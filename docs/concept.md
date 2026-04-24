@@ -77,9 +77,22 @@ Per README comparison table and DECISIONS:
 
 README closes the clause with "etc." -- no other specific skips are on record. All other upstream skills are outside the current cherry-pick scope but without a dedicated skip-decision; adding any requires a DECISIONS entry. See `.ytstack/VENDOR-INVENTORY.md` for the full upstream listing.
 
-### 3.3 Known wrapper-hardening rule
+### 3.3 Wrapper mechanism (locked)
 
-Per DECISIONS 2026-04-23 "Known risk -- superpowers interactive prompts may block Claude Code input": every superpowers wrapper must invoke upstream in non-interactive mode (`YTSTACK_NON_INTERACTIVE=1` or equivalent). This is a wrapper-hardening rule that applies to all superpowers wrappers we ship, not a skip-reason. Verification task open on M005 `REVIEW-NOTES.md`.
+Per DECISIONS 2026-04-24 "Wrapper mechanism = shell-exec inject + cross-ref check", every ytstack wrapper is a thin SKILL.md that:
+
+1. Declares minimal frontmatter (`name`, `description`, `allowed-tools`).
+2. Runs a shell preamble (```` ```! ```` fenced block) that resolves ytstack context: `_YT_DIR`, `_CURRENT_MILESTONE`, active-task paths, extracted verification commands.
+3. States "ytstack invocation notes" -- what to treat as the review subject / work unit, HARD-GATE conditions when ytstack state is missing, and post-procedure outcomes (DECISIONS.md append, ROADMAP edit, KNOWLEDGE.md lesson).
+4. Ends with ```` ```! \ncat "${CLAUDE_PLUGIN_ROOT:?}/vendor/<src>/SKILL.md"\n``` ```` which inlines the vendored procedure verbatim at render time.
+
+**Vendor is the single source of truth.** `./sync-upstream.sh` updates flow through without manual adaptation; no fork divergence possible by construction.
+
+Applies to: `plan-ceo-review`, `plan-eng-review`, `office-hours` (vendor/gstack) + `test-driven-development`, `systematic-debugging`, `verification-before-completion` (vendor/superpowers/skills).
+
+**Supersedes:** the earlier 2026-04-23 "Known risk -- superpowers interactive prompts may block Claude Code input" rule that required every superpowers wrapper to pass `YTSTACK_NON_INTERACTIVE=1`. That rule was a defensive workaround for a different wrapper shape (prose indirection telling the agent to "read vendor file and follow it"). Shell-exec-inject sidesteps the interactive-prompt risk because the vendor content is inlined as the same turn's prompt, not re-invoked as a separate Claude Code interaction.
+
+**Cross-ref check:** `bin/ytstack-check` now parses each vendored SKILL.md inlined by a ytstack wrapper and flags sibling-skill references (backtick-quoted or `/slash-command`) that ytstack does not itself wrap. Surfaces dangling invocations before they ship. First run (2026-04-24) flagged ~90 sibling references from gstack's interconnected skill set; human triage decides per case (wrap / strip-ref-in-docs / accept-gap).
 
 ### 3.4 Native components (ytstack authors these; no upstream equivalent used)
 
@@ -109,7 +122,19 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - `teammate-idle`, `task-created`, `task-completed` -- Agent Teams coordination
 - `pre-tool-use-edit`, `post-tool-use-bash` -- quality / safety gates
 
-### 3.5 Future candidates (deferred, not open questions)
+### 3.5 Distribution (self-marketplace, one repo)
+
+Per DECISIONS 2026-04-24 "ytstack self-marketplaces, no separate `-marketplace` repo" and "Marketplace name equals plugin name":
+
+- Plugin source + marketplace manifest both live in `Yesterday-AI/ytstack` (private GitHub repo). `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are colocated; no separate `-marketplace` repo exists or is needed.
+- `marketplace.json` `"name"` = `"ytstack"` (same as the plugin). Install command is `/plugin marketplace add Yesterday-AI/ytstack` followed by `/plugin install ytstack@ytstack`.
+- `marketplace.json` `"source": "./"` for self-reference.
+- `plugin.json` is minimal: `name`, `version`, `description`, `author`, `homepage`, `repository`, `license`, `keywords`. No explicit `skills` / `agents` / `hooks` path pointers -- Claude Code auto-discovers from `skills/`, `agents/`, `hooks/hooks.json`. Adding those pointer fields triggers duplicate-load errors or schema-validation rejects (verified 2026-04-24 during the install debacle; see KNOWLEDGE.md).
+- Private-repo install works via the user's existing `gh auth login` + git credential helper. Background auto-updates require `GITHUB_TOKEN` / `GH_TOKEN` env var.
+
+**Pragmatic, not permanent:** the single-repo self-marketplace choice is scoped to the current state where ytstack is the only Yesterday-AI stack-plugin. If a sibling stack emerges later (e.g. `ycstack` for non-development workflows), the Yesterday-AI org would likely consolidate into a shared marketplace repo that catalogs multiple stacks -- at which point this decision would be superseded by a new DECISIONS entry covering the multi-stack marketplace layout. Today's form is not an architectural stance against separate marketplace repos; it is the minimum-maintenance choice while there is exactly one stack.
+
+### 3.6 Future candidates (deferred, not open questions)
 
 Logged in `.ytstack/REVIEW-NOTES.md`. Example: wrapping superpowers' `requesting-code-review` / `receiving-code-review` for PR-level review in v0.2. These are deferrals with acceptance criteria, not open architectural questions.
 
@@ -155,9 +180,27 @@ Per QUICKSTART.md §"First milestone -- worked example", the documented happy pa
   → [loop: next task, or reassess-roadmap after slice]
 ```
 
-`office-hours` is listed in the README trigger examples as the skill for "describe a feature you're not sure about" but is not positioned as the first step in the greenfield flow in README or QUICKSTART.
+Per DECISIONS 2026-04-24 "Greenfield-flow reorder" (LOCKED), the above is the legacy flow. The target flow (M010 implementation in progress) is:
 
-> **Open design point (2026-04-24, user-flagged):** The user has raised that the greenfield flow should validate the pitch (office-hours / plan-ceo-review) BEFORE `init-project` writes name / one-liner into PROJECT.md, because today's order forces the user to invent pitch content cold during infra setup. This is NOT resolved in README or DECISIONS. Tracked in `.ytstack/REVIEW-NOTES.md` as an open item. No unilateral change to README, QUICKSTART, init-project, or this paper until a DECISIONS entry lands.
+```
+/ytstack:office-hours              (concept validation -- forcing questions)
+  → plan-ceo-review                (premise + scope challenge)
+  → [optional] plan-eng-review     (architecture review)
+  → init-project                   (infra-only: scope decision + skeleton files)
+  → plan-milestone                 (goal, exit criteria, size)
+  → slice-milestone                (break into slices with tasks)
+  → plan-task → test-driven-development → verification-before-completion → summarize-task
+  → [loop: next task, or reassess-roadmap after slice]
+```
+
+Key shifts from the legacy flow:
+
+- `office-hours` is the greenfield entry point (not `init-project`), so the pitch is validated before any artifact is written.
+- `plan-ceo-review` and `plan-eng-review` gain a "concept mode" (read office-hours output) on top of their existing "milestone mode" (read `M###-CONTEXT.md` + `M###-ROADMAP.md`).
+- `init-project` is refactored to infra-only: PM questions (project name, one-liner) are removed; PROJECT.md name + one-liner come from the validated pitch produced by office-hours, not asked cold.
+- `using-ytstack` trigger map is rewritten so natural-language build-intent ("baue mir eine cli", "build me a tool") routes to office-hours first in a greenfield directory, not plan-milestone.
+
+README.md + QUICKSTART.md §1-6 are updated as part of M010 execution.
 
 ### 5.2 Brownfield -- existing `.ytstack/`, continuing or starting new work
 
@@ -233,5 +276,5 @@ Per `CLAUDE.md` + DECISIONS 2026-04-23:
 
 ## 9. Known open items (not decided, do not act without user)
 
-- Greenfield flow reorder (office-hours / plan-ceo-review BEFORE init-project) -- see §5.1 open design point.
-- Any REVIEW-NOTES entries marked `[ ]`.
+- Any REVIEW-NOTES entries marked `[ ]`. (Previously: Greenfield-flow reorder -- LOCKED 2026-04-24, see §5.1 + DECISIONS.)
+- M010 "Greenfield Flow Reorder" milestone work is planned but not yet executed: office-hours entry, dual-mode ceo/eng-review, init-project infra-split, trigger-map rewrite, README/QUICKSTART updates. Tracked via `.ytstack/ROADMAP.md` once planned via `ytstack:plan-milestone`.
