@@ -2,6 +2,10 @@
 
 Read this before modifying anything in this repo.
 
+## Read first
+
+Before any architectural proposal, read in order: `docs/concept.md` (stable summary of what ytstack wraps and skips), `.ytstack/DECISIONS.md` (locked-in decisions, append-only), `.ytstack/VENDOR-INVENTORY.md` (what actually exists upstream). Do not debate a point that these files already settle.
+
 ## If you are an AI agent
 
 Stop. Read this section before acting.

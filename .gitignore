@@ -42,3 +42,10 @@ vendor/**/dist/
 vendor/**/build/
 vendor/**/.next/
 vendor/**/__pycache__/
+
+# Agents
+.claude/settings.local.json
+
+# Tmp
+~*.md
+~*/
