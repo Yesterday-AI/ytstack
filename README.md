@@ -94,8 +94,8 @@ ytstack covers three workflows. The `SessionStart` hook injects the `using-ytsta
 
 From raw idea to shipped task. Each process step (orange) produces an artifact on disk (green) that the next step reads as a contract.
 
-<details>
-<summary><strong>Greenfield flow diagram</strong> (click to expand)</summary>
+<details open>
+<summary><strong>Greenfield flow diagram</strong> (click to collapse)</summary>
 
 ![ytstack greenfield flow -- office-hours -> plan-ceo-review -> init-project -> plan-milestone -> slice -> task-loop (plan-task -> TDD -> verify -> summarize) -> reassess-roadmap at slice boundaries](docs/ytstack-greenfield-flow.png)
 
