@@ -158,3 +158,24 @@ Format for each entry:
 - `hooks/session-start` reads and injects its full content as `additionalContext` JSON, wrapped in an `<EXTREMELY_IMPORTANT>` envelope, BEFORE the project state block.
 - Total injected context per session start is ~8.5KB -- non-trivial but within Claude Code's context budget.
 - The README reframes ytstack as agent-driven: user talks naturally, agent auto-fires skills; slash-commands are the steering override for non-happy-path cases.
+
+---
+
+## 2026-04-24: User-facing skill count is flat, one SKILL.md = one skill
+
+**Context:** `/check-consistency` 2026-04-24 flagged that README.md contradicts itself and disk on the skill count. README:131 said "15 skills", README:145 said "14 skill packages", disk has 16 directories under `skills/`. `docs/concept.md` §9 had pre-flagged this drift. Root cause: `using-ytstack` lives as a `SKILL.md` under `skills/` but carries `kind: directive` and description "Not meant for direct user invocation", which opens a semantic question whether it should count as "a skill ytstack ships".
+
+**Options considered:**
+- A) Flat count -- every SKILL.md under `skills/` counts as one skill. README says "16 skills".
+- B) Role-split count -- README says "15 user-invocable skills + 1 internal directive".
+- C) Restructure -- move `using-ytstack` out of `skills/` into `hooks/` so it is not a skill at all. Breaks 1:1 parallelity with superpowers' `using-superpowers`.
+
+**Chose:** A.
+
+**Reason:** User-facing README numbers answer "how big is this thing"; one number is the useful answer. The directive-vs-action distinction lives in the skill's own frontmatter (`kind: directive`) and description, which is sufficient for internal tooling. Option C was rejected after checking `vendor/superpowers/hooks/session-start` (2026-04-24): superpowers uses the exact same shape we do (SKILL.md read via `cat`, injected as `additionalContext` JSON), and the pattern rides on an officially documented Claude Code API (SessionStart hook + `additionalContext`). Deviating from the proven pattern to paper over a Claude-Code-side feature gap (no manifest flag for `invocable: false`) would force a reverse migration the moment Anthropic ships such a flag. Option B surfaces internal semantics in user-facing prose for no reader benefit.
+
+**How to apply:**
+- Every directory under `skills/` that contains a `SKILL.md` counts as one skill in user-facing docs.
+- README.md currently at "16 skills" (§Status) and "16 skill packages" (§Repo layout); `/check-consistency` enforces this on every run.
+- `docs/concept.md` §9 drift bullet removed; the live `/check-consistency` run is now the enforcement surface.
+- If Claude Code later ships `invocable: false` or equivalent in the plugin manifest, revisit this decision via a superseding entry and consider surfacing the directive/invokable split in README prose.

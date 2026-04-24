@@ -43,7 +43,7 @@ Three existing tools each solve it from a different angle and overlap in the mid
 - **[superpowers](https://github.com/obra/superpowers)** (Jesse Vincent) -- methodology toolkit. Strongest on execution discipline: TDD, systematic debugging, verification-before-completion. Also ships planning skills (brainstorming, writing-plans, executing-plans). What it lacks: business-strategy reviews (no CEO / founder-mode diagnostics, no YC-office-hours forcing questions), and on-disk project memory that persists across sessions.
 - **[GSD](https://github.com/gsd-build/gsd-2)** (get-shit-done) -- project management done right. Milestones, slices, tasks, artifact-as-memory, cross-session continuity. What it requires: a separate TypeScript runtime with its own CLI and TUI that fights Claude Code's native extension points.
 
-gstack and superpowers overlap significantly in scope -- both ship planning, both ship debugging -- but each has a distinctive strength the other lacks. GSD has what neither has (structured artifact memory) but ships as a runtime. Combining all three by hand produces friction: skill conflicts, redundant planning flows, 50+ skill descriptions in every system prompt.
+gstack and superpowers overlap heavily in scope -- both ship planning, both ship debugging -- but each has a distinctive strength the other lacks. GSD has what neither has (structured artifact memory) but ships as a runtime. Combining all three by hand produces friction: skill conflicts, redundant planning flows, 50+ skill descriptions in every system prompt.
 
 Install all three and you get friction: interactive prompts blocking each other, skill overlap, 50+ skills flooding every system prompt, a separate runtime to maintain. See the combining articles on [dev.to](https://dev.to/imaginex/a-claude-code-skills-stack-how-to-combine-superpowers-gstack-and-gsd-without-the-chaos-44b3) and [Medium](https://medium.com/@tentenco/superpowers-gsd-and-gstack-what-each-claude-code-framework-actually-constrains-12a1560960ad) for the full diagnosis.
 
@@ -128,7 +128,7 @@ See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example: `init` �
 **v0.1.0 -- full build cycle complete.** 37/39 tasks done; 2 deferred to user-action (git init + push, GitHub repo creation).
 
 Ships:
-- 15 skills (project-OS lifecycle + gstack planning wrappers + superpowers execution wrappers + Agent Teams dispatch + `using-ytstack` directive that auto-injects to drive skill selection from natural-language intent)
+- 16 skills (project-OS lifecycle + gstack planning wrappers + superpowers execution wrappers + Agent Teams dispatch + `using-ytstack` directive that auto-injects to drive skill selection from natural-language intent)
 - 8 hooks (SessionStart / PreCompact / SessionEnd / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash). SessionStart-hook now injects the using-ytstack directive + project state.
 - Full docs (`CLAUDE.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest ready for publication
@@ -142,7 +142,7 @@ ytstack/
 ├── .claude-plugin/              plugin manifest + marketplace
 ├── .ytstack/                    dogfood: ytstack tracks itself
 ├── hooks/                       8 hook scripts + hooks.json
-├── skills/                      14 skill packages
+├── skills/                      16 skill packages
 ├── vendor/                      read-only subtrees (superpowers, gstack)
 ├── docs/
 │   ├── ux/                      mandatory skill-authoring contracts

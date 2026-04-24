@@ -43,6 +43,7 @@ Match the user's message against these phrases and invoke the corresponding skil
 | User says / situation | Skill to invoke |
 |---|---|
 | "init ytstack", "set up tracking", "new project" (and `.ytstack/` missing) | `ytstack:init-project` |
+| "let's plan what's next", "what's next" (state-dependent) | `ytstack:plan-milestone` if no active milestone, else `ytstack:plan-task` |
 | "plan a milestone", "new milestone", "start next milestone" | `ytstack:plan-milestone` |
 | "break this into slices", "slice this milestone" (milestone planned) | `ytstack:slice-milestone` |
 | "next task", "what should I work on", "detail the next step" | `ytstack:plan-task` |
