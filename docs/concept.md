@@ -57,16 +57,50 @@ From `README.md` §"ytstack is the curation" + `DECISIONS.md` 2026-04-23 "Cherry
 
 ### 3.1 Wrapped (ytstack surfaces these as `/ytstack:<name>`)
 
-Per README comparison table and DECISIONS:
+Per README comparison table and DECISIONS. Six skills, each with a distinct purpose. The per-skill entries below exist to prevent over-proliferation and guide future curation (see §3.7 "Curation principle" for the gate).
 
-| Skill | Upstream | Role (per README) |
-|---|---|---|
-| `plan-ceo-review` | gstack | "CEO / founder-mode strategy review" |
-| `plan-eng-review` | gstack | "Engineering plan / architecture review" |
-| `office-hours` | gstack | "YC-office-hours forcing diagnostics" |
-| `test-driven-development` | superpowers | "TDD as enforced discipline" |
-| `systematic-debugging` | superpowers | "Systematic debugging with root-cause gate" |
-| `verification-before-completion` | superpowers | "Verification-before-completion gate" |
+#### `office-hours` (gstack)
+
+**Purpose:** Discovery. Six YC-style forcing questions (demand reality, status quo, desperate specificity, narrowest wedge, observation, future-fit) that turn a raw idea into a structured pitch.
+**Produces:** `OFFICE-HOURS.md` (greenfield) or `.ytstack/OFFICE-HOURS-<slug>.md` (brownfield) with `name:` + `one-liner:` frontmatter + pitch body. Downstream skills (plan-ceo-review concept-mode, init-project PROJECT.md population, plan-milestone goal drafting) read this as a contract.
+**Triggers on:** greenfield build-intent ("baue mir X", "build me X", "new project") or explicit validation request ("I have an idea", "is this worth building", "brainstorm this", "office hours").
+**Differs from plan-ceo-review:** office-hours PRODUCES raw material (no plan yet); plan-ceo-review CRITIQUES existing material. Produce-then-critique, never reversed. Running CEO-review on nothing either aborts or duplicates discovery work office-hours does better.
+
+#### `plan-ceo-review` (gstack)
+
+**Purpose:** Scope + ambition critique. Challenges an existing plan across four modes: SCOPE EXPANSION, SELECTIVE EXPANSION, HOLD SCOPE, SCOPE REDUCTION. Asks "is this worth building, in the right scope, with the right ambition?"
+**Produces:** annotation block on the reviewed artifact + optional `DECISIONS.md` entry if a scope-change is locked.
+**Triggers on:** explicit request ("CEO review", "challenge premises", "think bigger", "expand scope"); locked as the concept-mode review step immediately after office-hours in greenfield; optional milestone-mode step between plan-milestone and slice-milestone.
+**Differs from office-hours:** critique vs produce (see above).
+**Differs from plan-eng-review:** WHAT vs HOW. plan-ceo-review asks whether the plan is the right plan; plan-eng-review asks whether the plan's execution approach is technically sound.
+
+#### `plan-eng-review` (gstack)
+
+**Purpose:** Feasibility + architecture critique. Locks in execution approach: architecture, data flow, edge cases, test coverage, performance, security risks. Asks "given we are building this, is the chosen approach technically sound?"
+**Produces:** annotations on the reviewed artifact (pitch in concept-mode; slice-plans in milestone-mode) + optional `DECISIONS.md` entry if an architectural choice is locked.
+**Triggers on:** explicit request ("engineering review", "architecture review", "lock in the plan"); optional concept-mode step after plan-ceo-review; standard milestone-mode step after slice-milestone before plan-task.
+**Differs from plan-ceo-review:** HOW vs WHAT (see above).
+
+#### `test-driven-development` (superpowers)
+
+**Purpose:** RED-GREEN-REFACTOR discipline for implementation. Write the failing test first, watch it fail, write the minimal code to pass, refactor, commit.
+**Produces:** test files + implementation code that satisfies the active task-plan's Verification command.
+**Triggers on:** during task execution ("TDD this", "write a test first", "RED-GREEN-REFACTOR"); also implicit in the documented plan-task -> TDD -> verify -> summarize loop.
+**Differs from ad-hoc coding:** the vendored superpowers skill enforces test-first ordering with anti-rationalization rules that specifically prevent skipping the RED step.
+
+#### `systematic-debugging` (superpowers)
+
+**Purpose:** Root-cause debugging via four phases: investigate, analyze, hypothesize, implement. Iron Law -- no fixes before the root cause is identified.
+**Produces:** the fix + optional `KNOWLEDGE.md` entry (if the pattern generalizes) + optional `DECISIONS.md` entry (if an architectural shift is forced).
+**Triggers on:** bugs, test failures, unexpected behavior ("debug this", "why is X broken", "investigate", "root cause", "something's off").
+**Differs from TDD:** debugging works backwards (existing symptom -> cause -> fix); TDD works forwards (requirement -> test -> code). A bug found mid-TDD typically hands off to systematic-debugging, which may produce a regression test that feeds back into the TDD cycle.
+
+#### `verification-before-completion` (superpowers)
+
+**Purpose:** Evidence gate before any "done" claim. Runs the task-plan's Verification command, captures real output, confirms pass/fail.
+**Produces:** signed-off pass (output matches expectation) or failure report (raw output surfaced; no auto-retry). No artifact; it is a gate.
+**Triggers on:** before commit, before PR, before summarize-task, before any "done" claim ("verify", "is it really done", "check before I commit").
+**Differs from running the command manually:** enforces that the command was actually executed this session and its output observed. The vendored superpowers skill has specific anti-rationalization rules against "it should work"-style hand-waving.
 
 ### 3.2 Explicitly skipped (verbatim from README §"ytstack is the curation")
 
@@ -96,28 +130,89 @@ Applies to: `plan-ceo-review`, `plan-eng-review`, `office-hours` (vendor/gstack)
 
 ### 3.4 Native components (ytstack authors these; no upstream equivalent used)
 
-Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implement in-plugin:
+Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implement in-plugin. Ten skills, each with a distinct purpose documented below.
 
-**Skills** (project-OS lifecycle):
-- `init-project` -- scope decision + create `.ytstack/` artifacts
-- `plan-milestone` -- define a milestone (goal, exit criteria, size)
-- `slice-milestone` -- break a milestone into slices + tasks
-- `plan-task` -- detail a single task (fits-one-context-window)
-- `summarize-task` -- close a task, write summary, update STATE.md
-- `reassess-roadmap` -- post-slice sanity check
-- `handoff-session` -- write rich handoff file for pause / team handoff
-- `resume-session` -- read state + handoff + recent summaries, brief agent
-- `spawn-milestone-team` -- dispatch Agent Teams for parallel slice execution
-- `using-ytstack` -- meta-directive injected by SessionStart hook
+#### `init-project` (lifecycle: infra)
+
+**Purpose:** Scaffold `.ytstack/` with the 6 core artifacts. Pure infra, no PM content.
+**Produces:** `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `RUNTIME.md`, `STATE.md`, `PREFERENCES.md`. PROJECT.md `name:` + `one-liner:` populated from `OFFICE-HOURS.md` pitch frontmatter if present; otherwise placeholders explicitly pointing at office-hours.
+**Triggers on:** "scaffold the project", "set up tracking", "init ytstack" -- AFTER the pitch is validated. Asks only one question (scope: project-level vs user-level vs both).
+**Differs from office-hours:** init-project is infra, office-hours is content. Greenfield flow runs office-hours -> [plan-ceo-review] -> init-project, never init-project first (see §5.1).
+
+#### `plan-milestone` (lifecycle: milestone-level planning)
+
+**Purpose:** Define a single milestone: goal, exit criteria, rough size (S / M / L). Commits the idea to a shippable slice of work.
+**Produces:** `M###-CONTEXT.md` (Q/A locked at plan time) + `M###-ROADMAP.md` (slice skeleton with placeholders).
+**Triggers on:** "plan a milestone", "new milestone", "start next milestone", "what's next" (when no active milestone).
+**Differs from office-hours:** office-hours validates the premise; plan-milestone commits the premise to a specific shippable unit. plan-milestone assumes the premise is already locked (from a pitch or pre-existing project scope).
+
+#### `slice-milestone` (lifecycle: slice-level planning)
+
+**Purpose:** Break the current milestone into slices, each slice holding 1-7 tasks (iron rule). Task-level granularity must fit one context window.
+**Produces:** `M###-S##-PLAN.md` per slice, each with the 1-7 task list + acceptance notes.
+**Triggers on:** after plan-milestone, before plan-task. "break this into slices", "slice this milestone".
+**Differs from plan-task:** slice is a logical grouping of tasks; plan-task is per-task detail. A slice without tasks is just a header; a task without a slice has no home.
+
+#### `plan-task` (lifecycle: task-level planning)
+
+**Purpose:** Flesh out one task with exact file paths, body description, and Verification command. Enforces fits-one-context-window discipline.
+**Produces:** `M###-S##-T##-PLAN.md` (what to touch, what to verify).
+**Triggers on:** after slice-milestone, before TDD execution. "next task", "detail the next step", "plan task".
+**Differs from slice-milestone:** one task at a time with executable specificity; slice is only the scaffold.
+
+#### `summarize-task` (lifecycle: task closure)
+
+**Purpose:** Close a task after execution. Record outcome, flip the checkbox in the slice-plan, update STATE.md.
+**Produces:** `M###-S##-T##-SUMMARY.md` (what happened, what was decided, what follow-ups exist).
+**Triggers on:** after task execution complete. "task is done", "ship it", "close this out".
+**Differs from verification-before-completion:** verification confirms the task's Verification command passed; summarize records what happened and closes the ledger. Always verify before summarize; never summarize without verify.
+
+#### `reassess-roadmap` (lifecycle: slice-boundary checkpoint)
+
+**Purpose:** Post-slice sanity check. Given what this slice taught us, does the remaining milestone plan still fit reality?
+**Produces:** optional ROADMAP edits (add / reorder / remove slices); optional `DECISIONS.md` entry if a major re-scope is locked.
+**Triggers on:** slice boundary (after last task of a slice is summarized). "reassess", "is the plan still right", "review progress".
+**Differs from plan-ceo-review:** reassess is post-slice, reality-check mode (what did we actually learn?); plan-ceo-review is pre-slice, ambition-check mode (is this worth building at this scope?).
+
+#### `handoff-session` (continuity: export)
+
+**Purpose:** Explicit state export for pausing work or cross-machine / cross-agent handoff. Richer than the automatic pre-compact hook because the user decides what matters.
+**Produces:** `.ytstack/HANDOFF.md` with current position + in-flight work + open decisions + recommended resume prompt.
+**Triggers on:** "handoff", "pause work", "save state for later", "I'm stepping away".
+**Differs from summarize-task:** handoff is session-level (a snapshot for a future reader); summarize is task-level (a closure record for a completed task).
+
+#### `resume-session` (continuity: import)
+
+**Purpose:** State import at session start. User-triggered deep briefing beyond the SessionStart-hook's compact inject.
+**Produces:** no artifact; produces a 3-paragraph briefing (state + recent summaries + open items) consumed inline by the agent.
+**Triggers on:** "where were we", "resume", "pick up where I left off", "what's open".
+**Differs from the SessionStart hook:** the hook injects terse state on every session start automatically; resume-session is user-triggered when more context is needed than the hook gave.
+
+#### `spawn-milestone-team` (orchestration: parallel execution)
+
+**Purpose:** Parallel slice execution via Claude Code's native Agent Teams. Each teammate works on one slice in its own fresh 200k context. Replaces GSD's TypeScript-runtime subprocess model with native CC primitives.
+**Produces:** an active Agent Team; artifact-level output is the committed slice-plans per teammate.
+**Triggers on:** "spawn team", "dispatch milestone", "parallel slice execution". Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` + Claude Code v2.1.32+.
+**Differs from the sequential plan-task -> TDD -> verify -> summarize loop:** orchestrates parallel work on multiple slices; the per-slice loop remains unchanged inside each teammate.
+
+#### `using-ytstack` (directive, not user-invokable)
+
+**Purpose:** Agent-behavior primer. Injected on every session start by the SessionStart hook; tells the agent to auto-route natural-language user intent to the right ytstack skill via the trigger map. Without this directive, ytstack behaves as a slash-command menu; with it, the agent proactively reaches for skills based on user phrasing.
+**Produces:** no artifact; the skill content IS the instruction.
+**Triggers on:** not invoked directly by user or agent (`user-invocable: false` in frontmatter). Loaded via `cat` by the `session-start` hook and injected as `additionalContext` at session start.
+**Differs from every other skill:** it is a meta-directive, not an action. Declaring it as a SKILL.md matches superpowers' `using-superpowers` pattern and lets the hook treat it as the canonical source of the trigger map + anti-rationalization Red Flags.
+
+---
 
 **Artifacts** (git-tracked Markdown under `.ytstack/`):
 - `PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, `RUNTIME.md`, `PREFERENCES.md`
 - Per-milestone: `M###-CONTEXT.md`, `M###-ROADMAP.md`
 - Per-slice: `M###-S##-PLAN.md`
 - Per-task: `M###-S##-T##-PLAN.md`, `M###-S##-T##-SUMMARY.md`
+- Per-pitch (greenfield input): `OFFICE-HOURS.md` (pre-init) -> `OFFICE-HOURS-<slug>.md` (post-init, moved into `.ytstack/`)
 
 **Hooks** (under `hooks/`, registered in `hooks/hooks.json`):
-- `session-start` -- injects `using-ytstack` directive + STATE snapshot
+- `session-start` -- injects `using-ytstack` directive (always) + STATE snapshot (brownfield) or greenfield next-step block (greenfield)
 - `pre-compact`, `session-end` -- context / state preservation
 - `teammate-idle`, `task-created`, `task-completed` -- Agent Teams coordination
 - `pre-tool-use-edit`, `post-tool-use-bash` -- quality / safety gates
@@ -137,6 +232,20 @@ Per DECISIONS 2026-04-24 "ytstack self-marketplaces, no separate `-marketplace` 
 ### 3.6 Future candidates (deferred, not open questions)
 
 Logged in `.ytstack/REVIEW-NOTES.md`. Example: wrapping superpowers' `requesting-code-review` / `receiving-code-review` for PR-level review in v0.2. These are deferrals with acceptance criteria, not open architectural questions.
+
+### 3.7 Curation principle (when to add a new skill)
+
+ytstack stays small by design. Before adding a new skill (wrapped OR native), answer all three gates. Failing any one means the skill should not be added; extend an existing one or leave it out.
+
+1. **What distinct artifact does it produce, critique, or modify?** A skill that produces nothing -- no file, no annotation, no state change -- is probably prose that belongs inside another skill, not a new skill. Examples of valid outputs: a new file, a specific annotation appended to an existing file, a state-field flipped in STATE.md, a locked decision in DECISIONS.md.
+
+2. **How is it distinct from every existing ytstack skill AND from every vendored sibling under `vendor/`?** Hand-wavy differentiation ("a lighter version of X", "a different style of Y") is a red flag. The distinction must name a specific input or output that no existing skill handles. Write the differentiation one-liner BEFORE writing the skill; if you cannot, the skill is not well-scoped.
+
+3. **What concrete user phrasing triggers it in the `using-ytstack` trigger map?** A skill without a natural-language trigger row is a skill the agent cannot reach proactively. If you cannot write a concrete lower-cased phrase the user would actually say, the skill probably lacks a purpose real users will experience.
+
+**Wrapped skills count against the budget identically to native skills.** Adding a wrapper is not "free" just because the logic lives in `vendor/`. Our thin-wrapper infrastructure still needs ytstack-context injection + mode detection + cross-ref validation. Every wrapped skill adds to the context-window load that users pay for.
+
+**When in doubt, do not add.** The cost of a missing skill is easy to measure (the user asks for something ytstack cannot do). The cost of an extra skill is distributed (context-bloat, disambiguation confusion, maintenance surface). ytstack's value scales sublinearly with skill count past a threshold; protect the threshold.
 
 ## 4. User experience model (per README §"What a session feels like" + §"What you get")
 
