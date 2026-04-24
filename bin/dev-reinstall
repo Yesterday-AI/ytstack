@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# bin/dev-reinstall -- ytstack plugin-dev helper: fast-refresh the installed
+# plugin cache from the marketplace-clone without going through the
+# interactive `/plugin install` flow in a running Claude Code session.
+#
+# What it does, in order:
+#   1. git pull on the marketplace-clone (fetches latest commits from
+#      origin = github.com/Yesterday-AI/ytstack).
+#   2. rsync marketplace content -> installed plugin cache, deleting
+#      stale files. Skips .git. The cache is a plain directory (no
+#      .git), so this leaves a clean copy of the marketplace head.
+#   3. Update ~/.claude/plugins/installed_plugins.json with the new
+#      git commit SHA + lastUpdated timestamp, so `/plugin`-UI and
+#      installed-plugin introspection reflect the true state.
+#
+# What it does NOT do:
+#   - Restart Claude Code. You must quit + reopen CC in your test dir
+#     for the SessionStart hook to re-inject the updated using-ytstack
+#     directive. This is a session-lifecycle constraint, not a script
+#     limitation.
+#   - Push commits to origin. Run `git push` yourself first.
+#
+# Prerequisite: you must have done `/plugin marketplace add
+# Yesterday-AI/ytstack` and `/plugin install ytstack@ytstack` at least
+# once, so the marketplace-clone and the installed cache dir already
+# exist. This script only refreshes them.
+#
+# Usage: bin/dev-reinstall
+
+set -euo pipefail
+
+SLUG="ytstack"
+CACHE_ROOT="$HOME/.claude/plugins/cache/$SLUG/ytstack"
+MARKET="$HOME/.claude/plugins/marketplaces/$SLUG"
+
+if [ ! -d "$MARKET/.git" ]; then
+  echo "error: marketplace clone not found at $MARKET" >&2
+  echo "Run /plugin marketplace add Yesterday-AI/ytstack in Claude Code first." >&2
+  exit 1
+fi
+
+VERSION_DIR=$(ls -d "$CACHE_ROOT"/*/ 2>/dev/null | head -1 | xargs -I{} basename {} 2>/dev/null || true)
+if [ -z "$VERSION_DIR" ]; then
+  echo "error: no installed version under $CACHE_ROOT" >&2
+  echo "Run /plugin install ytstack@ytstack in Claude Code first." >&2
+  exit 1
+fi
+CACHE="$CACHE_ROOT/$VERSION_DIR"
+
+echo "marketplace: $MARKET"
+echo "cache:       $CACHE"
+echo ""
+
+echo "==> git pull marketplace"
+git -C "$MARKET" pull --ff-only
+
+echo ""
+echo "==> mirror -> cache"
+rsync -a --delete --exclude '/.git' "$MARKET/" "$CACHE/"
+
+echo ""
+echo "==> update installed_plugins.json"
+SHA=$(git -C "$MARKET" rev-parse HEAD)
+TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+SHA="$SHA" TS="$TS" python3 - <<'PYEOF'
+import json, os, pathlib
+sha = os.environ["SHA"]
+ts = os.environ["TS"]
+p = pathlib.Path.home() / ".claude/plugins/installed_plugins.json"
+d = json.loads(p.read_text())
+key = "ytstack@ytstack"
+entries = d["plugins"].get(key, [])
+if not entries:
+    raise SystemExit(f"error: no {key} entry in installed_plugins.json")
+for entry in entries:
+    entry["gitCommitSha"] = sha
+    entry["lastUpdated"] = ts
+p.write_text(json.dumps(d, indent=2) + "\n")
+print(f"installed_plugins.json updated -> {sha[:7]} at {ts}")
+PYEOF
+
+echo ""
+echo "done. new SHA: $SHA"
+echo ""
+echo "Quit Claude Code and reopen in your test directory so the"
+echo "SessionStart hook re-injects the updated using-ytstack directive."

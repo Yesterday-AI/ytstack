@@ -18,6 +18,8 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 cd "$PROJECT_DIR" 2>/dev/null || exit 0
 
 # Resolve ytstack state directory. Project-level takes precedence over user-level.
+# In greenfield (no .ytstack/ anywhere), YT_DIR stays empty and we still inject
+# the using-ytstack directive so the agent can route build-intent to office-hours.
 YT_DIR=""
 YT_SCOPE=""
 if [ -d "$PROJECT_DIR/.ytstack" ]; then
@@ -32,17 +34,23 @@ else
   fi
 fi
 
-# Silent exit if ytstack not initialized in this project
-[ -z "$YT_DIR" ] && exit 0
-
-STATE_FILE="$YT_DIR/STATE.md"
+STATE_FILE="${YT_DIR:+$YT_DIR/STATE.md}"
 
 # Load the using-ytstack directive (source-of-truth lives in the plugin).
+# This is the core agent-behavior primer and must be injected on EVERY session
+# start where the ytstack plugin is active -- including greenfield sessions with
+# no .ytstack/ yet, because the directive's job is to route greenfield build-
+# intent to office-hours BEFORE any infra exists.
 USING_YTSTACK_FILE="${CLAUDE_PLUGIN_ROOT:-$PROJECT_DIR}/skills/using-ytstack/SKILL.md"
 USING_YTSTACK_CONTENT=""
 if [ -f "$USING_YTSTACK_FILE" ]; then
   USING_YTSTACK_CONTENT=$(cat "$USING_YTSTACK_FILE")
 fi
+
+# Silent exit if the plugin itself is not available (no CLAUDE_PLUGIN_ROOT
+# resolution). This is the only "no-op" case: we can't prime the agent if the
+# directive file does not exist on disk.
+[ -z "$USING_YTSTACK_CONTENT" ] && exit 0
 
 # Helper: emit additionalContext JSON with the given string
 emit_json() {
@@ -57,16 +65,38 @@ emit_json() {
   fi
 }
 
-# Handle missing STATE.md (anomaly -- .ytstack/ exists but no dashboard)
-if [ ! -f "$STATE_FILE" ]; then
-  MSG="[ytstack] $YT_DIR exists but STATE.md is missing. Run /ytstack:init-project to repair, or remove the directory."
-  if [ -n "$USING_YTSTACK_CONTENT" ]; then
-    MSG="$USING_YTSTACK_CONTENT
+# Greenfield: no .ytstack/ exists. Inject the directive with a greenfield state
+# block that tells the agent explicitly what to do with build-intent.
+if [ -z "$YT_DIR" ]; then
+  GREENFIELD_STATE="[ytstack active -- scope: greenfield]
+
+No \`.ytstack/\` directory in $PROJECT_DIR (or any parent). This is greenfield.
+
+Greenfield flow per the using-ytstack directive above:
+1. If the user expresses build-intent (\"baue mir X\", \"build me X\", \"new project\", \"I have an idea\"), invoke \`ytstack:office-hours\` FIRST to validate the pitch. Do NOT invoke plan-milestone or init-project directly.
+2. After office-hours produces OFFICE-HOURS.md, invoke \`ytstack:plan-ceo-review\` (concept mode) to stress-test premise + scope.
+3. Optionally \`ytstack:plan-eng-review\` (concept mode) for feasibility.
+4. Then \`ytstack:init-project\` to scaffold \`.ytstack/\` (populates PROJECT.md from the pitch, no cold PM questions)."
+
+  emit_json "<EXTREMELY_IMPORTANT>
+You have ytstack. Below is the full content of your 'ytstack:using-ytstack' skill, which tells you how to find and invoke ytstack skills based on user intent. Follow it. For all other skills, use the 'Skill' tool:
+
+$USING_YTSTACK_CONTENT
+</EXTREMELY_IMPORTANT>
 
 ---
 
-$MSG"
-  fi
+$GREENFIELD_STATE"
+  exit 0
+fi
+
+# Brownfield: .ytstack/ exists. Handle missing STATE.md as anomaly.
+if [ ! -f "$STATE_FILE" ]; then
+  MSG="$USING_YTSTACK_CONTENT
+
+---
+
+[ytstack] $YT_DIR exists but STATE.md is missing. Run /ytstack:init-project to repair, or remove the directory."
   emit_json "$MSG"
   exit 0
 fi
@@ -116,9 +146,9 @@ The files in $YT_DIR are the source of truth for this project's state. Read STAT
 
 # Combine: using-ytstack directive first, then project state.
 # The directive primes the agent's behavior; the state gives it
-# the specific where-we-are facts.
-if [ -n "$USING_YTSTACK_CONTENT" ]; then
-  FULL_CONTEXT="<EXTREMELY_IMPORTANT>
+# the specific where-we-are facts. USING_YTSTACK_CONTENT is always
+# non-empty here (early-exit above if missing).
+FULL_CONTEXT="<EXTREMELY_IMPORTANT>
 You have ytstack. Below is the full content of your 'ytstack:using-ytstack' skill, which tells you how to find and invoke ytstack skills based on user intent. Follow it. For all other skills, use the 'Skill' tool:
 
 $USING_YTSTACK_CONTENT
@@ -127,12 +157,6 @@ $USING_YTSTACK_CONTENT
 ---
 
 $STATE_CONTEXT"
-else
-  # using-ytstack not found -- still emit state, but log a warning
-  FULL_CONTEXT="[ytstack warning] skills/using-ytstack/SKILL.md not found at expected path. Project state follows but proactive skill-selection is not primed.
-
-$STATE_CONTEXT"
-fi
 
 emit_json "$FULL_CONTEXT"
 exit 0
