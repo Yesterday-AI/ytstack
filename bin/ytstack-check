@@ -137,6 +137,38 @@ def check_skill(path, root):
     # not procedural. They skip the structural-section checks.
     is_directive = fm.get("kind") == "directive"
 
+    # Thin-wrapper skills inline a vendor SKILL.md via the shell-exec
+    # injection pattern (```!  cat .../vendor/.../SKILL.md  ```). The
+    # structural contract (Checklist / Terminal State / Preamble /
+    # Procedure) lives in the vendored file, not in the wrapper.
+    is_thin_wrapper = bool(
+        re.search(r"vendor/[\w/-]+?/SKILL\.md", body)
+        and re.search(r"^```!\s*$", body, re.MULTILINE)
+    )
+
+    if is_thin_wrapper:
+        # Thin wrappers still get banned-words + em-dash checks, plus
+        # a requirement that they declare the ytstack invocation notes
+        # (otherwise they are just a vendor mirror).
+        if not re.search(
+            r"^##\s+ytstack invocation notes\b", body, re.MULTILINE | re.IGNORECASE
+        ):
+            warns.append(
+                f"{path}: thin-wrapper is missing '## ytstack invocation notes' "
+                f"section (where the wrapper adds its value)"
+            )
+        text_lc = (body + " " + str(fm)).lower()
+        for word in BANNED_WORDS:
+            if re.search(rf"\b{re.escape(word)}\b", text_lc):
+                fails.append(f"{path}: banned word '{word}' present")
+        for phrase in BANNED_PHRASES:
+            if phrase in text_lc:
+                fails.append(f"{path}: banned phrase '{phrase}' present")
+        for i, line in enumerate(body.split("\n"), 1):
+            if "—" in line and not line.strip().startswith("|"):
+                warns.append(f"{path}:{i}: em-dash in prose (use comma/period/...)")
+        return fails, warns
+
     if is_directive:
         # Directives still get banned-words + em-dash checks below,
         # but skip Checklist / Terminal State / Preamble requirements.
@@ -307,6 +339,94 @@ def check_cross_refs(root):
     return fails, warns
 
 
+# ---------- check: vendor sibling-skill refs (dangling cross-ref) ----------
+
+def check_vendor_sibling_refs(root):
+    """For each ytstack wrapper that cat-inlines a vendor SKILL.md, scan the
+    vendor content for sibling-skill mentions (backtick-quoted names or
+    slash-commands). Flag sibling names that ytstack does not also wrap:
+    the vendor instruction will tell the agent to 'run `foo`' but ytstack
+    users cannot because we do not ship that wrapper.
+
+    Surface level: warn per dangling ref with file:context snippet. The
+    human then decides per case (add wrapper, accept gap, rewrite prose).
+    """
+    fails = []
+    warns = []
+
+    # ytstack-shipped skill names (non-vendor-lookalike)
+    ytstack_skills = {
+        d.name for d in (root / "skills").iterdir()
+        if d.is_dir() and (d / "SKILL.md").is_file()
+    }
+
+    # Vendor-catalog roots we recognize
+    vendor_bases = []
+    for rel in ("vendor/gstack", "vendor/superpowers/skills"):
+        vb = root / rel
+        if vb.is_dir():
+            siblings = {
+                d.name for d in vb.iterdir()
+                if d.is_dir() and (d / "SKILL.md").is_file()
+            }
+            vendor_bases.append((vb, siblings))
+
+    if not vendor_bases:
+        return fails, warns
+
+    # For each ytstack wrapper, resolve which vendor SKILL.md it inlines and scan it
+    for wrapper in sorted((root / "skills").glob("*/SKILL.md")):
+        text = wrapper.read_text(encoding="utf-8")
+        # Find every vendor SKILL.md path mentioned in the wrapper body.
+        # Robust against shell expansion boilerplate (env-var defaults with
+        # spaces, quote variations, etc) because we match the path segment
+        # directly without trying to parse the surrounding `cat "..."`.
+        cat_refs = sorted(set(re.findall(
+            r"vendor/[\w/-]+?/SKILL\.md",
+            text,
+        )))
+        for vendor_rel in cat_refs:
+            vendor_path = root / vendor_rel
+            if not vendor_path.is_file():
+                continue  # already flagged elsewhere
+            # Identify catalog + sibling set
+            sibling_set = None
+            catalog_base = None
+            for vb, siblings in vendor_bases:
+                try:
+                    vendor_path.relative_to(vb)
+                    sibling_set = siblings
+                    catalog_base = vb
+                    break
+                except ValueError:
+                    continue
+            if sibling_set is None:
+                continue
+            self_name = vendor_path.parent.name
+            vendor_text = vendor_path.read_text(encoding="utf-8")
+            seen_in_this_vendor = set()
+            for sibling in sibling_set:
+                if sibling == self_name:
+                    continue
+                # Narrow match: backtick-quoted name OR /name slash-command.
+                # Prose mentions of kebab-words without punctuation do not match.
+                pattern = rf"(`{re.escape(sibling)}`|/{re.escape(sibling)}(?:\b|$))"
+                if re.search(pattern, vendor_text):
+                    if sibling in ytstack_skills:
+                        continue  # fine -- ytstack wraps it too
+                    seen_in_this_vendor.add(sibling)
+            for sibling in sorted(seen_in_this_vendor):
+                rel_vendor = vendor_path.relative_to(root)
+                rel_wrapper = wrapper.relative_to(root)
+                warns.append(
+                    f"{rel_wrapper}: vendor content at {rel_vendor} references "
+                    f"sibling skill '{sibling}' but ytstack does not ship a wrapper "
+                    f"for it (consider: wrap it, or strip the ref in docs, or accept gap)"
+                )
+
+    return fails, warns
+
+
 # ---------- main ----------
 
 def main():
@@ -337,6 +457,11 @@ def main():
 
     # Cross-refs
     f, w = check_cross_refs(root)
+    all_fails.extend(f)
+    all_warns.extend(w)
+
+    # Vendor sibling-skill dangling refs
+    f, w = check_vendor_sibling_refs(root)
     all_fails.extend(f)
     all_warns.extend(w)
 
