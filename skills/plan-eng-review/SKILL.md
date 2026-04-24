@@ -1,129 +1,51 @@
 ---
 name: plan-eng-review
-description: "Engineering-manager-mode plan review. Locks in execution plan: architecture, data flow, edge cases, test coverage, performance. Run after plan-ceo-review (if used) and before plan-task, to catch architecture issues before implementation. Wrapper around vendored gstack plan-eng-review."
-tier: task
-version: 0.1.0
+description: "Engineering-manager-mode plan review. Locks in execution plan: architecture, data flow, edge cases, test coverage, performance. Thin ytstack wrapper that injects slice-plan context into the vendored gstack plan-eng-review procedure. Run after plan-ceo-review (if used) and before plan-task."
 allowed-tools:
   - Bash
   - Read
   - Edit
   - AskUserQuestion
-triggers:
-  - plan-eng-review
-  - engineering review
-  - architecture review
-  - lock in the plan
-  - ytstack eng review
 ---
 
-# plan-eng-review
+# ytstack:plan-eng-review
 
-Eng-manager-mode review of the current milestone's execution plan. Where plan-ceo-review challenges scope and ambition, plan-eng-review challenges architecture and execution details. Wrapper around vendored gstack.
+Thin wrapper around the vendored gstack `plan-eng-review` skill (`vendor/gstack/plan-eng-review/SKILL.md`). Injects ytstack slice-plan context, then inlines the vendored procedure verbatim. Vendor is single source of truth.
 
-## When to run
+## ytstack context (resolved at render time)
 
-- After `plan-milestone` + `slice-milestone` produce concrete slice-plans
-- After `plan-ceo-review` if scope was expanded (new architectural implications)
-- Before the first `plan-task`, so architecture decisions land before code does
-- When you suspect the slicing is structurally wrong (circular dependencies, missing infra)
-
-## Anti-Pattern: "We'll figure out architecture during execution"
-
-Architecture decisions get baked into the first three files touched. By the time you notice the pattern is wrong, it's replicated across the slice. Eng review is the last cheap moment to catch this.
-
-## Checklist
-
-1. **Run preamble** -- state + slice-plans inventory
-2. **HARD-GATE** -- current milestone is sliced (at least one `M###-S##-PLAN.md` exists)
-3. **Load vendored skill**
-4. **Inject slice-plan subject** -- pass the current slice-plan(s) as the subject
-5. **Run vendored procedure** -- its edge-case, test-coverage, perf, architecture checks
-6. **Apply changes to slice-plans** if review recommends
-7. **Log decision to DECISIONS.md** if architecture shifted
-8. **Report + return**
-
-## Preamble
-
-```bash
-_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-cd "$_PROJECT_DIR" 2>/dev/null || true
+```!
+cd "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || true
 _PROJECT_SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || basename "$(pwd)")
-if [ -d "$_PROJECT_DIR/.ytstack" ]; then _YT_DIR="$_PROJECT_DIR/.ytstack";
+if [ -d "$PWD/.ytstack" ]; then _YT_DIR="$PWD/.ytstack";
 elif [ -d "$HOME/.ytstack/projects/$_PROJECT_SLUG" ]; then _YT_DIR="$HOME/.ytstack/projects/$_PROJECT_SLUG";
 else _YT_DIR=""; fi
-_HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
-
 _CURRENT_MILESTONE=none
-[ -f "$_YT_DIR/STATE.md" ] && _CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$_YT_DIR/STATE.md" | head -1)
-
-# List slice-plans for the current milestone
+if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STATE.md" ]; then
+  _CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$_YT_DIR/STATE.md" | head -1)
+fi
 _SLICE_PLANS=""
-if [ -n "$_CURRENT_MILESTONE" ] && [ -d "$_YT_DIR" ]; then
+if [ -n "$_CURRENT_MILESTONE" ] && [ "$_CURRENT_MILESTONE" != "none" ] && [ -d "$_YT_DIR" ]; then
   _SLICE_PLANS=$(ls "$_YT_DIR"/$_CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md 2>/dev/null | tr '\n' ' ')
 fi
-
-_VENDOR_SKILL="${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/gstack/plan-eng-review/SKILL.md"
-_VENDOR_EXISTS=$([ -f "$_VENDOR_SKILL" ] && echo yes || echo no)
-
-echo "HAS_YTSTACK: $_HAS_YTSTACK"
+echo "HAS_YTSTACK: $([ -n "$_YT_DIR" ] && echo yes || echo no)"
+echo "YT_DIR: $_YT_DIR"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "SLICE_PLANS: ${_SLICE_PLANS:-none}"
-echo "VENDOR_EXISTS: $_VENDOR_EXISTS"
 ```
 
-## Procedure
+## ytstack invocation notes
 
-**Step 2 HARD-GATE.**
+You are invoked inside a ytstack project. The "plan" being engineering-reviewed is the current milestone's slice-plans (paths listed above). When the vendored procedure below asks what plan to review, read those files; do NOT prompt the user to identify a plan.
 
-- `HAS_YTSTACK=no` → abort
-- `CURRENT_MILESTONE=none` → abort "run plan-milestone first"
-- `SLICE_PLANS=none` → abort "run slice-milestone first"
-- `VENDOR_EXISTS=no` → abort "gstack not vendored; see vendor/README.md"
+HARD-GATE: if `HAS_YTSTACK=no` or `CURRENT_MILESTONE=none` or `SLICE_PLANS=none`, abort with: "Run `ytstack:init-project`, `ytstack:plan-milestone`, and `ytstack:slice-milestone` first." Do not invoke the vendored procedure.
 
-**Step 3 -- Load vendored.** Read `{VENDOR_SKILL}` in full.
+After the vendored procedure completes:
+- Apply review outcomes by editing the affected slice-plans (add edge cases, adjust tests, tighten scope).
+- Append any locked architectural decision to `DECISIONS.md` in append-only format.
 
-**Step 4 -- Inject subject.** Build a subject summary from slice-plans:
+## Vendored procedure (inlined verbatim)
 
-> Reviewing execution plan for milestone **{CURRENT_MILESTONE}** of project **{PROJECT_NAME}**.
->
-> Slices:
-> {For each slice-plan:}
-> - **{SLICE_ID}:** {slice goal} -- {N} tasks
->   Files touched across tasks: {union of Files sections}
->
-> Architecture concerns to evaluate: data flow across slices, dependency order, shared state, test coverage, performance hot-spots.
-
-Tell the vendored skill to take this as the plan under review.
-
-**Step 5 -- Run vendored procedure.** Execute per gstack's eng-review logic: architecture diagram, edge cases, test coverage gaps, performance concerns, security surface. Its AskUserQuestion prompts run as-is.
-
-**Step 6 -- Apply changes.** If the review recommends changes to specific slice-plans or task-plans:
-
-- For slice-plan edits: use Edit tool on `{CURRENT_MILESTONE}-{SLICE_ID}-PLAN.md` per recommendation
-- For new tasks added: append to the slice's Tasks section (respect 1-7 rule -- if it pushes past 7, flag and recommend running `slice-milestone` to add a new slice)
-- For new slices: note the need and recommend user run `slice-milestone` after (not automatic)
-
-**Step 7 -- Log decision.** If architecture shifted materially, append to `DECISIONS.md`:
-
-```markdown
-## {ISO_TIMESTAMP}: Eng-review of {CURRENT_MILESTONE}
-
-**Context:** Ran `ytstack:plan-eng-review` on milestone {CURRENT_MILESTONE} slice-plans.
-**Outcome:** {what changed architecturally}
-**Reason:** {user-reasoning}
+```!
+cat "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/gstack/plan-eng-review/SKILL.md"
 ```
-
-**Step 8 -- Report + return.**
-
-> Engineering review complete on **{CURRENT_MILESTONE}**.
->
-> Changes applied:
-> - {list, or "none -- plan held up"}
->
-> DECISIONS.md updated: {yes/no}.
->
-> Next step: if changes were structural, re-run `/ytstack:slice-milestone` for affected slices. Otherwise proceed to `/ytstack:plan-task` for the first task.
-
-## Terminal State
-
-Return after applying review. Do NOT invoke `slice-milestone`, `plan-task`, or other downstream skills automatically.
