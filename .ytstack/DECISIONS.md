@@ -237,3 +237,38 @@ Format for each entry:
 **Reason:** Simplest, no implied channel distinction, no stale `-marketplace` suffix. The install command reads as "plugin ytstack from marketplace ytstack" -- redundant but unambiguous. Matches the self-marketplace spirit: one repo, one marketplace, minimum naming overhead.
 
 **Supersedes:** the "How to apply" bullet in "2026-04-24: ytstack self-marketplaces, no separate `-marketplace` repo" that specified `ytstack@ytstack-marketplace`. New install: `/plugin install ytstack@ytstack`.
+
+---
+
+## 2026-04-24: Greenfield-flow reorder -- office-hours → plan-ceo-review → [plan-eng-review] → init-project → plan-milestone
+
+**Context:** Smoke test 2026-04-24 in a greenfield dir with marketplace-installed plugin exposed the greenfield-flow first-skill miss concretely. Prompt "baue mir eine cli die csv-files liest und in postgres laedt" auto-invoked `ytstack:plan-milestone` (semantically matched "plan a milestone" / "what's next" rows) instead of any project-validation or infra-setup entry. Four combined root problems:
+
+1. Trigger map: init-project triggers only on literal "init ytstack" / "new project" phrasings, missing natural build-intent like "baue mir X" / "build me X".
+2. Skill ordering: plan-ceo-review + plan-eng-review are milestone-scoped (read `M###-CONTEXT.md` + `M###-ROADMAP.md`), cannot validate a project concept before any milestone exists.
+3. init-project mixes infra-setup (scope decision, skeleton files) with PM content (name, one-liner) -- forces the user to invent pitch cold during infra-setup.
+4. Even the currently-documented greenfield flow (QUICKSTART: init-project → plan-milestone → [optional plan-ceo-review]) is not reliably matched by agent behavior after the marketplace install.
+
+REVIEW-NOTES 2026-04-24 "Greenfield-flow first-skill is wrong" and docs/concept.md §5.1 "Open design point" already proposed the target flow:
+
+    office-hours (concept validation)
+      → plan-ceo-review (premise + scope challenge)
+      → [optional] plan-eng-review (architecture review)
+      → init-project (infra-only: scope decision + skeleton files)
+      → plan-milestone
+
+**Options considered:**
+- A) Surface-fix only: extend init-project trigger-map for build-intent phrasings ("baue mir X", "build me X"). Fastest. Leaves ordering, init-project split, and plan-ceo-review concept-mode unresolved.
+- B) Partial: add dual-mode (concept + milestone) to plan-ceo-review + plan-eng-review; update trigger map for greenfield entry; leave init-project unchanged. Half-measure.
+- C) Full: (1) dual-mode plan-ceo-review + plan-eng-review (concept + milestone), (2) init-project refactor -- PM questions removed, PROJECT.md name/one-liner populated from office-hours output instead, (3) office-hours' Terminal State points at plan-ceo-review, which points at plan-eng-review (optional) or init-project, which points at plan-milestone, (4) using-ytstack trigger map rewritten for greenfield routing, (5) README.md / QUICKSTART.md / docs/concept.md §5.1 updated for the new flow.
+
+**Chose:** C.
+
+**Reason:** Workflow orchestration is the foundational value of ytstack, not a deferrable polish. Shipping A or B would lock in the wrong default: every greenfield user lands in plan-milestone (or init-project with cold PM questions) before the project premise is validated -- contradicting ytstack's own methodology. The REVIEW-NOTES proposal is already the target; we simply haven't paid the implementation cost yet. User explicit 2026-04-24: "die orchestrierung des workflows ist die GRUNDLAGE fuer dieses plugin, das KOENNEN WIR NICHT AUFSCHIEBEN".
+
+**How to apply:**
+- New milestone **M010 "Greenfield Flow Reorder"** planned next via `ytstack:plan-milestone`, sliced via `ytstack:slice-milestone`.
+- Artifacts in scope: `skills/office-hours/`, `skills/plan-ceo-review/`, `skills/plan-eng-review/`, `skills/init-project/`, `skills/using-ytstack/` (trigger map), `README.md`, `QUICKSTART.md`, `docs/concept.md` §5.1.
+- Out of scope: no changes to downstream lifecycle skills (plan-milestone, slice-milestone, plan-task, summarize-task, reassess-roadmap, handoff-session, resume-session).
+- Exit criterion: re-run same greenfield smoke test ("baue mir eine cli...") routes to `office-hours` first (not plan-milestone), and the documented flow in QUICKSTART matches observed agent behavior.
+- Supersedes: the implicit ordering in QUICKSTART.md §1-6 and docs/concept.md §5.1. Those files are updated as part of M010 execution.
