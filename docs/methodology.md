@@ -71,7 +71,7 @@ The external source distinguishes multiple agent types with specific roles. We d
 - Spawned-session-detection pattern
 - Outcome-framing vs implementation-framing
 - Jargon-gloss-on-first-use
-- Banned-words + writing-style contract
+- Writing-style guidance (short sentences, concrete nouns, outcome framing, jargon gloss). Note: the banned-words list from an earlier version was rolled back on 2026-04-24 as scope-creep; only the em-dash punctuation rule is mechanically enforced. See DECISIONS 2026-04-24 "drop banned-vocabulary list".
 
 ### GSD (Get Shit Done) -- architectural influence, NOT vendored
 

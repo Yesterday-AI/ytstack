@@ -197,10 +197,10 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 
 #### `using-ytstack` (directive, not user-invokable)
 
-**Purpose:** Agent-behavior primer. Injected on every session start by the SessionStart hook; tells the agent to auto-route natural-language user intent to the right ytstack skill via the trigger map. Without this directive, ytstack behaves as a slash-command menu; with it, the agent proactively reaches for skills based on user phrasing.
+**Purpose:** Agent-behavior primer. Injected on every session start by the SessionStart hook; tells the agent to select ytstack skills by semantic matching against each skill's `description:` field (not a phrase/keyword table) and to invoke via the `Skill` tool when any skill plausibly applies (1%-rule). Without this directive, ytstack behaves as a slash-command menu; with it, the agent proactively reaches for skills based on user intent.
 **Produces:** no artifact; the skill content IS the instruction.
 **Triggers on:** not invoked directly by user or agent (`user-invocable: false` in frontmatter). Loaded via `cat` by the `session-start` hook and injected as `additionalContext` at session start.
-**Differs from every other skill:** it is a meta-directive, not an action. Declaring it as a SKILL.md matches superpowers' `using-superpowers` pattern and lets the hook treat it as the canonical source of the trigger map + anti-rationalization Red Flags.
+**Differs from every other skill:** it is a meta-directive, not an action. Declaring it as a SKILL.md matches superpowers' `using-superpowers` pattern. Per DECISIONS 2026-04-24 "Skill selection is semantic, not keyword-based", this file does NOT contain a trigger-map / phrase-table; selection is driven by each skill's own description field.
 
 ---
 
@@ -241,7 +241,7 @@ ytstack stays small by design. Before adding a new skill (wrapped OR native), an
 
 2. **How is it distinct from every existing ytstack skill AND from every vendored sibling under `vendor/`?** Hand-wavy differentiation ("a lighter version of X", "a different style of Y") is a red flag. The distinction must name a specific input or output that no existing skill handles. Write the differentiation one-liner BEFORE writing the skill; if you cannot, the skill is not well-scoped.
 
-3. **What concrete user phrasing triggers it in the `using-ytstack` trigger map?** A skill without a natural-language trigger row is a skill the agent cannot reach proactively. If you cannot write a concrete lower-cased phrase the user would actually say, the skill probably lacks a purpose real users will experience.
+3. **Does the skill's `description:` field state when-to-use clearly enough for semantic matching against real user intents?** ytstack does NOT use a trigger-map / phrase-lookup (per DECISIONS 2026-04-24 "Skill selection is semantic"). Selection is driven by the `description:` field, which Claude Code's model matches against user intent. A weak description is a skill the agent cannot reach proactively. Write when-to-use in situational / contextual prose (e.g. "Use before claiming work is complete") that covers expected user phrasings semantically without enumerating keywords.
 
 **Wrapped skills count against the budget identically to native skills.** Adding a wrapper is not "free" just because the logic lives in `vendor/`. Our thin-wrapper infrastructure still needs ytstack-context injection + mode detection + cross-ref validation. Every wrapped skill adds to the context-window load that users pay for.
 
@@ -252,8 +252,8 @@ ytstack stays small by design. Before adding a new skill (wrapped OR native), an
 ### 4.1 Agent-driven, not user-driven
 
 SessionStart hook injects on every session start:
-1. The full `using-ytstack/SKILL.md` content as a directive (trigger map + anti-rationalization Red Flags) -- primes the agent to map natural-language intent to ytstack skills.
-2. A project-state snapshot (current milestone / slice / task, recent summaries, next action).
+1. The full `using-ytstack/SKILL.md` content as a directive (1%-rule + anti-rationalization Red Flags + instruction-priority) -- primes the agent to invoke skills via the `Skill` tool based on semantic matching against each skill's `description:` field. No trigger-map / phrase-table (per DECISIONS 2026-04-24 "Skill selection is semantic, not keyword-based").
+2. A project-state snapshot (current milestone / slice / task, recent summaries, next action) if `.ytstack/` exists; otherwise a greenfield block telling the agent to prefer `office-hours` for build-intent.
 
 Users talk in plain language. The agent reaches for skills automatically. Slash-commands (`/ytstack:<name>`) are the steering override / escape hatch, not the normal path.
 
@@ -293,7 +293,7 @@ Key properties of this flow:
 - `office-hours` is the greenfield entry point. The pitch artifact it produces carries structured `name:` + `one-liner:` frontmatter that downstream skills consume without re-asking.
 - `plan-ceo-review` and `plan-eng-review` auto-detect mode: "concept" (pitch exists, no milestone) or "milestone" (milestone exists). Same skill, two review subjects.
 - `init-project` asks only one question (scope: project-level vs user-level vs both). No name / one-liner prompts; those come from the pitch, or placeholders pointing to office-hours if run without a pitch.
-- `using-ytstack` trigger map routes greenfield build-intent ("baue mir eine cli", "build me a tool", "I have an idea") to `office-hours` first, not to `plan-milestone` or `init-project` directly.
+- `office-hours`' `description:` field explicitly positions it as "the first step when a new project, feature, or initiative has not yet been validated", which the agent matches semantically against greenfield build-intent in any phrasing (German, English, paraphrase). `init-project` and `plan-milestone` descriptions explicitly name office-hours as their predecessor, so the agent does not route build-intent directly to either of them.
 
 ### 5.2 Brownfield -- existing `.ytstack/`, continuing or starting new work
 

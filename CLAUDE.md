@@ -65,7 +65,7 @@ Without exception. CI validates:
 - Frontmatter has `name`, `description`, `tier`, `version`, `allowed-tools`
 - Required sections: Anti-Pattern (optional but recommended), Checklist, Process Flow (for non-trivial skills), Preamble, Procedure, Terminal State
 - `AskUserQuestion` bodies have Re-ground + Simplify + RECOMMENDATION + Options (with Completeness + tier)
-- No banned words from `docs/ux/writing-style.md`
+- No em-dashes (`—` U+2014) in prose per `docs/ux/writing-style.md` (autocorrect hazard)
 - Sentinel file names match `<skill-name>-<question-identifier>` convention
 
 Violations fail CI. No exceptions.
@@ -106,7 +106,7 @@ ytstack's skill philosophy differs from Claude Code's published skill guidance i
 
 ### AI vocabulary
 
-See `docs/ux/writing-style.md` for the banned words list (delve, robust, comprehensive, etc.) and banned phrases. Auto-rejected in CI.
+See `docs/ux/writing-style.md` for writing-quality guidance (short sentences, concrete nouns, outcome framing, jargon gloss). The em-dash rule (`—` → `--`) is the only mechanically-enforced punctuation rule per DECISIONS 2026-04-24 "drop banned-vocabulary list (scope creep)".
 
 ### Third-party methodology content redistribution
 

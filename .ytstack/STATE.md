@@ -1,7 +1,7 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-04-24T17:30:00Z
+last_updated: 2026-04-24T18:08:52Z
 current_milestone: review + post-M009-patches
 active_slice: none
 active_task: none
@@ -16,7 +16,7 @@ active_task: none
 **Session 2026-04-24 additions:**
 - `docs/concept.md` (DRAFT, not yet user-approved) -- condensed reference paper synthesized from README + DECISIONS + methodology. README remains authoritative until explicit sign-off.
 - `.ytstack/VENDOR-INVENTORY.md` -- full inventory of 43 gstack skills + 14 superpowers skills, grounds future "what exists upstream?" questions.
-- `.claude/skills/check-consistency/SKILL.md` -- project-meta audit skill (NOT plugin-shipped). Runs 9 checks (skill-count drift, wrapped/native vs disk, trigger-map coverage, hook inventory, artifact list, workflow refs, banned-words, skip-claims).
+- `.claude/skills/check-consistency/SKILL.md` -- project-meta audit skill (NOT plugin-shipped). Runs 9 checks (skill-count drift, wrapped/native vs disk, hook inventory, artifact list, workflow refs, em-dash, skip-claims, and skill-description quality via semantic-selection hints). Note: the earlier "trigger-map coverage" and "banned-words" checks are retired per DECISIONS 2026-04-24 "Skill selection is semantic" + "drop banned-vocabulary list".
 - `CLAUDE.md` -- "Read first" pointer added (concept → DECISIONS → VENDOR-INVENTORY before architectural proposals).
 - `REVIEW-NOTES.md` -- 4+ new entries: pathname-confound, Denglisch-leak (policy: skills stay consistently English), greenfield-flow-first-skill-miss (open design point), skill-count-drift candidate for check-consistency.
 

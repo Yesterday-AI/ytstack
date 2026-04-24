@@ -121,7 +121,7 @@ Use the Read tool to load into working memory:
 - `docs/concept.md` (full)
 - `docs/methodology.md` (full)
 - `.ytstack/DECISIONS.md` (full)
-- `docs/ux/writing-style.md` (full, for banned-words list)
+- `docs/ux/writing-style.md` (full, for em-dash rule and any residual style requirements)
 
 ### Step 4: Read implementation inventory
 
@@ -129,7 +129,7 @@ For every directory in `_SKILLS_ON_DISK`, Read `skills/<name>/SKILL.md` frontmat
 
 Read `hooks/hooks.json` (full).
 
-Read `skills/using-ytstack/SKILL.md` (full) -- the trigger map is there.
+Read `skills/using-ytstack/SKILL.md` (full) -- the meta-directive is there. Per DECISIONS 2026-04-24 "Skill selection is semantic, not keyword-based", it no longer contains a trigger-map.
 
 ### Step 5: Run the nine consistency checks
 
@@ -157,12 +157,11 @@ For each check, record: check name, result (PASS / WARN / FAIL), findings list.
 - README §"ytstack is the curation" text: regex-extract any skill names called out as "duplicates" or "conflicts with" or "skipped".
 - Cross-check with `docs/concept.md` §3.2 table rows. Each README-skip must have a corresponding §3.2 row. Each §3.2 row must cite README. Mismatch -> WARN.
 
-#### Check 5: Trigger-map vs README natural-language examples
+#### Check 5: Skill descriptions cover README examples semantically
 
-- From `skills/using-ytstack/SKILL.md`, parse the trigger map table (markdown table under "Trigger map").
-- From `README.md` §"What a session feels like", parse the bulleted "Say X -> skill Y" examples.
-- Every README phrase must appear in the trigger map (or a close semantic equivalent). Missing -> WARN.
-- Every trigger-map skill must exist in `skills/`. Missing skill -> FAIL.
+- From `skills/using-ytstack/SKILL.md`, verify there is NO trigger-map table (per DECISIONS 2026-04-24 "Skill selection is semantic"). If one is found -> FAIL with "trigger-map reintroduced; skill selection must be description-based".
+- From `README.md` §"What a session feels like", extract the bulleted "Say X -> skill Y" examples.
+- For each README phrase, the target skill's `description:` field must semantically cover the intent (not via keyword list; via situational / contextual when-to-use prose). Manual review: read each target skill's description and confirm the phrase would semantically route there. WARN on any phrase whose target description does not obviously cover the intent -- the fix is to sharpen the description, never to re-add a keyword list.
 
 #### Check 6: Hook inventory
 
@@ -182,12 +181,12 @@ For each check, record: check name, result (PASS / WARN / FAIL), findings list.
 - Each name must resolve to `skills/<name>/`. Dangling reference -> FAIL.
 - From `QUICKSTART.md` do the same.
 
-#### Check 9: Banned words
+#### Check 9: Em-dash punctuation hygiene
 
-- From `docs/ux/writing-style.md`, extract the banned-word list.
-- Grep `README.md`, `docs/concept.md`, `QUICKSTART.md`, `CLAUDE.md`, `.ytstack/PROJECT.md` for each banned word (word-boundary, case-insensitive).
-- Any hit -> WARN with the line reference.
-- Also grep for literal em-dash character (`—`, U+2014) outside of meta-reference files (`docs/ux/writing-style.md`, `.ytstack/KNOWLEDGE.md`, `.ytstack/REVIEW-NOTES.md`). Hits -> WARN.
+- Grep `README.md`, `docs/concept.md`, `QUICKSTART.md`, `CLAUDE.md`, `.ytstack/PROJECT.md` for the literal em-dash character (`—`, U+2014).
+- Hits -> WARN with line reference. The em-dash is a concrete macOS autocorrect hazard (not a style preference) per `docs/ux/writing-style.md`; use `--` instead.
+- Meta-reference files that DESCRIBE the em-dash rule are exempt: `docs/ux/writing-style.md`, `.ytstack/KNOWLEDGE.md`, `.ytstack/REVIEW-NOTES.md`, `.ytstack/DECISIONS.md`.
+- NO banned-vocabulary scan (rolled back 2026-04-24, see DECISIONS).
 
 ### Step 6: Emit the report
 

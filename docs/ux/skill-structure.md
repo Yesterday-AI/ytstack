@@ -233,7 +233,7 @@ If `YTSTACK_NON_INTERACTIVE: true` appears in the preamble output, the skill MUS
 
 ## Writing Style
 
-All skill prose follows [writing-style.md](writing-style.md). Banned words, jargon gloss, outcome framing, concreteness standard.
+All skill prose follows [writing-style.md](writing-style.md). Jargon gloss, outcome framing, concreteness standard, em-dash punctuation rule. (An earlier banned-words list was rolled back 2026-04-24 as scope-creep; only the em-dash rule is mechanically enforced.)
 
 ## Validation (CI)
 
@@ -246,7 +246,7 @@ All skill prose follows [writing-style.md](writing-style.md). Banned words, jarg
 - [x] Preamble emits all required flags
 - [x] Terminal State section exists and lists forbidden next-skills
 - [x] Every `AskUserQuestion` body passes `askuserquestion-format.md` validation
-- [x] No banned words from `writing-style.md` appear in prose
+- [x] No em-dashes (`—` U+2014) in prose per `writing-style.md` (autocorrect hazard)
 - [x] Sentinel file paths match convention
 
 Violations fail CI. No exceptions.

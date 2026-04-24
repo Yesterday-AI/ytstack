@@ -1,6 +1,6 @@
 # ytstack Writing Style
 
-Applies to every skill response, every `AskUserQuestion`, every review finding, every summary. CI validates the banned-words rule on merge.
+Applies to every skill response, every `AskUserQuestion`, every review finding, every summary. `bin/ytstack-check` mechanically enforces only the em-dash rule (see "Punctuation pitfalls" below); everything else is a quality contract for skill-authors to honor.
 
 ## Core principles
 
