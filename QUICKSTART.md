@@ -1,6 +1,6 @@
 # ytstack Quickstart
 
-From zero to running a tracked milestone in 10 minutes.
+From zero to a tracked, shipped task -- the way you actually use ytstack: by talking to the agent in natural language. The agent fires skills automatically. Slash-commands are an override path, not the default.
 
 ## Install
 
@@ -29,135 +29,122 @@ claude --plugin-dir /path/to/ytstack --permission-mode acceptEdits -p "<prompt>"
 
 The `--permission-mode acceptEdits` flag is required -- ytstack skills write `.ytstack/` artifacts and would stall on permission prompts otherwise. Non-interactive detection via `YTSTACK_NON_INTERACTIVE=1` environment variable.
 
+## How it works
+
+When Claude Code starts in a ytstack project, the `SessionStart` hook injects the `using-ytstack` directive (a compliance primer: "if any skill plausibly applies, invoke it via the `Skill` tool before responding"). After that, the agent matches your natural-language intent against each skill's `description:` field **semantically** (no phrase list, no trigger map) and fires the right one.
+
+You almost never type `/ytstack:<name>`. The agent picks. You type slash-commands only to override, skip, or re-run a specific step.
+
 ## First milestone -- worked example
 
-Imagine building a small CLI tool. Here's the greenfield end-to-end flow (per DECISIONS 2026-04-24 "Greenfield-flow reorder"):
+Imagine building a small CLI tool from scratch. You're in an empty project directory (no `.ytstack/` yet). Greenfield flow:
 
-### 1. Validate the pitch
+### 1. Say what you want
 
-```text
-/ytstack:office-hours
+You type something like:
+
+> "Build me a CLI that imports CSV exports from accounting software into a Postgres staging table."
+
+That phrasing has no ytstack-specific keywords. The agent reads it, matches against every loaded skill's `description:`, and picks `ytstack:office-hours` (its description: "Use as the first step when a new project, feature, or initiative has not yet been validated"). You see:
+
+```
+> Skill(ytstack:office-hours)
+   Successfully loaded skill · N tools allowed
 ```
 
-Six forcing questions expose: demand reality, status quo, desperate specificity, narrowest wedge, observation, future-fit. Output: `./OFFICE-HOURS.md` with `name:` + `one-liner:` frontmatter and the full pitch body.
+The skill runs its six forcing questions (demand reality, status quo, desperate specificity, narrowest wedge, observation, future-fit). You answer in prose. When the pitch is complete, the skill writes `./OFFICE-HOURS.md` with structured frontmatter:
 
-Example result:
 ```
 ---
 name: csv-importer
 one-liner: CLI that imports CSV exports from accounting software into the finance database.
+mode: builder
 ---
+
+## Problem ...
+## What we're building ...
+(pitch body)
 ```
 
-### 2. CEO-review the pitch (concept mode)
+### 2. "Let's pressure-test the pitch"
 
-```text
-/ytstack:plan-ceo-review
-```
+You say:
 
-Challenges premise + scope of the pitch BEFORE any scaffolding. Mode: concept (pitch artifact, no milestone yet). Output: annotation on `OFFICE-HOURS.md` with go / rescope / kill verdict.
+> "Challenge the scope -- am I thinking big enough or too big?"
 
-### 3. (Optional) Eng-review the pitch (concept mode)
+Agent matches to `ytstack:plan-ceo-review` (description: "Challenge premise, scope, and ambition... concept-mode reviews a pitch..."). It detects concept-mode automatically (milestone doesn't exist, pitch does) and runs the four-mode review (SCOPE EXPANSION / SELECTIVE / HOLD / REDUCE). Outcome: an annotation block prepended to `OFFICE-HOURS.md` with the verdict and reasoning. The original pitch is preserved below.
 
-```text
-/ytstack:plan-eng-review
-```
+### 3. (Optional) "Sanity-check the approach"
 
-Feasibility + architectural risk check on the pitch. Also concept mode. Optional.
+Say: "Is the tech stack feasible?" -> agent fires `ytstack:plan-eng-review` in concept-mode. Also annotates the pitch. Optional; the flow can proceed without it.
 
-### 4. Scaffold the project
+### 4. "Scaffold the project"
 
-```text
-/ytstack:init-project
-```
+You say:
 
-You'll be asked:
-- Scope: **project-level** (recommended -- committed to git) vs user-level (private)
+> "OK, set it up for real."
 
-That's the only question. `PROJECT.md` gets pre-populated from `OFFICE-HOURS.md` (`name:` + `one-liner:`). The pitch is moved into `.ytstack/OFFICE-HOURS-<slug>.md` as a ytstack artifact.
+Agent fires `ytstack:init-project` (description: "Scaffold a ytstack project's `.ytstack/` directory... Use AFTER a pitch has been validated"). You get exactly one question: scope (project-level, committed to git, vs user-level, machine-local). That's it. No "what's the project name?" or "give me a one-liner" -- those come from `OFFICE-HOURS.md` frontmatter automatically. `PROJECT.md` is pre-populated. The pitch gets moved to `.ytstack/OFFICE-HOURS-<slug>.md` as a ytstack artifact.
 
 Result: `.ytstack/` with 6 core files + the consumed pitch.
 
-### 5. Plan the first milestone
+### 5. "Plan the first milestone"
 
-```text
-/ytstack:plan-milestone
-```
+You say:
 
-- Goal: drawn from pitch, refined: "Parse a CSV file and write it to the database."
-- Exit criteria: "Command `csv-importer path/to/file.csv` inserts all rows into `imports` table and reports row count."
-- Size: M (medium -- 2-3 slices)
+> "What ships first?"
 
-Result: `.ytstack/M001-CONTEXT.md` + `.ytstack/M001-ROADMAP.md` with slice placeholders.
+Agent fires `ytstack:plan-milestone`. Short discuss phase: goal (one-liner outcome), exit criteria (concrete checkable signals), size (S / M / L). Both goal and exit draw heavily from the pitch. Result: `.ytstack/M001-CONTEXT.md` + `.ytstack/M001-ROADMAP.md` with slice placeholders.
 
-### 6. Break the milestone into slices
+### 6. "Break it into slices"
 
-```text
-/ytstack:slice-milestone
-```
+You say:
 
-For each slice placeholder:
-- Slice goal: e.g. "S01 -- Parse CSV and validate rows"
-- Task list (1-7 tasks per slice): e.g.
-  1. Add CLI flag parsing with `--input` and `--output`
-  2. Implement CSV reader with streaming
-  3. Validate rows against schema
+> "Break M001 into slices."
 
-Result: `.ytstack/M001-S01-PLAN.md`, `.ytstack/M001-S02-PLAN.md`, etc.
+Agent fires `ytstack:slice-milestone`. For each slice, it asks the goal and 1-7 tasks. Result: `.ytstack/M001-S01-PLAN.md`, `.ytstack/M001-S02-PLAN.md`, etc.
 
-### 7. (Optional) Eng-review the slice-plans (milestone mode)
+Example S01: "Parse CSV and validate rows" with tasks [add CLI flag parsing, implement CSV reader with streaming, validate rows against schema].
 
-```text
-/ytstack:plan-eng-review
-```
+### 7. (Optional) "Architecture review"
 
-Same skill, milestone-mode this time: catches file-overlap between slices, test gaps, performance concerns. Distinct from the Step 3 concept-mode review of the pitch.
+Say: "Review the slice plans for architecture." -> `ytstack:plan-eng-review` milestone-mode this time. Same skill, different review subject (slice-plans, not pitch). Catches file-overlap, test gaps, perf concerns.
 
-### 8. Execute tasks -- two options
+### 8. Execute tasks
 
-**Option A: sequential (simple).** For each task:
+For each task in the active slice, the agent walks the loop. You type minimal prompts:
 
-```text
-/ytstack:plan-task          # elaborate next task (files + body + verification)
-/ytstack:test-driven-development   # implement with RED-GREEN-REFACTOR
-/ytstack:verification-before-completion  # confirm it passes
-/ytstack:summarize-task     # close the task, flip checkbox
-```
+| You say | Agent fires | What happens |
+|---|---|---|
+| "Detail the next task" / "what's next" | `ytstack:plan-task` | Writes `M001-S01-T01-PLAN.md` with exact file paths + body + verification command |
+| "TDD this" / (often auto-chained after plan-task) | `ytstack:test-driven-development` | RED test first, then minimal code, refactor, commit |
+| (on failure) "find the root cause" / "why is X broken" | `ytstack:systematic-debugging` | 4-phase root-cause-required procedure; feeds regression test back into TDD |
+| "Is it done?" / "check before commit" | `ytstack:verification-before-completion` | Runs the task-plan's verification command, confirms output |
+| "Task is done" / "close this out" | `ytstack:summarize-task` | Writes `M001-S01-T01-SUMMARY.md`, flips checkbox, updates `STATE.md` |
 
-**Option B: parallel via Agent Teams (faster, experimental).** Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and Claude Code v2.1.32+.
+You don't orchestrate the transitions -- the agent does, based on each skill's Terminal State pointer plus your confirmation. You confirm / correct; you don't drive.
 
-```text
-/ytstack:spawn-milestone-team
-```
+**Parallel variant:** when a milestone has multiple slices ready, say something like "dispatch a team to work the slices in parallel" -> agent fires `ytstack:spawn-milestone-team`. Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and Claude Code v2.1.32+. Each teammate works a slice in its own fresh 200k context.
 
-Spawns teammates (one per slice + optional architect-reviewer). Each teammate works in parallel with its own 200k context. Lead coordinates.
+### 9. "Reassess between slices"
 
-### 9. Reassess after each slice
-
-```text
-/ytstack:reassess-roadmap
-```
-
-Checks if the remaining plan still fits reality given what was learned in the slice. A/B/C decision: proceed, patch, or major rethink.
+At the end of each slice, say: "Does the roadmap still fit reality?" -> `ytstack:reassess-roadmap` reads recent summaries, surfaces deviations, prompts for roadmap changes (add / split / reorder / remove slices).
 
 ### 10. Close the milestone
 
-When all slices are done, update `.ytstack/ROADMAP.md` to flip the milestone to `done`. Run `/ytstack:plan-milestone` for the next.
+When all slices are done, say: "Close M001." -> agent updates `.ytstack/ROADMAP.md` to flip the milestone to `done`. Then say "plan the next milestone" when you're ready.
 
 ## Reading the state
 
-At any point:
+Open a new Claude Code session on the project. Before your first message, the `SessionStart` hook has already injected the `STATE.md` snapshot (current milestone / slice / task, recent summaries, next action). You can just say:
 
-```text
-/ytstack:resume-session
-```
+> "Where were we?"
 
-Reads `.ytstack/STATE.md` + `.ytstack/HANDOFF.md` (if present) + latest 3 task summaries. Gives you a 3-paragraph briefing of where you are.
+Agent fires `ytstack:resume-session` -- reads `STATE.md` + `HANDOFF.md` + latest 3 task summaries and gives you a 3-paragraph briefing. For a richer snapshot, read the files directly:
 
-For a richer snapshot, read the files directly:
 - `.ytstack/STATE.md` -- dashboard
 - `.ytstack/ROADMAP.md` -- full milestone plan
-- `.ytstack/DECISIONS.md` -- architectural decisions log
+- `.ytstack/DECISIONS.md` -- architectural decisions log (append-only)
 - `.ytstack/KNOWLEDGE.md` -- patterns and gotchas learned
 - `.ytstack/REVIEW-NOTES.md` -- deferred items flagged for end-of-cycle review
 
@@ -165,29 +152,38 @@ For a richer snapshot, read the files directly:
 
 Before stepping away for a break:
 
-```text
-/ytstack:handoff-session
-```
+> "I'm stepping away for a week -- do a handoff."
 
-Writes `.ytstack/HANDOFF.md` with current position + in-flight work + open decisions + warnings. Next session reads it via `resume-session`.
+Agent fires `ytstack:handoff-session`. Writes `.ytstack/HANDOFF.md` with current position + in-flight work + open decisions + warnings + a recommended resume prompt. Next session reads it.
 
 The SessionStart hook also auto-injects state on every session start, so `resume-session` is for deep-dives when you want more than the hook's compact summary.
 
 ## Debugging
 
-```text
-/ytstack:systematic-debugging
-```
+Say:
 
-Four-phase process: investigate → analyze → hypothesize → implement. Root cause required before any fix. Findings auto-logged to `KNOWLEDGE.md` (pattern) and `DECISIONS.md` (architectural shift).
+> "Something's broken, find it."
+
+Agent fires `ytstack:systematic-debugging`. Four-phase process: investigate -> analyze -> hypothesize -> implement. Root cause required before any fix. Findings auto-logged to `KNOWLEDGE.md` (pattern) and `DECISIONS.md` (architectural shift). The fix path merges back into the normal task loop: regression test first (TDD), then verify, then summarize.
+
+## When you DO type a slash-command
+
+Natural language is the happy path. You reach for `/ytstack:<name>` only in these cases:
+
+- **Override the agent's auto-pick.** Agent started `plan-milestone` but you want a CEO challenge first: type `/ytstack:plan-ceo-review`.
+- **Re-run a skill explicitly.** You already CEO-reviewed this milestone but want to re-challenge after new learnings: type `/ytstack:plan-ceo-review` again.
+- **Skip a step.** Greenfield flow says office-hours first, but you have a written pitch already: just type `/ytstack:init-project` and the skill will read your manual `./OFFICE-HOURS.md` frontmatter.
+
+For everything else, just talk.
 
 ## Common gotchas
 
 - **`claude -p` needs `--permission-mode acceptEdits`** or skills stall on Write prompts.
-- **Skill invocations are namespaced:** `/ytstack:init-project`, not `/init-project`.
+- **Skill invocations are namespaced** under `ytstack:` when you do use slash-commands (`/ytstack:init-project`, not `/init-project`).
 - **Sentinel files accumulate in `~/.ytstack/.*-prompted`** -- don't worry about them; cleanup command ships later.
 - **`.ytstack/` goes in git.** That's the default. Team members inherit project memory on clone.
 - **One milestone at a time.** If you start a second before closing the first, the roadmap-tracking breaks. Close M### by flipping status in `.ytstack/ROADMAP.md`.
+- **Agent picks the wrong skill?** Sharpen that skill's `description:` field to cover the intent more explicitly. Don't reintroduce phrase-lists -- that's the antipattern the design principle #6 warns about (see README).
 
 ## More
 

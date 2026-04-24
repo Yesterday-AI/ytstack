@@ -182,11 +182,31 @@ Without `--permission-mode acceptEdits`, Write operations stall on permission di
 
 ## Quickstart
 
-Greenfield: in your project directory, run `/ytstack:office-hours` to validate the pitch, then `/ytstack:plan-ceo-review` (optional `/ytstack:plan-eng-review`), then `/ytstack:init-project` to scaffold `.ytstack/` with `PROJECT.md` pre-populated from the pitch. One scope question, zero cold PM questions.
+**You talk in natural language; the agent fires skills automatically.** Slash-commands exist as an override path when you want to skip a step or re-run one. For the happy path you never type them.
 
-Brownfield (ytstack already initialized): say what you want in plain language -- the agent auto-routes to the right skill via the `using-ytstack` directive.
+**Greenfield** (empty project dir, no `.ytstack/` yet). Say something like "baue mir eine cli die X macht" / "let's build a tool that Y" / "I have an idea for Z". The agent matches your intent against each skill's `description:` semantically and walks the chain:
 
-See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example: `office-hours` → `plan-ceo-review` → `init-project` → `plan-milestone` → `slice` → `plan-task` → TDD → verify → summarize.
+| You say / what happens | Agent fires | Artifact produced |
+|---|---|---|
+| "build me X" / "I have an idea for Z" | `ytstack:office-hours` | `OFFICE-HOURS.md` (pitch with `name:` + `one-liner:` frontmatter) |
+| (after pitch is written) | `ytstack:plan-ceo-review` (concept mode) | annotation block prepended to pitch |
+| (optional, if architecture needs sanity-check) | `ytstack:plan-eng-review` (concept mode) | annotation block prepended to pitch |
+| (once pitch is locked) | `ytstack:init-project` | `.ytstack/` with 6 core files, `PROJECT.md` populated from pitch frontmatter |
+| (after scaffolding) | `ytstack:plan-milestone` | `M001-CONTEXT.md` + `M001-ROADMAP.md` |
+| "break this into slices" | `ytstack:slice-milestone` | `M001-S##-PLAN.md` per slice |
+| (per task in the slice) | `plan-task` -> TDD -> verify -> `summarize-task` | `T##-PLAN.md` -> code + tests -> `T##-SUMMARY.md` |
+
+**Brownfield** (ytstack already initialized). Say what you want in plain language:
+
+- "where were we" -> `resume-session` produces a 3-paragraph briefing
+- "let's plan what's next" -> `plan-milestone` (no active milestone) or `plan-task` (active milestone)
+- "this task is done" -> `summarize-task` closes the task, flips the checkbox, updates `STATE.md`
+- "something's broken, find it" -> `systematic-debugging` runs its 4-phase root-cause procedure (no symptom patches)
+- "let's do a handoff" -> `handoff-session` writes `HANDOFF.md` for the next session
+
+Type `/ytstack:<skill-name>` only when you want to override the auto-pick, skip a step, or explicitly re-run one (e.g. `/ytstack:plan-ceo-review` to re-challenge a milestone you already sliced). The using-ytstack directive loaded at session start enforces this model via the Skill tool.
+
+See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example written in the same natural-language style.
 
 ## Who this is for
 
