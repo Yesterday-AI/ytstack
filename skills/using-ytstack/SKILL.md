@@ -4,6 +4,7 @@ description: "Establishes how agents find and invoke ytstack skills. Requires Sk
 tier: core
 version: 0.1.0
 kind: directive
+user-invocable: false
 ---
 
 # Using ytstack
