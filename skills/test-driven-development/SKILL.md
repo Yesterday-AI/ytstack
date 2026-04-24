@@ -60,7 +60,7 @@ fi
 _TASK_PLAN="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$_ACTIVE_TASK-PLAN.md"
 _HAS_TASK_PLAN=$([ -f "$_TASK_PLAN" ] && echo yes || echo no)
 
-_VENDOR_SKILL="${CLAUDE_PLUGIN_ROOT:-/Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack}/vendor/superpowers/skills/test-driven-development/SKILL.md"
+_VENDOR_SKILL="${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/superpowers/skills/test-driven-development/SKILL.md"
 _VENDOR_EXISTS=$([ -f "$_VENDOR_SKILL" ] && echo yes || echo no)
 
 # If running under Agent Teams or headless orchestrator, force non-interactive on superpowers too

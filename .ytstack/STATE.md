@@ -50,9 +50,9 @@ Then: re-do init-project smoke-test in a neutral sandbox path (avoid "ytstack" s
 - Cross-cutting concerns
 - Findings per milestone (M001, M002, M003)
 
-After review, two user-action tasks close M008:
-- T33 -- Create GitHub repos: `yesterday-ai/ytstack` + `yesterday-ai/ytstack-marketplace`
-- T35 -- `git init` ytstack, add remote, commit, tag v0.1.0, push
+After review, remaining user-action to close M008:
+- T33 -- ~~Create GitHub repos~~ **done 2026-04-24**: `Yesterday-AI/ytstack` created (private, self-marketplaced; no separate marketplace repo per DECISIONS 2026-04-24).
+- T35 -- `git init` + initial commits + push: **done 2026-04-24**. Remaining: tag v0.1.0 + push tag.
 
 ## Completed milestones
 

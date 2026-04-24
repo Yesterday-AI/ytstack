@@ -62,7 +62,7 @@ if [ -n "$_CURRENT_MILESTONE" ] && [ -d "$_YT_DIR" ]; then
   _SLICE_PLANS=$(ls "$_YT_DIR"/$_CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md 2>/dev/null | tr '\n' ' ')
 fi
 
-_VENDOR_SKILL="${CLAUDE_PLUGIN_ROOT:-/Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack}/vendor/gstack/plan-eng-review/SKILL.md"
+_VENDOR_SKILL="${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/gstack/plan-eng-review/SKILL.md"
 _VENDOR_EXISTS=$([ -f "$_VENDOR_SKILL" ] && echo yes || echo no)
 
 echo "HAS_YTSTACK: $_HAS_YTSTACK"

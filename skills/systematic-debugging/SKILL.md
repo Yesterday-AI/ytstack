@@ -59,7 +59,7 @@ elif [ -d "$HOME/.ytstack/projects/$_PROJECT_SLUG" ]; then _YT_DIR="$HOME/.ytsta
 else _YT_DIR=""; fi
 _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 
-_VENDOR_SKILL="${CLAUDE_PLUGIN_ROOT:-/Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack}/vendor/superpowers/skills/systematic-debugging/SKILL.md"
+_VENDOR_SKILL="${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/superpowers/skills/systematic-debugging/SKILL.md"
 _VENDOR_EXISTS=$([ -f "$_VENDOR_SKILL" ] && echo yes || echo no)
 
 _CURRENT_MILESTONE=none; _ACTIVE_TASK=none

@@ -66,7 +66,7 @@ digraph check_consistency {
 ## Preamble
 
 ```bash
-_PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-/Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack}"
+_PLUGIN_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 cd "$_PLUGIN_ROOT" 2>/dev/null || { echo "ERR: cannot enter plugin root $_PLUGIN_ROOT"; exit 1; }
 
 _HAS_README=$([ -f README.md ] && echo yes || echo no)

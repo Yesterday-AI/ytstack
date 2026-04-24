@@ -1,13 +1,13 @@
 {
   "name": "ytstack",
   "version": "0.1.0",
-  "description": "Yesterday Technologies Stack — opinionated software-development OS for AI agents. Curated superpowers + gstack skills plus Project-OS artifact discipline (PROJECT.md, DECISIONS.md, KNOWLEDGE.md, milestone/slice/task hierarchy), orchestrated via SessionStart hooks.",
+  "description": "Yesterday Technologies Stack -- opinionated software-development OS for AI agents. Curated superpowers + gstack skills plus Project-OS artifact discipline (PROJECT.md, DECISIONS.md, KNOWLEDGE.md, milestone/slice/task hierarchy), orchestrated via SessionStart hooks.",
   "author": {
     "name": "Yesterday",
-    "url": "https://github.com/yesterday-ai"
+    "url": "https://github.com/Yesterday-AI"
   },
-  "homepage": "https://github.com/yesterday-ai/ytstack",
-  "repository": "https://github.com/yesterday-ai/ytstack",
+  "homepage": "https://github.com/Yesterday-AI/ytstack",
+  "repository": "https://github.com/Yesterday-AI/ytstack",
   "license": "MIT",
   "keywords": [
     "claude-code",

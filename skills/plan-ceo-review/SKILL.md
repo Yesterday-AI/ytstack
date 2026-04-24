@@ -61,7 +61,7 @@ _CONTEXT_FILE="$_YT_DIR/$_CURRENT_MILESTONE-CONTEXT.md"
 _ROADMAP_FILE="$_YT_DIR/$_CURRENT_MILESTONE-ROADMAP.md"
 
 # Vendored gstack skill path (plugin-root relative)
-_VENDOR_SKILL="${CLAUDE_PLUGIN_ROOT:-/Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack}/vendor/gstack/plan-ceo-review/SKILL.md"
+_VENDOR_SKILL="${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/gstack/plan-ceo-review/SKILL.md"
 _VENDOR_EXISTS=$([ -f "$_VENDOR_SKILL" ] && echo yes || echo no)
 
 echo "HAS_YTSTACK: $_HAS_YTSTACK"

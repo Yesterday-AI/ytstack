@@ -71,7 +71,7 @@ if [ "$_HAS_TASK_PLAN" = "yes" ]; then
   _VERIFICATION_CMD=$(awk '/^## Verification/{flag=1; next} /^## /{flag=0} flag' "$_TASK_PLAN" | grep -E '^```' -A 100 | sed -n '/^```bash/,/^```$/{/^```/d; p}' | head -5)
 fi
 
-_VENDOR_SKILL="${CLAUDE_PLUGIN_ROOT:-/Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack}/vendor/superpowers/skills/verification-before-completion/SKILL.md"
+_VENDOR_SKILL="${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/superpowers/skills/verification-before-completion/SKILL.md"
 _VENDOR_EXISTS=$([ -f "$_VENDOR_SKILL" ] && echo yes || echo no)
 
 echo "HAS_YTSTACK: $_HAS_YTSTACK"

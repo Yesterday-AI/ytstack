@@ -179,3 +179,42 @@ Format for each entry:
 - README.md currently at "16 skills" (§Status) and "16 skill packages" (§Repo layout); `/check-consistency` enforces this on every run.
 - `docs/concept.md` §9 drift bullet removed; the live `/check-consistency` run is now the enforcement surface.
 - If Claude Code later ships `invocable: false` or equivalent in the plugin manifest, revisit this decision via a superseding entry and consider surfacing the directive/invokable split in README prose.
+
+---
+
+## 2026-04-24: ytstack self-marketplaces, no separate `-marketplace` repo
+
+**Context:** Original M008 planning assumed a two-repo design: `Yesterday-AI/ytstack` (plugin source) plus a separate `Yesterday-AI/ytstack-marketplace` (marketplace manifest pointer). Research against Claude Code's official plugin-marketplace docs (2026-04-24) confirmed `.claude-plugin/marketplace.json` inside the plugin repo is natively supported as a "self-marketplace" -- no separate marketplace repo required. Keeping two repos would be duplicate maintenance for zero user benefit.
+
+**Options considered:**
+- A) Two-repo design: `Yesterday-AI/ytstack` + `Yesterday-AI/ytstack-marketplace`. Marketplace.json only in the marketplace repo.
+- B) Self-marketplace: one repo (`Yesterday-AI/ytstack`) holds both `plugin.json` and `marketplace.json` under `.claude-plugin/`, with the marketplace entry's `source` pointing at the same repo (`"./."`).
+
+**Chose:** B.
+
+**Reason:** Officially documented in Claude Code's plugin-marketplaces reference; removes one repo's worth of maintenance + sync overhead; collapses install to a single reference (`/plugin marketplace add Yesterday-AI/ytstack && /plugin install ytstack@ytstack-marketplace`). No downside surfaced during research. Applied in-session: README, QUICKSTART, docs/references.md, .ytstack/ROADMAP.md, RUNTIME.md, REVIEW-NOTES.md, STATE.md all reconciled; marketplace.json rewritten with `source: "./."` and stale `$note` removed.
+
+**How to apply:**
+- Install command everywhere: `/plugin marketplace add Yesterday-AI/ytstack` (plugin repo itself, not a separate marketplace repo), followed by `/plugin install ytstack@ytstack-marketplace` (marketplace name from the json).
+- `.claude-plugin/marketplace.json` uses `"source": "./."` for self-reference.
+- If a future decision adds community-maintained marketplaces (e.g. a Yesterday-wide or Anthropic-official marketplace listing), they can also reference ytstack -- this decision only commits that the primary, vendor-owned marketplace lives in-repo.
+
+---
+
+## 2026-04-24: Skill-level path fallbacks must fail-fast, not hardcode absolute Alex-only paths
+
+**Context:** Six plugin skills (test-driven-development, systematic-debugging, office-hours, plan-eng-review, verification-before-completion, plan-ceo-review) and one project-meta skill (check-consistency) used `${CLAUDE_PLUGIN_ROOT:-/Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack}` as the vendor-skill path resolution pattern. The fallback was Alex's machine-local absolute path, which would break on any other machine if the env var was unset.
+
+**Options considered:**
+- A) Leave hardcoded absolute fallback.
+- B) Fail-fast with `${CLAUDE_PLUGIN_ROOT:?msg}` for plugin skills; portable fallback `${CLAUDE_PROJECT_DIR:-$PWD}` for project-meta skills.
+- C) Derive plugin root from the running script via `$0` / `BASH_SOURCE`.
+
+**Chose:** B.
+
+**Reason:** Plugin skills only ever run inside Claude Code, where `CLAUDE_PLUGIN_ROOT` is set by the harness. If it's ever missing, the right behavior is an explicit error, not silent wrong-path execution against someone else's filesystem. Option C is brittle because SKILL.md bash blocks don't have a reliable `$0` from Claude Code's execution context. Project-meta skills (only check-consistency so far) use `CLAUDE_PROJECT_DIR` with `$PWD` fallback, matching the existing pattern in other ytstack preambles.
+
+**How to apply:**
+- Plugin skills: `"${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/..."`
+- Project-meta skills (under `.claude/skills/`): `"${CLAUDE_PROJECT_DIR:-$PWD}"`
+- Never reintroduce absolute user-machine paths as fallbacks.

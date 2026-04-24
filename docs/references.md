@@ -98,10 +98,10 @@ From https://code.claude.com/docs/en/hooks.md (and the Agent Teams extension at 
 - **User direction:** ytstack is "Yesterday Technologies Stack" -- ESD-focused (Enterprise Software Development), enterprise-capable but equally useful for solo dev.
 - **yesterday-os project:** exploratory scratch folder, NOT a separate product. Contains material we used to understand agent-OS patterns. ytstack does not merge with it.
 - **User scope-discipline rule:** never modify files outside current project directory without asking. See repo root `CLAUDE.md` (contributor guide).
-- **Related Yesterday repos:** `yesterday-ai/agentic-foundation` (sibling AI-foundation library, some skills installed as symlinks separately from ytstack).
+- **Related Yesterday repos:** `Yesterday-AI/agentic-foundation` (sibling AI-foundation library, some skills installed as symlinks separately from ytstack).
 
 ## Not sources (clarifications)
 
-- **gstack-marketplace** -- we do NOT publish to or depend on gstack's marketplace. ytstack publishes via `yesterday-ai/ytstack-marketplace` (M008).
+- **gstack-marketplace** -- we do NOT publish to or depend on gstack's marketplace. ytstack self-marketplaces: `.claude-plugin/marketplace.json` lives in the plugin repo itself (`Yesterday-AI/ytstack`), no separate marketplace repo. See DECISIONS 2026-04-24.
 - **superpowers-marketplace** -- same. We install superpowers as a git-subtree VENDOR, not as an installed plugin that users need separately.
 - **claude-plugins-official** -- Anthropic's official marketplace, source of the superpowers plugin we originally installed before deciding to vendor it into ytstack.

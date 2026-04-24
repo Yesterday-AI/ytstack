@@ -32,8 +32,8 @@ None. ytstack is file-based.
 
 Distribution via Claude Code plugin marketplace (M008):
 
-- Repo: `github.com/yesterday-ai/ytstack` (plugin source)
-- Marketplace: `github.com/yesterday-ai/ytstack-marketplace` (manifest pointer)
-- Install: `/plugin marketplace add yesterday-ai/ytstack-marketplace && /plugin install ytstack@ytstack-marketplace`
+- Repo: `github.com/Yesterday-AI/ytstack` (plugin source + self-marketplace)
+- Marketplace manifest: `.claude-plugin/marketplace.json` inside the plugin repo (no separate `-marketplace` repo -- see DECISIONS 2026-04-24)
+- Install: `/plugin marketplace add Yesterday-AI/ytstack && /plugin install ytstack@ytstack-marketplace`
 
 No CI runtime, no hosted service. Pure git-distributed.

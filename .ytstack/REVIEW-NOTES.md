@@ -93,13 +93,12 @@ Running list of items to verify, revisit, or polish at end-of-cycle review. Adde
 
 ### M008 -- Publishing
 
-- [ ] **User action needed:**
-  - `git init` ytstack repo
-  - Create `yesterday-ai/ytstack` GitHub repo
-  - Create `yesterday-ai/ytstack-marketplace` GitHub repo (separate)
-  - Commit marketplace.json to the marketplace repo
-  - Tag v0.1.0 on ytstack repo
-  - Push both
+- [x] ~~`git init` ytstack repo~~ done 2026-04-23
+- [x] ~~Create `Yesterday-AI/ytstack` GitHub repo~~ done 2026-04-24 (private)
+- [x] ~~Push initial commits~~ done 2026-04-24
+- [ ] Tag v0.1.0 on ytstack repo + push tag
+- [~] ~~Create `yesterday-ai/ytstack-marketplace` GitHub repo (separate)~~ **OBSOLETE** per DECISIONS 2026-04-24 (self-marketplace). `.claude-plugin/marketplace.json` lives in the plugin repo itself.
+- [~] ~~Commit marketplace.json to the marketplace repo~~ **OBSOLETE** per same DECISIONS entry.
 - [ ] **Marketplace.json fields may be incomplete.** Used inference from `plugins-reference` docs; verify against an existing marketplace manifest (e.g. obra/superpowers-marketplace).
 - [ ] **LICENSE text is standard MIT.** Verify Yesterday uses MIT specifically (not Apache-2.0) for this repo.
 
