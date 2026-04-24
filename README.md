@@ -61,6 +61,14 @@ Install all three and you get friction: interactive prompts blocking each other,
 
 **One vendored stack, one namespace.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/` holds read-only subtrees of superpowers and gstack, pulled via `git subtree`. Upstream updates land cleanly; we never modify their content.
 
+## The greenfield flow at a glance
+
+From raw idea to shipped task. Each process step (orange) produces an artifact on disk (green) that the next step reads as a contract. The `SessionStart` hook injects the `using-ytstack` directive once; skill selection after that is semantic -- the agent matches user intent against each skill's `description:` field, not a phrase list.
+
+![ytstack greenfield flow -- office-hours -> plan-ceo-review -> init-project -> plan-milestone -> slice -> task-loop (plan-task -> TDD -> verify -> summarize) -> reassess-roadmap at slice boundaries](docs/ytstack-greenfield-flow.png)
+
+Source: [`docs/ytstack-greenfield-flow.excalidraw`](docs/ytstack-greenfield-flow.excalidraw) (edit, then re-render with `uv run python skills/excalidraw-diagram/references/render_excalidraw.py docs/ytstack-greenfield-flow.excalidraw`).
+
 ## Compared to using each framework alone
 
 | Need | gstack alone | superpowers alone | GSD alone | **ytstack** |
