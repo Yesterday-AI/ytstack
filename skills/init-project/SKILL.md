@@ -1,6 +1,6 @@
 ---
 name: init-project
-description: "Initialize ytstack project tracking. Creates `.ytstack/` with PROJECT.md, DECISIONS.md, KNOWLEDGE.md, RUNTIME.md, STATE.md, PREFERENCES.md. Use when starting a new project or adopting ytstack on an existing one. Must run before any other ytstack skill."
+description: "Scaffold a ytstack project's `.ytstack/` directory with the 6 core artifacts (PROJECT.md, DECISIONS.md, KNOWLEDGE.md, RUNTIME.md, STATE.md, PREFERENCES.md). Use AFTER a pitch has been validated via office-hours (and optionally plan-ceo-review / plan-eng-review in concept-mode) -- init-project reads OFFICE-HOURS.md frontmatter to populate PROJECT.md name + one-liner. Do NOT use as the greenfield entry-point for unvalidated ideas; run office-hours first."
 tier: core
 version: 0.1.0
 allowed-tools:

@@ -1,6 +1,6 @@
 ---
 name: plan-ceo-review
-description: "CEO / founder-mode plan review. Challenges premise, scope, and ambition of the current milestone. Four modes: SCOPE EXPANSION, SELECTIVE EXPANSION, HOLD SCOPE, SCOPE REDUCTION. Thin ytstack wrapper that injects milestone context into the vendored gstack plan-ceo-review procedure. Use before locking a milestone plan."
+description: "Challenge premise, scope, and ambition via four modes: SCOPE EXPANSION, SELECTIVE EXPANSION, HOLD SCOPE, SCOPE REDUCTION. Auto-detects mode: concept-mode reviews a pitch (OFFICE-HOURS.md) before any scaffolding exists; milestone-mode reviews a committed milestone (M###-CONTEXT.md + M###-ROADMAP.md) before slicing. Use concept-mode right after office-hours to stress-test the pitch; use milestone-mode after plan-milestone and before slice-milestone. Thin ytstack wrapper around the vendored gstack plan-ceo-review procedure."
 allowed-tools:
   - Bash
   - Read

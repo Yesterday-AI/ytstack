@@ -1,6 +1,6 @@
 ---
 name: plan-eng-review
-description: "Engineering-manager-mode plan review. Locks in execution plan: architecture, data flow, edge cases, test coverage, performance. Thin ytstack wrapper that injects slice-plan context into the vendored gstack plan-eng-review procedure. Run after plan-ceo-review (if used) and before plan-task."
+description: "Review execution approach for feasibility, architecture, data flow, edge cases, test coverage, performance, and security risks. Auto-detects mode: concept-mode reviews a pitch (OFFICE-HOURS.md) for technical feasibility before any scaffolding; milestone-mode reviews slice-plans (M###-S##-PLAN.md) before plan-task. Use concept-mode optionally after plan-ceo-review to sanity-check the pitched approach; use milestone-mode after slice-milestone to lock architecture before implementation. Thin ytstack wrapper around the vendored gstack plan-eng-review procedure."
 allowed-tools:
   - Bash
   - Read

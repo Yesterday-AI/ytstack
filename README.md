@@ -167,6 +167,7 @@ ytstack/
 3. **Evidence before assertion.** Nothing counts as "done" without verification.
 4. **One fact, one place.** No duplicate documentation across files.
 5. **User sovereignty.** Explicit user decision gates before destructive or scope-expanding actions.
+6. **Skill selection via semantic descriptions, not keyword matching.** Claude Code's model matches user intent against each skill's `description:` field. Phrase-lists, trigger-maps, and secret-word tables are brittle by construction -- every new phrasing (language, paraphrase, dialect) breaks them. Skills self-identify through rich when-to-use descriptions; the agent selects semantically. If selection misbehaves, sharpen the description, never add a keyword list.
 
 ## Contributing
 

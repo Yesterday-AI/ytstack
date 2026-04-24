@@ -240,6 +240,34 @@ Format for each entry:
 
 ---
 
+## 2026-04-24: Skill selection is semantic (description-based), not keyword-based
+
+**Context:** The initial `using-ytstack/SKILL.md` included a trigger-map table mapping explicit user phrasings (`"baue mir X"`, `"build me X"`, `"new project"`, ...) to ytstack skills, plus a "Greenfield flow" section encoding a specific 6-step chain. Both were added by the agent during the using-ytstack authoring pass on 2026-04-24 (documented in the "Add `using-ytstack` skill" decision earlier today) as a defensive workaround for headless-mode skill-tool registration failures observed in M001 T05.
+
+Review 2026-04-24 revealed two problems:
+1. Phrase-matching is an antipattern. Every new user phrasing (German, paraphrase, domain-specific word) needs an explicit table entry; otherwise the agent silently misses. Fragile by construction. User feedback: "ich glaube den workflow an phrasen zu matchen ist ein unkontrollierbares antipattern."
+2. Other Claude-Code plugins (superpowers, claude-md-management, code-review, security-guidance) do NOT use trigger-map tables. They rely on the `description:` field in each skill's frontmatter, which Claude Code's model matches semantically against user intent. Docs confirm: "description - What the skill does and when to use it. Claude uses this to decide when to apply the skill."
+3. The M001 T05 headless-mode evidence that motivated the trigger-map did not apply to interactive-mode: superpowers has ~40 skills in production use without a trigger-map. The workaround was applied to the wrong layer.
+
+**Options considered:**
+- A) Keep trigger-map (status quo). Pro: explicit routing for known phrasings. Con: brittle, requires maintenance per new phrasing, fragile-by-construction.
+- B) Remove trigger-map entirely, rely on skill `description:` semantic matching + using-ytstack directive pressure (the superpowers pattern). Pro: matches documented Claude Code mechanism, handles unknown phrasings naturally, less maintenance. Con: requires each skill to have a rich, context-rich description; testing is LLM-judgment-based rather than deterministic.
+- C) Hybrid: keep trigger-map as "fast path", fall back to description-matching. Pro: both paths available. Con: two codepaths to maintain; the trigger-map path becomes an authoritative-seeming-but-incomplete list that drifts out of sync with descriptions.
+
+**Chose:** B.
+
+**Reason:** The trigger-map is the mechanism that superpowers deliberately does not have. Description-matching is how Claude Code skills are meant to be selected per documentation. Adding a phrase-list on top is scope-creep (same pattern as the banned-words list that was rolled back in the previous DECISIONS entry). It also reduces context-budget pressure on every session start because the directive becomes smaller.
+
+**How to apply:**
+- `skills/using-ytstack/SKILL.md` rewritten without the trigger-map table and greenfield-flow section. Kept: SUBAGENT-STOP, EXTREMELY-IMPORTANT, instruction priority, the rule (now description-first), skill priority (process / structural / execution), Red Flags table, process flow DOT. Version bumped to 0.2.0.
+- Five skill `description:` fields sharpened to encode greenfield-vs-milestone context + ordering (office-hours, init-project, plan-ceo-review, plan-eng-review, plan-milestone). Each description now states situational when-to-use that semantically covers expected user phrasings without listing keywords.
+- Added `using-ytstack/SKILL.md` version bump (0.1.0 -> 0.2.0) reflecting the structural change.
+- Added a design principle to README.md: "Skill selection via semantic descriptions, not keyword matching."
+
+**Supersedes:** the trigger-map and greenfield-flow portions of "2026-04-24: Add `using-ytstack` skill + SessionStart-hook-injected directive for agent-driven skill selection". The SessionStart-hook-injection pattern and 1%-rule directive stand. The trigger-map portion is retired.
+
+---
+
 ## 2026-04-24: Greenfield-flow reorder -- office-hours → plan-ceo-review → [plan-eng-review] → init-project → plan-milestone
 
 **Context:** Smoke test 2026-04-24 in a greenfield dir with marketplace-installed plugin exposed the greenfield-flow first-skill miss concretely. Prompt "baue mir eine cli die csv-files liest und in postgres laedt" auto-invoked `ytstack:plan-milestone` (semantically matched "plan a milestone" / "what's next" rows) instead of any project-validation or infra-setup entry. Four combined root problems:
