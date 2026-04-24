@@ -94,9 +94,14 @@ ytstack covers three workflows. The `SessionStart` hook injects the `using-ytsta
 
 From raw idea to shipped task. Each process step (orange) produces an artifact on disk (green) that the next step reads as a contract.
 
+<details>
+<summary><strong>Greenfield flow diagram</strong> (click to expand)</summary>
+
 ![ytstack greenfield flow -- office-hours -> plan-ceo-review -> init-project -> plan-milestone -> slice -> task-loop (plan-task -> TDD -> verify -> summarize) -> reassess-roadmap at slice boundaries](docs/ytstack-greenfield-flow.png)
 
-Source: [`docs/ytstack-greenfield-flow.excalidraw`](docs/ytstack-greenfield-flow.excalidraw) (single source of truth). Light render is the default; a dark render at [`docs/ytstack-greenfield-flow-dark.png`](docs/ytstack-greenfield-flow-dark.png) is generated via `appState.exportWithDarkMode = true` (patch `skills/excalidraw-diagram/references/render_template.html`, then `uv run python skills/excalidraw-diagram/references/render_excalidraw.py docs/ytstack-greenfield-flow.excalidraw --output docs/ytstack-greenfield-flow-dark.png`).
+Source: [`docs/ytstack-greenfield-flow.excalidraw`](docs/ytstack-greenfield-flow.excalidraw) (single source of truth).
+
+</details>
 
 ### 2. Brownfield -- existing `.ytstack/`, continuing or starting new work
 
@@ -121,6 +126,15 @@ At each slice boundary: `ytstack:reassess-roadmap` to check the plan still fits 
 
 **Parallel variant:** `ytstack:spawn-milestone-team` dispatches Claude Code Agent Teams (one teammate per slice, each in a fresh 200k context). Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` + Claude Code v2.1.32+.
 
+<details>
+<summary><strong>Brownfield flow diagram</strong> (click to expand)</summary>
+
+![ytstack brownfield flow -- SessionStart hook injects directive + STATE snapshot, natural-language routing to resume-session / plan-milestone / plan-task / summarize-task / handoff-session, task-loop continuation, post-slice reassess and parallel-team variants](docs/ytstack-brownfield-flow.png)
+
+Source: [`docs/ytstack-brownfield-flow.excalidraw`](docs/ytstack-brownfield-flow.excalidraw).
+
+</details>
+
 ### 3. Brownfield debugging -- something is broken
 
 ```
@@ -134,6 +148,15 @@ At each slice boundary: `ytstack:reassess-roadmap` to check the plan still fits 
 Iron rule: root cause required before any fix. Findings auto-log to `KNOWLEDGE.md` (pattern) and `DECISIONS.md` (architectural shift).
 
 Fix path merges back into the brownfield task loop: regression test first (`test-driven-development`) -> `verification-before-completion` -> `summarize-task`. Same task skeleton as feature work, not a separate "debug mode".
+
+<details>
+<summary><strong>Debugging flow diagram</strong> (click to expand)</summary>
+
+![ytstack debugging flow -- systematic-debugging 4-phase procedure (investigate / analyze / hypothesize / implement) with iron-rule root-cause gate, KNOWLEDGE + DECISIONS logs, and merge-back into the task loop via test-driven-development / verification-before-completion / summarize-task](docs/ytstack-debugging-flow.png)
+
+Source: [`docs/ytstack-debugging-flow.excalidraw`](docs/ytstack-debugging-flow.excalidraw).
+
+</details>
 
 ## Compared to using each framework alone
 
