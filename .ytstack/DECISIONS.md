@@ -272,3 +272,26 @@ REVIEW-NOTES 2026-04-24 "Greenfield-flow first-skill is wrong" and docs/concept.
 - Out of scope: no changes to downstream lifecycle skills (plan-milestone, slice-milestone, plan-task, summarize-task, reassess-roadmap, handoff-session, resume-session).
 - Exit criterion: re-run same greenfield smoke test ("baue mir eine cli...") routes to `office-hours` first (not plan-milestone), and the documented flow in QUICKSTART matches observed agent behavior.
 - Supersedes: the implicit ordering in QUICKSTART.md §1-6 and docs/concept.md §5.1. Those files are updated as part of M010 execution.
+
+---
+
+## 2026-04-24: Wrapper mechanism = shell-exec inject + cross-ref check
+
+**Context:** Audit 2026-04-24 revealed that existing ytstack "wrappers" (`plan-ceo-review`, `plan-eng-review`, `office-hours`, `test-driven-development`, `systematic-debugging`, `verification-before-completion`) mix prose indirection ("read vendor file and follow it") with partial adaptation / fork of vendor content. Worst case: `verification-before-completion` is 97% the size of the vendored original -- quasi-copy, not wrapper. Three of the six are thin (5-7% of vendor size), but even those use prose indirection rather than any CC-native mechanism. Both approaches violate the vendor-as-single-source-of-truth rule and will drift on upstream updates.
+
+**Options considered:**
+- A) Shell-exec content injection: wrapper body ends with `` `!`cat ${CLAUDE_PLUGIN_ROOT}/vendor/.../SKILL.md` `` to inline the vendor procedure verbatim at render time, with ytstack-specific context prepended. Documented CC feature.
+- B) plugin.json `"skills"` as array pointing at vendor/ dirs. Unverified whether the schema supports arrays, and no context-injection possible before vendor-procedure runs.
+- C) Stop wrapping -- ytstack ships only Project-OS skills, users install superpowers + gstack separately as their own plugins. Contradicts the README "one install" claim; loses ytstack-context-aware invocation.
+- D) Symlinks in `skills/` pointing to `vendor/<name>/`. Works but offers no context-injection hook.
+- paperclip `metadata.sources[]` + `usage: referenced`: spec-level wrap-vocabulary (agentcompanies.io/specification#external-references-and-pinning) but Claude Code has no native runtime that fetches / inlines / merges these references. Would require custom build tooling.
+
+**Chose:** A.
+
+**Reason:** Only A enforces vendor-as-SSOT (automatic flow-through of `./sync-upstream.sh` updates) while preserving the ytstack-context-injection we need (milestone file paths, STATE.md values, post-process instructions like "log scope decisions to DECISIONS.md"). D solves SSOT but loses context hook. B+C are either unverified or contradict positioning. `metadata.sources` is attractive conceptually but requires building our own runtime, which is out of scope for the current milestone. User explicit 2026-04-24: "shell inject kommt dem am naechsten, dann koennen wir anders als bei symlinks noch ein paar meta directives geben".
+
+**How to apply:**
+- Every wrapper SKILL.md becomes a thin file containing: minimal frontmatter (name + description + allowed-tools), a preamble ```` ```! ```` block that loads ytstack context (`_YT_DIR`, `_CURRENT_MILESTONE`, relevant artifact paths), a prose "ytstack invocation notes" section with milestone-specific context + post-process instructions, ending with ```` ```! \ncat "${CLAUDE_PLUGIN_ROOT:?}/vendor/<src>/SKILL.md"\n``` ```` to inline the vendored procedure.
+- Wrappers rewritten in scope of this change: `plan-ceo-review`, `plan-eng-review`, `office-hours` (vendor/gstack), `test-driven-development`, `systematic-debugging`, `verification-before-completion` (vendor/superpowers/skills).
+- Cross-ref check: extend `bin/ytstack-check` with a new validator that parses each vendored SKILL.md referenced by a wrapper, finds skill-name mentions inside the vendor text, and flags any reference that resolves to neither a ytstack-shipped skill nor a wrapped vendor skill. Output: REVIEW-NOTES drop-in with exact file:line of the dangling reference, so the human can decide (ship-additional-wrapper / rewrite-vendor-ref / accept-gap).
+- Scope impact on M010: merged into the greenfield-flow-reorder milestone as "Part 1: Wrapper refactor (6 skills thin-wrapped + cross-ref check added)", "Part 2: Greenfield-flow reorder (office-hours first, dual-mode ceo/eng, init-project split)".
