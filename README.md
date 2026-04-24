@@ -1,6 +1,31 @@
-# ytstack
+<div align="center">
+  <img src="assets/ytstack-logo.svg" width="88" alt="ytstack" />
 
-**Working memory for AI coding agents.** A Claude Code plugin that turns multi-session, multi-week projects into something your agent can actually hold onto. Project memory on disk, curated skill set, parallel execution via native Agent Teams. One install, one namespace, no stack to maintain.
+  <h1>ytstack</h1>
+
+  <p><em>Working memory for AI coding agents.</em></p>
+
+  <p>
+    A Claude Code plugin that turns multi-session, multi-week projects into something your agent can actually hold onto. Project memory on disk, curated skill set, parallel execution via native Agent Teams. One install, one namespace, no stack to maintain.
+  </p>
+
+  <p>
+    <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
+    <img alt="version" src="https://img.shields.io/badge/version-0.1.0-FC4E14">
+    <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
+    <img alt="skills" src="https://img.shields.io/badge/skills-16-FC4E14">
+    <img alt="hooks" src="https://img.shields.io/badge/hooks-8-FC4E14">
+  </p>
+
+  <table>
+    <tr>
+      <td align="center"><strong>1</strong><br/>install</td>
+      <td align="center"><strong>0</strong><br/>separate runtimes</td>
+      <td align="center"><strong>16</strong><br/>curated skills</td>
+      <td align="center"><strong>MIT</strong><br/>open source</td>
+    </tr>
+  </table>
+</div>
 
 > Open Claude Code tomorrow. The agent already knows which milestone you're in, which task is open, what the last three tasks shipped, which decisions are locked. No "remind me what we were working on" ritual. You just start.
 
@@ -177,6 +202,22 @@ ytstack/
 5. **User sovereignty.** Explicit user decision gates before destructive or scope-expanding actions.
 6. **Skill selection via semantic descriptions, not keyword matching.** Claude Code's model matches user intent against each skill's `description:` field. Phrase-lists, trigger-maps, and secret-word tables are brittle by construction -- every new phrasing (language, paraphrase, dialect) breaks them. Skills self-identify through rich when-to-use descriptions; the agent selects semantically. If selection misbehaves, sharpen the description, never add a keyword list.
 
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [QUICKSTART.md](./QUICKSTART.md) | End-to-end worked example |
+| [CLAUDE.md](./CLAUDE.md) | Contributor guide for AI coding agents |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Contributor guide for humans |
+| [docs/concept.md](./docs/concept.md) | Condensed reference paper -- what ytstack wraps, skips, adds |
+| [docs/methodology.md](./docs/methodology.md) | What we adapted from gstack / superpowers / GSD, and how |
+| [docs/references.md](./docs/references.md) | Sources consulted while designing ytstack |
+| [docs/ux/](./docs/ux/) | Skill-authoring UX contracts (frontmatter, format, writing style) |
+| [.ytstack/DECISIONS.md](./.ytstack/DECISIONS.md) | Append-only architectural decision log |
+| [.ytstack/KNOWLEDGE.md](./.ytstack/KNOWLEDGE.md) | Patterns + gotchas learned while building ytstack |
+| [.ytstack/ROADMAP.md](./.ytstack/ROADMAP.md) | Milestone plan |
+| [.ytstack/STATE.md](./.ytstack/STATE.md) | Current status dashboard |
+
 ## Contributing
 
 Read [CLAUDE.md](./CLAUDE.md) before modifying anything. See [CONTRIBUTING.md](./CONTRIBUTING.md) for PR rules and [docs/ux/](./docs/ux/) for the mandatory skill-authoring contracts.
@@ -194,3 +235,7 @@ See [`docs/references.md`](./docs/references.md) for the full list of sources co
 MIT. See [LICENSE](./LICENSE). Attributions in [NOTICE](./NOTICE).
 
 Inspired by [gstack](https://github.com/garrytan/gstack), [superpowers](https://github.com/obra/superpowers), and [GSD](https://github.com/gsd-build/gsd-2). Built on Claude Code.
+
+---
+
+Maintained by [Yesterday-AI](https://github.com/Yesterday-AI).
