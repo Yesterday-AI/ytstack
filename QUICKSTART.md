@@ -16,7 +16,7 @@ This starts a fresh Claude Code session with ytstack loaded. No marketplace regi
 
 ```bash
 /plugin marketplace add Yesterday-AI/ytstack
-/plugin install ytstack@ytstack-marketplace
+/plugin install ytstack@ytstack
 ```
 
 Self-marketplaced: `.claude-plugin/marketplace.json` lives in the plugin repo itself. Private-repo auth via `gh auth login`.

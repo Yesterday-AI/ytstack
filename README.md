@@ -93,7 +93,7 @@ Starts a fresh Claude Code session with ytstack loaded. Skills appear as `/ytsta
 
 ```bash
 /plugin marketplace add Yesterday-AI/ytstack
-/plugin install ytstack@ytstack-marketplace
+/plugin install ytstack@ytstack
 ```
 
 ytstack self-marketplaces: `.claude-plugin/marketplace.json` lives in the plugin repo itself. No separate marketplace repo needed. Private-repo auth uses your existing `gh auth login` / git credential helper.

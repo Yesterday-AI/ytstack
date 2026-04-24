@@ -130,7 +130,7 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 
 **Goal:** Ship ytstack as an installable plugin via a Yesterday-owned marketplace.
 
-**Exit criteria:** Third party can run `/plugin marketplace add Yesterday-AI/ytstack && /plugin install ytstack@ytstack-marketplace` and get a working install.
+**Exit criteria:** Third party can run `/plugin marketplace add Yesterday-AI/ytstack && /plugin install ytstack@ytstack` and get a working install.
 
 - [ ] Add `LICENSE` (MIT), `NOTICE` (superpowers + gstack + generic "external AI-first methodology inspired-by" attribution)
 - [ ] Add `CLAUDE.md` (contributor guidelines)

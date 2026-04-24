@@ -218,3 +218,22 @@ Format for each entry:
 - Plugin skills: `"${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/..."`
 - Project-meta skills (under `.claude/skills/`): `"${CLAUDE_PROJECT_DIR:-$PWD}"`
 - Never reintroduce absolute user-machine paths as fallbacks.
+
+---
+
+## 2026-04-24: Marketplace name equals plugin name
+
+**Context:** Follow-up to earlier 2026-04-24 "ytstack self-marketplaces". The marketplace.json `"name"` field was still `"ytstack-marketplace"`, a leftover from the original two-repo plan. Produced the confusing install command `/plugin install ytstack@ytstack-marketplace` -- readers asked where the `-marketplace` suffix came from when there is no separate marketplace repo.
+
+**Research:** Checked upstream convention via `vendor/superpowers/.claude-plugin/marketplace.json` -- superpowers uses `"superpowers-dev"` (plugin name + channel suffix, not `-marketplace`). Official Claude Code docs do not mandate a naming convention; reserved names exist but third-party marketplaces pick freely.
+
+**Options considered:**
+- A) `"ytstack"` -- match the plugin name. Install: `ytstack@ytstack`.
+- B) Keep `"ytstack-marketplace"`. Misleading now that no separate marketplace repo exists.
+- C) `"ytstack-dev"` -- mimic superpowers, implies a dev channel. We do not have stable-vs-dev channels.
+
+**Chose:** A.
+
+**Reason:** Simplest, no implied channel distinction, no stale `-marketplace` suffix. The install command reads as "plugin ytstack from marketplace ytstack" -- redundant but unambiguous. Matches the self-marketplace spirit: one repo, one marketplace, minimum naming overhead.
+
+**Supersedes:** the "How to apply" bullet in "2026-04-24: ytstack self-marketplaces, no separate `-marketplace` repo" that specified `ytstack@ytstack-marketplace`. New install: `/plugin install ytstack@ytstack`.

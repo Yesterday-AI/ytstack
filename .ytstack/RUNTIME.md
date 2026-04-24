@@ -34,6 +34,6 @@ Distribution via Claude Code plugin marketplace (M008):
 
 - Repo: `github.com/Yesterday-AI/ytstack` (plugin source + self-marketplace)
 - Marketplace manifest: `.claude-plugin/marketplace.json` inside the plugin repo (no separate `-marketplace` repo -- see DECISIONS 2026-04-24)
-- Install: `/plugin marketplace add Yesterday-AI/ytstack && /plugin install ytstack@ytstack-marketplace`
+- Install: `/plugin marketplace add Yesterday-AI/ytstack && /plugin install ytstack@ytstack`
 
 No CI runtime, no hosted service. Pure git-distributed.
