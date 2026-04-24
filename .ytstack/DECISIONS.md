@@ -25,7 +25,7 @@ Format for each entry:
 
 **Chose:** C
 
-**Reason:** Claude Code's native Agent Teams feature already provides fresh 200k-context-per-task and shared task list with file-locking — the core value GSD's runtime adds. Combined with hooks (SessionStart/TeammateIdle/TaskCompleted) and skill-managed `.ytstack/` artifacts, we replicate ~95% of GSD's value without a runtime app. User explicitly ruled out B ("zusaetzlich installieren, das wird zu viel").
+**Reason:** Claude Code's native Agent Teams feature already provides fresh 200k-context-per-task and shared task list with file-locking -- the core value GSD's runtime adds. Combined with hooks (SessionStart/TeammateIdle/TaskCompleted) and skill-managed `.ytstack/` artifacts, we replicate ~95% of GSD's value without a runtime app. User explicitly ruled out B ("zusaetzlich installieren, das wird zu viel").
 
 ---
 
@@ -123,7 +123,7 @@ Format for each entry:
 
 ---
 
-## 2026-04-23: Known risk — superpowers interactive prompts may block Claude Code input
+## 2026-04-23: Known risk -- superpowers interactive prompts may block Claude Code input
 
 **Context:** An independent comparison article reported that superpowers' interactive prompts (within its brainstorming/writing-plans flow) can block Claude Code's input during builds. We haven't reproduced it in a controlled test. This is documented as a known risk, not a settled bug.
 
@@ -142,19 +142,19 @@ Format for each entry:
 
 ## 2026-04-24: Add `using-ytstack` skill + SessionStart-hook-injected directive for agent-driven skill selection
 
-**Context:** Initial M002 SessionStart hook injected only project state (milestone / slice / task position + recent summaries). It did NOT tell the agent it should auto-invoke ytstack skills. Result: ytstack behaved as a slash-command menu the user had to drive manually. superpowers' magic is that their SessionStart hook reads the full `using-superpowers/SKILL.md` content and injects it as a forceful directive — the agent then proactively reaches for skills based on natural-language user intent.
+**Context:** Initial M002 SessionStart hook injected only project state (milestone / slice / task position + recent summaries). It did NOT tell the agent it should auto-invoke ytstack skills. Result: ytstack behaved as a slash-command menu the user had to drive manually. superpowers' magic is that their SessionStart hook reads the full `using-superpowers/SKILL.md` content and injects it as a forceful directive -- the agent then proactively reaches for skills based on natural-language user intent.
 
 **Options considered:**
-- A) Rely on Claude Code's native skill-description matching. Every ytstack skill already has a `description` field — Claude should pick up on them based on context.
+- A) Rely on Claude Code's native skill-description matching. Every ytstack skill already has a `description` field -- Claude should pick up on them based on context.
 - B) Add a `using-ytstack` skill with a trigger map (phrase → skill), Red Flags anti-rationalization table, and EXTREMELY-IMPORTANT directive. Update SessionStart hook to inject its content alongside project state.
 - C) Add slash-command aliases for common phrases (e.g. auto-map "where were we" to `/ytstack:resume-session` via a preprocessor).
 
 **Chose:** B.
 
-**Reason:** M001 T05 smoke test already revealed Claude Code's native skill-description matching does NOT reliably trigger in headless mode (Skill-tool-invocation errored as "not registered in the harness"). superpowers' pattern proves the injected-directive approach works — their ~40 skills reliably auto-fire because `using-superpowers` primes the agent with compliance pressure ("1% chance a skill applies → invoke"). Option A alone is not strong enough. Option C would surface user-level string-matching that conflicts with Claude Code's own slash-command-parser. Option B follows the proven superpowers pattern.
+**Reason:** M001 T05 smoke test already revealed Claude Code's native skill-description matching does NOT reliably trigger in headless mode (Skill-tool-invocation errored as "not registered in the harness"). superpowers' pattern proves the injected-directive approach works -- their ~40 skills reliably auto-fire because `using-superpowers` primes the agent with compliance pressure ("1% chance a skill applies → invoke"). Option A alone is not strong enough. Option C would surface user-level string-matching that conflicts with Claude Code's own slash-command-parser. Option B follows the proven superpowers pattern.
 
 **How to apply:**
 - `skills/using-ytstack/SKILL.md` contains the trigger map (natural-language phrase → ytstack skill), EXTREMELY-IMPORTANT directive, and anti-rationalization Red Flags.
 - `hooks/session-start` reads and injects its full content as `additionalContext` JSON, wrapped in an `<EXTREMELY_IMPORTANT>` envelope, BEFORE the project state block.
-- Total injected context per session start is ~8.5KB — non-trivial but within Claude Code's context budget.
+- Total injected context per session start is ~8.5KB -- non-trivial but within Claude Code's context budget.
 - The README reframes ytstack as agent-driven: user talks naturally, agent auto-fires skills; slash-commands are the steering override for non-happy-path cases.

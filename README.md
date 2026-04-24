@@ -13,7 +13,7 @@ Enterprise-capable. Equally useful for solo dev.
 Open a project that uses ytstack. Before your first message, a SessionStart hook has already injected two things into your agent's context: (1) a directive that tells the agent to reach for ytstack skills whenever your intent matches one, and (2) a state snapshot that tells it where you are:
 
 ```
-[ytstack active — scope: project]
+[ytstack active -- scope: project]
 Project: csv-importer
 Current: M002 / S01 / T04
 Last updated: 2026-04-23T19:30:00Z
@@ -31,7 +31,7 @@ From there, you just talk to the agent. **You rarely type slash-commands.** The 
 
 **Slash-commands are for steering**, not driving. Type `/ytstack:<name>` when you want to override the skill the agent would have picked, skip a step, or trigger an unusual workflow (e.g. running `ytstack:plan-ceo-review` on a milestone you already sliced, to challenge the premise again). For the happy path, natural language is enough.
 
-Stepping away for a week? Say "let's do a handoff" — agent fires `ytstack:handoff-session`, writes a rich handoff file. You or a teammate pick up from the file without re-explanation.
+Stepping away for a week? Say "let's do a handoff" -- agent fires `ytstack:handoff-session`, writes a rich handoff file. You or a teammate pick up from the file without re-explanation.
 
 ## Why it exists
 
@@ -39,19 +39,19 @@ AI coding agents are excellent inside a single session and fall apart between th
 
 Three existing tools each solve it from a different angle and overlap in the middle:
 
-- **[gstack](https://github.com/garrytan/gstack)** (Garry Tan) — broad builder toolkit. Strongest on strategy and decision rigor: CEO / eng-manager / office-hours reviews that force real thinking before code. Also ships execution skills (`investigate` for systematic debugging, `qa`, `review`, `ship`) and session-level context save/restore. What it lacks: explicit TDD enforcement, and a structured milestone / slice / task artifact hierarchy that survives beyond "notes from the last session."
-- **[superpowers](https://github.com/obra/superpowers)** (Jesse Vincent) — methodology toolkit. Strongest on execution discipline: TDD, systematic debugging, verification-before-completion. Also ships planning skills (brainstorming, writing-plans, executing-plans). What it lacks: business-strategy reviews (no CEO / founder-mode diagnostics, no YC-office-hours forcing questions), and on-disk project memory that persists across sessions.
-- **[GSD](https://github.com/gsd-build/gsd-2)** (get-shit-done) — project management done right. Milestones, slices, tasks, artifact-as-memory, cross-session continuity. What it requires: a separate TypeScript runtime with its own CLI and TUI that fights Claude Code's native extension points.
+- **[gstack](https://github.com/garrytan/gstack)** (Garry Tan) -- broad builder toolkit. Strongest on strategy and decision rigor: CEO / eng-manager / office-hours reviews that force real thinking before code. Also ships execution skills (`investigate` for systematic debugging, `qa`, `review`, `ship`) and session-level context save/restore. What it lacks: explicit TDD enforcement, and a structured milestone / slice / task artifact hierarchy that survives beyond "notes from the last session."
+- **[superpowers](https://github.com/obra/superpowers)** (Jesse Vincent) -- methodology toolkit. Strongest on execution discipline: TDD, systematic debugging, verification-before-completion. Also ships planning skills (brainstorming, writing-plans, executing-plans). What it lacks: business-strategy reviews (no CEO / founder-mode diagnostics, no YC-office-hours forcing questions), and on-disk project memory that persists across sessions.
+- **[GSD](https://github.com/gsd-build/gsd-2)** (get-shit-done) -- project management done right. Milestones, slices, tasks, artifact-as-memory, cross-session continuity. What it requires: a separate TypeScript runtime with its own CLI and TUI that fights Claude Code's native extension points.
 
-gstack and superpowers overlap significantly in scope — both ship planning, both ship debugging — but each has a distinctive strength the other lacks. GSD has what neither has (structured artifact memory) but ships as a runtime. Combining all three by hand produces friction: skill conflicts, redundant planning flows, 50+ skill descriptions in every system prompt.
+gstack and superpowers overlap significantly in scope -- both ship planning, both ship debugging -- but each has a distinctive strength the other lacks. GSD has what neither has (structured artifact memory) but ships as a runtime. Combining all three by hand produces friction: skill conflicts, redundant planning flows, 50+ skill descriptions in every system prompt.
 
 Install all three and you get friction: interactive prompts blocking each other, skill overlap, 50+ skills flooding every system prompt, a separate runtime to maintain. See the combining articles on [dev.to](https://dev.to/imaginex/a-claude-code-skills-stack-how-to-combine-superpowers-gstack-and-gsd-without-the-chaos-44b3) and [Medium](https://medium.com/@tentenco/superpowers-gsd-and-gstack-what-each-claude-code-framework-actually-constrains-12a1560960ad) for the full diagnosis.
 
-**ytstack is the curation.** One plugin. We cherry-pick the _non-overlapping best_: gstack's strategy-review skills (CEO / eng / office-hours), superpowers' discipline skills (TDD / systematic-debugging / verification). We skip the overlap: gstack's `investigate` duplicates superpowers' `systematic-debugging`, superpowers' `writing-plans` conflicts with our milestone / slice / task flow, etc. GSD's project-memory discipline is re-implemented natively as skills + hooks — no separate runtime. Claude Code's native Agent Teams handle parallel execution.
+**ytstack is the curation.** One plugin. We cherry-pick the _non-overlapping best_: gstack's strategy-review skills (CEO / eng / office-hours), superpowers' discipline skills (TDD / systematic-debugging / verification). We skip the overlap: gstack's `investigate` duplicates superpowers' `systematic-debugging`, superpowers' `writing-plans` conflicts with our milestone / slice / task flow, etc. GSD's project-memory discipline is re-implemented natively as skills + hooks -- no separate runtime. Claude Code's native Agent Teams handle parallel execution.
 
 ## What you get
 
-**Agent-driven, not user-driven.** A SessionStart hook injects a "using ytstack" directive on every session start that tells the agent to map your natural-language intent to the right ytstack skill and invoke it before responding. You talk in plain language; the agent fires skills in the background. Slash-commands (`/ytstack:<name>`) exist for explicit steering — they're the escape hatch, not the normal path.
+**Agent-driven, not user-driven.** A SessionStart hook injects a "using ytstack" directive on every session start that tells the agent to map your natural-language intent to the right ytstack skill and invoke it before responding. You talk in plain language; the agent fires skills in the background. Slash-commands (`/ytstack:<name>`) exist for explicit steering -- they're the escape hatch, not the normal path.
 
 **Never lose context across sessions.** Every ytstack project gets a `.ytstack/` directory with `PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, and a milestone / slice / task hierarchy. Files are git-tracked Markdown. The same SessionStart hook injects the relevant state on every session start. The agent always knows where it is.
 
@@ -59,22 +59,22 @@ Install all three and you get friction: interactive prompts blocking each other,
 
 **Parallel execution without a custom runtime.** `ytstack:spawn-milestone-team` dispatches a Claude Code Agent Team where each teammate works on a slice in its own fresh 200k context. Replicates GSD's fresh-subprocess-per-task model using Claude Code's native experimental feature. No separate CLI, no SQLite, no TUI to babysit.
 
-**One vendored stack, one namespace.** Skills appear as `/ytstack:<name>` — no conflicts with other plugins. `vendor/` holds read-only subtrees of superpowers and gstack, pulled via `git subtree`. Upstream updates land cleanly; we never modify their content.
+**One vendored stack, one namespace.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/` holds read-only subtrees of superpowers and gstack, pulled via `git subtree`. Upstream updates land cleanly; we never modify their content.
 
 ## Compared to using each framework alone
 
 | Need | gstack alone | superpowers alone | GSD alone | **ytstack** |
 |---|---|---|---|---|
-| CEO / founder-mode strategy review | ✅ | — | — | ✅ (via wrapper) |
-| YC-office-hours forcing diagnostics | ✅ | — | — | ✅ (via wrapper) |
-| Engineering plan / architecture review | ✅ | partial (brainstorming) | — | ✅ (via wrapper) |
-| TDD as enforced discipline | — | ✅ | — | ✅ (via wrapper) |
-| Systematic debugging with root-cause gate | ✅ (`investigate`) | ✅ | — | ✅ (superpowers wrapper) |
+| CEO / founder-mode strategy review | ✅ | -- | -- | ✅ (via wrapper) |
+| YC-office-hours forcing diagnostics | ✅ | -- | -- | ✅ (via wrapper) |
+| Engineering plan / architecture review | ✅ | partial (brainstorming) | -- | ✅ (via wrapper) |
+| TDD as enforced discipline | -- | ✅ | -- | ✅ (via wrapper) |
+| Systematic debugging with root-cause gate | ✅ (`investigate`) | ✅ | -- | ✅ (superpowers wrapper) |
 | Verification-before-completion gate | partial (via `ship`) | ✅ | ✅ | ✅ (via wrapper) |
-| Structured milestone / slice / task artifacts | — | — | ✅ | ✅ (native) |
-| Cross-session project memory | light (`context-save`) | — | ✅ | ✅ (native) |
-| Agent Teams for parallel fresh-context work | — | — | via subprocess | ✅ (native) |
-| SessionStart-hook state injection | — | ✅ (for its own skills) | — | ✅ (for project state) |
+| Structured milestone / slice / task artifacts | -- | -- | ✅ | ✅ (native) |
+| Cross-session project memory | light (`context-save`) | -- | ✅ | ✅ (native) |
+| Agent Teams for parallel fresh-context work | -- | -- | via subprocess | ✅ (native) |
+| SessionStart-hook state injection | -- | ✅ (for its own skills) | -- | ✅ (for project state) |
 | No separate runtime to install | ✅ | ✅ | ❌ | ✅ |
 | One namespace, one install | plugin-level | plugin-level | n/a | ✅ |
 | Skill conflicts when combined with others | medium | medium | n/a | none |
@@ -125,7 +125,7 @@ See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example: `init` �
 
 ## Status
 
-**v0.1.0 — full build cycle complete.** 37/39 tasks done; 2 deferred to user-action (git init + push, GitHub repo creation).
+**v0.1.0 -- full build cycle complete.** 37/39 tasks done; 2 deferred to user-action (git init + push, GitHub repo creation).
 
 Ships:
 - 15 skills (project-OS lifecycle + gstack planning wrappers + superpowers execution wrappers + Agent Teams dispatch + `using-ytstack` directive that auto-injects to drive skill selection from natural-language intent)
@@ -169,7 +169,7 @@ ytstack/
 Read [CLAUDE.md](./CLAUDE.md) before modifying anything. See [CONTRIBUTING.md](./CONTRIBUTING.md) for PR rules and [docs/ux/](./docs/ux/) for the mandatory skill-authoring contracts.
 
 Key rules:
-- Never modify content in `vendor/**` (upstream superpowers / gstack trees — wrap, don't edit)
+- Never modify content in `vendor/**` (upstream superpowers / gstack trees -- wrap, don't edit)
 - Never copy third-party methodology prose verbatim (concepts only)
 - One logical change per commit
 - Follow the AskUserQuestion 4-part format for any user-facing question

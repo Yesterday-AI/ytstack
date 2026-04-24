@@ -22,24 +22,24 @@ Close a task: capture what actually happened (often different from the plan), fl
 
 ## Anti-Pattern: "The task is done, I don't need a summary"
 
-Without a summary, the next session has no way to know this task happened — STATE.md wasn't updated, the slice-plan checkbox is still `[ ]`, and the next agent will either redo the work or get confused. The summary is the closure signal. Always write it, even for one-line tasks ("CSS tweak — shipped in one commit, no follow-up needed").
+Without a summary, the next session has no way to know this task happened -- STATE.md wasn't updated, the slice-plan checkbox is still `[ ]`, and the next agent will either redo the work or get confused. The summary is the closure signal. Always write it, even for one-line tasks ("CSS tweak -- shipped in one commit, no follow-up needed").
 
 ## Checklist
 
 You MUST create a TodoWrite task for each of these items:
 
-1. **Run preamble** — detect active task + plan file
-2. **HARD-GATE: active task must exist** — abort if none
-3. **Read the plan** — show user the original scope
-4. **Ask outcome** — what actually shipped
-5. **Ask deviations** — what differed from plan (if anything)
-6. **Ask follow-ups** — new tasks / decisions surfaced during execution
-7. **Ask verification result** — did the verification command pass?
+1. **Run preamble** -- detect active task + plan file
+2. **HARD-GATE: active task must exist** -- abort if none
+3. **Read the plan** -- show user the original scope
+4. **Ask outcome** -- what actually shipped
+5. **Ask deviations** -- what differed from plan (if anything)
+6. **Ask follow-ups** -- new tasks / decisions surfaced during execution
+7. **Ask verification result** -- did the verification command pass?
 8. **Write `M###-S##-T##-SUMMARY.md`**
 9. **Flip slice-plan checkbox** `[ ]` → `[x]`
-10. **Update STATE.md** — clear `active_task`, bump counts, update status line
-11. **Offer git stage** — ask if user wants git-add of touched files
-12. **Report + return** — suggest next task or slice-close
+10. **Update STATE.md** -- clear `active_task`, bump counts, update status line
+11. **Offer git stage** -- ask if user wants git-add of touched files
+12. **Report + return** -- suggest next task or slice-close
 
 ## Preamble
 
@@ -110,7 +110,7 @@ Use AskUserQuestion (open-ended):
 >
 > Good: "Signup form validates email client-side and POSTs JSON to /api/signup. Server hashes with argon2 and inserts user row. Returns 201 with session cookie. Duplicate email returns 409."
 >
-> Bad: "I implemented signup" — too vague, not useful to future sessions.
+> Bad: "I implemented signup" -- too vague, not useful to future sessions.
 
 Remember as `_OUTCOME`.
 
@@ -146,9 +146,9 @@ Use AskUserQuestion (multi-choice):
 >
 > Verification was: `{VERIFICATION_CMD}`
 >
-> A) Passed — clean exit, expected output. (Completeness: 10/10)
-> B) Passed with caveats — exits 0 but something's off. (Completeness: 7/10, flag in followups)
-> C) Failed — task not actually done. (Completeness: 0/10, do not close)
+> A) Passed -- clean exit, expected output. (Completeness: 10/10)
+> B) Passed with caveats -- exits 0 but something's off. (Completeness: 7/10, flag in followups)
+> C) Failed -- task not actually done. (Completeness: 0/10, do not close)
 >
 > If C: do NOT proceed. Re-execute the task until it passes, then re-run this skill.
 
@@ -168,7 +168,7 @@ closed: {ISO_TIMESTAMP}
 verification: {VERIFICATION_RESULT}
 ---
 
-# {CURRENT_MILESTONE}-{ACTIVE_SLICE}-{ACTIVE_TASK} — Summary
+# {CURRENT_MILESTONE}-{ACTIVE_SLICE}-{ACTIVE_TASK} -- Summary
 
 ## Outcome
 
@@ -184,7 +184,7 @@ verification: {VERIFICATION_RESULT}
 
 ## Verification
 
-Command: `{VERIFICATION_CMD}` — {VERIFICATION_RESULT}.
+Command: `{VERIFICATION_CMD}` -- {VERIFICATION_RESULT}.
 ```
 
 ### Step 9: Flip slice-plan checkbox
@@ -192,13 +192,13 @@ Command: `{VERIFICATION_CMD}` — {VERIFICATION_RESULT}.
 Edit `{SLICE_PLAN}`. Replace:
 
 ```
-- [ ] {ACTIVE_TASK} — {TASK_DESC}
+- [ ] {ACTIVE_TASK} -- {TASK_DESC}
 ```
 
 with:
 
 ```
-- [x] {ACTIVE_TASK} — {TASK_DESC}
+- [x] {ACTIVE_TASK} -- {TASK_DESC}
 ```
 
 Also bump `completed_tasks` in the slice-plan's frontmatter by 1.
@@ -208,7 +208,7 @@ Also bump `completed_tasks` in the slice-plan's frontmatter by 1.
 Edit STATE.md:
 - `active_task: {ACTIVE_TASK}` → `active_task: none`
 - `last_updated: ...` → bump to current
-- Status line → `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} — {N}/{TOTAL} tasks done in slice. Next task: pick from slice-plan or run `/ytstack:plan-task`.`
+- Status line → `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} -- {N}/{TOTAL} tasks done in slice. Next task: pick from slice-plan or run `/ytstack:plan-task`.`
 
 If the slice is now fully complete (all tasks `[x]`): update status to recommend `/ytstack:reassess-roadmap`.
 
@@ -222,9 +222,9 @@ If `IS_GIT=yes`, use AskUserQuestion:
 >
 > RECOMMENDATION: A if the files match the plan. B if you touched additional files (deviation case).
 >
-> A) Stage the planned files — `git add {FILE_LIST}` then you commit manually with a message
-> B) Don't stage — I'll handle it myself
-> C) Stage all changes — `git add -A` (use with caution; may include unintended files)
+> A) Stage the planned files -- `git add {FILE_LIST}` then you commit manually with a message
+> B) Don't stage -- I'll handle it myself
+> C) Stage all changes -- `git add -A` (use with caution; may include unintended files)
 
 If A: run `git add {FILE_LIST}` and report `git status` output.
 If B: skip.
@@ -250,6 +250,6 @@ Report:
 Valid terminal states:
 - Return after summary file + slice-plan update + STATE.md update + optional git stage
 - Abort on HARD-GATE failure (no active task / missing plan file)
-- Abort on verification failure (C in Step 7) — task stays open
+- Abort on verification failure (C in Step 7) -- task stays open
 
 Do NOT invoke `plan-task`, `reassess-roadmap`, or `plan-milestone` automatically.

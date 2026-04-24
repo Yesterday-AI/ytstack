@@ -1,6 +1,6 @@
 ---
 name: systematic-debugging
-description: "Root-cause debugging in four phases: investigate, analyze, hypothesize, implement. Iron Law — no fixes without root cause. Wraps vendored superpowers:systematic-debugging with ytstack-aware logging (findings go to KNOWLEDGE.md, decisions to DECISIONS.md). Use when hitting a bug, test failure, or unexpected behavior."
+description: "Root-cause debugging in four phases: investigate, analyze, hypothesize, implement. Iron Law -- no fixes without root cause. Wraps vendored superpowers:systematic-debugging with ytstack-aware logging (findings go to KNOWLEDGE.md, decisions to DECISIONS.md). Use when hitting a bug, test failure, or unexpected behavior."
 tier: task
 version: 0.1.0
 allowed-tools:
@@ -24,7 +24,7 @@ Wrap the vendored superpowers systematic-debugging skill. Adds ytstack integrati
 
 ## Iron Law (from vendored)
 
-**No fixes without root cause.** A symptom going away is not evidence the bug is fixed — it's evidence the symptom moved. The four-phase process (investigate → analyze → hypothesize → implement) exists to force root-cause identification before any code changes.
+**No fixes without root cause.** A symptom going away is not evidence the bug is fixed -- it's evidence the symptom moved. The four-phase process (investigate → analyze → hypothesize → implement) exists to force root-cause identification before any code changes.
 
 ## When to run
 
@@ -32,17 +32,17 @@ Wrap the vendored superpowers systematic-debugging skill. Adds ytstack integrati
 - 500 error, stack trace, unexpected exception
 - "It was working yesterday"
 - Performance regression with no obvious cause
-- NOT for feature work — use TDD or direct execution
+- NOT for feature work -- use TDD or direct execution
 
 ## Anti-Pattern: "I can see what's wrong, just fix it"
 
-Sometimes true, often not. The vendored skill's anti-pattern list is real. Read it. If you're certain you've identified root cause without running the four phases, you're probably wrong — and if you're right, the phases take 5 extra minutes. Cheap insurance.
+Sometimes true, often not. The vendored skill's anti-pattern list is real. Read it. If you're certain you've identified root cause without running the four phases, you're probably wrong -- and if you're right, the phases take 5 extra minutes. Cheap insurance.
 
 ## Checklist
 
-1. **Run preamble** — state + vendored skill
-2. **HARD-GATE** — vendored skill present
-3. **Capture symptom** — user describes what's broken
+1. **Run preamble** -- state + vendored skill
+2. **HARD-GATE** -- vendored skill present
+3. **Capture symptom** -- user describes what's broken
 4. **Run vendored 4-phase process**
 5. **After fix: capture root cause** to KNOWLEDGE.md if generalizable
 6. **If architectural shift** → DECISIONS.md entry
@@ -75,9 +75,9 @@ echo "CONTEXT: milestone=$_CURRENT_MILESTONE, task=$_ACTIVE_TASK"
 
 ## Procedure
 
-**Step 2 HARD-GATE.** Abort if `VENDOR_EXISTS=no`. `HAS_YTSTACK=no` is OK — debugging can happen outside a tracked project; we just skip the KNOWLEDGE.md/DECISIONS.md persistence then.
+**Step 2 HARD-GATE.** Abort if `VENDOR_EXISTS=no`. `HAS_YTSTACK=no` is OK -- debugging can happen outside a tracked project; we just skip the KNOWLEDGE.md/DECISIONS.md persistence then.
 
-**Step 3 — Capture symptom.** Use AskUserQuestion (open-ended):
+**Step 3 -- Capture symptom.** Use AskUserQuestion (open-ended):
 
 > What's broken? Be specific. Include:
 > - Exact error message or behavior
@@ -89,7 +89,7 @@ echo "CONTEXT: milestone=$_CURRENT_MILESTONE, task=$_ACTIVE_TASK"
 
 Remember as `_SYMPTOM`.
 
-**Step 4 — Run vendored.** Read `{VENDOR_SKILL}` in full and follow its four-phase procedure. Pass `_SYMPTOM` as the initial problem statement. The vendored skill handles:
+**Step 4 -- Run vendored.** Read `{VENDOR_SKILL}` in full and follow its four-phase procedure. Pass `_SYMPTOM` as the initial problem statement. The vendored skill handles:
 - **Investigate:** gather evidence, don't theorize yet
 - **Analyze:** pattern-match the evidence against known bug shapes
 - **Hypothesize:** propose root causes, pick the most likely, design a test
@@ -97,7 +97,7 @@ Remember as `_SYMPTOM`.
 
 Let the skill's anti-rationalization patterns drive ("don't stop at first plausible fix" etc.).
 
-**Step 5 — Capture root cause to KNOWLEDGE.md.** If `HAS_YTSTACK=yes` AND the root cause is generalizable (pattern, gotcha, convention violation), append to `{YT_DIR}/KNOWLEDGE.md`:
+**Step 5 -- Capture root cause to KNOWLEDGE.md.** If `HAS_YTSTACK=yes` AND the root cause is generalizable (pattern, gotcha, convention violation), append to `{YT_DIR}/KNOWLEDGE.md`:
 
 Under "Lessons learned":
 ```markdown
@@ -111,7 +111,7 @@ Under "Gotchas":
 
 If root cause is one-off (e.g. typo in a specific commit), skip KNOWLEDGE.md. The git history already has it.
 
-**Step 6 — If architectural shift → DECISIONS.md.** If the fix changes a design decision (e.g. "switched from lock-based to optimistic concurrency because of deadlocks"), append to `{YT_DIR}/DECISIONS.md`:
+**Step 6 -- If architectural shift → DECISIONS.md.** If the fix changes a design decision (e.g. "switched from lock-based to optimistic concurrency because of deadlocks"), append to `{YT_DIR}/DECISIONS.md`:
 
 ```markdown
 ## {ISO_TIMESTAMP}: {decision title}
@@ -122,9 +122,9 @@ If root cause is one-off (e.g. typo in a specific commit), skip KNOWLEDGE.md. Th
 **Reason:** {why}
 ```
 
-Not every fix is a decision — only architectural ones. One-line style-fixes don't count.
+Not every fix is a decision -- only architectural ones. One-line style-fixes don't count.
 
-**Step 7 — Report + return.**
+**Step 7 -- Report + return.**
 
 > Bug fixed. Root cause: {root-cause-summary}.
 >
@@ -143,4 +143,4 @@ Not every fix is a decision — only architectural ones. One-line style-fixes do
 
 ## Terminal State
 
-Return after debugging complete. Do NOT invoke `summarize-task` unless the user explicitly says "mark task done" — debugging and task-completion are separate lifecycles.
+Return after debugging complete. Do NOT invoke `summarize-task` unless the user explicitly says "mark task done" -- debugging and task-completion are separate lifecycles.

@@ -4,7 +4,7 @@ Services, APIs, env vars, and ports used by ytstack.
 
 ## Services
 
-None yet. ytstack is a Claude Code plugin — no external services of its own.
+None yet. ytstack is a Claude Code plugin -- no external services of its own.
 
 Runtime dependencies (at user install time):
 

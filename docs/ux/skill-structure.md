@@ -81,7 +81,7 @@ Example (from `plan-milestone`):
 ## Anti-Pattern: "This feature is too small for a full milestone"
 
 Every feature goes through this process. A CSS tweak, a single bugfix, a config
-change — all of them. "Small" features are where unexamined assumptions cause
+change -- all of them. "Small" features are where unexamined assumptions cause
 the most wasted work. The milestone can be minimal (one slice, two tasks), but
 you MUST create it and get approval.
 ```
@@ -97,8 +97,8 @@ Template:
 
 You MUST create a task for each of these items and complete them in order:
 
-1. **<step name>** — <one-line description>
-2. **<step name>** — <one-line description>
+1. **<step name>** -- <one-line description>
+2. **<step name>** -- <one-line description>
 3. ...
 ```
 

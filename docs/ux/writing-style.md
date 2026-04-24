@@ -96,7 +96,7 @@ These show up in AI-generated prose and make writing sound like marketing copy. 
 - "as we delve deeper"
 
 **Banned punctuation:**
-- Em dashes (`—`). Use commas, periods, or `...` instead.
+- Em dashes (the `—` character, U+2014). Use `--` (ASCII double-hyphen), commas, periods, or `...` instead. macOS autocorrect often converts `--` to `—` silently while typing; disable smart-punctuation or run `bin/ytstack-check` before committing.
 - Ellipsis as hesitation filler (`...`). Use it only when genuinely meaning "and so on" or trailing pause.
 
 ## Preferred style

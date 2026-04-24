@@ -6,13 +6,13 @@ ytstack's design is opinionated. This file documents which concepts we adapted f
 
 ### Three-tier context model
 
-**Adapted concept:** a hierarchy of loaded context — core (always), task-specific (loaded when relevant), background (on-demand).
+**Adapted concept:** a hierarchy of loaded context -- core (always), task-specific (loaded when relevant), background (on-demand).
 
 **ytstack implementation:** skill frontmatter carries a `tier` field:
 
-- `tier: core` — session-wide, persisted answers (e.g. project scope, storage location). Loaded on every session start via the `session-start` hook.
-- `tier: task` — per-turn decisions (e.g. team size for milestone dispatch). Not persisted.
-- `tier: background` — skippable, default-pickable (e.g. telemetry opt-in). Only asked when user sets `YTSTACK_FULL_SETUP=1`.
+- `tier: core` -- session-wide, persisted answers (e.g. project scope, storage location). Loaded on every session start via the `session-start` hook.
+- `tier: task` -- per-turn decisions (e.g. team size for milestone dispatch). Not persisted.
+- `tier: background` -- skippable, default-pickable (e.g. telemetry opt-in). Only asked when user sets `YTSTACK_FULL_SETUP=1`.
 
 **Divergence:** the external source uses three tiers as a prose recommendation. We bake it into skill frontmatter, read it in the `AskUserQuestion` format contract (`docs/ux/askuserquestion-format.md`), and will enforce via CI (`ytstack-skill-check`, M008).
 
@@ -22,7 +22,7 @@ ytstack's design is opinionated. This file documents which concepts we adapted f
 
 **ytstack implementation:** `.ytstack/` directory with PROJECT.md, DECISIONS.md, KNOWLEDGE.md, RUNTIME.md, STATE.md, PREFERENCES.md. Per-milestone: M###-CONTEXT.md, M###-ROADMAP.md. Per-slice: M###-S##-PLAN.md. Per-task: M###-S##-T##-PLAN.md + M###-S##-T##-SUMMARY.md. All Markdown-based, git-trackable.
 
-**Divergence:** the external source suggests Notion / Confluence / Google Drive as storage. We use plain Markdown in the repo. Pros: diff-friendly, works offline, no vendor lock-in. Cons: no cross-project query tools (none yet — future).
+**Divergence:** the external source suggests Notion / Confluence / Google Drive as storage. We use plain Markdown in the repo. Pros: diff-friendly, works offline, no vendor lock-in. Cons: no cross-project query tools (none yet -- future).
 
 ### Skill-playbook-based skill creation
 
@@ -34,7 +34,7 @@ ytstack's design is opinionated. This file documents which concepts we adapted f
 
 ### Append-only decision register
 
-**Adapted concept:** architectural decisions never overwrite — they accumulate with "supersedes" links.
+**Adapted concept:** architectural decisions never overwrite -- they accumulate with "supersedes" links.
 
 **ytstack implementation:** `.ytstack/DECISIONS.md` is strictly append-only. Format per entry: Context + Options considered + Chose + Reason + Supersedes (if this replaces an older entry). Hook and skill logic never rewrites past entries.
 
@@ -52,7 +52,7 @@ The external source proposes a specific categorization of feedback events. We op
 
 ### Agent-type hierarchy
 
-The external source distinguishes multiple agent types with specific roles. We delegate this to Claude Code's native subagents + Agent Teams. When `spawn-milestone-team` creates teammates, it references subagent definitions (architect, implementer, verifier) — but we don't enforce a strict taxonomy.
+The external source distinguishes multiple agent types with specific roles. We delegate this to Claude Code's native subagents + Agent Teams. When `spawn-milestone-team` creates teammates, it references subagent definitions (architect, implementer, verifier) -- but we don't enforce a strict taxonomy.
 
 ## What we took from named projects (attributed in NOTICE)
 
@@ -73,7 +73,7 @@ The external source distinguishes multiple agent types with specific roles. We d
 - Jargon-gloss-on-first-use
 - Banned-words + writing-style contract
 
-### GSD (Get Shit Done) — architectural influence, NOT vendored
+### GSD (Get Shit Done) -- architectural influence, NOT vendored
 
 - Artifact hierarchy (PROJECT / DECISIONS / KNOWLEDGE / ROADMAP / per-milestone / per-slice / per-task)
 - Phase workflow (discuss → plan → execute → verify)

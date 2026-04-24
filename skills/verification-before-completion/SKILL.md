@@ -35,14 +35,14 @@ A minute ago was a different codebase. Run them again now. The vendored skill's 
 
 ## Checklist
 
-1. **Run preamble** — state + task-plan verification command
-2. **HARD-GATE** — vendored skill present
+1. **Run preamble** -- state + task-plan verification command
+2. **HARD-GATE** -- vendored skill present
 3. **Determine verification command(s)**:
    a. If `ACTIVE_TASK` exists → read its `T##-PLAN.md`, use its Verification section
    b. Otherwise → ask user for verification command
 4. **Run vendored procedure** with the command(s)
 5. **Confirm output matches expectations**
-6. **Report** — pass / fail / pass-with-caveats
+6. **Report** -- pass / fail / pass-with-caveats
 
 ## Preamble
 
@@ -85,7 +85,7 @@ echo "VENDOR_EXISTS: $_VENDOR_EXISTS"
 
 **Step 2 HARD-GATE.** Abort if `VENDOR_EXISTS=no`.
 
-**Step 3 — Determine verification command.**
+**Step 3 -- Determine verification command.**
 
 - If `HAS_VERIFICATION_CMD=yes`: use it. Show to user: "Verifying task **{ACTIVE_TASK}**. Command from task-plan: `{cmd}`"
 - Else use AskUserQuestion (open-ended):
@@ -98,13 +98,13 @@ echo "VENDOR_EXISTS: $_VENDOR_EXISTS"
 
 Remember as `_CMDS`.
 
-**Step 4 — Run vendored.** Read `{VENDOR_SKILL}`. Follow its procedure with `_CMDS` as the verification commands. Its logic handles:
+**Step 4 -- Run vendored.** Read `{VENDOR_SKILL}`. Follow its procedure with `_CMDS` as the verification commands. Its logic handles:
 - Running the commands
 - Capturing stdout + stderr + exit code
 - Comparing against expected success signal
 - Deciding pass / fail
 
-**Step 5 — Confirm.** For each command, report:
+**Step 5 -- Confirm.** For each command, report:
 - Exit code
 - Pass signal match
 - Any unexpected output (warnings, flaky indicators)
@@ -113,13 +113,13 @@ If all pass cleanly: mark VERIFIED.
 If exit 0 but output suggests issues (warnings, deprecations, "skipped N tests"): mark PASS_WITH_CAVEATS.
 If any fail: mark FAILED.
 
-**Step 6 — Report.**
+**Step 6 -- Report.**
 
 > Verification for **{ACTIVE_TASK / whatever}**: **{VERIFIED / PASS_WITH_CAVEATS / FAILED}**.
 >
 > Commands run:
 > {For each command:}
-> - `{cmd}` — exit={code}, {pass/fail/caveats}: {one-line outcome}
+> - `{cmd}` -- exit={code}, {pass/fail/caveats}: {one-line outcome}
 >
 > {If FAILED:} Do NOT claim done. Return to debugging / implementation.
 > {If PASS_WITH_CAVEATS:} Evidence of issues: {list}. Decide: is this acceptable to ship, or do we fix first?
@@ -132,4 +132,4 @@ If any fail: mark FAILED.
 
 ## Terminal State
 
-Return after reporting verification outcome. Do NOT invoke `summarize-task` automatically — verification pass enables, it doesn't mandate, summary writing.
+Return after reporting verification outcome. Do NOT invoke `summarize-task` automatically -- verification pass enables, it doesn't mandate, summary writing.

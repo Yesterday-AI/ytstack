@@ -17,20 +17,20 @@ triggers:
 
 # spawn-milestone-team
 
-Ask Claude Code to create an Agent Team for the current milestone. Each teammate gets a slice. Teammates work in parallel with isolated contexts, coordinate via the shared task list. This is ytstack's answer to GSD's fresh-subprocess-per-task model — we use Claude Code's native Agent Teams feature instead of building our own runtime.
+Ask Claude Code to create an Agent Team for the current milestone. Each teammate gets a slice. Teammates work in parallel with isolated contexts, coordinate via the shared task list. This is ytstack's answer to GSD's fresh-subprocess-per-task model -- we use Claude Code's native Agent Teams feature instead of building our own runtime.
 
 ## Prerequisites
 
 - `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` set in shell or settings.json
 - Claude Code v2.1.32 or later
 - Current milestone has sliced plans (`M###-S##-PLAN.md` exists for each slice)
-- Milestone has passed `plan-eng-review` (recommended — catches architecture issues before parallel work starts)
+- Milestone has passed `plan-eng-review` (recommended -- catches architecture issues before parallel work starts)
 
 ## Anti-Pattern: "Just execute the slices sequentially myself"
 
 That works. Agent Teams add coordination overhead and token cost. Use sequential execution when:
 - Slices have heavy cross-dependencies
-- The milestone is small (M or S — 1-3 slices)
+- The milestone is small (M or S -- 1-3 slices)
 - You want tight human oversight per slice
 
 Use Agent Teams when:
@@ -40,13 +40,13 @@ Use Agent Teams when:
 
 ## Checklist
 
-1. **Run preamble** — detect Agent Teams capability + milestone state
-2. **HARD-GATE** — env var + version + slice-plans present
-3. **Check slice independence** — warn if slices overlap files
-4. **Ask team size** — typically one teammate per slice, with architect-reviewer override
-5. **Construct team spawn instruction** — natural-language prompt Claude will execute
-6. **Emit instruction** — Claude takes over from there
-7. **Do not block** — Agent Teams are long-running; this skill completes quickly
+1. **Run preamble** -- detect Agent Teams capability + milestone state
+2. **HARD-GATE** -- env var + version + slice-plans present
+3. **Check slice independence** -- warn if slices overlap files
+4. **Ask team size** -- typically one teammate per slice, with architect-reviewer override
+5. **Construct team spawn instruction** -- natural-language prompt Claude will execute
+6. **Emit instruction** -- Claude takes over from there
+7. **Do not block** -- Agent Teams are long-running; this skill completes quickly
 
 ## Preamble
 
@@ -97,11 +97,11 @@ echo "VERSION_OK: $_VERSION_OK"
 
 - `HAS_YTSTACK=no` → abort
 - `CURRENT_MILESTONE=none` → abort "run plan-milestone first"
-- `SLICE_COUNT=0` → abort "run slice-milestone first — no slice-plans found"
+- `SLICE_COUNT=0` → abort "run slice-milestone first -- no slice-plans found"
 - `AGENT_TEAMS_ENABLED=no` → abort "set `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in your env or `settings.json` then restart Claude Code"
 - `VERSION_OK=no` → abort "Claude Code v2.1.32+ required. Current: {CC_VERSION}. Upgrade before running this skill."
 
-**Step 3 — Check slice independence.** Read each slice-plan's Files section. Compare across slices. If two slices touch the same file path:
+**Step 3 -- Check slice independence.** Read each slice-plan's Files section. Compare across slices. If two slices touch the same file path:
 
 Report:
 > Slice overlap detected:
@@ -110,7 +110,7 @@ Report:
 > Running these in parallel risks merge conflicts. Consider:
 > - Sequential execution (skip this skill, run `plan-task` + `test-driven-development` per slice)
 > - Re-slice to separate the overlapping files (re-run `slice-milestone`)
-> - Explicitly accept the risk — the last writer wins, earlier changes may need manual merge
+> - Explicitly accept the risk -- the last writer wins, earlier changes may need manual merge
 
 Use AskUserQuestion:
 > A) Accept risk, spawn team anyway (Completeness: 6/10, risk: medium)
@@ -119,20 +119,20 @@ Use AskUserQuestion:
 
 If B or C: STOP.
 
-**Step 4 — Ask team size.** Use AskUserQuestion:
+**Step 4 -- Ask team size.** Use AskUserQuestion:
 
 > Milestone **{CURRENT_MILESTONE}** has {SLICE_COUNT} slice(s). Team size?
 >
-> RECOMMENDATION: A — one teammate per slice plus an architect-lead reviewer gives best coverage without excessive coordination overhead.
+> RECOMMENDATION: A -- one teammate per slice plus an architect-lead reviewer gives best coverage without excessive coordination overhead.
 >
 > A) {SLICE_COUNT} implementers + 1 architect-reviewer. (Completeness: 10/10)
-> B) {SLICE_COUNT} implementers only — no reviewer. (Completeness: 8/10, cheaper)
-> C) Fewer teammates than slices — one teammate picks up multiple slices sequentially. (Completeness: 10/10, slower but token-cheaper)
-> D) Custom count — I'll specify. (Completeness: 10/10)
+> B) {SLICE_COUNT} implementers only -- no reviewer. (Completeness: 8/10, cheaper)
+> C) Fewer teammates than slices -- one teammate picks up multiple slices sequentially. (Completeness: 10/10, slower but token-cheaper)
+> D) Custom count -- I'll specify. (Completeness: 10/10)
 
 Remember as `_TEAM_CONFIG`.
 
-**Step 5 — Construct spawn instruction.** Build natural-language for Claude:
+**Step 5 -- Construct spawn instruction.** Build natural-language for Claude:
 
 ```
 I want to dispatch milestone {CURRENT_MILESTONE} of project {PROJECT_NAME} to an Agent Team.
@@ -150,7 +150,7 @@ Each teammate MUST:
 3. Use `ytstack:test-driven-development` for implementation
 4. Use `ytstack:verification-before-completion` before marking a task complete
 5. Use `ytstack:summarize-task` to close each task
-6. NOT invoke `ytstack:reassess-roadmap` mid-slice — that's for the lead after slice completes
+6. NOT invoke `ytstack:reassess-roadmap` mid-slice -- that's for the lead after slice completes
 
 Lead (main session) coordinates, checks teammate progress, assembles findings. When all slices are complete, lead runs `ytstack:reassess-roadmap` and reports back.
 
@@ -159,7 +159,7 @@ Non-interactive mode: teammates have YTSTACK_NON_INTERACTIVE=1 in their environm
 Start when I say "go".
 ```
 
-**Step 6 — Emit.** Present the instruction to the user:
+**Step 6 -- Emit.** Present the instruction to the user:
 
 > Ready to spawn team for **{CURRENT_MILESTONE}** ({TEAM_SIZE} teammates).
 >
@@ -171,9 +171,9 @@ Start when I say "go".
 >
 > Say "go" to dispatch, or "cancel" to stop. If "go", Claude will create the team; from that point, you can monitor teammates via Shift+Down cycling or split panes.
 
-Wait for user confirmation. If "go", the user sends the instruction as their next prompt; Claude then invokes Agent Teams. This skill does not directly invoke the Agent Teams API — Claude owns that.
+Wait for user confirmation. If "go", the user sends the instruction as their next prompt; Claude then invokes Agent Teams. This skill does not directly invoke the Agent Teams API -- Claude owns that.
 
-**Step 7 — Report + return.**
+**Step 7 -- Report + return.**
 
 > Team spawn instruction emitted. Claude will execute on your "go".
 >
@@ -181,13 +181,13 @@ Wait for user confirmation. If "go", the user sends the instruction as their nex
 > - Lead creates `~/.claude/teams/ytstack-{CURRENT_MILESTONE}/` with config
 > - Task list lives at `~/.claude/tasks/ytstack-{CURRENT_MILESTONE}/`
 > - Teammates self-claim tasks, report via mailbox
-> - ytstack hooks (`task-created`, `task-completed`, `teammate-idle` — shipped in M006) react to team events
+> - ytstack hooks (`task-created`, `task-completed`, `teammate-idle` -- shipped in M006) react to team events
 >
 > Monitor with Shift+Down (cycle teammates) or check `/plugin status` if split panes enabled.
 
 ## Terminal State
 
-Return after emitting the spawn instruction. Do NOT try to invoke Agent Teams directly — Claude owns that API through the team-lead role. Do NOT invoke downstream skills; the teammates will handle their own lifecycle via the M003 skills.
+Return after emitting the spawn instruction. Do NOT try to invoke Agent Teams directly -- Claude owns that API through the team-lead role. Do NOT invoke downstream skills; the teammates will handle their own lifecycle via the M003 skills.
 
 ## Limitations
 

@@ -14,7 +14,7 @@ ytstack is a curated, opinionated stack. Not every idea belongs. Before proposin
 
 **Does NOT belong:**
 - New skills that replicate vendored superpowers / gstack skills
-- Modifications to `vendor/**` content (never — wrap, don't edit)
+- Modifications to `vendor/**` content (never -- wrap, don't edit)
 - Alternative UX contracts (one set of contracts, enforced by CI)
 - Domain-specific functionality (publish a separate plugin that depends on ytstack)
 
@@ -22,7 +22,7 @@ ytstack is a curated, opinionated stack. Not every idea belongs. Before proposin
 
 Every PR MUST:
 
-1. **Solve a real, observed problem.** Not "might be useful" — something that actually broke or blocked real work. Describe the session or scenario.
+1. **Solve a real, observed problem.** Not "might be useful" -- something that actually broke or blocked real work. Describe the session or scenario.
 2. **Preserve the UX contracts.** If your change touches a skill, re-read `docs/ux/*.md` and confirm the skill still passes. Run `ytstack-skill-check` (ships M008 pre-release) locally.
 3. **Update REVIEW-NOTES.md.** If your PR closes an item there, strike it. If it opens new concerns, add them.
 4. **Update STATE.md.** If your PR is part of a milestone, bump the appropriate checkboxes.
@@ -53,7 +53,7 @@ We DO:
 
 ### Atomic commits
 
-One logical change per commit. Rename + rewrite + tests? Three commits. A task's work might span several commits — that's fine, each should be independently understandable and revertable.
+One logical change per commit. Rename + rewrite + tests? Three commits. A task's work might span several commits -- that's fine, each should be independently understandable and revertable.
 
 Commit message format:
 - Task work: `M###-S##-T##: <action>` (e.g. `M003-S01-T10: write failing test for argon2`)
@@ -125,5 +125,5 @@ Per ytstack's design direction, we credit external methodology work generically,
 ## Getting help
 
 - Read `docs/references.md` for sources we've leaned on.
-- Check `.ytstack/REVIEW-NOTES.md` — your question may already be logged.
+- Check `.ytstack/REVIEW-NOTES.md` -- your question may already be logged.
 - Read `CLAUDE.md` for agent-specific guidance.

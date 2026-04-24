@@ -17,7 +17,7 @@ triggers:
 
 # handoff-session
 
-Create a `.ytstack/HANDOFF.md` that lets the next session (yours or someone else's) pick up exactly where this one left off. This is the user-triggered equivalent of the automatic `pre-compact` hook — but richer, because the user decides what matters.
+Create a `.ytstack/HANDOFF.md` that lets the next session (yours or someone else's) pick up exactly where this one left off. This is the user-triggered equivalent of the automatic `pre-compact` hook -- but richer, because the user decides what matters.
 
 ## Anti-Pattern: "I'll remember what I was doing"
 
@@ -25,12 +25,12 @@ You won't. Tomorrow-you, monday-you, and teammate-you all read handoffs cold. Th
 
 ## Checklist
 
-1. **Run preamble** — detect state
-2. **HARD-GATE** — ytstack initialized
-3. **Ask: what's open right now?** — one sentence on in-flight work
-4. **Ask: what's the next action?** — concrete next step
-5. **Ask: any open decisions blocking?** — things you need the next session to decide
-6. **Ask: any warnings / gotchas?** — things easy to miss
+1. **Run preamble** -- detect state
+2. **HARD-GATE** -- ytstack initialized
+3. **Ask: what's open right now?** -- one sentence on in-flight work
+4. **Ask: what's the next action?** -- concrete next step
+5. **Ask: any open decisions blocking?** -- things you need the next session to decide
+6. **Ask: any warnings / gotchas?** -- things easy to miss
 7. **Write `HANDOFF.md`** (overwrites the hook-generated one)
 8. **Report + suggest clean exit**
 
@@ -64,33 +64,33 @@ echo "BRANCH: $_BRANCH"
 
 **Step 2 HARD-GATE.** If `HAS_YTSTACK=no`: abort.
 
-**Step 3 — Open work.** AskUserQuestion:
+**Step 3 -- Open work.** AskUserQuestion:
 > Writing a handoff for **{PROJECT_NAME}** on branch `{BRANCH}`. Position: {CURRENT_MILESTONE} / {ACTIVE_SLICE} / {ACTIVE_TASK}.
 >
 > What's currently in-flight? One sentence. What were you in the middle of when you hit pause?
 
 Remember as `_OPEN_WORK`.
 
-**Step 4 — Next action.** AskUserQuestion:
+**Step 4 -- Next action.** AskUserQuestion:
 > What's the exact next step when you pick this up? Be concrete. Not "continue the task" but "finish the argon2 integration in src/auth/signup.ts, starting at line 47."
 
 Remember as `_NEXT_ACTION`.
 
-**Step 5 — Open decisions.** AskUserQuestion:
+**Step 5 -- Open decisions.** AskUserQuestion:
 > Any decisions that need to be made before the next session can proceed? These become blockers if forgotten.
 >
 > Enter "none" if there are no blocking decisions.
 
 Remember as `_OPEN_DECISIONS`.
 
-**Step 6 — Warnings.** AskUserQuestion:
-> Any warnings, gotchas, or easy-to-miss details the next session should know? Examples: "the test suite skips a flaky test on main — don't be surprised", "env var X must be set before running", "the staging DB is seeded, don't reset it".
+**Step 6 -- Warnings.** AskUserQuestion:
+> Any warnings, gotchas, or easy-to-miss details the next session should know? Examples: "the test suite skips a flaky test on main -- don't be surprised", "env var X must be set before running", "the staging DB is seeded, don't reset it".
 >
 > Enter "none" if nothing.
 
 Remember as `_WARNINGS`.
 
-**Step 7 — Write HANDOFF.md.** Use Write tool. Path: `{YT_DIR}/HANDOFF.md`. Overwrites any hook-generated version.
+**Step 7 -- Write HANDOFF.md.** Use Write tool. Path: `{YT_DIR}/HANDOFF.md`. Overwrites any hook-generated version.
 
 ```markdown
 ---
@@ -133,7 +133,7 @@ Written by the user via `/ytstack:handoff-session` at {ISO_TIMESTAMP}.
 ## How to resume
 
 1. Start a new Claude Code session in this project directory.
-2. SessionStart hook will auto-inject state from `STATE.md` — read that first.
+2. SessionStart hook will auto-inject state from `STATE.md` -- read that first.
 3. Read this file (`HANDOFF.md`) for the in-flight context.
 4. Check latest `{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{ACTIVE_TASK}-PLAN.md` and corresponding `-SUMMARY.md` if it exists.
 5. Run `/ytstack:resume-session` to get a synthesized briefing.
@@ -147,7 +147,7 @@ Written by the user via `/ytstack:handoff-session` at {ISO_TIMESTAMP}.
 - Decision log: `{YT_DIR}/DECISIONS.md`
 ```
 
-**Step 8 — Report + suggest exit.**
+**Step 8 -- Report + suggest exit.**
 
 > Handoff written to `{YT_DIR}/HANDOFF.md`. Safe to exit Claude Code now.
 >
@@ -157,4 +157,4 @@ Written by the user via `/ytstack:handoff-session` at {ISO_TIMESTAMP}.
 
 ## Terminal State
 
-Return after writing HANDOFF.md. Do NOT invoke any other skill. Do NOT attempt to end the Claude Code session — that's the user's choice.
+Return after writing HANDOFF.md. Do NOT invoke any other skill. Do NOT attempt to end the Claude Code session -- that's the user's choice.

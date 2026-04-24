@@ -1,4 +1,4 @@
-# ytstack — Contributor Guidelines
+# ytstack -- Contributor Guidelines
 
 Read this before modifying anything in this repo.
 
@@ -6,7 +6,7 @@ Read this before modifying anything in this repo.
 
 Stop. Read this section before acting.
 
-ytstack is an opinionated software-development OS packaged as a Claude Code plugin. It has strict UX contracts and a curated scope. Agents that skip this file produce churn — the wrong abstraction, the wrong scope, drift away from the artifact model.
+ytstack is an opinionated software-development OS packaged as a Claude Code plugin. It has strict UX contracts and a curated scope. Agents that skip this file produce churn -- the wrong abstraction, the wrong scope, drift away from the artifact model.
 
 **Your job is to protect the human from shipping low-quality skills.** Before you open a PR or commit a skill change, you MUST:
 
@@ -70,16 +70,16 @@ Violations fail CI. No exceptions.
 
 Every commit is one logical change. When you've made multiple changes (rename + rewrite + tests), split into separate commits before pushing.
 
-- Task work: `M###-S##-T##: <action> <target>` — e.g. `M001-S01-T04: write plugin manifest`
-- Infra: `chore: <action>` — e.g. `chore: update ROADMAP.md with M002 tasks`
-- Bugfix: `fix: <short desc>` — e.g. `fix: preamble emits BRANCH=unknown outside git`
+- Task work: `M###-S##-T##: <action> <target>` -- e.g. `M001-S01-T04: write plugin manifest`
+- Infra: `chore: <action>` -- e.g. `chore: update ROADMAP.md with M002 tasks`
+- Bugfix: `fix: <short desc>` -- e.g. `fix: preamble emits BRANCH=unknown outside git`
 
 ## Before you commit
 
 Run this mental checklist:
 
 1. Does this commit do ONE logical thing? (If no, split.)
-2. Does the skill still pass UX contract checks? (Run `ytstack-skill-check` once the tool exists — M001.)
+2. Does the skill still pass UX contract checks? (Run `ytstack-skill-check` once the tool exists -- M001.)
 3. Did I update `.ytstack/STATE.md` with the new task status?
 4. Did I add a `DECISIONS.md` entry if this commit locks in a non-obvious choice?
 5. Did I show the human the diff before staging?
@@ -110,7 +110,7 @@ See above. Concepts yes, prose no.
 
 ## When in doubt
 
-Ask the human. ytstack is a taste-driven project. If something feels like it needs a judgment call, surface it — don't assume you have the context.
+Ask the human. ytstack is a taste-driven project. If something feels like it needs a judgment call, surface it -- don't assume you have the context.
 
 ## Reference sources
 

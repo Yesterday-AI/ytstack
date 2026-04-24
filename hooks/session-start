@@ -3,11 +3,11 @@
 #
 # Injects two things as additionalContext when a `.ytstack/` directory is present:
 #
-#   1. The full content of skills/using-ytstack/SKILL.md — the directive that
+#   1. The full content of skills/using-ytstack/SKILL.md -- the directive that
 #      tells the agent to auto-invoke ytstack skills based on user intent
 #      (superpowers-style proactive skill selection).
 #
-#   2. The current project state from .ytstack/STATE.md — so the agent knows
+#   2. The current project state from .ytstack/STATE.md -- so the agent knows
 #      where we are in the milestone/slice/task hierarchy.
 #
 # Silent no-op for projects without ytstack tracking.
@@ -52,12 +52,12 @@ emit_json() {
   elif command -v python3 >/dev/null 2>&1; then
     printf '%s' "$content" | python3 -c 'import sys, json; print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": sys.stdin.read()}}))'
   else
-    # Last-resort raw — won't safely handle embedded quotes/newlines
+    # Last-resort raw -- won't safely handle embedded quotes/newlines
     printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$content"
   fi
 }
 
-# Handle missing STATE.md (anomaly — .ytstack/ exists but no dashboard)
+# Handle missing STATE.md (anomaly -- .ytstack/ exists but no dashboard)
 if [ ! -f "$STATE_FILE" ]; then
   MSG="[ytstack] $YT_DIR exists but STATE.md is missing. Run /ytstack:init-project to repair, or remove the directory."
   if [ -n "$USING_YTSTACK_CONTENT" ]; then
@@ -128,7 +128,7 @@ $USING_YTSTACK_CONTENT
 
 $STATE_CONTEXT"
 else
-  # using-ytstack not found — still emit state, but log a warning
+  # using-ytstack not found -- still emit state, but log a warning
   FULL_CONTEXT="[ytstack warning] skills/using-ytstack/SKILL.md not found at expected path. Project state follows but proactive skill-selection is not primed.
 
 $STATE_CONTEXT"

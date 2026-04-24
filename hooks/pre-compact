@@ -58,9 +58,9 @@ Position: ${CURRENT_MILESTONE:-none}${ACTIVE_SLICE:+ / $ACTIVE_SLICE}${ACTIVE_TA
 
 ## What to read next
 
-1. \`$YT_DIR/STATE.md\` — full dashboard, next action, open decisions
-2. \`$YT_DIR/ROADMAP.md\` — milestone plan, task checkboxes
-3. \`$YT_DIR/REVIEW-NOTES.md\` — deferred items flagged during this cycle
+1. \`$YT_DIR/STATE.md\` -- full dashboard, next action, open decisions
+2. \`$YT_DIR/ROADMAP.md\` -- milestone plan, task checkboxes
+3. \`$YT_DIR/REVIEW-NOTES.md\` -- deferred items flagged during this cycle
 4. The latest \`$YT_DIR/*-SUMMARY.md\` if any exist
 
 ## Note

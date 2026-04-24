@@ -9,7 +9,7 @@ active_task: none
 
 # State
 
-**Status:** Full build cycle complete + post-M009 patches landing. 38/39 roadmap tasks done; 1 deferred (GitHub repo creation + push + v0.1.0 tag — user action). End-of-cycle review in progress.
+**Status:** Full build cycle complete + post-M009 patches landing. 38/39 roadmap tasks done; 1 deferred (GitHub repo creation + push + v0.1.0 tag -- user action). End-of-cycle review in progress.
 
 **Post-M009 patches since 2026-04-23:** using-ytstack skill + session-start hook behavior-priming rewrite; 3 subagent definitions (architect / implementer / verifier); `docs/ux/agent-structure.md` contract; git init + initial scaffold commit; superpowers + gstack subtrees added.
 
@@ -37,8 +37,8 @@ M009 Docs & Community            [####]   4/4  DONE
 - Findings per milestone (M001, M002, M003)
 
 After review, two user-action tasks close M008:
-- T33 — Create GitHub repos: `yesterday-ai/ytstack` + `yesterday-ai/ytstack-marketplace`
-- T35 — `git init` ytstack, add remote, commit, tag v0.1.0, push
+- T33 -- Create GitHub repos: `yesterday-ai/ytstack` + `yesterday-ai/ytstack-marketplace`
+- T35 -- `git init` ytstack, add remote, commit, tag v0.1.0, push
 
 ## Completed milestones
 
@@ -48,31 +48,31 @@ All 9 milestones achieved. See ROADMAP.md for per-milestone detail.
 
 **Skills (15):**
 
-- `init-project` (M001) — bootstrap `.ytstack/` artifacts
-- `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `handoff-session`, `resume-session` (M003) — Project-OS lifecycle
-- `plan-ceo-review`, `office-hours`, `plan-eng-review` (M004) — gstack planning wrappers
-- `test-driven-development`, `systematic-debugging`, `verification-before-completion` (M005) — superpowers execution wrappers
-- `spawn-milestone-team` (M006) — Agent Teams dispatch
-- `using-ytstack` (post-M009) — auto-injected directive that drives agent-side skill selection from natural-language intent. Adapted from superpowers' `using-superpowers` pattern.
+- `init-project` (M001) -- bootstrap `.ytstack/` artifacts
+- `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `handoff-session`, `resume-session` (M003) -- Project-OS lifecycle
+- `plan-ceo-review`, `office-hours`, `plan-eng-review` (M004) -- gstack planning wrappers
+- `test-driven-development`, `systematic-debugging`, `verification-before-completion` (M005) -- superpowers execution wrappers
+- `spawn-milestone-team` (M006) -- Agent Teams dispatch
+- `using-ytstack` (post-M009) -- auto-injected directive that drives agent-side skill selection from natural-language intent. Adapted from superpowers' `using-superpowers` pattern.
 
 **Subagent definitions (3, post-M009):**
 
-- `agents/architect.md` — plan-review, approve-to-implement gate (read-only). Used by `spawn-milestone-team` for the optional architect-lead role.
-- `agents/implementer.md` — executes one slice via the `plan-task → TDD → verify → summarize` cycle. Bounded to slice scope.
-- `agents/verifier.md` — evidence-before-assertions, runs plan's verification command from cold context, passes/fails task closure.
+- `agents/architect.md` -- plan-review, approve-to-implement gate (read-only). Used by `spawn-milestone-team` for the optional architect-lead role.
+- `agents/implementer.md` -- executes one slice via the `plan-task → TDD → verify → summarize` cycle. Bounded to slice scope.
+- `agents/verifier.md` -- evidence-before-assertions, runs plan's verification command from cold context, passes/fails task closure.
 
 These are referenced by `skills/spawn-milestone-team/SKILL.md` as the default teammate-role types. Previously the skill named them without providing definitions (gap surfaced during behavior-priming audit).
 
 **Hooks (8):**
 
-- `session-start` (M002) — inject project state on startup/resume/clear/compact
-- `pre-compact` (M002) — write HANDOFF.md before context compression
-- `session-end` (M002) — finalize STATE.md, append session journal
-- `teammate-idle` (M006) — keep teammates claiming open tasks
-- `task-created` (M006) — scope-drift check against milestone roadmap
-- `task-completed` (M006) — auto-draft T##-SUMMARY.md
-- `pre-tool-use-edit` (M007) — scope + schema drift check before file edits
-- `post-tool-use-bash` (M007) — auto-append commit to task summary
+- `session-start` (M002) -- inject project state on startup/resume/clear/compact
+- `pre-compact` (M002) -- write HANDOFF.md before context compression
+- `session-end` (M002) -- finalize STATE.md, append session journal
+- `teammate-idle` (M006) -- keep teammates claiming open tasks
+- `task-created` (M006) -- scope-drift check against milestone roadmap
+- `task-completed` (M006) -- auto-draft T##-SUMMARY.md
+- `pre-tool-use-edit` (M007) -- scope + schema drift check before file edits
+- `post-tool-use-bash` (M007) -- auto-append commit to task summary
 
 **Docs:**
 

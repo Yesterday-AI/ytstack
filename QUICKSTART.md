@@ -25,9 +25,9 @@ This starts a fresh Claude Code session with ytstack loaded. No marketplace regi
 claude --plugin-dir /path/to/ytstack --permission-mode acceptEdits -p "<prompt>"
 ```
 
-The `--permission-mode acceptEdits` flag is required — ytstack skills write `.ytstack/` artifacts and would stall on permission prompts otherwise. Non-interactive detection via `YTSTACK_NON_INTERACTIVE=1` environment variable.
+The `--permission-mode acceptEdits` flag is required -- ytstack skills write `.ytstack/` artifacts and would stall on permission prompts otherwise. Non-interactive detection via `YTSTACK_NON_INTERACTIVE=1` environment variable.
 
-## First milestone — worked example
+## First milestone -- worked example
 
 Imagine building a small CLI tool. Here's the end-to-end flow:
 
@@ -38,7 +38,7 @@ Imagine building a small CLI tool. Here's the end-to-end flow:
 ```
 
 You'll be asked:
-- Scope: **project-level** (recommended — committed to git) vs user-level (private)
+- Scope: **project-level** (recommended -- committed to git) vs user-level (private)
 - Name: e.g. "csv-importer"
 - One-liner: e.g. "CLI that imports CSV exports from accounting software into the finance database"
 
@@ -52,7 +52,7 @@ Result: `.ytstack/` with 6 files (PROJECT.md, DECISIONS.md, KNOWLEDGE.md, RUNTIM
 
 - Goal: "Parse a CSV file and write it to the database."
 - Exit criteria: "Command `csv-importer path/to/file.csv` inserts all rows into `imports` table and reports row count."
-- Size: M (medium — 2-3 slices)
+- Size: M (medium -- 2-3 slices)
 
 Result: `.ytstack/M001-CONTEXT.md` + `.ytstack/M001-ROADMAP.md` with slice placeholders.
 
@@ -71,7 +71,7 @@ Challenges your scope, ambition, and premise. If the feature is worth expanding 
 ```
 
 For each slice placeholder:
-- Slice goal: e.g. "S01 — Parse CSV and validate rows"
+- Slice goal: e.g. "S01 -- Parse CSV and validate rows"
 - Task list (1-7 tasks per slice): e.g.
   1. Add CLI flag parsing with `--input` and `--output`
   2. Implement CSV reader with streaming
@@ -87,7 +87,7 @@ Result: `.ytstack/M001-S01-PLAN.md`, `.ytstack/M001-S02-PLAN.md`, etc.
 
 Locks in architecture before implementation. Catches file-overlap between slices, test gaps, performance concerns.
 
-### 6. Execute tasks — two options
+### 6. Execute tasks -- two options
 
 **Option A: sequential (simple).** For each task:
 
@@ -129,11 +129,11 @@ At any point:
 Reads `.ytstack/STATE.md` + `.ytstack/HANDOFF.md` (if present) + latest 3 task summaries. Gives you a 3-paragraph briefing of where you are.
 
 For a richer snapshot, read the files directly:
-- `.ytstack/STATE.md` — dashboard
-- `.ytstack/ROADMAP.md` — full milestone plan
-- `.ytstack/DECISIONS.md` — architectural decisions log
-- `.ytstack/KNOWLEDGE.md` — patterns and gotchas learned
-- `.ytstack/REVIEW-NOTES.md` — deferred items flagged for end-of-cycle review
+- `.ytstack/STATE.md` -- dashboard
+- `.ytstack/ROADMAP.md` -- full milestone plan
+- `.ytstack/DECISIONS.md` -- architectural decisions log
+- `.ytstack/KNOWLEDGE.md` -- patterns and gotchas learned
+- `.ytstack/REVIEW-NOTES.md` -- deferred items flagged for end-of-cycle review
 
 ## Handoff / resume
 
@@ -159,7 +159,7 @@ Four-phase process: investigate → analyze → hypothesize → implement. Root 
 
 - **`claude -p` needs `--permission-mode acceptEdits`** or skills stall on Write prompts.
 - **Skill invocations are namespaced:** `/ytstack:init-project`, not `/init-project`.
-- **Sentinel files accumulate in `~/.ytstack/.*-prompted`** — don't worry about them; cleanup command ships later.
+- **Sentinel files accumulate in `~/.ytstack/.*-prompted`** -- don't worry about them; cleanup command ships later.
 - **`.ytstack/` goes in git.** That's the default. Team members inherit project memory on clone.
 - **One milestone at a time.** If you start a second before closing the first, the roadmap-tracking breaks. Close M### by flipping status in `.ytstack/ROADMAP.md`.
 

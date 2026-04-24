@@ -9,7 +9,7 @@ kind: directive
 # Using ytstack
 
 <SUBAGENT-STOP>
-If you were dispatched as an Agent Teams teammate to execute a specific slice or task, skip this skill — your scope is bounded by the task plan the lead gave you.
+If you were dispatched as an Agent Teams teammate to execute a specific slice or task, skip this skill -- your scope is bounded by the task plan the lead gave you.
 </SUBAGENT-STOP>
 
 <EXTREMELY-IMPORTANT>
@@ -26,15 +26,15 @@ This is not negotiable. This is not optional. You cannot rationalize your way ou
 
 User instructions always take precedence over skills:
 
-1. **User's explicit instructions** (`CLAUDE.md`, direct messages, `--append-system-prompt`) — highest priority. If the user says "don't run the milestone workflow, just make this one change", honor that.
-2. **ytstack skills** — override default agent behavior when they apply.
-3. **Default agent behavior** — lowest priority.
+1. **User's explicit instructions** (`CLAUDE.md`, direct messages, `--append-system-prompt`) -- highest priority. If the user says "don't run the milestone workflow, just make this one change", honor that.
+2. **ytstack skills** -- override default agent behavior when they apply.
+3. **Default agent behavior** -- lowest priority.
 
 If `CLAUDE.md` says "skip ytstack for hot-fix branches" and this is a hot-fix branch, don't invoke ytstack skills. The user is in control.
 
 ## The rule
 
-**Invoke the relevant ytstack skill BEFORE any response or action.** Even a 1% chance a skill might apply means you should invoke it to check. If the invoked skill turns out to be the wrong fit, you don't have to continue using it — but you need to check.
+**Invoke the relevant ytstack skill BEFORE any response or action.** Even a 1% chance a skill might apply means you should invoke it to check. If the invoked skill turns out to be the wrong fit, you don't have to continue using it -- but you need to check.
 
 ## Trigger map
 
@@ -68,7 +68,7 @@ Match the user's message against these phrases and invoke the corresponding skil
 
 "Fix this bug" → `systematic-debugging` first (root-cause it), then task-level skills.
 
-## Red flags — stop and invoke
+## Red flags -- stop and invoke
 
 These thoughts mean STOP, you're rationalizing:
 
@@ -86,13 +86,13 @@ These thoughts mean STOP, you're rationalizing:
 ## When NOT to invoke a ytstack skill
 
 - User explicitly says "skip ytstack" or "just do it directly"
-- Task is clearly outside scope (e.g. fixing a typo in a file that's not in any task-plan — but consider: is this user bypassing `/ytstack:plan-task` they should run?)
+- Task is clearly outside scope (e.g. fixing a typo in a file that's not in any task-plan -- but consider: is this user bypassing `/ytstack:plan-task` they should run?)
 - You're an Agent-Teams subagent with a specific task assignment (SUBAGENT-STOP above)
-- The session isn't actually in a ytstack project (no `.ytstack/` — then this skill's content wouldn't be injected anyway)
+- The session isn't actually in a ytstack project (no `.ytstack/` -- then this skill's content wouldn't be injected anyway)
 
-## Slash commands — when the user uses them
+## Slash commands -- when the user uses them
 
-The user CAN invoke ytstack skills manually with `/ytstack:<skill-name>`. When they do, honor that explicit choice. But most of the time the user won't type slash commands — they'll describe what they want in natural language. Your job: map their description to the right skill from the trigger map above, and invoke it.
+The user CAN invoke ytstack skills manually with `/ytstack:<skill-name>`. When they do, honor that explicit choice. But most of the time the user won't type slash commands -- they'll describe what they want in natural language. Your job: map their description to the right skill from the trigger map above, and invoke it.
 
 Slash commands are the user's **steering mechanism** for the non-happy path (override the skill the agent would have picked, skip a step, start an unusual workflow). Normal interaction is natural language, with the agent auto-reaching for skills.
 
@@ -118,8 +118,8 @@ digraph using_ytstack {
 
 ## After invoking a skill
 
-Follow its Checklist exactly. Create TodoWrite entries per item. Don't improvise steps. The skill's Terminal State section tells you what to do next — respect it; don't auto-invoke the suggested follow-up skill unless explicitly told the user wants that.
+Follow its Checklist exactly. Create TodoWrite entries per item. Don't improvise steps. The skill's Terminal State section tells you what to do next -- respect it; don't auto-invoke the suggested follow-up skill unless explicitly told the user wants that.
 
 ## Summary
 
-ytstack is active in this project. Use ytstack skills. When the user describes what they want, map to a skill and invoke. Let the user steer via slash-commands only when they want to override your choice or skip a step. The agent is the one who proactively reaches for skills — not the user.
+ytstack is active in this project. Use ytstack skills. When the user describes what they want, map to a skill and invoke. Let the user steer via slash-commands only when they want to override your choice or skip a step. The agent is the one who proactively reaches for skills -- not the user.

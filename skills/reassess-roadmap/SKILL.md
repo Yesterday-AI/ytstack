@@ -17,28 +17,28 @@ triggers:
 
 # reassess-roadmap
 
-Post-slice checkpoint. Looks at what was learned during the slice and asks whether the milestone roadmap still matches reality. Often the answer is yes — but when it's no, catching it here is cheap; catching it at milestone-end is expensive.
+Post-slice checkpoint. Looks at what was learned during the slice and asks whether the milestone roadmap still matches reality. Often the answer is yes -- but when it's no, catching it here is cheap; catching it at milestone-end is expensive.
 
 ## When to run
 
 - After `ytstack:summarize-task` closes the **last** task of a slice
 - Before picking the next slice to plan/execute
-- NOT mid-slice — in-flight changes scatter the plan
+- NOT mid-slice -- in-flight changes scatter the plan
 
 ## Anti-Pattern: "The plan was right, no need to reassess"
 
-Run it anyway. It takes 2 minutes and either confirms the plan (good — more confidence) or surfaces a gap the next slice would have hit blind (much better — save a slice of wasted work). The value isn't in changing the plan — it's in knowing whether to change it.
+Run it anyway. It takes 2 minutes and either confirms the plan (good -- more confidence) or surfaces a gap the next slice would have hit blind (much better -- save a slice of wasted work). The value isn't in changing the plan -- it's in knowing whether to change it.
 
 ## Checklist
 
-1. **Run preamble** — detect milestone + just-completed slice
-2. **HARD-GATE** — slice must be fully complete (all tasks `[x]`)
-3. **Summarize the slice** — show outcomes of the N task summaries
+1. **Run preamble** -- detect milestone + just-completed slice
+2. **HARD-GATE** -- slice must be fully complete (all tasks `[x]`)
+3. **Summarize the slice** -- show outcomes of the N task summaries
 4. **Ask: does the remaining roadmap still fit?**
-5. **If no, prompt for changes** — add / split / reorder / remove slices
+5. **If no, prompt for changes** -- add / split / reorder / remove slices
 6. **Update `M###-ROADMAP.md`** with agreed changes
 7. **Append decision to `M###-CONTEXT.md`** if the change is non-trivial
-8. **Update STATE.md** — flip completed slice, set next `active_slice`
+8. **Update STATE.md** -- flip completed slice, set next `active_slice`
 
 ## Preamble
 
@@ -91,8 +91,8 @@ echo "SLICE_COMPLETE: $_SLICE_COMPLETE"
 > RECOMMENDATION: A if nothing surprised you. B if one or two surprises. C if you feel "we should reconsider the whole plan."
 >
 > A) Yes, proceed as planned. (Completeness: 10/10)
-> B) Partial changes needed — add / split / reorder a slice. (Completeness: 8/10)
-> C) Major rethink — the milestone scope or goal shifted. (Completeness: 10/10 for doing the rethink honestly)
+> B) Partial changes needed -- add / split / reorder a slice. (Completeness: 8/10)
+> C) Major rethink -- the milestone scope or goal shifted. (Completeness: 10/10 for doing the rethink honestly)
 
 If A: jump to Step 8.
 If B: Step 5.
@@ -103,19 +103,19 @@ If C: prompt "Should we go back to `/ytstack:plan-milestone` to re-define the mi
 > What needs to change in the roadmap?
 >
 > Describe changes in plain English. Examples:
-> - "Add a new slice S04 between S02 and S03 for rate-limiting — surfaced during S02."
-> - "Remove S03 — turns out what we did in S02 covered it."
-> - "Split S03 into S03a (schema change) and S03b (UI update) — too big for one slice."
+> - "Add a new slice S04 between S02 and S03 for rate-limiting -- surfaced during S02."
+> - "Remove S03 -- turns out what we did in S02 covered it."
+> - "Split S03 into S03a (schema change) and S03b (UI update) -- too big for one slice."
 
 Remember as `_CHANGES`.
 
 **Step 6.** Apply changes to `{CURRENT_MILESTONE}-ROADMAP.md` via Edit tool. For each change:
-- Add: insert a new `- [ ] S## — {name}` line at the correct position, increment `total_slices` frontmatter
+- Add: insert a new `- [ ] S## -- {name}` line at the correct position, increment `total_slices` frontmatter
 - Split: replace one slice line with two, increment `total_slices`
 - Remove: delete line, decrement `total_slices`
 - Reorder: move lines (preserve checkbox state)
 
-If slices beyond the modified ones have placeholder task lists, leave them — `slice-milestone` will handle re-planning.
+If slices beyond the modified ones have placeholder task lists, leave them -- `slice-milestone` will handle re-planning.
 
 **Step 7.** If the change was non-trivial (B or C): append to `{CURRENT_MILESTONE}-CONTEXT.md`:
 
@@ -133,7 +133,7 @@ Reason: {USER_REASON_IF_PROVIDED}
 - Flip `active_slice` from completed slice to the next unfinished slice (next `- [ ] S##` in ROADMAP)
 - `active_task: none`
 - Bump `last_updated`
-- Status line: `**Status:** {CURRENT_MILESTONE} — slice {OLD_SLICE} complete. Next slice: {NEW_ACTIVE_SLICE}.`
+- Status line: `**Status:** {CURRENT_MILESTONE} -- slice {OLD_SLICE} complete. Next slice: {NEW_ACTIVE_SLICE}.`
 
 Also flip `- [ ] {OLD_SLICE}` → `- [x] {OLD_SLICE}` in `{CURRENT_MILESTONE}-ROADMAP.md` and bump `completed_slices`.
 

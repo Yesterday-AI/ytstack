@@ -32,12 +32,12 @@ Superpowers' maintainers explicitly reject this. Tests that come after the code 
 
 ## Checklist
 
-1. **Run preamble** — detect active task + verification command
-2. **HARD-GATE** — active task exists, vendored skill present
-3. **Inject task context** — pass T##-PLAN's Files + Verification to the vendored skill
+1. **Run preamble** -- detect active task + verification command
+2. **HARD-GATE** -- active task exists, vendored skill present
+3. **Inject task context** -- pass T##-PLAN's Files + Verification to the vendored skill
 4. **Run vendored RED-GREEN-REFACTOR loop**
-5. **Commit per vendored skill's guidance** — atomic commits per cycle
-6. **Report + return** — suggest `summarize-task` if the task is done
+5. **Commit per vendored skill's guidance** -- atomic commits per cycle
+6. **Report + return** -- suggest `summarize-task` if the task is done
 
 ## Preamble
 
@@ -85,7 +85,7 @@ echo "SUPERPOWERS_NON_INTERACTIVE: $_SUPERPOWERS_NON_INTERACTIVE"
 - `HAS_TASK_PLAN=no` → abort "task-plan missing at {TASK_PLAN}. Repair before TDD"
 - `VENDOR_EXISTS=no` → abort "superpowers not vendored. See vendor/README.md"
 
-**Step 3 — Inject task context.** Read `{TASK_PLAN}`, extract:
+**Step 3 -- Inject task context.** Read `{TASK_PLAN}`, extract:
 - Files section (list of paths)
 - Verification section (command)
 
@@ -93,7 +93,7 @@ Pass to the vendored skill as:
 
 > Current ytstack task: **{ACTIVE_TASK}**.
 >
-> Files this task touches (scope boundary — don't edit outside):
+> Files this task touches (scope boundary -- don't edit outside):
 > {file list from plan}
 >
 > Verification command (the test must make this command pass):
@@ -107,7 +107,7 @@ If `SUPERPOWERS_NON_INTERACTIVE=true`, also inject:
 
 > Running in non-interactive mode. Do not prompt for decisions that have a sensible default. Use the task-plan's stated files and verification command as the authoritative spec.
 
-**Step 4 — Run vendored.** Read `{VENDOR_SKILL}` in full and follow its procedure step by step:
+**Step 4 -- Run vendored.** Read `{VENDOR_SKILL}` in full and follow its procedure step by step:
 - Write failing test
 - Run it, confirm it fails in the expected way
 - Write minimal implementation
@@ -117,7 +117,7 @@ If `SUPERPOWERS_NON_INTERACTIVE=true`, also inject:
 
 Let the vendored skill's anti-patterns (testing-anti-patterns reference) drive what's OK vs not.
 
-**Step 5 — Commit per vendored guidance.** Vendored skill recommends commit per GREEN phase. Honor that — one commit per RED-GREEN-REFACTOR cycle.
+**Step 5 -- Commit per vendored guidance.** Vendored skill recommends commit per GREEN phase. Honor that -- one commit per RED-GREEN-REFACTOR cycle.
 
 Commit message format (ytstack convention):
 ```
@@ -126,11 +126,11 @@ Commit message format (ytstack convention):
 
 e.g. `M003-S01-T10: add failing test for argon2 hash`
 
-**Step 6 — Report + return.**
+**Step 6 -- Report + return.**
 
 > TDD cycle complete for **{ACTIVE_TASK}**. Commits: {count}.
 >
-> Verification command: `{cmd}` — {passed / still failing}.
+> Verification command: `{cmd}` -- {passed / still failing}.
 >
 > Next step:
 > - If verification passes and task is done: run `/ytstack:summarize-task`
@@ -138,4 +138,4 @@ e.g. `M003-S01-T10: add failing test for argon2 hash`
 
 ## Terminal State
 
-Return after TDD cycle completes. Do NOT auto-invoke `summarize-task` — the user confirms the task is fully done before summarizing. Do NOT invoke `plan-task` for a new task.
+Return after TDD cycle completes. Do NOT auto-invoke `summarize-task` -- the user confirms the task is fully done before summarizing. Do NOT invoke `plan-task` for a new task.

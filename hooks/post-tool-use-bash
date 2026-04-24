@@ -71,13 +71,13 @@ verification: pending
 source: post-tool-use-bash-draft
 ---
 
-# $CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK — Summary (draft)
+# $CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK -- Summary (draft)
 
 Auto-draft created by the \`post-tool-use-bash\` hook on first commit of this task. Run \`/ytstack:summarize-task\` to fill in Outcome / Deviations / Follow-ups / Verification.
 
 ## Commits so far
 
-- \`$COMMIT_SHA\` — $COMMIT_MSG ($TS)
+- \`$COMMIT_SHA\` -- $COMMIT_MSG ($TS)
 
 ## Outcome
 
@@ -100,19 +100,19 @@ else
   if grep -q "^## Commits so far" "$SUMMARY_FILE"; then
     # Insert new commit line under the section header
     if sed --version >/dev/null 2>&1; then
-      sed -i "/^## Commits so far/a - \`$COMMIT_SHA\` — $COMMIT_MSG ($TS)" "$SUMMARY_FILE"
+      sed -i "/^## Commits so far/a - \`$COMMIT_SHA\` -- $COMMIT_MSG ($TS)" "$SUMMARY_FILE"
     else
       sed -i '' "/^## Commits so far/a\\
-- \`$COMMIT_SHA\` — $COMMIT_MSG ($TS)
+- \`$COMMIT_SHA\` -- $COMMIT_MSG ($TS)
 " "$SUMMARY_FILE"
     fi
   else
-    # No section yet — append one at end
+    # No section yet -- append one at end
     cat >> "$SUMMARY_FILE" <<EOF
 
 ## Commits so far
 
-- \`$COMMIT_SHA\` — $COMMIT_MSG ($TS)
+- \`$COMMIT_SHA\` -- $COMMIT_MSG ($TS)
 EOF
   fi
 fi

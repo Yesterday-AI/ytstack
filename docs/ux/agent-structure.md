@@ -2,7 +2,7 @@
 
 Every ytstack agent definition (`agents/*.md`) MUST follow this structure. `ytstack-check` validates it at CI time (planned M008 pre-release). Agents that fail validation are not shipped.
 
-Parallel in spirit to [skill-structure.md](./skill-structure.md), but scoped to subagent definitions — the files in `agents/` that describe specialized roles (architect, implementer, verifier, etc.) used by `spawn-milestone-team` and as standalone Agent-tool subagents.
+Parallel in spirit to [skill-structure.md](./skill-structure.md), but scoped to subagent definitions -- the files in `agents/` that describe specialized roles (architect, implementer, verifier, etc.) used by `spawn-milestone-team` and as standalone Agent-tool subagents.
 
 ## Required frontmatter fields
 
@@ -41,7 +41,7 @@ Explicit allowlist. Required. This IS enforced at runtime for both team-teammate
 
 - **architect** (read-only reviewer) → no `Edit`, no `Write`
 - **implementer** (does the work) → `Read`, `Edit`, `Write`, `Bash`, `Grep`, `Glob`, `AskUserQuestion`
-- **verifier** (runs checks) → `Read`, `Bash`, `Grep`, `Glob` (no `Edit` — verifiers never patch)
+- **verifier** (runs checks) → `Read`, `Bash`, `Grep`, `Glob` (no `Edit` -- verifiers never patch)
 
 If the role doesn't need a tool, don't list it. Tighter surfaces reduce accidental drift.
 
@@ -50,9 +50,9 @@ If the role doesn't need a tool, don't list it. Tighter surfaces reduce accident
 **Required for every ytstack agent, even though the current Claude Code docs note that `skills` is ignored in the teammate context.** Two reasons:
 
 1. **Standalone subagent spawns (via Agent tool) DO honor `skills`.** Without it, the agent cannot invoke ytstack skills when spawned outside a team.
-2. **Intent documentation.** Anyone reading the agent file sees immediately which ytstack skills this role is designed to invoke. Future behavior changes in Claude Code may begin enforcing `skills` for teammates too — we want to be ready.
+2. **Intent documentation.** Anyone reading the agent file sees immediately which ytstack skills this role is designed to invoke. Future behavior changes in Claude Code may begin enforcing `skills` for teammates too -- we want to be ready.
 
-List every ytstack skill the agent is expected to invoke, fully-qualified (`ytstack:<name>`). Cross-check against the skill's Terminal State — if a skill forbids downstream auto-invocation, don't include it in an agent that would chain to it automatically.
+List every ytstack skill the agent is expected to invoke, fully-qualified (`ytstack:<name>`). Cross-check against the skill's Terminal State -- if a skill forbids downstream auto-invocation, don't include it in an agent that would chain to it automatically.
 
 ## Required body sections
 
@@ -76,7 +76,7 @@ List every ytstack skill the agent is expected to invoke, fully-qualified (`ytst
 
 ### Opening paragraph
 
-Role summary in ≤2 sentences. Reference ytstack explicitly — this agent exists inside a ytstack Agent Team or Agent-tool dispatch.
+Role summary in ≤2 sentences. Reference ytstack explicitly -- this agent exists inside a ytstack Agent Team or Agent-tool dispatch.
 
 ### What the agent does
 
@@ -91,8 +91,8 @@ Explicit non-responsibilities. Prevents scope creep. Example (architect): "does 
 Covers:
 
 - Dispatch pattern (Agent-tool vs Agent-Teams teammate)
-- Whether the agent re-reads `.ytstack/` artifacts at spawn (usually yes — fresh context)
-- Relationship to `using-ytstack`'s `SUBAGENT-STOP` directive — typically: this agent is exempt from the "auto-detect intent and invoke" behavior because its task comes from the lead
+- Whether the agent re-reads `.ytstack/` artifacts at spawn (usually yes -- fresh context)
+- Relationship to `using-ytstack`'s `SUBAGENT-STOP` directive -- typically: this agent is exempt from the "auto-detect intent and invoke" behavior because its task comes from the lead
 
 ## Consistency with referencing skills
 
@@ -107,19 +107,19 @@ Conversely, for each skill that references an agent type (e.g. `spawn-milestone-
 - The named agent exists at `agents/<name>.md`
 - The agent's `description` mentions the skill context (so auto-selection works when the skill suggests it)
 
-## Agent vs. skill — when to create which
+## Agent vs. skill -- when to create which
 
 | If the work is... | Create a... |
 |---|---|
 | A reusable process (1+ steps, used many times) | **Skill** (`skills/<name>/SKILL.md`) |
 | A bounded role with tool/skill restrictions for parallel dispatch | **Agent** (`agents/<name>.md`) |
-| Both — a role that needs a process | **Agent** that invokes one or more skills |
+| Both -- a role that needs a process | **Agent** that invokes one or more skills |
 
 Don't duplicate a skill's logic inside an agent body. The agent references the skill; the skill holds the logic.
 
 ## Agent file size
 
-Target under **100 lines** (including frontmatter). An agent definition that exceeds 200 lines is a code smell — it's probably duplicating logic from a skill that should live in a skill. Refactor.
+Target under **100 lines** (including frontmatter). An agent definition that exceeds 200 lines is a code smell -- it's probably duplicating logic from a skill that should live in a skill. Refactor.
 
 ## Validation checklist
 

@@ -22,17 +22,17 @@ Break an existing milestone into concrete slices. Each slice gets a goal + 1-7 t
 
 ## Anti-Pattern: "I'll just plan one big slice with 15 tasks"
 
-No. 1-7 tasks per slice is the iron rule. Larger slices lose context fidelity during execution — the agent forgets the early tasks by the time it reaches the late ones. If you feel you need >7 tasks in one slice, split into two. That's not arbitrary — it's the structural constraint that makes subagent-driven execution work.
+No. 1-7 tasks per slice is the iron rule. Larger slices lose context fidelity during execution -- the agent forgets the early tasks by the time it reaches the late ones. If you feel you need >7 tasks in one slice, split into two. That's not arbitrary -- it's the structural constraint that makes subagent-driven execution work.
 
 ## Checklist
 
 You MUST create a TodoWrite task for each of these items and complete them in order:
 
-1. **Run preamble** — detect current milestone + unplanned slice slots
-2. **HARD-GATE: milestone must be planned** — abort if `CURRENT_MILESTONE=none`
+1. **Run preamble** -- detect current milestone + unplanned slice slots
+2. **HARD-GATE: milestone must be planned** -- abort if `CURRENT_MILESTONE=none`
 3. **Loop per unplanned slice:** ask goal, ask task list (1-7 items), write `M###-S##-PLAN.md`
-4. **Update `M###-ROADMAP.md`** — replace slice placeholders with real names
-5. **Report + return** — next step is `plan-task` or `spawn-milestone-team` (M006)
+4. **Update `M###-ROADMAP.md`** -- replace slice placeholders with real names
+5. **Report + return** -- next step is `plan-task` or `spawn-milestone-team` (M006)
 
 ## Process Flow
 
@@ -88,7 +88,7 @@ fi
 _ROADMAP="$_YT_DIR/$_CURRENT_MILESTONE-ROADMAP.md"
 _UNPLANNED_SLICES=""
 if [ -f "$_ROADMAP" ]; then
-  _UNPLANNED_SLICES=$(grep -oE 'S[0-9][0-9] — \(to be planned\)' "$_ROADMAP" | grep -oE 'S[0-9][0-9]' | tr '\n' ' ')
+  _UNPLANNED_SLICES=$(grep -oE 'S[0-9][0-9] -- \(to be planned\)' "$_ROADMAP" | grep -oE 'S[0-9][0-9]' | tr '\n' ' ')
 fi
 
 _NON_INTERACTIVE=false
@@ -123,11 +123,11 @@ STOP.
 
 For each `S##` in `UNPLANNED_SLICES`:
 
-**3a — Ask slice goal.** Use AskUserQuestion (open-ended):
+**3a -- Ask slice goal.** Use AskUserQuestion (open-ended):
 
 > Slice **{CURRENT_MILESTONE}-{SLICE_ID}** of **{CURRENT_MILESTONE_GOAL}**.
 >
-> What's the goal of this slice? One sentence. The slice should produce working, testable software on its own — not a half-feature that requires later slices to verify.
+> What's the goal of this slice? One sentence. The slice should produce working, testable software on its own -- not a half-feature that requires later slices to verify.
 >
 > Good examples:
 > - "Signup form validates email and creates a user row."
@@ -136,7 +136,7 @@ For each `S##` in `UNPLANNED_SLICES`:
 
 Remember as `_SLICE_GOAL`.
 
-**3b — Ask task list.** Use AskUserQuestion (open-ended):
+**3b -- Ask task list.** Use AskUserQuestion (open-ended):
 
 > List the 1-7 tasks that complete this slice. One task per line. Each task should:
 > - Fit in one context window (iron rule from ytstack docs)
@@ -150,12 +150,12 @@ Remember as `_SLICE_GOAL`.
 
 Remember as `_SLICE_TASKS` (preserve lines).
 
-**3c — Validate task count.** Count lines in `_SLICE_TASKS`. If count is 0 or >7:
+**3c -- Validate task count.** Count lines in `_SLICE_TASKS`. If count is 0 or >7:
 > "I count {N} tasks. The iron rule is 1-7 per slice. Re-list with the right count, or split this into two slices by re-running `plan-milestone` to add a slice placeholder first."
 
 Loop back to 3b.
 
-**3d — Write `M###-S##-PLAN.md`.** Use Write tool:
+**3d -- Write `M###-S##-PLAN.md`.** Use Write tool:
 
 ```markdown
 ---
@@ -168,7 +168,7 @@ task_count: {N}
 completed_tasks: 0
 ---
 
-# {CURRENT_MILESTONE}-{SLICE_ID} — Slice Plan
+# {CURRENT_MILESTONE}-{SLICE_ID} -- Slice Plan
 
 **Goal:** {SLICE_GOAL}
 
@@ -176,7 +176,7 @@ completed_tasks: 0
 
 {For each task in _SLICE_TASKS, emit:}
 
-- [ ] T{##} — {task-line}
+- [ ] T{##} -- {task-line}
 
 ## Done when
 
@@ -194,13 +194,13 @@ Task numbering: T01, T02, T03, ... in order provided. Zero-pad to 2 digits.
 Use Edit tool. For each slice planned above, replace:
 
 ```
-- [ ] S## — (to be planned)
+- [ ] S## -- (to be planned)
 ```
 
 with:
 
 ```
-- [ ] S## — {SLICE_GOAL_FIRST_LINE}
+- [ ] S## -- {SLICE_GOAL_FIRST_LINE}
 ```
 
 Keep the `[ ]` checkbox (not yet executed, just planned).
@@ -212,14 +212,14 @@ Report:
 > Sliced **{CURRENT_MILESTONE}** ({COUNT_PLANNED} of {TOTAL_SLICES} slices now planned):
 >
 > {For each slice:}
-> - {SLICE_ID}: {SLICE_GOAL} ({N_TASKS} tasks) — `{CURRENT_MILESTONE}-{SLICE_ID}-PLAN.md`
+> - {SLICE_ID}: {SLICE_GOAL} ({N_TASKS} tasks) -- `{CURRENT_MILESTONE}-{SLICE_ID}-PLAN.md`
 >
 > {CURRENT_MILESTONE}-ROADMAP.md updated with slice names.
 >
 > Next step options:
 > - Run `/ytstack:plan-task` to flesh out the first task of slice S01 with file paths + verification steps.
 > - Run `/ytstack:spawn-milestone-team` (ships M006) to dispatch the whole milestone to an Agent Team.
-> - Add more slices by editing `{CURRENT_MILESTONE}-ROADMAP.md` to add new `- [ ] S## — (to be planned)` lines and re-running this skill.
+> - Add more slices by editing `{CURRENT_MILESTONE}-ROADMAP.md` to add new `- [ ] S## -- (to be planned)` lines and re-running this skill.
 
 ## Terminal State
 

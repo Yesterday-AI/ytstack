@@ -21,7 +21,7 @@ Take one task from the current slice's task list and turn it into a concrete pla
 
 ## Anti-Pattern: "The task summary is enough, I'll figure out files during execution"
 
-No. Tasks without pre-committed file paths drift. An agent (human or AI) asked to "add signup form" will discover mid-stream that the form lives in three different places and pick the wrong one. File paths in the task plan are a concurrency primitive — they prevent two tasks from editing the same file by accident, and they make scope-drift detection possible.
+No. Tasks without pre-committed file paths drift. An agent (human or AI) asked to "add signup form" will discover mid-stream that the form lives in three different places and pick the wrong one. File paths in the task plan are a concurrency primitive -- they prevent two tasks from editing the same file by accident, and they make scope-drift detection possible.
 
 ## Iron rule
 
@@ -36,16 +36,16 @@ When in doubt, split. Smaller tasks ship faster than oversized ones.
 
 You MUST create a TodoWrite task for each of these items:
 
-1. **Run preamble** — detect current slice + next unplanned task
-2. **HARD-GATE: slice must exist** — abort if no active slice
-3. **Confirm task selection** — show the task line from slice-plan, confirm it's next
-4. **Ask file list** — exact paths to create / modify / delete
-5. **Ask task body** — what the code does, in prose + pseudocode
-6. **Ask verification** — 1-2 commands that prove done
-7. **Ask fits-one-context-window check** — sanity-check or split
+1. **Run preamble** -- detect current slice + next unplanned task
+2. **HARD-GATE: slice must exist** -- abort if no active slice
+3. **Confirm task selection** -- show the task line from slice-plan, confirm it's next
+4. **Ask file list** -- exact paths to create / modify / delete
+5. **Ask task body** -- what the code does, in prose + pseudocode
+6. **Ask verification** -- 1-2 commands that prove done
+7. **Ask fits-one-context-window check** -- sanity-check or split
 8. **Write `M###-S##-T##-PLAN.md`**
-9. **Update STATE.md** — `active_task: T##`
-10. **Report + return** — task ready to execute or dispatch to subagent
+9. **Update STATE.md** -- `active_task: T##`
+10. **Report + return** -- task ready to execute or dispatch to subagent
 
 ## Preamble
 
@@ -75,7 +75,7 @@ fi
 if [ "$_ACTIVE_SLICE" = "none" ] || [ -z "$_ACTIVE_SLICE" ]; then
   ROADMAP="$_YT_DIR/$_CURRENT_MILESTONE-ROADMAP.md"
   if [ -f "$ROADMAP" ]; then
-    _ACTIVE_SLICE=$(grep -oE '^- \[ \] S[0-9][0-9] —' "$ROADMAP" | head -1 | grep -oE 'S[0-9][0-9]')
+    _ACTIVE_SLICE=$(grep -oE '^- \[ \] S[0-9][0-9] --' "$ROADMAP" | head -1 | grep -oE 'S[0-9][0-9]')
   fi
 fi
 
@@ -85,7 +85,7 @@ _SLICE_PLAN="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md"
 # (Un-elaborated = listed in slice-plan but no corresponding T##-PLAN.md file exists)
 _NEXT_TASK=""
 if [ -f "$_SLICE_PLAN" ]; then
-  for t in $(grep -oE '^- \[ \] T[0-9][0-9] —' "$_SLICE_PLAN" | grep -oE 'T[0-9][0-9]'); do
+  for t in $(grep -oE '^- \[ \] T[0-9][0-9] --' "$_SLICE_PLAN" | grep -oE 'T[0-9][0-9]'); do
     _TASK_FILE="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$t-PLAN.md"
     if [ ! -f "$_TASK_FILE" ]; then
       _NEXT_TASK="$t"
@@ -112,13 +112,13 @@ If `NEXT_TASK=none`: report "all tasks in {ACTIVE_SLICE} are planned. Next: exec
 
 ### Step 3: Confirm task selection
 
-Read the task line from `{SLICE_PLAN}`. Grep pattern: `^- \[ \] {NEXT_TASK} — (.*)$`. Extract the description.
+Read the task line from `{SLICE_PLAN}`. Grep pattern: `^- \[ \] {NEXT_TASK} -- (.*)$`. Extract the description.
 
-Report (no AskUserQuestion — just show):
+Report (no AskUserQuestion -- just show):
 
 > Next unplanned task in **{CURRENT_MILESTONE}-{ACTIVE_SLICE}**:
 >
-> **{NEXT_TASK}** — {TASK_DESCRIPTION}
+> **{NEXT_TASK}** -- {TASK_DESCRIPTION}
 >
 > Planning this now. If this isn't the task you want, `/exit` and edit the slice-plan to reorder.
 
@@ -140,9 +140,9 @@ Remember as `_FILE_LIST`.
 
 Use AskUserQuestion (open-ended):
 
-> Describe what the code in this task does. Prose is fine — pseudocode is better. For UI: what interaction and what outcome. For backend: what request/response. For infra: what resource + what state.
+> Describe what the code in this task does. Prose is fine -- pseudocode is better. For UI: what interaction and what outcome. For backend: what request/response. For infra: what resource + what state.
 >
-> Not "implement signup" — but "signup form POSTs to /api/signup with JSON body {email, password}. Server validates email regex, hashes password with argon2, inserts row into users table, returns 201 + session cookie. Failure cases: duplicate email → 409, invalid regex → 400."
+> Not "implement signup" -- but "signup form POSTs to /api/signup with JSON body {email, password}. Server validates email regex, hashes password with argon2, inserts row into users table, returns 201 + session cookie. Failure cases: duplicate email → 409, invalid regex → 400."
 
 Remember as `_TASK_BODY`.
 
@@ -154,7 +154,7 @@ Use AskUserQuestion (open-ended):
 >
 > Good: `bun test test/auth/signup.test.ts` or `curl -X POST localhost:3000/api/signup -d '{"email":"a@b.c","password":"test1234"}'`
 >
-> Bad: "manual test" or "check it works" — those aren't falsifiable.
+> Bad: "manual test" or "check it works" -- those aren't falsifiable.
 
 Remember as `_VERIFICATION`.
 
@@ -164,11 +164,11 @@ Use AskUserQuestion (multi-choice):
 
 > Sanity check: does this task fit one context window? Look at your answers to Steps 4-6.
 >
-> RECOMMENDATION: A. If you needed to talk yourself into "yes, it fits", it probably doesn't — split.
+> RECOMMENDATION: A. If you needed to talk yourself into "yes, it fits", it probably doesn't -- split.
 >
 > A) Yes, fits comfortably. (Completeness: 10/10)
-> B) Maybe — borderline, might overflow. (Completeness: 6/10, risk: high)
-> C) No — I should split this task first.
+> B) Maybe -- borderline, might overflow. (Completeness: 6/10, risk: high)
+> C) No -- I should split this task first.
 
 If C: emit "Splitting needed. Run `/exit`, edit the slice-plan to replace this task with two tasks, then re-run `/ytstack:plan-task`." STOP.
 
@@ -188,7 +188,7 @@ created: {ISO_TIMESTAMP}
 status: planned
 ---
 
-# {CURRENT_MILESTONE}-{ACTIVE_SLICE}-{NEXT_TASK} — Task Plan
+# {CURRENT_MILESTONE}-{ACTIVE_SLICE}-{NEXT_TASK} -- Task Plan
 
 **Summary:** {TASK_DESCRIPTION}
 
@@ -217,7 +217,7 @@ Run `/ytstack:summarize-task` after execution to mark complete and advance STATE
 
 Use Edit tool. Change `active_task: <old>` → `active_task: {NEXT_TASK}`. Bump `last_updated`.
 
-Update Status line: `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} / {NEXT_TASK} planned — ready to execute.`
+Update Status line: `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} / {NEXT_TASK} planned -- ready to execute.`
 
 ### Step 10: Report + return
 
@@ -238,4 +238,4 @@ Valid terminal states:
 - Abort if gates fail (HAS_YTSTACK / CURRENT_MILESTONE / ACTIVE_SLICE / NEXT_TASK unresolved)
 - Abort if user picks C in Step 7 (task too big, split needed)
 
-Do NOT invoke `ytstack:summarize-task` automatically — the user / subagent must execute the task first. Do NOT start writing code from within this skill — that's the execution phase, a separate concern.
+Do NOT invoke `ytstack:summarize-task` automatically -- the user / subagent must execute the task first. Do NOT start writing code from within this skill -- that's the execution phase, a separate concern.

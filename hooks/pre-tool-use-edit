@@ -118,7 +118,7 @@ if [ "$SCOPE_DRIFT" = "yes" ] || [ "$SCHEMA_DRIFT" = "yes" ]; then
       echo ""
     fi
 
-    echo "  Proceeding anyway — the edit will happen."
+    echo "  Proceeding anyway -- the edit will happen."
   } >&2
   exit 2
 fi

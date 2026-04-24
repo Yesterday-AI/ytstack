@@ -22,21 +22,21 @@ Define the next milestone for a ytstack project: goal, exit criteria, rough size
 
 ## Anti-Pattern: "This feature is too small for a milestone"
 
-Every feature goes through this. A CSS tweak, a single bugfix, a config change — all of them. "Small" features are where unexamined assumptions cause the most wasted work. The milestone can be minimal (one slice, two tasks), but you MUST define its goal, exit criteria, and rough shape before planning slices.
+Every feature goes through this. A CSS tweak, a single bugfix, a config change -- all of them. "Small" features are where unexamined assumptions cause the most wasted work. The milestone can be minimal (one slice, two tasks), but you MUST define its goal, exit criteria, and rough shape before planning slices.
 
 ## Checklist
 
 You MUST create a TodoWrite task for each of these items and complete them in order:
 
-1. **Run preamble** — detect ytstack state + next milestone number
-2. **HARD-GATE: check ytstack initialized** — abort if `HAS_YTSTACK=no`
-3. **Ask goal** — one-sentence outcome the milestone delivers
-4. **Ask exit criteria** — how we know it's done (concrete signals)
-5. **Ask rough size** — S / M / L (cascading from task-count estimate)
-6. **Write `M###-CONTEXT.md`** — Q/A transcript locked as the milestone's source-of-truth
-7. **Write `M###-ROADMAP.md`** — skeleton with placeholder slices based on size
-8. **Update STATE.md** — new `current_milestone`, next action points to slice-milestone
-9. **Report + return** — suggest running `ytstack:slice-milestone` next
+1. **Run preamble** -- detect ytstack state + next milestone number
+2. **HARD-GATE: check ytstack initialized** -- abort if `HAS_YTSTACK=no`
+3. **Ask goal** -- one-sentence outcome the milestone delivers
+4. **Ask exit criteria** -- how we know it's done (concrete signals)
+5. **Ask rough size** -- S / M / L (cascading from task-count estimate)
+6. **Write `M###-CONTEXT.md`** -- Q/A transcript locked as the milestone's source-of-truth
+7. **Write `M###-ROADMAP.md`** -- skeleton with placeholder slices based on size
+8. **Update STATE.md** -- new `current_milestone`, next action points to slice-milestone
+9. **Report + return** -- suggest running `ytstack:slice-milestone` next
 
 ## Process Flow
 
@@ -131,7 +131,7 @@ If `YTSTACK_NON_INTERACTIVE` is `true`, parse goal from prompt context. Otherwis
 
 > Planning milestone **{NEXT_MILESTONE}** for project **{PROJECT_NAME}** on branch `{BRANCH}`.
 >
-> What's the goal of this milestone? One sentence describing the outcome it delivers. Not the tasks — the *result*.
+> What's the goal of this milestone? One sentence describing the outcome it delivers. Not the tasks -- the *result*.
 >
 > Good examples:
 > - "Users can sign up with email and get a verification link."
@@ -156,17 +156,17 @@ Remember as `_EXIT_CRITERIA` (preserve line breaks).
 
 If `YTSTACK_NON_INTERACTIVE` is `true`, auto-pick M (medium) and log. Otherwise use AskUserQuestion:
 
-> Rough size of this milestone? Use your gut — we'll refine in slice-milestone.
+> Rough size of this milestone? Use your gut -- we'll refine in slice-milestone.
 >
 > Size drives the initial slice skeleton. You can always add slices later.
 >
 > RECOMMENDATION: Choose M for most milestones. S is for near-trivial features. L signals you should probably split into two milestones; review after slicing.
 >
-> A) S — small. 1 slice, 2-4 tasks total. (Completeness: 10/10 for truly small work, risk: 8/10 if the scope is actually larger than it feels)
-> B) M — medium. 2-3 slices, 5-10 tasks total. (Completeness: 10/10, recommended for most milestones)
-> C) L — large. 4-5 slices, 11-20 tasks total. (Completeness: 10/10, risk: consider splitting into two milestones)
+> A) S -- small. 1 slice, 2-4 tasks total. (Completeness: 10/10 for truly small work, risk: 8/10 if the scope is actually larger than it feels)
+> B) M -- medium. 2-3 slices, 5-10 tasks total. (Completeness: 10/10, recommended for most milestones)
+> C) L -- large. 4-5 slices, 11-20 tasks total. (Completeness: 10/10, risk: consider splitting into two milestones)
 >
-> (to re-ask later: run `ytstack forget milestone-size-{NEXT_MILESTONE}` or delete `~/.ytstack/.milestone-size-{NEXT_MILESTONE}-prompted`)
+> (to re-ask later: delete `~/.ytstack/.milestone-size-{NEXT_MILESTONE}-prompted`)
 
 Remember as `_SIZE` (value: `S`, `M`, or `L`).
 
@@ -182,7 +182,7 @@ created: {ISO_TIMESTAMP}
 size: {SIZE}
 ---
 
-# {NEXT_MILESTONE} — Context
+# {NEXT_MILESTONE} -- Context
 
 ## Goal
 
@@ -194,7 +194,7 @@ size: {SIZE}
 
 ## Size
 
-{SIZE} — see `{NEXT_MILESTONE}-ROADMAP.md` for slice breakdown.
+{SIZE} -- see `{NEXT_MILESTONE}-ROADMAP.md` for slice breakdown.
 
 ## Decisions locked in discuss phase
 
@@ -235,13 +235,13 @@ completed_slices: 0
 
 Slice detail lives in per-slice `{NEXT_MILESTONE}-S##-PLAN.md` files, created by `ytstack:slice-milestone`.
 
-- [ ] S01 — (to be planned)
+- [ ] S01 -- (to be planned)
 {#if SIZE == "M" or SIZE == "L"}
-- [ ] S02 — (to be planned)
-- [ ] S03 — (to be planned)
+- [ ] S02 -- (to be planned)
+- [ ] S03 -- (to be planned)
 {/if}
 {#if SIZE == "L"}
-- [ ] S04 — (to be planned)
+- [ ] S04 -- (to be planned)
 {/if}
 
 ## Run order
@@ -284,8 +284,8 @@ Report:
 > - Slices: {SLICE_COUNT} placeholder(s) in `{NEXT_MILESTONE}-ROADMAP.md`
 >
 > Files created:
-> - `{YT_DIR}/{NEXT_MILESTONE}-CONTEXT.md` — Q/A locked
-> - `{YT_DIR}/{NEXT_MILESTONE}-ROADMAP.md` — slice skeleton
+> - `{YT_DIR}/{NEXT_MILESTONE}-CONTEXT.md` -- Q/A locked
+> - `{YT_DIR}/{NEXT_MILESTONE}-ROADMAP.md` -- slice skeleton
 >
 > STATE.md updated: `current_milestone` = {NEXT_MILESTONE}.
 >

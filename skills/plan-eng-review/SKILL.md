@@ -33,11 +33,11 @@ Architecture decisions get baked into the first three files touched. By the time
 
 ## Checklist
 
-1. **Run preamble** — state + slice-plans inventory
-2. **HARD-GATE** — current milestone is sliced (at least one `M###-S##-PLAN.md` exists)
+1. **Run preamble** -- state + slice-plans inventory
+2. **HARD-GATE** -- current milestone is sliced (at least one `M###-S##-PLAN.md` exists)
 3. **Load vendored skill**
-4. **Inject slice-plan subject** — pass the current slice-plan(s) as the subject
-5. **Run vendored procedure** — its edge-case, test-coverage, perf, architecture checks
+4. **Inject slice-plan subject** -- pass the current slice-plan(s) as the subject
+5. **Run vendored procedure** -- its edge-case, test-coverage, perf, architecture checks
 6. **Apply changes to slice-plans** if review recommends
 7. **Log decision to DECISIONS.md** if architecture shifted
 8. **Report + return**
@@ -80,30 +80,30 @@ echo "VENDOR_EXISTS: $_VENDOR_EXISTS"
 - `SLICE_PLANS=none` → abort "run slice-milestone first"
 - `VENDOR_EXISTS=no` → abort "gstack not vendored; see vendor/README.md"
 
-**Step 3 — Load vendored.** Read `{VENDOR_SKILL}` in full.
+**Step 3 -- Load vendored.** Read `{VENDOR_SKILL}` in full.
 
-**Step 4 — Inject subject.** Build a subject summary from slice-plans:
+**Step 4 -- Inject subject.** Build a subject summary from slice-plans:
 
 > Reviewing execution plan for milestone **{CURRENT_MILESTONE}** of project **{PROJECT_NAME}**.
 >
 > Slices:
 > {For each slice-plan:}
-> - **{SLICE_ID}:** {slice goal} — {N} tasks
+> - **{SLICE_ID}:** {slice goal} -- {N} tasks
 >   Files touched across tasks: {union of Files sections}
 >
 > Architecture concerns to evaluate: data flow across slices, dependency order, shared state, test coverage, performance hot-spots.
 
 Tell the vendored skill to take this as the plan under review.
 
-**Step 5 — Run vendored procedure.** Execute per gstack's eng-review logic: architecture diagram, edge cases, test coverage gaps, performance concerns, security surface. Its AskUserQuestion prompts run as-is.
+**Step 5 -- Run vendored procedure.** Execute per gstack's eng-review logic: architecture diagram, edge cases, test coverage gaps, performance concerns, security surface. Its AskUserQuestion prompts run as-is.
 
-**Step 6 — Apply changes.** If the review recommends changes to specific slice-plans or task-plans:
+**Step 6 -- Apply changes.** If the review recommends changes to specific slice-plans or task-plans:
 
 - For slice-plan edits: use Edit tool on `{CURRENT_MILESTONE}-{SLICE_ID}-PLAN.md` per recommendation
-- For new tasks added: append to the slice's Tasks section (respect 1-7 rule — if it pushes past 7, flag and recommend running `slice-milestone` to add a new slice)
+- For new tasks added: append to the slice's Tasks section (respect 1-7 rule -- if it pushes past 7, flag and recommend running `slice-milestone` to add a new slice)
 - For new slices: note the need and recommend user run `slice-milestone` after (not automatic)
 
-**Step 7 — Log decision.** If architecture shifted materially, append to `DECISIONS.md`:
+**Step 7 -- Log decision.** If architecture shifted materially, append to `DECISIONS.md`:
 
 ```markdown
 ## {ISO_TIMESTAMP}: Eng-review of {CURRENT_MILESTONE}
@@ -113,12 +113,12 @@ Tell the vendored skill to take this as the plan under review.
 **Reason:** {user-reasoning}
 ```
 
-**Step 8 — Report + return.**
+**Step 8 -- Report + return.**
 
 > Engineering review complete on **{CURRENT_MILESTONE}**.
 >
 > Changes applied:
-> - {list, or "none — plan held up"}
+> - {list, or "none -- plan held up"}
 >
 > DECISIONS.md updated: {yes/no}.
 >

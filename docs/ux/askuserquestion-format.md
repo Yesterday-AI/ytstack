@@ -52,13 +52,13 @@ Each option gets three annotations:
 Example:
 
 ```
-A) Project-level (./.ytstack/) — committed to git, shared with team
+A) Project-level (./.ytstack/) -- committed to git, shared with team
    Completeness: 10/10, effort: human: 0 / CC: 0, tier: core
 
-B) User-level (~/.ytstack/projects/<slug>/) — private, machine-local
+B) User-level (~/.ytstack/projects/<slug>/) -- private, machine-local
    Completeness: 7/10, effort: human: 0 / CC: 0, tier: core
 
-C) Both (project-level + user-level for private notes) — hybrid
+C) Both (project-level + user-level for private notes) -- hybrid
    Completeness: 9/10, effort: human: low / CC: low, tier: core
 ```
 
@@ -108,7 +108,7 @@ Meta-questions (setup-mode, telemetry opt-in, visual-companion offer, onboarding
 Every `core`-tier question ends with a one-liner:
 
 ```
-(to re-ask later: run `ytstack forget <marker-name>` or delete `~/.ytstack/.<marker-name>`)
+(to re-ask later: delete `~/.ytstack/.<marker-name>`)
 ```
 
 So users know how to undo a premature answer.

@@ -22,7 +22,7 @@ Initialize a `.ytstack/` directory with the core project-memory artifacts that e
 
 ## Anti-Pattern: "This project is too small for formal init"
 
-Every project goes through this. A CSS tweak, a weekend script, a prototype — all of them. "Small" projects are where unexamined assumptions cause the most wasted work. The init can be minimal (30 seconds, two questions), but you MUST run it before any other ytstack skill.
+Every project goes through this. A CSS tweak, a weekend script, a prototype -- all of them. "Small" projects are where unexamined assumptions cause the most wasted work. The init can be minimal (30 seconds, two questions), but you MUST run it before any other ytstack skill.
 
 If the user insists the project is too small for ytstack, don't force it. Tell them ytstack is optional. But if they've asked for it, run init properly.
 
@@ -30,16 +30,16 @@ If the user insists the project is too small for ytstack, don't force it. Tell t
 
 You MUST create a TodoWrite task for each of these items and complete them in order:
 
-1. **Run preamble** — emit state flags about current project and ytstack status
-2. **Handle already-initialized case** — if HAS_YTSTACK=yes, report and exit cleanly
-3. **Ask scope question** — project-level vs user-level storage (core tier)
-4. **Ask project name** — one short line
-5. **Ask project one-liner** — one sentence: what it does + for whom
-6. **Create artifact directory** — `.ytstack/` or `~/.ytstack/projects/<slug>/` based on scope
-7. **Write all 6 artifact files** — PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES
-8. **Touch completion sentinel** — `~/.ytstack/.init-project-<slug>-completed`
-9. **Report what was created** — file list with paths, one-line summary of each
-10. **Return control** — do NOT auto-invoke any other skill
+1. **Run preamble** -- emit state flags about current project and ytstack status
+2. **Handle already-initialized case** -- if HAS_YTSTACK=yes, report and exit cleanly
+3. **Ask scope question** -- project-level vs user-level storage (core tier)
+4. **Ask project name** -- one short line
+5. **Ask project one-liner** -- one sentence: what it does + for whom
+6. **Create artifact directory** -- `.ytstack/` or `~/.ytstack/projects/<slug>/` based on scope
+7. **Write all 6 artifact files** -- PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES
+8. **Touch completion sentinel** -- `~/.ytstack/.init-project-<slug>-completed`
+9. **Report what was created** -- file list with paths, one-line summary of each
+10. **Return control** -- do NOT auto-invoke any other skill
 
 ## Process Flow
 
@@ -129,16 +129,16 @@ Otherwise, use AskUserQuestion with this exact body:
 >
 > RECOMMENDATION: Choose A. Project-level is the only safe default. You never lose state to a laptop failure, and teammates see the same history. User-level is only right for secret side projects or when you can't commit to the repo.
 >
-> A) Project-level (./.ytstack/) — committed to git, team-shared
+> A) Project-level (./.ytstack/) -- committed to git, team-shared
 >    Completeness: 10/10, effort: 0 setup / 0 ongoing, tier: core
 >
-> B) User-level (~/.ytstack/projects/{SLUG}/) — private, machine-local
+> B) User-level (~/.ytstack/projects/{SLUG}/) -- private, machine-local
 >    Completeness: 7/10, effort: 0 setup / 0 ongoing (risk of loss on hardware failure), tier: core
 >
-> C) Both (project for team facts, user for private notes) — hybrid
+> C) Both (project for team facts, user for private notes) -- hybrid
 >    Completeness: 9/10, effort: low setup / slight ongoing discipline, tier: core
 >
-> (to re-ask later: run `ytstack forget storage-scope-{SLUG}` or delete `~/.ytstack/.init-project-{SLUG}-scope-prompted`)
+> (to re-ask later: delete `~/.ytstack/.init-project-{SLUG}-scope-prompted`)
 
 Remember the answer as `_SCOPE_CHOICE` (value: `project`, `user`, or `both`).
 
@@ -342,12 +342,12 @@ Write this prose summary (substitute the real paths based on `_SCOPE_CHOICE`):
 
 > Created ytstack tracking for **{PROJECT_NAME}**:
 >
-> - {location}/PROJECT.md — your project description
-> - {location}/DECISIONS.md — empty decision register (append as you decide)
-> - {location}/KNOWLEDGE.md — empty patterns and lessons file
-> - {location}/RUNTIME.md — empty services and env-vars file
-> - {location}/STATE.md — dashboard, current status
-> - {location}/PREFERENCES.md — your local settings
+> - {location}/PROJECT.md -- your project description
+> - {location}/DECISIONS.md -- empty decision register (append as you decide)
+> - {location}/KNOWLEDGE.md -- empty patterns and lessons file
+> - {location}/RUNTIME.md -- empty services and env-vars file
+> - {location}/STATE.md -- dashboard, current status
+> - {location}/PREFERENCES.md -- your local settings
 >
 > Next step: review `{location}/PROJECT.md` and fill in the sections below the one-liner. When ready, run `ytstack:plan-milestone` to define what ships first.
 >
