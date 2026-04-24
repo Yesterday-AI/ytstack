@@ -1,0 +1,369 @@
+#!/usr/bin/env python3
+"""ytstack-check — validate ytstack plugin artifacts against UX contracts.
+
+Run from the plugin root (or pass path):
+    bin/ytstack-check
+    bin/ytstack-check /path/to/ytstack
+    bin/ytstack-check --strict      # warnings become failures
+    bin/ytstack-check --quiet       # only print on failure
+
+Exit codes: 0 = pass, 1 = fail, 2 = warnings only (non-strict).
+
+Checks against the contracts in docs/ux/:
+  - skill-structure.md
+  - agent-structure.md
+  - askuserquestion-format.md
+  - writing-style.md
+"""
+
+import os
+import re
+import sys
+from pathlib import Path
+
+BANNED_WORDS = [
+    "delve", "delving", "crucial", "robust", "comprehensive", "nuanced",
+    "multifaceted", "furthermore", "moreover", "additionally", "pivotal",
+    "landscape", "tapestry", "foster", "showcase", "intricate", "vibrant",
+    "fundamental", "fundamentally", "significant", "significantly",
+    "interplay", "underscore",
+]
+
+BANNED_PHRASES = [
+    "here's the kicker", "here's the thing", "plot twist",
+    "let me break this down", "the bottom line", "make no mistake",
+    "can't stress this enough", "in today's fast-paced world",
+    "as we delve deeper",
+]
+
+
+# ---------- helpers ----------
+
+def find_plugin_root(arg):
+    """Locate the ytstack plugin root (has .claude-plugin/plugin.json)."""
+    start = Path(arg) if arg else Path.cwd()
+    start = start.resolve()
+    for p in [start, *start.parents]:
+        if (p / ".claude-plugin" / "plugin.json").is_file():
+            return p
+    sys.stderr.write(f"error: no .claude-plugin/plugin.json found from {start}\n")
+    sys.exit(1)
+
+
+def parse_frontmatter(path):
+    """Extract YAML frontmatter (between --- markers) as a plain dict.
+
+    Deliberately naive — handles simple key: value, multi-line block-scalars
+    (`description: |`), and list items (`- value`). Good enough for skill +
+    agent frontmatter; does NOT support nested maps or flow style.
+    """
+    text = path.read_text(encoding="utf-8")
+    m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
+    if not m:
+        return None, text
+    raw = m.group(1)
+    body = text[m.end():]
+
+    fm = {}
+    current_key = None
+    current_list = None
+    current_block = None
+
+    for line in raw.split("\n"):
+        # Block scalar continuation (description: |)
+        if current_block is not None:
+            if line.startswith("  ") or line == "":
+                current_block.append(line[2:] if line.startswith("  ") else "")
+                continue
+            else:
+                fm[current_key] = "\n".join(current_block).rstrip()
+                current_block = None
+                current_key = None
+
+        # List item continuation
+        if current_list is not None:
+            if line.startswith("  - "):
+                current_list.append(line[4:].strip())
+                continue
+            else:
+                fm[current_key] = current_list
+                current_list = None
+                current_key = None
+
+        # Key: value on one line, or key: | / key: (start of list)
+        km = re.match(r"^([a-zA-Z_][a-zA-Z0-9_-]*):\s*(.*)$", line)
+        if km:
+            key, val = km.group(1), km.group(2)
+            if val == "|":
+                current_key = key
+                current_block = []
+            elif val == "":
+                # Either empty (skip) or list follows
+                current_key = key
+                current_list = []
+            else:
+                fm[key] = val.strip()
+
+    # Flush trailing state
+    if current_block is not None:
+        fm[current_key] = "\n".join(current_block).rstrip()
+    if current_list is not None and current_list:
+        fm[current_key] = current_list
+
+    return fm, body
+
+
+# ---------- check: skill ----------
+
+def check_skill(path, root):
+    fails = []
+    warns = []
+    name = path.parent.name
+
+    fm, body = parse_frontmatter(path)
+    if fm is None:
+        fails.append(f"{path}: missing frontmatter")
+        return fails, warns
+
+    # Required frontmatter
+    if fm.get("name") != name:
+        fails.append(
+            f"{path}: frontmatter name '{fm.get('name')}' != directory '{name}'"
+        )
+    if not fm.get("description"):
+        fails.append(f"{path}: missing description")
+
+    # kind: directive skills are meta-primers (like using-ytstack),
+    # not procedural. They skip the structural-section checks.
+    is_directive = fm.get("kind") == "directive"
+
+    if is_directive:
+        # Directives still get banned-words + em-dash checks below,
+        # but skip Checklist / Terminal State / Preamble requirements.
+        text_lc = (body + " " + str(fm)).lower()
+        for word in BANNED_WORDS:
+            if re.search(rf"\b{re.escape(word)}\b", text_lc):
+                fails.append(f"{path}: banned word '{word}' present")
+        for phrase in BANNED_PHRASES:
+            if phrase in text_lc:
+                fails.append(f"{path}: banned phrase '{phrase}' present")
+        for i, line in enumerate(body.split("\n"), 1):
+            if "—" in line and not line.strip().startswith("|"):
+                warns.append(f"{path}:{i}: em-dash in prose (use comma/period/...)")
+        return fails, warns
+
+    # Required body sections (per docs/ux/skill-structure.md)
+    required_sections = [
+        (r"^##\s+Checklist\b", "Checklist"),
+        (r"^##\s+Terminal State\b", "Terminal State"),
+    ]
+    recommended_sections = [
+        (r"^##\s+Preamble\b", "Preamble"),
+        (r"^##\s+Procedure\b", "Procedure"),
+        (r"^##\s+Process Flow\b", "Process Flow"),
+        (r"^##\s+Anti-Pattern\b", "Anti-Pattern"),
+    ]
+
+    for pattern, label in required_sections:
+        if not re.search(pattern, body, re.MULTILINE):
+            fails.append(f"{path}: missing required section '## {label}'")
+
+    for pattern, label in recommended_sections:
+        if not re.search(pattern, body, re.MULTILINE):
+            warns.append(f"{path}: missing recommended section '## {label}'")
+
+    # Checklist must force TodoWrite discipline
+    if re.search(r"^##\s+Checklist\b", body, re.MULTILINE):
+        checklist_block = re.split(r"^## ", body, flags=re.MULTILINE)
+        checklist_text = next(
+            (b for b in checklist_block if b.startswith("Checklist")), ""
+        )
+        if "MUST" not in checklist_text:
+            warns.append(
+                f"{path}: Checklist does not contain 'MUST' (TodoWrite-discipline)"
+            )
+
+    # Banned words / phrases (scan whole file, case-insensitive)
+    text_lc = (body + " " + str(fm)).lower()
+    for word in BANNED_WORDS:
+        # Word-boundary match so "significant" doesn't false-match
+        if re.search(rf"\b{re.escape(word)}\b", text_lc):
+            fails.append(f"{path}: banned word '{word}' present")
+    for phrase in BANNED_PHRASES:
+        if phrase in text_lc:
+            fails.append(f"{path}: banned phrase '{phrase}' present")
+
+    # Em-dashes in prose
+    for i, line in enumerate(body.split("\n"), 1):
+        if "—" in line and not line.strip().startswith("|"):  # allow in tables
+            warns.append(f"{path}:{i}: em-dash in prose (use comma/period/...)")
+
+    return fails, warns
+
+
+# ---------- check: agent ----------
+
+def check_agent(path, root):
+    fails = []
+    warns = []
+    name = path.stem
+
+    fm, body = parse_frontmatter(path)
+    if fm is None:
+        fails.append(f"{path}: missing frontmatter")
+        return fails, warns
+
+    # Required fields (per docs/ux/agent-structure.md)
+    for field in ("name", "description", "model", "tools", "skills"):
+        if field not in fm:
+            fails.append(f"{path}: missing required frontmatter field '{field}'")
+
+    if fm.get("name") != name:
+        fails.append(
+            f"{path}: frontmatter name '{fm.get('name')}' != filename '{name}'"
+        )
+
+    desc = fm.get("description", "")
+    example_count = desc.count("<example>") if isinstance(desc, str) else 0
+    if example_count < 2:
+        fails.append(
+            f"{path}: description has {example_count} <example> blocks (need >=2)"
+        )
+
+    # Skills must reference existing ytstack skills
+    skills = fm.get("skills", [])
+    if isinstance(skills, list):
+        for skill_ref in skills:
+            if not skill_ref.startswith("ytstack:"):
+                warns.append(
+                    f"{path}: skill '{skill_ref}' not ytstack-namespaced"
+                )
+                continue
+            skill_name = skill_ref.replace("ytstack:", "", 1)
+            if not (root / "skills" / skill_name / "SKILL.md").is_file():
+                fails.append(
+                    f"{path}: skill '{skill_ref}' not found at skills/{skill_name}/SKILL.md"
+                )
+
+    # Body sections
+    if not re.search(r"[Dd]oes? NOT|do NOT", body):
+        fails.append(
+            f"{path}: missing 'does NOT' / 'do NOT' section content"
+        )
+    if not re.search(r"[Ss]ubagent context|SUBAGENT-STOP", body):
+        warns.append(f"{path}: no subagent-context note found")
+
+    # Line count
+    line_count = len(path.read_text(encoding="utf-8").split("\n"))
+    if line_count > 200:
+        fails.append(f"{path}: {line_count} lines (limit 200)")
+    elif line_count > 100:
+        warns.append(f"{path}: {line_count} lines (soft limit 100)")
+
+    # Banned words
+    text_lc = (body + " " + str(fm)).lower()
+    for word in BANNED_WORDS:
+        if re.search(rf"\b{re.escape(word)}\b", text_lc):
+            fails.append(f"{path}: banned word '{word}' present")
+
+    return fails, warns
+
+
+# ---------- check: cross-references ----------
+
+def check_cross_refs(root):
+    fails = []
+    warns = []
+
+    # spawn-milestone-team → architect/implementer/verifier
+    smt = root / "skills" / "spawn-milestone-team" / "SKILL.md"
+    if smt.is_file():
+        smt_text = smt.read_text(encoding="utf-8")
+        for role in ("architect", "implementer", "verifier"):
+            if role in smt_text:
+                if not (root / "agents" / f"{role}.md").is_file():
+                    fails.append(
+                        f"spawn-milestone-team references '{role}' but "
+                        f"agents/{role}.md missing"
+                    )
+
+    # Wrappers: hard-coded vendor path references
+    # Look for vendor/<name>/... in each wrapper SKILL.md
+    for skill_md in (root / "skills").glob("*/SKILL.md"):
+        text = skill_md.read_text(encoding="utf-8")
+        for m in re.finditer(
+            r"vendor/(superpowers|gstack)[^\s\"`)]*", text
+        ):
+            ref = m.group(0).rstrip(".,:;")
+            # Trim anything after /SKILL.md if present
+            if "SKILL.md" in ref:
+                check_path = root / ref
+                if not check_path.is_file():
+                    fails.append(
+                        f"{skill_md}: references {ref} but file missing "
+                        f"(subtree not added?)"
+                    )
+
+    return fails, warns
+
+
+# ---------- main ----------
+
+def main():
+    args = sys.argv[1:]
+    strict = "--strict" in args
+    quiet = "--quiet" in args
+    path_args = [a for a in args if not a.startswith("--")]
+    root_arg = path_args[0] if path_args else None
+
+    root = find_plugin_root(root_arg)
+
+    all_fails = []
+    all_warns = []
+
+    # Skills
+    for skill_md in sorted((root / "skills").glob("*/SKILL.md")):
+        f, w = check_skill(skill_md, root)
+        all_fails.extend(f)
+        all_warns.extend(w)
+
+    # Agents (may not exist — that's fine)
+    agents_dir = root / "agents"
+    if agents_dir.is_dir():
+        for agent_md in sorted(agents_dir.glob("*.md")):
+            f, w = check_agent(agent_md, root)
+            all_fails.extend(f)
+            all_warns.extend(w)
+
+    # Cross-refs
+    f, w = check_cross_refs(root)
+    all_fails.extend(f)
+    all_warns.extend(w)
+
+    # Report
+    if not quiet or all_fails or (strict and all_warns):
+        if all_fails:
+            print(f"FAIL: {len(all_fails)} error(s)")
+            for line in all_fails:
+                print(f"  [fail] {line}")
+        if all_warns:
+            tag = "fail" if strict else "warn"
+            print(f"{'WARNINGS promoted to errors' if strict else 'WARNINGS'}: {len(all_warns)}")
+            for line in all_warns:
+                print(f"  [{tag}] {line}")
+        if not all_fails and not all_warns:
+            print("OK: all skills + agents pass ytstack-check")
+        elif not all_fails and all_warns and not strict:
+            print(f"OK (with {len(all_warns)} warning[s])")
+
+    if all_fails:
+        sys.exit(1)
+    if strict and all_warns:
+        sys.exit(1)
+    if all_warns:
+        sys.exit(2)
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

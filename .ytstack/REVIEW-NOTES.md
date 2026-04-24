@@ -54,10 +54,12 @@ Running list of items to verify, revisit, or polish at end-of-cycle review. Adde
 
 ## Conformance to own rules (audit tasks)
 
-- [ ] **Banned-words grep.** Run `grep -riE 'delve|robust|comprehensive|nuanced|multifaceted|pivotal|landscape|tapestry|foster|showcase|intricate|vibrant|fundamental|significant|interplay|furthermore|moreover'` on all project files. Should return zero. CI-gate via `ytstack-skill-check`.
-- [ ] **Em-dash grep.** Run `grep -r "—" /path/to/ytstack/ --include '*.md'`. All should be replaced with commas, periods, or `...` per writing-style.md.
+- [x] **Banned-words grep.** Resolved via `bin/ytstack-check` (added 2026-04-24). Currently reports zero banned-word hits across the tree.
+- [ ] **Em-dash cleanup pass.** `bin/ytstack-check` reports **288 em-dash warnings** across skills + docs + .ytstack artifacts (first run 2026-04-24). Root cause: macOS autocorrect converts `--` to `—` during typing. Warning-level, not blocking, but violates own writing-style.md. Cleanup task: global find-replace `—` → `--` (or `, ` / `. ` per context) in one pass, commit separately, re-run ytstack-check to confirm zero warnings remain.
 - [ ] **Outcome-framing audit.** Review every AskUserQuestion body for outcome-framing (pain / delight / forcing) vs implementation-framing. Manual review in M008.
 - [ ] **Self-reference audit.** Grep for any surviving explicit source names (author names, URLs to specific people) per the "no naming" user directive. Should be zero outside `docs/references.md` (where upstream repos ARE named intentionally).
+- [ ] **`kind: directive` documented in skill-structure.md.** Currently implemented in `bin/ytstack-check` as a bypass for structural checks (Checklist / Terminal State) on meta-primer skills like using-ytstack. Not yet documented in the contract. Add note in skill-structure.md.
+- [ ] **Recommended-sections coverage.** `ytstack-check` warns when a skill lacks `## Process Flow` / `## Preamble` / `## Procedure` / `## Anti-Pattern`. Several existing skills (handoff-session, resume-session, reassess-roadmap, some wrappers) miss one or two of these. Decide: tighten the docs (make them all required) or accept the warning as informational.
 
 ## M004-M009 findings (added 2026-04-23, end of build)
 

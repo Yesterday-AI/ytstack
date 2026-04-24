@@ -3,6 +3,7 @@ name: using-ytstack
 description: "Establishes how agents find and invoke ytstack skills. Requires Skill-tool invocation before any response when a ytstack skill applies. Auto-injected by the SessionStart hook when a `.ytstack/` directory is present. Not meant for direct user invocation."
 tier: core
 version: 0.1.0
+kind: directive
 ---
 
 # Using ytstack
