@@ -3,7 +3,7 @@
 
   <h1>ytstack</h1>
 
-  <p><em>Working memory for AI coding agents.</em></p>
+  <p><em>An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng.</em></p>
 
   <p>
     A Claude Code plugin that turns multi-session, multi-week projects into something your agent can actually hold onto. Project memory on disk, curated skill set, parallel execution via native Agent Teams. One install, one namespace, no stack to maintain.

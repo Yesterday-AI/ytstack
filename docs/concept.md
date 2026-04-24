@@ -24,7 +24,7 @@ source_articles_analyzed:
 
 From `README.md` §opening + PROJECT.md one-liner:
 
-- **What:** "Working memory for AI coding agents." A Claude Code plugin that turns multi-session, multi-week projects into something an agent can hold onto. Project memory on disk, curated skill set, parallel execution via native Agent Teams. One install, one namespace.
+- **What:** "An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng." A Claude Code plugin that turns multi-session, multi-week projects into something an agent can hold onto. Project memory on disk, curated skill set, parallel execution via native Agent Teams. One install, one namespace.
 - **Why:** AI coding agents are excellent inside a single session and fall apart between them. Long projects rot; context-window pressure makes the agent forget early decisions. ytstack removes the "remind me what we were working on" ritual.
 
 ## 2. The three upstream sources and their roles
