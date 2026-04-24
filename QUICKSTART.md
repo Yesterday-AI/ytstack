@@ -31,9 +31,41 @@ The `--permission-mode acceptEdits` flag is required -- ytstack skills write `.y
 
 ## First milestone -- worked example
 
-Imagine building a small CLI tool. Here's the end-to-end flow:
+Imagine building a small CLI tool. Here's the greenfield end-to-end flow (per DECISIONS 2026-04-24 "Greenfield-flow reorder"):
 
-### 1. Initialize the project
+### 1. Validate the pitch
+
+```text
+/ytstack:office-hours
+```
+
+Six forcing questions expose: demand reality, status quo, desperate specificity, narrowest wedge, observation, future-fit. Output: `./OFFICE-HOURS.md` with `name:` + `one-liner:` frontmatter and the full pitch body.
+
+Example result:
+```
+---
+name: csv-importer
+one-liner: CLI that imports CSV exports from accounting software into the finance database.
+---
+```
+
+### 2. CEO-review the pitch (concept mode)
+
+```text
+/ytstack:plan-ceo-review
+```
+
+Challenges premise + scope of the pitch BEFORE any scaffolding. Mode: concept (pitch artifact, no milestone yet). Output: annotation on `OFFICE-HOURS.md` with go / rescope / kill verdict.
+
+### 3. (Optional) Eng-review the pitch (concept mode)
+
+```text
+/ytstack:plan-eng-review
+```
+
+Feasibility + architectural risk check on the pitch. Also concept mode. Optional.
+
+### 4. Scaffold the project
 
 ```text
 /ytstack:init-project
@@ -41,32 +73,24 @@ Imagine building a small CLI tool. Here's the end-to-end flow:
 
 You'll be asked:
 - Scope: **project-level** (recommended -- committed to git) vs user-level (private)
-- Name: e.g. "csv-importer"
-- One-liner: e.g. "CLI that imports CSV exports from accounting software into the finance database"
 
-Result: `.ytstack/` with 6 files (PROJECT.md, DECISIONS.md, KNOWLEDGE.md, RUNTIME.md, STATE.md, PREFERENCES.md).
+That's the only question. `PROJECT.md` gets pre-populated from `OFFICE-HOURS.md` (`name:` + `one-liner:`). The pitch is moved into `.ytstack/OFFICE-HOURS-<slug>.md` as a ytstack artifact.
 
-### 2. Plan the first milestone
+Result: `.ytstack/` with 6 core files + the consumed pitch.
+
+### 5. Plan the first milestone
 
 ```text
 /ytstack:plan-milestone
 ```
 
-- Goal: "Parse a CSV file and write it to the database."
+- Goal: drawn from pitch, refined: "Parse a CSV file and write it to the database."
 - Exit criteria: "Command `csv-importer path/to/file.csv` inserts all rows into `imports` table and reports row count."
 - Size: M (medium -- 2-3 slices)
 
 Result: `.ytstack/M001-CONTEXT.md` + `.ytstack/M001-ROADMAP.md` with slice placeholders.
 
-### 3. (Optional) CEO-review the plan
-
-```text
-/ytstack:plan-ceo-review
-```
-
-Challenges your scope, ambition, and premise. If the feature is worth expanding or narrowing, this catches it before code.
-
-### 4. Break the milestone into slices
+### 6. Break the milestone into slices
 
 ```text
 /ytstack:slice-milestone
@@ -81,15 +105,15 @@ For each slice placeholder:
 
 Result: `.ytstack/M001-S01-PLAN.md`, `.ytstack/M001-S02-PLAN.md`, etc.
 
-### 5. (Optional) Eng-review the slice-plans
+### 7. (Optional) Eng-review the slice-plans (milestone mode)
 
 ```text
 /ytstack:plan-eng-review
 ```
 
-Locks in architecture before implementation. Catches file-overlap between slices, test gaps, performance concerns.
+Same skill, milestone-mode this time: catches file-overlap between slices, test gaps, performance concerns. Distinct from the Step 3 concept-mode review of the pitch.
 
-### 6. Execute tasks -- two options
+### 8. Execute tasks -- two options
 
 **Option A: sequential (simple).** For each task:
 
@@ -108,7 +132,7 @@ Locks in architecture before implementation. Catches file-overlap between slices
 
 Spawns teammates (one per slice + optional architect-reviewer). Each teammate works in parallel with its own 200k context. Lead coordinates.
 
-### 7. Reassess after each slice
+### 9. Reassess after each slice
 
 ```text
 /ytstack:reassess-roadmap
@@ -116,7 +140,7 @@ Spawns teammates (one per slice + optional architect-reviewer). Each teammate wo
 
 Checks if the remaining plan still fits reality given what was learned in the slice. A/B/C decision: proceed, patch, or major rethink.
 
-### 8. Close the milestone
+### 10. Close the milestone
 
 When all slices are done, update `.ytstack/ROADMAP.md` to flip the milestone to `done`. Run `/ytstack:plan-milestone` for the next.
 

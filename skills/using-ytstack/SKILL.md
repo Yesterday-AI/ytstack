@@ -43,7 +43,8 @@ Match the user's message against these phrases and invoke the corresponding skil
 
 | User says / situation | Skill to invoke |
 |---|---|
-| "init ytstack", "set up tracking", "new project" (and `.ytstack/` missing) | `ytstack:init-project` |
+| "baue mir X", "build me X", "I want to build X", "let's build X", "make a CLI / tool / app", "new project", "I have an idea", "is this worth building", "brainstorm this", "office hours" (greenfield: `.ytstack/` missing, or concept-validation requested) | `ytstack:office-hours` |
+| "init ytstack", "set up tracking", "scaffold the project" (pitch already validated, ready for infra) | `ytstack:init-project` |
 | "let's plan what's next", "what's next" (state-dependent) | `ytstack:plan-milestone` if no active milestone, else `ytstack:plan-task` |
 | "plan a milestone", "new milestone", "start next milestone" | `ytstack:plan-milestone` |
 | "break this into slices", "slice this milestone" (milestone planned) | `ytstack:slice-milestone` |
@@ -53,12 +54,24 @@ Match the user's message against these phrases and invoke the corresponding skil
 | "handoff", "pause work", "save state for later", "I'm stepping away" | `ytstack:handoff-session` |
 | "reassess", "is the plan still right", "review progress" (post-slice) | `ytstack:reassess-roadmap` |
 | "think bigger", "expand scope", "CEO review", "challenge premises" | `ytstack:plan-ceo-review` |
-| "is this worth building", "brainstorm this", "I have an idea", "office hours" | `ytstack:office-hours` |
 | "review architecture", "lock in the plan", "engineering review" | `ytstack:plan-eng-review` |
 | "let's TDD this", "write a test first", "RED-GREEN-REFACTOR" | `ytstack:test-driven-development` |
 | "debug this", "why is X broken", "investigate", "root cause", "something's off" | `ytstack:systematic-debugging` |
 | "verify", "is it really done", "check before I commit" | `ytstack:verification-before-completion` |
 | "spawn team", "run slices in parallel", "dispatch milestone" | `ytstack:spawn-milestone-team` |
+
+## Greenfield flow (no `.ytstack/` yet)
+
+When a user expresses build-intent in a directory with no `.ytstack/`, the locked flow is:
+
+1. `office-hours` -- validate the pitch via six forcing questions, produce an `OFFICE-HOURS.md` pitch artifact.
+2. `plan-ceo-review` -- challenge premise + scope of the pitch (concept mode).
+3. `plan-eng-review` -- optional architecture sanity check of the pitch.
+4. `init-project` -- scaffold `.ytstack/` + PROJECT.md populated from the pitch (no cold PM questions).
+5. `plan-milestone` -- goal + exit criteria for the first milestone, drawn from the pitch.
+6. `slice-milestone` -> `plan-task` -> TDD -> verify -> summarize.
+
+Do NOT route a greenfield build-intent to `plan-milestone` or `init-project` directly; the pitch must exist first.
 
 ## Skill priority (when multiple could apply)
 

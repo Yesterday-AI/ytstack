@@ -27,14 +27,23 @@ echo "CWD: $PWD"
 
 ## ytstack invocation notes
 
-office-hours is valid both greenfield (no `.ytstack/` yet -- interrogating a pre-project idea) and brownfield (project exists, new feature being considered). The vendored procedure drives the six questions; the answers plus the compiled pitch are the artifact.
+office-hours is the **greenfield entry point** for ytstack (per DECISIONS 2026-04-24 "Greenfield-flow reorder"). It is also valid brownfield (project exists, a new feature needs pitch validation). The vendored procedure drives the six questions; the answers plus the compiled pitch are the artifact.
 
-HARD-GATE: none. office-hours runs even without a ytstack project.
+HARD-GATE: none. office-hours runs with or without `.ytstack/`.
 
 After the vendored procedure completes:
-- If `HAS_YTSTACK=yes`: write the pitch output to `$YT_DIR/OFFICE-HOURS-<short-slug>.md` for referencing by downstream skills (plan-ceo-review, init-project, plan-milestone).
+
+- If `HAS_YTSTACK=yes`: write the pitch output to `$YT_DIR/OFFICE-HOURS-<short-slug>.md`. The slug is a 2-4 word kebab-case summary of the pitch, derived from the pitch headline.
 - If `HAS_YTSTACK=no`: write to `./OFFICE-HOURS.md` in the current directory. This becomes the seed for `ytstack:init-project` when the user is ready to commit.
-- The pitch artifact is the canonical answer to "what is this project / feature and for whom"; subsequent ytstack skills (init-project's PROJECT.md population, plan-milestone's goal field) read from it.
+- The pitch artifact's top of file MUST contain a `name:` frontmatter field (project-or-feature name) and a `one-liner:` frontmatter field (the `[noun] for [audience] that [verb + outcome]` sentence). Downstream skills read these keys to populate PROJECT.md without re-asking.
+
+**Terminal State:** report the path of the written pitch artifact, then suggest the next step:
+
+- If the pitch felt strong and the user is ready to commit: recommend `ytstack:plan-ceo-review` (concept mode) to stress-test premise + scope before scaffolding.
+- If the pitch still feels soft: recommend refining it manually, or re-running office-hours on the weakest question.
+- Once plan-ceo-review (and optionally plan-eng-review) has validated the pitch, recommend `ytstack:init-project` to scaffold the project with PROJECT.md pre-populated from the pitch.
+
+Do NOT auto-invoke any downstream skill.
 
 ## Vendored procedure (inlined verbatim)
 

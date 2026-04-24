@@ -28,21 +28,40 @@ _SLICE_PLANS=""
 if [ -n "$_CURRENT_MILESTONE" ] && [ "$_CURRENT_MILESTONE" != "none" ] && [ -d "$_YT_DIR" ]; then
   _SLICE_PLANS=$(ls "$_YT_DIR"/$_CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md 2>/dev/null | tr '\n' ' ')
 fi
+_PITCH=""
+if [ -f "./OFFICE-HOURS.md" ]; then
+  _PITCH="./OFFICE-HOURS.md"
+elif [ -n "$_YT_DIR" ]; then
+  _PITCH=$(ls "$_YT_DIR"/OFFICE-HOURS-*.md 2>/dev/null | head -1)
+fi
+if [ -n "$_SLICE_PLANS" ]; then
+  _MODE=milestone
+elif [ -n "$_PITCH" ] && [ -f "$_PITCH" ]; then
+  _MODE=concept
+else
+  _MODE=abort
+fi
 echo "HAS_YTSTACK: $([ -n "$_YT_DIR" ] && echo yes || echo no)"
-echo "YT_DIR: $_YT_DIR"
+echo "MODE: $_MODE"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "SLICE_PLANS: ${_SLICE_PLANS:-none}"
+echo "PITCH: ${_PITCH:-none}"
 ```
 
 ## ytstack invocation notes
 
-You are invoked inside a ytstack project. The "plan" being engineering-reviewed is the current milestone's slice-plans (paths listed above). When the vendored procedure below asks what plan to review, read those files; do NOT prompt the user to identify a plan.
+Two modes, auto-detected above:
 
-HARD-GATE: if `HAS_YTSTACK=no` or `CURRENT_MILESTONE=none` or `SLICE_PLANS=none`, abort with: "Run `ytstack:init-project`, `ytstack:plan-milestone`, and `ytstack:slice-milestone` first." Do not invoke the vendored procedure.
+**Mode = milestone** (slice-plans exist). The "plan" being engineering-reviewed is the current milestone's slice-plans. Read those files when the vendored procedure asks what to review. Architecture, data flow, edge cases, test coverage, performance.
+
+**Mode = concept** (no slice-plans yet; pitch artifact produced by `ytstack:office-hours` exists). The "plan" being engineering-reviewed is the pitch at `_PITCH`. Focus the review on feasibility + architectural risk of the pitched approach BEFORE any infra is scaffolded: is the target tech stack viable, are there hidden integration complexities, are the perf/scale expectations realistic, are there obvious security / data-handling gaps. Output the feasibility verdict + top 3 risk items. Concept-mode eng review is OPTIONAL per the locked greenfield flow (DECISIONS 2026-04-24); office-hours + plan-ceo-review can proceed to init-project without it.
+
+**Mode = abort.** If neither slice-plans nor a pitch artifact exist, abort with: "Run `ytstack:office-hours` first (concept-mode review) or `ytstack:slice-milestone` first (milestone-mode review). plan-eng-review reviews existing plan content; it does not produce it." Do NOT invoke the vendored procedure.
 
 After the vendored procedure completes:
-- Apply review outcomes by editing the affected slice-plans (add edge cases, adjust tests, tighten scope).
-- Append any locked architectural decision to `DECISIONS.md` in append-only format.
+
+- **Milestone mode:** apply review outcomes by editing the affected slice-plans (add edge cases, adjust tests, tighten scope). Append any locked architectural decision to `DECISIONS.md` in append-only format.
+- **Concept mode:** append the feasibility verdict + risk-item list as an annotation block at the top of `_PITCH`. If "go", recommend `ytstack:init-project`. If "stop / rescope", recommend revisiting office-hours on the affected question.
 
 ## Vendored procedure (inlined verbatim)
 

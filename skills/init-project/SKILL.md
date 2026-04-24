@@ -22,46 +22,42 @@ Initialize a `.ytstack/` directory with the core project-memory artifacts that e
 
 ## Anti-Pattern: "This project is too small for formal init"
 
-Every project goes through this. A CSS tweak, a weekend script, a prototype -- all of them. "Small" projects are where unexamined assumptions cause the most wasted work. The init can be minimal (30 seconds, two questions), but you MUST run it before any other ytstack skill.
+Every project goes through this. A CSS tweak, a weekend script, a prototype -- all of them. "Small" projects are where unexamined assumptions cause the most wasted work. The init can be minimal (one scope question), but you MUST run it before any other ytstack skill except `office-hours`.
 
 If the user insists the project is too small for ytstack, don't force it. Tell them ytstack is optional. But if they've asked for it, run init properly.
+
+**Infra-only scope (DECISIONS 2026-04-24 "Greenfield-flow reorder"):** init-project does NOT ask for project name or one-liner. Those come from a pitch artifact produced by `ytstack:office-hours` (and optionally stress-tested by `plan-ceo-review` / `plan-eng-review`). If no pitch exists when init-project runs, PROJECT.md is scaffolded with explicit placeholders pointing the user at `office-hours`.
 
 ## Checklist
 
 You MUST create a TodoWrite task for each of these items and complete them in order:
 
-1. **Run preamble** -- emit state flags about current project and ytstack status
+1. **Run preamble** -- emit state flags about current project, ytstack status, and pitch-artifact presence
 2. **Handle already-initialized case** -- if HAS_YTSTACK=yes, report and exit cleanly
 3. **Ask scope question** -- project-level vs user-level storage (core tier)
-4. **Ask project name** -- one short line
-5. **Ask project one-liner** -- one sentence: what it does + for whom
-6. **Create artifact directory** -- `.ytstack/` or `~/.ytstack/projects/<slug>/` based on scope
-7. **Write all 6 artifact files** -- PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES
-8. **Touch completion sentinel** -- `~/.ytstack/.init-project-<slug>-completed`
-9. **Report what was created** -- file list with paths, one-line summary of each
-10. **Return control** -- do NOT auto-invoke any other skill
+4. **Create artifact directory** -- `.ytstack/` or `~/.ytstack/projects/<slug>/` based on scope
+5. **Write all 6 artifact files** -- PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES. PROJECT.md pre-populated from pitch artifact if present; otherwise placeholders.
+6. **Touch completion sentinel** -- `~/.ytstack/.init-project-<slug>-completed`
+7. **Report what was created** -- file list + pitch-status + next-step suggestion
+8. **Return control** -- do NOT auto-invoke any other skill
 
 ## Process Flow
 
 ```dot
 digraph init_project {
-    "Run preamble" [shape=box];
+    "Run preamble (detects pitch)" [shape=box];
     "HAS_YTSTACK?" [shape=diamond];
     "Report already initialized" [shape=doublecircle];
     "Ask scope" [shape=box];
-    "Ask name" [shape=box];
-    "Ask one-liner" [shape=box];
-    "Write artifacts" [shape=box];
+    "Write artifacts (pitch-populated or placeholder)" [shape=box];
     "Touch sentinel" [shape=box];
     "Report + return" [shape=doublecircle];
 
-    "Run preamble" -> "HAS_YTSTACK?";
+    "Run preamble (detects pitch)" -> "HAS_YTSTACK?";
     "HAS_YTSTACK?" -> "Report already initialized" [label="yes"];
     "HAS_YTSTACK?" -> "Ask scope" [label="no"];
-    "Ask scope" -> "Ask name";
-    "Ask name" -> "Ask one-liner";
-    "Ask one-liner" -> "Write artifacts";
-    "Write artifacts" -> "Touch sentinel";
+    "Ask scope" -> "Write artifacts (pitch-populated or placeholder)";
+    "Write artifacts (pitch-populated or placeholder)" -> "Touch sentinel";
     "Touch sentinel" -> "Report + return";
 }
 ```
@@ -92,6 +88,17 @@ fi
 _EXPLAIN_LEVEL="default"
 [ -f "$HOME/.ytstack/config" ] && _EXPLAIN_LEVEL=$(grep -E '^explain_level=' "$HOME/.ytstack/config" 2>/dev/null | cut -d= -f2 || echo default)
 _IS_GIT=$([ -d .git ] && echo yes || echo no)
+# Pitch-artifact discovery (produced by ytstack:office-hours)
+_PITCH=""
+if [ -f "./OFFICE-HOURS.md" ]; then
+  _PITCH="./OFFICE-HOURS.md"
+fi
+_PITCH_NAME=""
+_PITCH_ONELINER=""
+if [ -n "$_PITCH" ]; then
+  _PITCH_NAME=$(sed -n 's/^name: *//p' "$_PITCH" | head -1)
+  _PITCH_ONELINER=$(sed -n 's/^one-liner: *//p' "$_PITCH" | head -1)
+fi
 echo "BRANCH: $_BRANCH"
 echo "PROJECT_SLUG: $_PROJECT_SLUG"
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
@@ -99,6 +106,9 @@ echo "YTSTACK_SCOPE: $_YTSTACK_SCOPE"
 echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 echo "EXPLAIN_LEVEL: $_EXPLAIN_LEVEL"
 echo "IS_GIT: $_IS_GIT"
+echo "PITCH: ${_PITCH:-none}"
+echo "PITCH_NAME: ${_PITCH_NAME:-<placeholder>}"
+echo "PITCH_ONELINER: ${_PITCH_ONELINER:-<placeholder>}"
 ```
 
 ## Procedure
@@ -142,30 +152,7 @@ Otherwise, use AskUserQuestion with this exact body:
 
 Remember the answer as `_SCOPE_CHOICE` (value: `project`, `user`, or `both`).
 
-### Step 4: Ask project name
-
-Use AskUserQuestion (open-ended):
-
-> What's the project called? One short line. This goes into `PROJECT.md` as the name.
-
-Remember as `_PROJECT_NAME`.
-
-### Step 5: Ask project one-liner
-
-Use AskUserQuestion (open-ended):
-
-> One sentence: what does this project do, and for whom?
->
-> Good examples:
-> - "A CLI that warns developers before they push secrets to GitHub."
-> - "A weekend Python script that extracts receipt totals from email for my accountant."
-> - "An agent platform for SMB content teams to automate social-media posts."
->
-> Fill in: `[noun] for [audience] that [verb + outcome]`.
-
-Remember as `_PROJECT_ONELINER`.
-
-### Step 6: Create artifact directory
+### Step 4: Create artifact directory
 
 Based on `_SCOPE_CHOICE`:
 
@@ -174,11 +161,18 @@ Based on `_SCOPE_CHOICE`:
 
 For `both`, write all files to both locations for v0.1. Later skills can split.
 
-### Step 7: Write 6 artifact files
+If a pitch artifact exists (`PITCH != none` from preamble), also move it into the ytstack dir: `mv ./OFFICE-HOURS.md "$_YT_DIR/OFFICE-HOURS-$_PITCH_SLUG.md"` (slug is a 2-4 word kebab-case summary from the pitch headline; if none available, use `initial`). The pitch is now a ytstack artifact that downstream skills (plan-milestone, plan-ceo-review milestone-mode) can read.
 
-Use the Write tool. Substitute `{PROJECT_NAME}`, `{PROJECT_SLUG}`, `{PROJECT_ONELINER}`, and `{ISO_TIMESTAMP}` (current UTC timestamp in `YYYY-MM-DDTHH:MM:SSZ` format) in each template.
+### Step 5: Write 6 artifact files
 
-Location: the directory chosen in Step 6. For `both`, write each file to both locations with identical content.
+Use the Write tool. Substitutions:
+
+- `{PROJECT_NAME}` = `$_PITCH_NAME` if non-empty, else `$_PROJECT_SLUG`.
+- `{PROJECT_ONELINER}` = `$_PITCH_ONELINER` if non-empty, else the placeholder string `(run /ytstack:office-hours to validate the premise and populate this one-liner; until then the project has no validated pitch)`.
+- `{PROJECT_SLUG}` = `$_PROJECT_SLUG`.
+- `{ISO_TIMESTAMP}` = current UTC timestamp in `YYYY-MM-DDTHH:MM:SSZ` format.
+
+Location: the directory chosen in Step 4. For `both`, write each file to both locations with identical content.
 
 #### PROJECT.md
 
@@ -328,7 +322,7 @@ Options: default | terse | brutal
 (Project-specific preferences that don't fit elsewhere.)
 ```
 
-### Step 8: Touch completion sentinel
+### Step 6: Touch completion sentinel
 
 ```bash
 mkdir -p "$HOME/.ytstack"
@@ -336,26 +330,40 @@ touch "$HOME/.ytstack/.init-project-${_PROJECT_SLUG}-completed"
 touch "$HOME/.ytstack/.init-project-${_PROJECT_SLUG}-scope-prompted"
 ```
 
-### Step 9: Report what was created
+### Step 7: Report what was created
 
-Write this prose summary (substitute the real paths based on `_SCOPE_CHOICE`):
+Write this prose summary (substitute the real paths based on `_SCOPE_CHOICE`, and branch on whether a pitch was consumed):
+
+**If `PITCH != none`** (pitch was consumed + moved to ytstack dir):
 
 > Created ytstack tracking for **{PROJECT_NAME}**:
 >
-> - {location}/PROJECT.md -- your project description
+> - {location}/PROJECT.md -- populated from `OFFICE-HOURS-{PITCH_SLUG}.md`
+> - {location}/OFFICE-HOURS-{PITCH_SLUG}.md -- the validated pitch (moved from `./OFFICE-HOURS.md`)
 > - {location}/DECISIONS.md -- empty decision register (append as you decide)
 > - {location}/KNOWLEDGE.md -- empty patterns and lessons file
 > - {location}/RUNTIME.md -- empty services and env-vars file
 > - {location}/STATE.md -- dashboard, current status
 > - {location}/PREFERENCES.md -- your local settings
 >
-> Next step: review `{location}/PROJECT.md` and fill in the sections below the one-liner. When ready, run `ytstack:plan-milestone` to define what ships first.
+> Next step: run `ytstack:plan-milestone` to define the first milestone. The pitch gives plan-milestone a goal and exit criteria to draw from.
 >
 > If you're in a git repo (`IS_GIT: yes`): these files are unstaged. `git status` will show them. Commit when ready.
 
-### Step 10: Return control
+**If `PITCH = none`** (no pitch, placeholders were written):
 
-STOP here. Do NOT invoke `ytstack:plan-milestone` automatically. The user may want to fill in PROJECT.md details before planning the first milestone.
+> Created ytstack tracking for **{PROJECT_NAME}** (scaffolded without a validated pitch):
+>
+> - {location}/PROJECT.md -- one-liner is a placeholder pointing to office-hours
+> - {location}/DECISIONS.md, KNOWLEDGE.md, RUNTIME.md, STATE.md, PREFERENCES.md -- empty
+>
+> **Recommended next step: run `ytstack:office-hours`** to validate the project premise, then the outcome will populate PROJECT.md. Running `ytstack:plan-milestone` directly without a pitch works but the milestone goal will not be grounded in a validated premise.
+>
+> If you're in a git repo (`IS_GIT: yes`): these files are unstaged. `git status` will show them. Commit when ready.
+
+### Step 8: Return control
+
+STOP here. Do NOT invoke `ytstack:plan-milestone` or `ytstack:office-hours` automatically. The user decides the next step.
 
 ## Terminal State
 
@@ -364,7 +372,8 @@ The terminal state is one of:
 - Returning control to the user after writing the 6 artifacts and reporting file paths
 - Exiting immediately after reporting "already initialized" (when HAS_YTSTACK=yes)
 
-Do NOT invoke `ytstack:plan-milestone`, `ytstack:spawn-milestone-team`, or any other ytstack skill from here. The ONLY valid next actions are:
+Do NOT invoke `ytstack:plan-milestone`, `ytstack:office-hours`, `ytstack:spawn-milestone-team`, or any other ytstack skill from here. The ONLY valid next actions are:
 
 - User reviews and edits PROJECT.md manually
-- User runs `ytstack:plan-milestone` themselves when ready
+- User runs `ytstack:office-hours` if no pitch was consumed (PROJECT.md has placeholder one-liner)
+- User runs `ytstack:plan-milestone` when ready for the first milestone

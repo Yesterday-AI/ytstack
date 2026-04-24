@@ -108,9 +108,11 @@ Without `--permission-mode acceptEdits`, Write operations stall on permission di
 
 ## Quickstart
 
-One line: in your project, run `/ytstack:init-project`, answer three questions (scope / name / one-liner), and you have tracked project memory.
+Greenfield: in your project directory, run `/ytstack:office-hours` to validate the pitch, then `/ytstack:plan-ceo-review` (optional `/ytstack:plan-eng-review`), then `/ytstack:init-project` to scaffold `.ytstack/` with `PROJECT.md` pre-populated from the pitch. One scope question, zero cold PM questions.
 
-See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example: `init` → `plan-milestone` → `slice` → `plan-task` → TDD → verify → summarize.
+Brownfield (ytstack already initialized): say what you want in plain language -- the agent auto-routes to the right skill via the `using-ytstack` directive.
+
+See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example: `office-hours` → `plan-ceo-review` → `init-project` → `plan-milestone` → `slice` → `plan-task` → TDD → verify → summarize.
 
 ## Who this is for
 

@@ -165,42 +165,26 @@ Three reference flows condensed from `README.md` §"What a session feels like" +
 
 ### 5.1 Greenfield -- new project, no `.ytstack/` yet
 
-Per QUICKSTART.md §"First milestone -- worked example", the documented happy path is:
+Per DECISIONS 2026-04-24 "Greenfield-flow reorder" (LOCKED, implemented):
 
 ```
-/ytstack:init-project      (scope / name / one-liner → .ytstack/ + 6 artifacts)
-  → plan-milestone         (goal, exit criteria, size)
-  → [optional] plan-ceo-review   (challenge premises)
-  → slice-milestone        (break into slices with tasks)
-  → [optional] plan-eng-review   (architecture review)
-  → plan-task              (detail next task)
-  → test-driven-development (RED-GREEN-REFACTOR)
-  → verification-before-completion  (evidence-based done-claim)
-  → summarize-task         (close task, flip checkbox)
-  → [loop: next task, or reassess-roadmap after slice]
-```
-
-Per DECISIONS 2026-04-24 "Greenfield-flow reorder" (LOCKED), the above is the legacy flow. The target flow (M010 implementation in progress) is:
-
-```
-/ytstack:office-hours              (concept validation -- forcing questions)
-  → plan-ceo-review                (premise + scope challenge)
-  → [optional] plan-eng-review     (architecture review)
-  → init-project                   (infra-only: scope decision + skeleton files)
-  → plan-milestone                 (goal, exit criteria, size)
+/ytstack:office-hours              (concept validation -- forcing questions, writes OFFICE-HOURS.md with name + one-liner frontmatter)
+  → plan-ceo-review                (concept mode: premise + scope challenge on the pitch)
+  → [optional] plan-eng-review     (concept mode: feasibility + architectural-risk check on the pitch)
+  → init-project                   (infra-only: scope question, scaffolds .ytstack/, populates PROJECT.md from pitch frontmatter, moves pitch into .ytstack/OFFICE-HOURS-<slug>.md)
+  → plan-milestone                 (goal + exit criteria, drawn from pitch)
   → slice-milestone                (break into slices with tasks)
+  → [optional] plan-eng-review     (milestone mode: architecture review of slice-plans)
   → plan-task → test-driven-development → verification-before-completion → summarize-task
   → [loop: next task, or reassess-roadmap after slice]
 ```
 
-Key shifts from the legacy flow:
+Key properties of this flow:
 
-- `office-hours` is the greenfield entry point (not `init-project`), so the pitch is validated before any artifact is written.
-- `plan-ceo-review` and `plan-eng-review` gain a "concept mode" (read office-hours output) on top of their existing "milestone mode" (read `M###-CONTEXT.md` + `M###-ROADMAP.md`).
-- `init-project` is refactored to infra-only: PM questions (project name, one-liner) are removed; PROJECT.md name + one-liner come from the validated pitch produced by office-hours, not asked cold.
-- `using-ytstack` trigger map is rewritten so natural-language build-intent ("baue mir eine cli", "build me a tool") routes to office-hours first in a greenfield directory, not plan-milestone.
-
-README.md + QUICKSTART.md §1-6 are updated as part of M010 execution.
+- `office-hours` is the greenfield entry point. The pitch artifact it produces carries structured `name:` + `one-liner:` frontmatter that downstream skills consume without re-asking.
+- `plan-ceo-review` and `plan-eng-review` auto-detect mode: "concept" (pitch exists, no milestone) or "milestone" (milestone exists). Same skill, two review subjects.
+- `init-project` asks only one question (scope: project-level vs user-level vs both). No name / one-liner prompts; those come from the pitch, or placeholders pointing to office-hours if run without a pitch.
+- `using-ytstack` trigger map routes greenfield build-intent ("baue mir eine cli", "build me a tool", "I have an idea") to `office-hours` first, not to `plan-milestone` or `init-project` directly.
 
 ### 5.2 Brownfield -- existing `.ytstack/`, continuing or starting new work
 
@@ -276,5 +260,4 @@ Per `CLAUDE.md` + DECISIONS 2026-04-23:
 
 ## 9. Known open items (not decided, do not act without user)
 
-- Any REVIEW-NOTES entries marked `[ ]`. (Previously: Greenfield-flow reorder -- LOCKED 2026-04-24, see §5.1 + DECISIONS.)
-- M010 "Greenfield Flow Reorder" milestone work is planned but not yet executed: office-hours entry, dual-mode ceo/eng-review, init-project infra-split, trigger-map rewrite, README/QUICKSTART updates. Tracked via `.ytstack/ROADMAP.md` once planned via `ytstack:plan-milestone`.
+- Any REVIEW-NOTES entries marked `[ ]`. (Previously: Greenfield-flow reorder -- LOCKED + implemented 2026-04-24, see §5.1 + DECISIONS.)
