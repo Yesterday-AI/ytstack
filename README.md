@@ -150,12 +150,14 @@ See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example: `office-
 ## Who this is for
 
 **Good fit:**
+
 - Projects that span more than one Claude Code session
 - Teams where multiple people (or agents) touch the same codebase
 - Any workflow where "what was decided and why" matters a week later
 - People who already use superpowers or gstack and want the other's strengths without the friction
 
 **Poor fit:**
+
 - One-shot scripts that ship in a single session
 - Teams that don't want opinionated process
 - Workflows already deeply invested in GSD's TypeScript runtime (use GSD directly; ytstack solves a different layer)
@@ -165,6 +167,7 @@ See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example: `office-
 **v0.1.0 -- full build cycle complete.** 37/39 tasks done; 2 deferred to user-action (git init + push, GitHub repo creation).
 
 Ships:
+
 - 16 skills (project-OS lifecycle + gstack planning wrappers + superpowers execution wrappers + Agent Teams dispatch + `using-ytstack` directive that auto-injects to drive skill selection from natural-language intent)
 - 8 hooks (SessionStart / PreCompact / SessionEnd / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash). SessionStart-hook now injects the using-ytstack directive + project state.
 - Full docs (`CLAUDE.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
@@ -223,6 +226,7 @@ ytstack/
 Read [CLAUDE.md](./CLAUDE.md) before modifying anything. See [CONTRIBUTING.md](./CONTRIBUTING.md) for PR rules and [docs/ux/](./docs/ux/) for the mandatory skill-authoring contracts.
 
 Key rules:
+
 - Never modify content in `vendor/**` (upstream superpowers / gstack trees -- wrap, don't edit)
 - Never copy third-party methodology prose verbatim (concepts only)
 - One logical change per commit
@@ -238,4 +242,4 @@ Inspired by [gstack](https://github.com/garrytan/gstack), [superpowers](https://
 
 ---
 
-Maintained by [Yesterday-AI](https://github.com/Yesterday-AI).
+Maintained by [Yesterday](https://github.com/Yesterday-AI).
