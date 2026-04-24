@@ -48,5 +48,5 @@ Do NOT auto-invoke any downstream skill.
 ## Vendored procedure (inlined verbatim)
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/gstack/office-hours/SKILL.md"
+cat "${CLAUDE_SKILL_DIR}/../../vendor/gstack/office-hours/SKILL.md"
 ```

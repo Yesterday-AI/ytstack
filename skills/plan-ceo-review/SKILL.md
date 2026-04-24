@@ -67,5 +67,5 @@ After the vendored procedure completes:
 ## Vendored procedure (inlined verbatim)
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/gstack/plan-ceo-review/SKILL.md"
+cat "${CLAUDE_SKILL_DIR}/../../vendor/gstack/plan-ceo-review/SKILL.md"
 ```

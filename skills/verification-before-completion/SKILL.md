@@ -51,5 +51,5 @@ After the vendored procedure completes:
 ## Vendored procedure (inlined verbatim)
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}/vendor/superpowers/skills/verification-before-completion/SKILL.md"
+cat "${CLAUDE_SKILL_DIR}/../../vendor/superpowers/skills/verification-before-completion/SKILL.md"
 ```
