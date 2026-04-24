@@ -1,20 +1,27 @@
 {
   "name": "ytstack",
   "description": "Yesterday Technologies Stack -- opinionated software-development OS for AI agents.",
+  "owner": {
+    "name": "Yesterday",
+    "url": "https://github.com/Yesterday-AI"
+  },
   "plugins": [
     {
       "name": "ytstack",
-      "source": "./.",
       "description": "Claude Code plugin. Project-OS artifact discipline + curated superpowers and gstack skill wrappers + Agent Teams orchestration.",
+      "version": "0.1.0",
+      "source": "./",
+      "author": {
+        "name": "Yesterday",
+        "url": "https://github.com/Yesterday-AI"
+      },
       "keywords": [
         "claude-code",
         "agentic",
         "development-methodology",
         "project-management",
         "yesterday-ai"
-      ],
-      "version": "0.1.0",
-      "license": "MIT"
+      ]
     }
   ]
 }
