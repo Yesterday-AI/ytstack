@@ -94,9 +94,9 @@ ytstack covers three workflows. The `SessionStart` hook injects the `using-ytsta
 
 From raw idea to shipped task. Each process step (orange) produces an artifact on disk (green) that the next step reads as a contract.
 
-![ytstack greenfield flow -- office-hours -> plan-ceo-review -> init-project -> plan-milestone -> slice -> task-loop (plan-task -> TDD -> verify -> summarize) -> reassess-roadmap at slice boundaries](docs/ytstack-greenfield-flow.png)
+![ytstack greenfield flow -- office-hours -> plan-ceo-review -> init-project -> plan-milestone -> slice -> task-loop (plan-task -> TDD -> verify -> summarize) -> reassess-roadmap at slice boundaries](docs/ytstack-greenfield-flow-dark.png)
 
-Source: [`docs/ytstack-greenfield-flow.excalidraw`](docs/ytstack-greenfield-flow.excalidraw) (edit, then re-render with `uv run python skills/excalidraw-diagram/references/render_excalidraw.py docs/ytstack-greenfield-flow.excalidraw`).
+Sources: [`docs/ytstack-greenfield-flow-dark.excalidraw`](docs/ytstack-greenfield-flow-dark.excalidraw) (shown above) · [`docs/ytstack-greenfield-flow.excalidraw`](docs/ytstack-greenfield-flow.excalidraw) (light variant). Edit, then re-render with `uv run python skills/excalidraw-diagram/references/render_excalidraw.py <path-to-file.excalidraw>`.
 
 ### 2. Brownfield -- existing `.ytstack/`, continuing or starting new work
 
