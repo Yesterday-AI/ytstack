@@ -21,20 +21,10 @@ import re
 import sys
 from pathlib import Path
 
-BANNED_WORDS = [
-    "delve", "delving", "crucial", "robust", "comprehensive", "nuanced",
-    "multifaceted", "furthermore", "moreover", "additionally", "pivotal",
-    "landscape", "tapestry", "foster", "showcase", "intricate", "vibrant",
-    "fundamental", "fundamentally", "significant", "significantly",
-    "interplay", "underscore",
-]
-
-BANNED_PHRASES = [
-    "here's the kicker", "here's the thing", "plot twist",
-    "let me break this down", "the bottom line", "make no mistake",
-    "can't stress this enough", "in today's fast-paced world",
-    "as we delve deeper",
-]
+# Banned vocabulary / phrases were dropped 2026-04-24: those rules were
+# ytstack-original scope creep (not requested; not inherited from gstack /
+# superpowers / GSD). Only the em-dash punctuation rule is kept because it
+# is a concrete macOS autocorrect hazard, not a style opinion.
 
 
 # ---------- helpers ----------
@@ -147,9 +137,8 @@ def check_skill(path, root):
     )
 
     if is_thin_wrapper:
-        # Thin wrappers still get banned-words + em-dash checks, plus
-        # a requirement that they declare the ytstack invocation notes
-        # (otherwise they are just a vendor mirror).
+        # Thin wrappers require "ytstack invocation notes" (where the
+        # wrapper adds its value) + em-dash hygiene. No banned-words gate.
         if not re.search(
             r"^##\s+ytstack invocation notes\b", body, re.MULTILINE | re.IGNORECASE
         ):
@@ -157,28 +146,15 @@ def check_skill(path, root):
                 f"{path}: thin-wrapper is missing '## ytstack invocation notes' "
                 f"section (where the wrapper adds its value)"
             )
-        text_lc = (body + " " + str(fm)).lower()
-        for word in BANNED_WORDS:
-            if re.search(rf"\b{re.escape(word)}\b", text_lc):
-                fails.append(f"{path}: banned word '{word}' present")
-        for phrase in BANNED_PHRASES:
-            if phrase in text_lc:
-                fails.append(f"{path}: banned phrase '{phrase}' present")
         for i, line in enumerate(body.split("\n"), 1):
             if "—" in line and not line.strip().startswith("|"):
                 warns.append(f"{path}:{i}: em-dash in prose (use comma/period/...)")
         return fails, warns
 
     if is_directive:
-        # Directives still get banned-words + em-dash checks below,
-        # but skip Checklist / Terminal State / Preamble requirements.
-        text_lc = (body + " " + str(fm)).lower()
-        for word in BANNED_WORDS:
-            if re.search(rf"\b{re.escape(word)}\b", text_lc):
-                fails.append(f"{path}: banned word '{word}' present")
-        for phrase in BANNED_PHRASES:
-            if phrase in text_lc:
-                fails.append(f"{path}: banned phrase '{phrase}' present")
+        # Directives get em-dash hygiene but skip structural-section
+        # requirements (Checklist / Terminal State / Preamble / Procedure
+        # live in the vendored flow or the action skill, not the primer).
         for i, line in enumerate(body.split("\n"), 1):
             if "—" in line and not line.strip().startswith("|"):
                 warns.append(f"{path}:{i}: em-dash in prose (use comma/period/...)")
@@ -215,17 +191,7 @@ def check_skill(path, root):
                 f"{path}: Checklist does not contain 'MUST' (TodoWrite-discipline)"
             )
 
-    # Banned words / phrases (scan whole file, case-insensitive)
-    text_lc = (body + " " + str(fm)).lower()
-    for word in BANNED_WORDS:
-        # Word-boundary match so "significant" doesn't false-match
-        if re.search(rf"\b{re.escape(word)}\b", text_lc):
-            fails.append(f"{path}: banned word '{word}' present")
-    for phrase in BANNED_PHRASES:
-        if phrase in text_lc:
-            fails.append(f"{path}: banned phrase '{phrase}' present")
-
-    # Em-dashes in prose
+    # Em-dashes in prose (macOS autocorrect hazard). No banned-word gate.
     for i, line in enumerate(body.split("\n"), 1):
         if "—" in line and not line.strip().startswith("|"):  # allow in tables
             warns.append(f"{path}:{i}: em-dash in prose (use comma/period/...)")
@@ -291,12 +257,6 @@ def check_agent(path, root):
         fails.append(f"{path}: {line_count} lines (limit 200)")
     elif line_count > 100:
         warns.append(f"{path}: {line_count} lines (soft limit 100)")
-
-    # Banned words
-    text_lc = (body + " " + str(fm)).lower()
-    for word in BANNED_WORDS:
-        if re.search(rf"\b{re.escape(word)}\b", text_lc):
-            fails.append(f"{path}: banned word '{word}' present")
 
     return fails, warns
 

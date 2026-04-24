@@ -61,43 +61,10 @@ ytstack-specific:
 - `handoff` -- state written when a session ends, read when the next session starts
 - `context rot` -- degradation of Claude's quality as its context window fills
 
-## Banned words
+## Punctuation pitfalls
 
-These show up in AI-generated prose and make writing sound like marketing copy. Don't use them. CI `ytstack-skill-check` flags them.
-
-**Banned vocabulary:**
-- delve, delving
-- crucial
-- robust
-- comprehensive
-- nuanced
-- multifaceted
-- furthermore, moreover, additionally
-- pivotal
-- landscape, tapestry
-- underscore (as a verb)
-- foster (as in "foster collaboration")
-- showcase
-- intricate
-- vibrant
-- fundamental, fundamentally
-- significant, significantly
-- interplay
-
-**Banned phrases:**
-- "here's the kicker"
-- "here's the thing"
-- "plot twist"
-- "let me break this down"
-- "the bottom line"
-- "make no mistake"
-- "can't stress this enough"
-- "in today's fast-paced world"
-- "as we delve deeper"
-
-**Banned punctuation:**
-- Em dashes (the `—` character, U+2014). Use `--` (ASCII double-hyphen), commas, periods, or `...` instead. macOS autocorrect often converts `--` to `—` silently while typing; disable smart-punctuation or run `bin/ytstack-check` before committing.
-- Ellipsis as hesitation filler (`...`). Use it only when genuinely meaning "and so on" or trailing pause.
+- **Em dashes (the `—` character, U+2014).** Use `--` (ASCII double-hyphen), commas, periods, or `...` instead. macOS autocorrect silently converts `--` to `—` while typing; disable smart-punctuation or run `bin/ytstack-check` before committing. This is a concrete autocorrect hazard, not a style preference.
+- **Ellipsis as hesitation filler (`...`).** Use it only when genuinely meaning "and so on" or trailing pause.
 
 ## Preferred style
 
