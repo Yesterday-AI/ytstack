@@ -86,13 +86,54 @@ Install all three and you get friction: interactive prompts blocking each other,
 
 **One vendored stack, one namespace.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/` holds read-only subtrees of superpowers and gstack, pulled via `git subtree`. Upstream updates land cleanly; we never modify their content.
 
-## The greenfield flow at a glance
+## Workflows
 
-From raw idea to shipped task. Each process step (orange) produces an artifact on disk (green) that the next step reads as a contract. The `SessionStart` hook injects the `using-ytstack` directive once; skill selection after that is semantic -- the agent matches user intent against each skill's `description:` field, not a phrase list.
+ytstack covers three workflows. The `SessionStart` hook injects the `using-ytstack` directive once per session; skill selection after that is semantic -- the agent matches user intent against each skill's `description:` field, not a phrase list.
+
+### 1. Greenfield -- new project, no `.ytstack/` yet
+
+From raw idea to shipped task. Each process step (orange) produces an artifact on disk (green) that the next step reads as a contract.
 
 ![ytstack greenfield flow -- office-hours -> plan-ceo-review -> init-project -> plan-milestone -> slice -> task-loop (plan-task -> TDD -> verify -> summarize) -> reassess-roadmap at slice boundaries](docs/ytstack-greenfield-flow.png)
 
 Source: [`docs/ytstack-greenfield-flow.excalidraw`](docs/ytstack-greenfield-flow.excalidraw) (edit, then re-render with `uv run python skills/excalidraw-diagram/references/render_excalidraw.py docs/ytstack-greenfield-flow.excalidraw`).
+
+### 2. Brownfield -- existing `.ytstack/`, continuing or starting new work
+
+SessionStart hook injects `STATE.md` + the `using-ytstack` directive before your first message. Natural-language routing:
+
+```
+<session start: state injected>
+  -> "where were we"           -> ytstack:resume-session    (3-paragraph briefing)
+  -> "let's plan what's next"  -> ytstack:plan-milestone    (if no active milestone)
+                                  ytstack:plan-task        (if milestone is active)
+  -> "this task is done"       -> ytstack:summarize-task    (close + flip checkbox)
+  -> "let's do a handoff"      -> ytstack:handoff-session   (rich HANDOFF.md)
+```
+
+Continuing an open task:
+
+```
+plan-task -> test-driven-development -> verification-before-completion -> summarize-task
+```
+
+At each slice boundary: `ytstack:reassess-roadmap` to check the plan still fits reality.
+
+**Parallel variant:** `ytstack:spawn-milestone-team` dispatches Claude Code Agent Teams (one teammate per slice, each in a fresh 200k context). Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` + Claude Code v2.1.32+.
+
+### 3. Brownfield debugging -- something is broken
+
+```
+"something's broken, find it"   -> ytstack:systematic-debugging
+  Phase 1: root-cause investigation  (no fixes yet)
+  Phase 2: pattern analysis
+  Phase 3: hypothesis testing
+  Phase 4: implementation
+```
+
+Iron rule: root cause required before any fix. Findings auto-log to `KNOWLEDGE.md` (pattern) and `DECISIONS.md` (architectural shift).
+
+Fix path merges back into the brownfield task loop: regression test first (`test-driven-development`) -> `verification-before-completion` -> `summarize-task`. Same task skeleton as feature work, not a separate "debug mode".
 
 ## Compared to using each framework alone
 
