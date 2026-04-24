@@ -17,5 +17,8 @@
     "artifact-discipline",
     "enterprise-software-development",
     "yesterday-ai"
-  ]
+  ],
+  "skills": "./skills/",
+  "agents": "./agents/",
+  "hooks": "./hooks/hooks.json"
 }
