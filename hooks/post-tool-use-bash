@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# ytstack PostToolUse hook for Bash
+#
+# Fires after every successful Bash tool call. If the command was a `git
+# commit`, append a one-line entry to the active task's T##-SUMMARY.md
+# (or create a draft summary if none exists yet) so the commit is linked
+# to the ytstack task automatically.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+cd "$PROJECT_DIR" 2>/dev/null || exit 0
+
+YT_DIR=""
+if [ -d "$PROJECT_DIR/.ytstack" ]; then
+  YT_DIR="$PROJECT_DIR/.ytstack"
+else
+  SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PROJECT_DIR")")
+  USER_YT="$HOME/.ytstack/projects/$SLUG"
+  [ -d "$USER_YT" ] && YT_DIR="$USER_YT"
+fi
+
+[ -z "$YT_DIR" ] && exit 0
+
+STATE_FILE="$YT_DIR/STATE.md"
+[ ! -f "$STATE_FILE" ] && exit 0
+
+# Parse stdin for the Bash command and outcome
+INPUT=$(cat)
+CMD=""
+EXIT_CODE=""
+if command -v jq >/dev/null 2>&1; then
+  CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+  EXIT_CODE=$(echo "$INPUT" | jq -r '.tool_response.exit_code // .exit_code // empty' 2>/dev/null)
+fi
+
+# Only act on successful git commits
+case "$CMD" in
+  *git*commit*)
+    [ "${EXIT_CODE:-0}" -ne 0 ] && exit 0
+    ;;
+  *) exit 0 ;;
+esac
+
+# Get active task from STATE.md
+CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$STATE_FILE" | head -1)
+ACTIVE_SLICE=$(sed -n 's/^active_slice: *//p' "$STATE_FILE" | head -1)
+ACTIVE_TASK=$(sed -n 's/^active_task: *//p' "$STATE_FILE" | head -1)
+
+# No active task → nothing to link
+[ "$ACTIVE_TASK" = "none" ] || [ -z "$ACTIVE_TASK" ] && exit 0
+
+# Get the most recent commit SHA + message for the link
+COMMIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+COMMIT_MSG=$(git log -1 --pretty=format:%s 2>/dev/null || echo "")
+
+SUMMARY_FILE="$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK-SUMMARY.md"
+TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# If no summary exists yet, create a draft; otherwise append a Commits section / entry
+if [ ! -f "$SUMMARY_FILE" ]; then
+  PROJECT_NAME=$(sed -n 's/^name: *//p' "$YT_DIR/PROJECT.md" 2>/dev/null | head -1)
+  cat > "$SUMMARY_FILE" <<EOF
+---
+milestone: $CURRENT_MILESTONE
+slice: $ACTIVE_SLICE
+task: $ACTIVE_TASK
+project: ${PROJECT_NAME:-unknown}
+closed: draft
+verification: pending
+source: post-tool-use-bash-draft
+---
+
+# $CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK — Summary (draft)
+
+Auto-draft created by the \`post-tool-use-bash\` hook on first commit of this task. Run \`/ytstack:summarize-task\` to fill in Outcome / Deviations / Follow-ups / Verification.
+
+## Commits so far
+
+- \`$COMMIT_SHA\` — $COMMIT_MSG ($TS)
+
+## Outcome
+
+(Fill in when task is done.)
+
+## Deviations from plan
+
+(Fill in when task is done.)
+
+## Follow-ups
+
+(Fill in when task is done.)
+
+## Verification
+
+(Fill in when task is done.)
+EOF
+else
+  # Append to existing "Commits so far" section, or add the section if missing
+  if grep -q "^## Commits so far" "$SUMMARY_FILE"; then
+    # Insert new commit line under the section header
+    if sed --version >/dev/null 2>&1; then
+      sed -i "/^## Commits so far/a - \`$COMMIT_SHA\` — $COMMIT_MSG ($TS)" "$SUMMARY_FILE"
+    else
+      sed -i '' "/^## Commits so far/a\\
+- \`$COMMIT_SHA\` — $COMMIT_MSG ($TS)
+" "$SUMMARY_FILE"
+    fi
+  else
+    # No section yet — append one at end
+    cat >> "$SUMMARY_FILE" <<EOF
+
+## Commits so far
+
+- \`$COMMIT_SHA\` — $COMMIT_MSG ($TS)
+EOF
+  fi
+fi
+
+exit 0

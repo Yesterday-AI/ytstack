@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# ytstack TeammateIdle hook
+#
+# Fires when a Claude Code Agent Teams teammate is about to go idle.
+# Checks whether the teammate has unfinished work in the shared task list
+# and, if so, emits feedback (exit 2) to keep them working.
+#
+# Idempotent: safe to re-fire; doesn't double-count.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+cd "$PROJECT_DIR" 2>/dev/null || exit 0
+
+YT_DIR=""
+if [ -d "$PROJECT_DIR/.ytstack" ]; then
+  YT_DIR="$PROJECT_DIR/.ytstack"
+else
+  SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PROJECT_DIR")")
+  USER_YT="$HOME/.ytstack/projects/$SLUG"
+  [ -d "$USER_YT" ] && YT_DIR="$USER_YT"
+fi
+
+# Silent exit if not a ytstack project
+[ -z "$YT_DIR" ] && exit 0
+
+STATE_FILE="$YT_DIR/STATE.md"
+[ ! -f "$STATE_FILE" ] && exit 0
+
+# Determine current milestone + its slice-plans
+CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$STATE_FILE" | head -1)
+[ -z "$CURRENT_MILESTONE" ] || [ "$CURRENT_MILESTONE" = "none" ] && exit 0
+
+# Count unfinished tasks across all slice-plans for this milestone
+OPEN_TASK_COUNT=0
+for plan in "$YT_DIR"/$CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md; do
+  [ -f "$plan" ] || continue
+  count=$(grep -c '^- \[ \] T[0-9][0-9]' "$plan" 2>/dev/null || echo 0)
+  OPEN_TASK_COUNT=$((OPEN_TASK_COUNT + count))
+done
+
+# If everything done, let teammate idle (exit 0, no feedback)
+if [ "$OPEN_TASK_COUNT" -eq 0 ]; then
+  exit 0
+fi
+
+# Otherwise emit feedback via exit 2 + stderr (lead gets the message)
+cat >&2 <<EOF
+[ytstack] $OPEN_TASK_COUNT task(s) still open in milestone $CURRENT_MILESTONE.
+Check the shared task list and claim the next unblocked task. If you believe
+you have no claimable work, confirm with the lead before going idle.
+EOF
+exit 2

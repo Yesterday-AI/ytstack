@@ -1,0 +1,76 @@
+ytstack
+Copyright 2026 Yesterday
+
+This product includes software and conceptual work from the following sources.
+
+---
+
+## superpowers
+
+Vendored via git subtree at vendor/superpowers/. Source repository:
+<https://github.com/obra/superpowers>
+
+License: MIT (see vendor/superpowers/LICENSE after subtree-add)
+
+We vendor superpowers read-only and wrap selected skills with ytstack-namespaced
+skills at skills/test-driven-development/, skills/systematic-debugging/,
+skills/verification-before-completion/. We do not modify vendored content.
+
+Attribution: Jesse Vincent and the Prime Radiant team are the original authors
+of the superpowers methodology and skills. Their maintainer rules (see
+vendor/superpowers/CLAUDE.md after subtree-add) explicitly request that
+skill content NOT be modified without extensive eval evidence. ytstack
+respects this constraint.
+
+---
+
+## gstack
+
+Vendored via git subtree at vendor/gstack/. Source: TBD (determine final URL
+before v0.1 publication).
+
+License: (verify after subtree-add, assumed MIT)
+
+We vendor gstack read-only and wrap three planning skills:
+skills/plan-ceo-review/, skills/office-hours/, skills/plan-eng-review/.
+
+Attribution: gstack originates from Garry Tan's work on ytstack, shaped around
+YC-style product and engineering review patterns.
+
+---
+
+## External AI-first methodology
+
+Conceptual influence (not vendored, not attributed by name per ytstack
+design direction). We adopted the following concepts and re-implemented them
+in our own prose:
+
+- Three-tier context model (core / task / background)
+- Component-based system thinking for AI organizations
+- Skill-playbook-based skill creation
+- Artifact-as-memory with append-only decision register
+
+No source material, prose, or graphics from any external methodology is
+included in this repository. All artifact formats, file structures, and
+prose are original ytstack work.
+
+---
+
+## Claude Code
+
+ytstack is a plugin for Claude Code. Claude Code is a product of Anthropic.
+<https://claude.com/code>
+
+The plugin system, hook event names, skill format, and AskUserQuestion tool
+are part of Claude Code's public extension API.
+
+---
+
+## GSD (Get Shit Done)
+
+Referenced for architectural inspiration only. ytstack does NOT vendor, depend
+on, or install GSD. See README.md and .ytstack/DECISIONS.md for why we
+replicated GSD's artifact discipline via skills + hooks rather than using
+the GSD TypeScript runtime directly.
+
+GSD source: <https://github.com/gsd-build/gsd-2>

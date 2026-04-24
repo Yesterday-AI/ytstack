@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# ytstack PreToolUse hook for Edit|Write|MultiEdit
+#
+# Two quality gates before any file-editing tool runs:
+#
+#   1) Scope drift: is the target path listed in the active T##-PLAN.md's
+#      Files section? If not, the edit is outside declared scope.
+#
+#   2) Schema drift: if the target path looks like a model / schema file
+#      (common patterns: *models.py, *schema.*, migrations/, prisma/),
+#      check whether a migration file is being edited in the same turn.
+#      Editing models without migrations is a classic drift.
+#
+# Both gates emit exit-2 warnings, not blocks. The lead sees the warning
+# and decides. User-driven session with explicit scope creep is still
+# valid work; the goal is to make it conscious.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+cd "$PROJECT_DIR" 2>/dev/null || exit 0
+
+YT_DIR=""
+if [ -d "$PROJECT_DIR/.ytstack" ]; then
+  YT_DIR="$PROJECT_DIR/.ytstack"
+else
+  SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PROJECT_DIR")")
+  USER_YT="$HOME/.ytstack/projects/$SLUG"
+  [ -d "$USER_YT" ] && YT_DIR="$USER_YT"
+fi
+
+# Silent exit if not a ytstack project
+[ -z "$YT_DIR" ] && exit 0
+
+STATE_FILE="$YT_DIR/STATE.md"
+[ ! -f "$STATE_FILE" ] && exit 0
+
+# Parse hook input JSON from stdin
+INPUT=$(cat)
+TARGET_PATH=""
+if command -v jq >/dev/null 2>&1; then
+  TARGET_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
+fi
+
+[ -z "$TARGET_PATH" ] && exit 0
+
+# Resolve relative paths to absolute for comparison
+case "$TARGET_PATH" in
+  /*) ABS_PATH="$TARGET_PATH" ;;
+  *) ABS_PATH="$PROJECT_DIR/$TARGET_PATH" ;;
+esac
+
+# Project-relative path for grep-against-plan
+REL_PATH="${ABS_PATH#$PROJECT_DIR/}"
+
+# ----------------------------------------
+# Gate 1: Scope drift against active T##-PLAN.md
+# ----------------------------------------
+
+CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$STATE_FILE" | head -1)
+ACTIVE_SLICE=$(sed -n 's/^active_slice: *//p' "$STATE_FILE" | head -1)
+ACTIVE_TASK=$(sed -n 's/^active_task: *//p' "$STATE_FILE" | head -1)
+
+SCOPE_DRIFT=no
+if [ -n "$ACTIVE_TASK" ] && [ "$ACTIVE_TASK" != "none" ]; then
+  TASK_PLAN="$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK-PLAN.md"
+  if [ -f "$TASK_PLAN" ]; then
+    # Check if the target path appears in the Files section
+    if ! grep -qF "$REL_PATH" "$TASK_PLAN" 2>/dev/null && ! grep -qF "$(basename "$REL_PATH")" "$TASK_PLAN" 2>/dev/null; then
+      SCOPE_DRIFT=yes
+    fi
+  fi
+fi
+
+# ----------------------------------------
+# Gate 2: Schema drift (model edit without migration)
+# ----------------------------------------
+
+SCHEMA_DRIFT=no
+case "$REL_PATH" in
+  *models.py|*/models/*.py|*schema.prisma|*schema.sql|*schema.ts|*schema.js)
+    # Heuristic: if editing a model, check if there's a migration file referenced
+    # in the same plan (via regex for "migrations/" or "prisma/migrations/")
+    if [ -n "$ACTIVE_TASK" ] && [ "$ACTIVE_TASK" != "none" ] && [ -f "$TASK_PLAN" ]; then
+      if ! grep -qE 'migrations?/|prisma/migrations' "$TASK_PLAN" 2>/dev/null; then
+        SCHEMA_DRIFT=yes
+      fi
+    fi
+    ;;
+esac
+
+# ----------------------------------------
+# Emit warnings (exit 2) if any drift detected
+# ----------------------------------------
+
+if [ "$SCOPE_DRIFT" = "yes" ] || [ "$SCHEMA_DRIFT" = "yes" ]; then
+  {
+    echo "[ytstack] Drift warning for edit to: $REL_PATH"
+    echo ""
+
+    if [ "$SCOPE_DRIFT" = "yes" ]; then
+      echo "  Scope drift: this path is NOT in the Files section of"
+      echo "  $CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK-PLAN.md."
+      echo ""
+      echo "  Fix one of:"
+      echo "    - Add the path to the task-plan's Files section if it's part of the task"
+      echo "    - Split into a new task via /ytstack:plan-task"
+      echo "    - Acknowledge and proceed (edit continues; this is a warning, not a block)"
+      echo ""
+    fi
+
+    if [ "$SCHEMA_DRIFT" = "yes" ]; then
+      echo "  Schema drift: editing a model/schema file without a migration in the same task."
+      echo "  Fix one of:"
+      echo "    - Add the migration file to the task's Files section and edit it in this turn"
+      echo "    - Split the schema change into its own task"
+      echo "    - Acknowledge (edit continues; this is a warning, not a block)"
+      echo ""
+    fi
+
+    echo "  Proceeding anyway — the edit will happen."
+  } >&2
+  exit 2
+fi
+
+exit 0

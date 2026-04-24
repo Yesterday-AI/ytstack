@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# ytstack SessionEnd hook
+#
+# Fires when Claude Code ends the session. Updates STATE.md's last_updated
+# timestamp and writes a journal entry with end-of-session marker.
+#
+# Side-effects only. Does not emit stdout context.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+cd "$PROJECT_DIR" 2>/dev/null || exit 0
+
+YT_DIR=""
+if [ -d "$PROJECT_DIR/.ytstack" ]; then
+  YT_DIR="$PROJECT_DIR/.ytstack"
+else
+  SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PROJECT_DIR")")
+  USER_YT="$HOME/.ytstack/projects/$SLUG"
+  [ -d "$USER_YT" ] && YT_DIR="$USER_YT"
+fi
+
+[ -z "$YT_DIR" ] && exit 0
+
+STATE_FILE="$YT_DIR/STATE.md"
+JOURNAL_DIR="$YT_DIR/journal"
+TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# Update last_updated field in STATE.md (portable BSD + GNU sed)
+if [ -f "$STATE_FILE" ]; then
+  if sed --version >/dev/null 2>&1; then
+    # GNU sed
+    sed -i "s/^last_updated: .*/last_updated: $TS/" "$STATE_FILE"
+  else
+    # BSD sed (macOS)
+    sed -i '' "s/^last_updated: .*/last_updated: $TS/" "$STATE_FILE"
+  fi
+fi
+
+# Append to journal (persistent log of sessions)
+mkdir -p "$JOURNAL_DIR"
+JOURNAL_FILE="$JOURNAL_DIR/sessions.jsonl"
+
+get_field() { sed -n "s/^$1: *//p" "$STATE_FILE" 2>/dev/null | head -1; }
+CURRENT_MILESTONE=$(get_field current_milestone)
+ACTIVE_SLICE=$(get_field active_slice)
+ACTIVE_TASK=$(get_field active_task)
+
+# Build JSONL entry. Prefer jq for safe encoding; fall back to python3.
+if command -v jq >/dev/null 2>&1; then
+  jq -nc \
+    --arg ts "$TS" \
+    --arg event "session-end" \
+    --arg milestone "${CURRENT_MILESTONE:-none}" \
+    --arg slice "${ACTIVE_SLICE:-none}" \
+    --arg task "${ACTIVE_TASK:-none}" \
+    --arg session_id "${CLAUDE_SESSION_ID:-unknown}" \
+    '{timestamp: $ts, event: $event, milestone: $milestone, slice: $slice, task: $task, session_id: $session_id}' \
+    >> "$JOURNAL_FILE"
+elif command -v python3 >/dev/null 2>&1; then
+  python3 -c "
+import json, os
+print(json.dumps({
+  'timestamp': '$TS',
+  'event': 'session-end',
+  'milestone': '${CURRENT_MILESTONE:-none}',
+  'slice': '${ACTIVE_SLICE:-none}',
+  'task': '${ACTIVE_TASK:-none}',
+  'session_id': os.environ.get('CLAUDE_SESSION_ID', 'unknown')
+}))
+" >> "$JOURNAL_FILE"
+fi
+
+exit 0

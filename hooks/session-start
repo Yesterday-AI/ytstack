@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# ytstack SessionStart hook
+#
+# Injects two things as additionalContext when a `.ytstack/` directory is present:
+#
+#   1. The full content of skills/using-ytstack/SKILL.md — the directive that
+#      tells the agent to auto-invoke ytstack skills based on user intent
+#      (superpowers-style proactive skill selection).
+#
+#   2. The current project state from .ytstack/STATE.md — so the agent knows
+#      where we are in the milestone/slice/task hierarchy.
+#
+# Silent no-op for projects without ytstack tracking.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+cd "$PROJECT_DIR" 2>/dev/null || exit 0
+
+# Resolve ytstack state directory. Project-level takes precedence over user-level.
+YT_DIR=""
+YT_SCOPE=""
+if [ -d "$PROJECT_DIR/.ytstack" ]; then
+  YT_DIR="$PROJECT_DIR/.ytstack"
+  YT_SCOPE="project"
+else
+  SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PROJECT_DIR")")
+  USER_YT="$HOME/.ytstack/projects/$SLUG"
+  if [ -d "$USER_YT" ]; then
+    YT_DIR="$USER_YT"
+    YT_SCOPE="user"
+  fi
+fi
+
+# Silent exit if ytstack not initialized in this project
+[ -z "$YT_DIR" ] && exit 0
+
+STATE_FILE="$YT_DIR/STATE.md"
+
+# Load the using-ytstack directive (source-of-truth lives in the plugin).
+USING_YTSTACK_FILE="${CLAUDE_PLUGIN_ROOT:-$PROJECT_DIR}/skills/using-ytstack/SKILL.md"
+USING_YTSTACK_CONTENT=""
+if [ -f "$USING_YTSTACK_FILE" ]; then
+  USING_YTSTACK_CONTENT=$(cat "$USING_YTSTACK_FILE")
+fi
+
+# Helper: emit additionalContext JSON with the given string
+emit_json() {
+  local content="$1"
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$content" | jq -Rs '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: .}}'
+  elif command -v python3 >/dev/null 2>&1; then
+    printf '%s' "$content" | python3 -c 'import sys, json; print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": sys.stdin.read()}}))'
+  else
+    # Last-resort raw — won't safely handle embedded quotes/newlines
+    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$content"
+  fi
+}
+
+# Handle missing STATE.md (anomaly — .ytstack/ exists but no dashboard)
+if [ ! -f "$STATE_FILE" ]; then
+  MSG="[ytstack] $YT_DIR exists but STATE.md is missing. Run /ytstack:init-project to repair, or remove the directory."
+  if [ -n "$USING_YTSTACK_CONTENT" ]; then
+    MSG="$USING_YTSTACK_CONTENT
+
+---
+
+$MSG"
+  fi
+  emit_json "$MSG"
+  exit 0
+fi
+
+# Extract frontmatter fields from STATE.md
+get_field() { sed -n "s/^$1: *//p" "$STATE_FILE" | head -1; }
+PROJECT=$(get_field project)
+CURRENT_MILESTONE=$(get_field current_milestone)
+ACTIVE_SLICE=$(get_field active_slice)
+ACTIVE_TASK=$(get_field active_task)
+LAST_UPDATED=$(get_field last_updated)
+
+# Extract the "Next action" section body (up to the next ## header)
+NEXT_ACTION=$(awk '/^## Next action/{flag=1; next} /^## /{flag=0} flag' "$STATE_FILE" | sed '/^$/d' | head -5)
+
+# Recent summary file names (last 3 T##-SUMMARY.md by mtime)
+RECENT_SUMMARIES=""
+if compgen -G "$YT_DIR"/*-SUMMARY.md > /dev/null 2>&1; then
+  RECENT_SUMMARIES=$(ls -t "$YT_DIR"/*-SUMMARY.md 2>/dev/null | head -3 | while read -r f; do
+    basename "$f" .md
+  done | paste -sd, - | sed 's/,/, /g')
+fi
+
+# Build the state context block
+STATE_CONTEXT="[ytstack active -- scope: $YT_SCOPE]
+
+Project: ${PROJECT:-unknown}
+Current: ${CURRENT_MILESTONE:-none}${ACTIVE_SLICE:+ / $ACTIVE_SLICE}${ACTIVE_TASK:+ / $ACTIVE_TASK}
+Last updated: ${LAST_UPDATED:-unknown}"
+
+if [ -n "$NEXT_ACTION" ]; then
+  STATE_CONTEXT="$STATE_CONTEXT
+
+Next action:
+$NEXT_ACTION"
+fi
+
+if [ -n "$RECENT_SUMMARIES" ]; then
+  STATE_CONTEXT="$STATE_CONTEXT
+
+Recent tasks: $RECENT_SUMMARIES"
+fi
+
+STATE_CONTEXT="$STATE_CONTEXT
+
+The files in $YT_DIR are the source of truth for this project's state. Read STATE.md for the full dashboard, DECISIONS.md for locked architectural choices, KNOWLEDGE.md for patterns and gotchas, ROADMAP.md for the task list. Do not rely on prior-conversation context for these facts."
+
+# Combine: using-ytstack directive first, then project state.
+# The directive primes the agent's behavior; the state gives it
+# the specific where-we-are facts.
+if [ -n "$USING_YTSTACK_CONTENT" ]; then
+  FULL_CONTEXT="<EXTREMELY_IMPORTANT>
+You have ytstack. Below is the full content of your 'ytstack:using-ytstack' skill, which tells you how to find and invoke ytstack skills based on user intent. Follow it. For all other skills, use the 'Skill' tool:
+
+$USING_YTSTACK_CONTENT
+</EXTREMELY_IMPORTANT>
+
+---
+
+$STATE_CONTEXT"
+else
+  # using-ytstack not found — still emit state, but log a warning
+  FULL_CONTEXT="[ytstack warning] skills/using-ytstack/SKILL.md not found at expected path. Project state follows but proactive skill-selection is not primed.
+
+$STATE_CONTEXT"
+fi
+
+emit_json "$FULL_CONTEXT"
+exit 0

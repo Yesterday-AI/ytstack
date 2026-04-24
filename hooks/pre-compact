@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# ytstack PreCompact hook
+#
+# Fires before Claude Code compacts the conversation. Writes a handoff snapshot
+# to .ytstack/HANDOFF.md so the post-compaction session can re-orient quickly
+# from on-disk state.
+#
+# Side-effects only. Does not emit stdout context.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+cd "$PROJECT_DIR" 2>/dev/null || exit 0
+
+YT_DIR=""
+if [ -d "$PROJECT_DIR/.ytstack" ]; then
+  YT_DIR="$PROJECT_DIR/.ytstack"
+else
+  SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PROJECT_DIR")")
+  USER_YT="$HOME/.ytstack/projects/$SLUG"
+  [ -d "$USER_YT" ] && YT_DIR="$USER_YT"
+fi
+
+[ -z "$YT_DIR" ] && exit 0
+
+STATE_FILE="$YT_DIR/STATE.md"
+HANDOFF_FILE="$YT_DIR/HANDOFF.md"
+TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# Pull current position from STATE.md frontmatter (if present)
+get_field() { sed -n "s/^$1: *//p" "$STATE_FILE" 2>/dev/null | head -1; }
+PROJECT=$(get_field project)
+CURRENT_MILESTONE=$(get_field current_milestone)
+ACTIVE_SLICE=$(get_field active_slice)
+ACTIVE_TASK=$(get_field active_task)
+
+cat > "$HANDOFF_FILE" <<EOF
+---
+kind: handoff
+event: pre-compact
+timestamp: $TS
+project: ${PROJECT:-unknown}
+current_milestone: ${CURRENT_MILESTONE:-none}
+active_slice: ${ACTIVE_SLICE:-none}
+active_task: ${ACTIVE_TASK:-none}
+---
+
+# Pre-Compaction Handoff
+
+Claude Code was about to compact the conversation at $TS. This file is a
+breadcrumb so the next session (or post-compact continuation) can re-orient
+from on-disk state without relying on compressed conversation memory.
+
+## Where we are
+
+Project: ${PROJECT:-unknown}
+Position: ${CURRENT_MILESTONE:-none}${ACTIVE_SLICE:+ / $ACTIVE_SLICE}${ACTIVE_TASK:+ / $ACTIVE_TASK}
+
+## What to read next
+
+1. \`$YT_DIR/STATE.md\` — full dashboard, next action, open decisions
+2. \`$YT_DIR/ROADMAP.md\` — milestone plan, task checkboxes
+3. \`$YT_DIR/REVIEW-NOTES.md\` — deferred items flagged during this cycle
+4. The latest \`$YT_DIR/*-SUMMARY.md\` if any exist
+
+## Note
+
+This handoff is overwritten on each pre-compact event. If you need historical
+handoffs, check \`$YT_DIR/journal/\` (written by session-end hook, future).
+EOF
+
+exit 0

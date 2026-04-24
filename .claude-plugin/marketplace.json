@@ -1,0 +1,21 @@
+{
+  "$note": "Marketplace manifest for ytstack. Used when a separate ytstack-marketplace repo is set up. After `/plugin marketplace add yesterday-ai/ytstack-marketplace`, users can run `/plugin install ytstack@ytstack-marketplace`.",
+  "name": "ytstack-marketplace",
+  "description": "Yesterday Technologies Stack — opinionated software-development OS for AI agents.",
+  "plugins": [
+    {
+      "name": "ytstack",
+      "source": "github.com/yesterday-ai/ytstack",
+      "description": "Claude Code plugin. Project-OS artifact discipline + curated superpowers and gstack skill wrappers + Agent Teams orchestration.",
+      "keywords": [
+        "claude-code",
+        "agentic",
+        "development-methodology",
+        "project-management",
+        "yesterday-ai"
+      ],
+      "version": "0.1.0",
+      "license": "MIT"
+    }
+  ]
+}

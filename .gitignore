@@ -1,0 +1,44 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.*.swp
+.*.swo
+
+# Local env / secrets
+.env
+.env.local
+.env.*.local
+*.local
+
+# Logs
+*.log
+
+# Python helper caches (if scripts under scripts/ accumulate them)
+__pycache__/
+*.pyc
+
+# ytstack hook-generated artifacts
+# These are overwritten each session by pre-compact / session-end hooks;
+# not useful to commit. If a handoff needs to survive, the user writes
+# it via /ytstack:handoff-session which writes to the same path — and if
+# they want that one in git, remove it from this ignore manually for
+# that commit.
+.ytstack/HANDOFF.md
+.ytstack/journal/
+
+# Defensive: vendored subtrees should be read-only tracked, but if any
+# upstream ships node_modules / dist / build accidentally after a pull,
+# we don't want them in our repo.
+vendor/**/node_modules/
+vendor/**/dist/
+vendor/**/build/
+vendor/**/.next/
+vendor/**/__pycache__/

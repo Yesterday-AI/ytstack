@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# ytstack TaskCreated hook
+#
+# Fires when a TaskCreate is being invoked. Performs scope-drift check:
+# does the task description reference files / concepts that lie OUTSIDE the
+# current milestone's M###-ROADMAP.md and slice-plans?
+#
+# On drift: exit 2 with feedback so the lead sees the warning and decides.
+# On clean: exit 0, let the task be created.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+cd "$PROJECT_DIR" 2>/dev/null || exit 0
+
+YT_DIR=""
+if [ -d "$PROJECT_DIR/.ytstack" ]; then
+  YT_DIR="$PROJECT_DIR/.ytstack"
+else
+  SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PROJECT_DIR")")
+  USER_YT="$HOME/.ytstack/projects/$SLUG"
+  [ -d "$USER_YT" ] && YT_DIR="$USER_YT"
+fi
+
+# Silent exit if not a ytstack project or no milestone active
+[ -z "$YT_DIR" ] && exit 0
+
+STATE_FILE="$YT_DIR/STATE.md"
+[ ! -f "$STATE_FILE" ] && exit 0
+
+CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$STATE_FILE" | head -1)
+[ -z "$CURRENT_MILESTONE" ] || [ "$CURRENT_MILESTONE" = "none" ] && exit 0
+
+# Read the task payload from stdin (hooks receive JSON on stdin)
+TASK_JSON=$(cat)
+TASK_SUBJECT=""
+TASK_DESCRIPTION=""
+if command -v jq >/dev/null 2>&1; then
+  TASK_SUBJECT=$(echo "$TASK_JSON" | jq -r '.tool_input.subject // .subject // empty' 2>/dev/null)
+  TASK_DESCRIPTION=$(echo "$TASK_JSON" | jq -r '.tool_input.description // .description // empty' 2>/dev/null)
+fi
+
+# If we can't parse the task, allow creation (don't block on parse failure)
+if [ -z "$TASK_SUBJECT" ] && [ -z "$TASK_DESCRIPTION" ]; then
+  exit 0
+fi
+
+# Build the corpus: all slice-plans for the current milestone
+CORPUS_FILES=""
+for plan in "$YT_DIR"/$CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md; do
+  [ -f "$plan" ] && CORPUS_FILES="$CORPUS_FILES $plan"
+done
+CORPUS_FILES="$CORPUS_FILES $YT_DIR/$CURRENT_MILESTONE-ROADMAP.md"
+
+# Simple heuristic: extract candidate file paths from the task text.
+# If the task mentions a file that's not listed in any slice-plan's Files
+# section, flag drift.
+TASK_TEXT="$TASK_SUBJECT
+$TASK_DESCRIPTION"
+
+CANDIDATE_PATHS=$(echo "$TASK_TEXT" | grep -oE '[a-zA-Z_./-]+\.(ts|tsx|js|jsx|py|rs|go|md|json|yaml|yml|html|css|scss|sql|sh)' | sort -u)
+
+if [ -z "$CANDIDATE_PATHS" ]; then
+  # No file paths in task text; nothing to check.
+  exit 0
+fi
+
+# Check each candidate: does it appear in any corpus file?
+DRIFTED_PATHS=""
+for path in $CANDIDATE_PATHS; do
+  found=no
+  for corpus in $CORPUS_FILES; do
+    if [ -f "$corpus" ] && grep -q "$path" "$corpus" 2>/dev/null; then
+      found=yes
+      break
+    fi
+  done
+  if [ "$found" = "no" ]; then
+    DRIFTED_PATHS="$DRIFTED_PATHS $path"
+  fi
+done
+
+if [ -z "$DRIFTED_PATHS" ]; then
+  exit 0
+fi
+
+# Drift detected. Emit feedback via exit 2.
+cat >&2 <<EOF
+[ytstack] Scope drift warning: task references path(s) not in any slice-plan for $CURRENT_MILESTONE:
+$DRIFTED_PATHS
+
+Either:
+1. The task is legitimate but the slice-plan needs updating → add these paths to the relevant M###-S##-PLAN.md's Files section, then retry.
+2. The task is out of scope → it belongs in a future milestone. Park in $YT_DIR/REVIEW-NOTES.md.
+
+Proceed anyway if you've made the trade-off consciously; the task will still be created.
+EOF
+# Exit 2 = non-blocking warning (surfaced to lead). Task creation continues.
+exit 2
