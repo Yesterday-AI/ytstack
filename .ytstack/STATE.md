@@ -1,15 +1,17 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-04-23T20:30:00Z
-current_milestone: M009
+last_updated: 2026-04-24T16:00:00Z
+current_milestone: review + post-M009-patches
 active_slice: none
 active_task: none
 ---
 
 # State
 
-**Status:** Full build cycle complete. 37/39 tasks done; 2 deferred (require user action: git init + push, GitHub repo creation, tag). **Ready for end-of-cycle review.**
+**Status:** Full build cycle complete + post-M009 patches landing. 38/39 roadmap tasks done; 1 deferred (GitHub repo creation + push + v0.1.0 tag — user action). End-of-cycle review in progress.
+
+**Post-M009 patches since 2026-04-23:** using-ytstack skill + session-start hook behavior-priming rewrite; 3 subagent definitions (architect / implementer / verifier); `docs/ux/agent-structure.md` contract; git init + initial scaffold commit; superpowers + gstack subtrees added.
 
 ```
 Progress:  [####################]  37/39 tasks (95%)

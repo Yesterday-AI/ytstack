@@ -10,7 +10,7 @@ This product includes software and conceptual work from the following sources.
 Vendored via git subtree at vendor/superpowers/. Source repository:
 <https://github.com/obra/superpowers>
 
-License: MIT (see vendor/superpowers/LICENSE after subtree-add)
+License: MIT. See vendor/superpowers/LICENSE.
 
 We vendor superpowers read-only and wrap selected skills with ytstack-namespaced
 skills at skills/test-driven-development/, skills/systematic-debugging/,
@@ -18,24 +18,23 @@ skills/verification-before-completion/. We do not modify vendored content.
 
 Attribution: Jesse Vincent and the Prime Radiant team are the original authors
 of the superpowers methodology and skills. Their maintainer rules (see
-vendor/superpowers/CLAUDE.md after subtree-add) explicitly request that
-skill content NOT be modified without extensive eval evidence. ytstack
-respects this constraint.
+vendor/superpowers/CLAUDE.md) explicitly request that skill content NOT be
+modified without extensive eval evidence. ytstack respects this constraint.
 
 ---
 
 ## gstack
 
-Vendored via git subtree at vendor/gstack/. Source: TBD (determine final URL
-before v0.1 publication).
+Vendored via git subtree at vendor/gstack/. Source repository:
+<https://github.com/garrytan/gstack>
 
-License: (verify after subtree-add, assumed MIT)
+License: MIT. See vendor/gstack/LICENSE.
 
 We vendor gstack read-only and wrap three planning skills:
 skills/plan-ceo-review/, skills/office-hours/, skills/plan-eng-review/.
 
-Attribution: gstack originates from Garry Tan's work on ytstack, shaped around
-YC-style product and engineering review patterns.
+Attribution: gstack originates from Garry Tan's work, shaped around YC-style
+product and engineering review patterns.
 
 ---
 

@@ -17,10 +17,10 @@ Running list of items to verify, revisit, or polish at end-of-cycle review. Adde
 (Must fix or explicitly defer before going public via marketplace in M008.)
 
 - [ ] **Interactive-mode smoke test.** Verify `ytstack:init-project` invokes via the `Skill` tool in a real non-headless Claude session. Headless `-p` mode fell back to SKILL.md-as-prompted-instructions. End result correct, but registration path unclear. (surfaced: M001 T05)
-- [ ] **LICENSE file** (MIT). Planned M008.
-- [ ] **NOTICE file** with attributions: superpowers (MIT), gstack (check license), external methodology inspired-by (no source name per user direction). Planned M008.
-- [ ] **`ytstack-skill-check` CI tool.** Validator for UX contracts (frontmatter, checklist, flow graph, preamble flags, AskUserQuestion format, banned-words). Referenced across docs. Planned M008 pre-release — consider pulling forward to M001.5 if skill count grows fast.
-- [ ] **Git init the ytstack repo.** Currently not a git repo. Needed before marketplace publication.
+- [x] **LICENSE file** (MIT). Shipped in initial scaffold commit (dc5b005, 2026-04-24).
+- [x] **NOTICE file** with attributions: superpowers (MIT), gstack (MIT, source confirmed `github.com/garrytan/gstack`), external methodology inspired-by. Shipped + updated post-subtree-add.
+- [ ] **`ytstack-skill-check` CI tool.** Validator for UX contracts (frontmatter, checklist, flow graph, preamble flags, AskUserQuestion format, banned-words). Referenced across docs. **Now Phase-1 priority — agents/ addition + post-M009 audit surfaced real conformance gaps that a validator would have caught.**
+- [x] **Git init the ytstack repo.** Done 2026-04-24; initial commit `dc5b005` + two subtree commits for superpowers + gstack.
 
 ## UX issues to revisit
 
@@ -63,13 +63,14 @@ Running list of items to verify, revisit, or polish at end-of-cycle review. Adde
 
 ### M004 — Planning Cherry-Picks
 
-- [ ] **Vendor subtree-add is deferred.** Wrapper skills reference `vendor/gstack/plan-ceo-review/SKILL.md` etc. but the vendor dir is empty (only `vendor/README.md`). Before v0.1 publication: git-init ytstack, decide final gstack source URL, run `git subtree add`.
-- [ ] **gstack vendor source URL unknown.** gstack ships via `./setup` script from some upstream; need to determine the canonical git URL (possibly internal to Yesterday team or forked from Garry Tan's original).
+- [x] **Vendor subtree-add is deferred.** — Resolved 2026-04-24. `git subtree add --prefix=vendor/gstack https://github.com/garrytan/gstack.git main --squash`. All 3 wrapper-target skills (`plan-ceo-review`, `office-hours`, `plan-eng-review`) verified present at expected paths.
+- [x] **gstack vendor source URL unknown.** — Resolved: `https://github.com/garrytan/gstack`.
 - [ ] **Wrapper skills assume vendored preamble is skippable.** Each wrapper says "Do not inherit gstack's preamble". But gstack preambles emit state flags the vendored skill's body may depend on. Verify this assumption holds in interactive test.
 - [ ] **Outcome application in wrappers.** plan-ceo-review wrapper Step 6 says "translate review conclusions into ytstack file edits" but doesn't specify the translation format. May need a convention: "if gstack emits `MODE: SCOPE_EXPANSION`, edit ROADMAP slices + CONTEXT exit criteria".
 
 ### M005 — Execution Cherry-Picks
 
+- [x] **superpowers subtree-add.** Resolved 2026-04-24. All 3 wrapper-target skills (`test-driven-development`, `systematic-debugging`, `verification-before-completion`) verified present at `vendor/superpowers/skills/<name>/SKILL.md`.
 - [ ] **superpowers interactive-prompt-blocking-input caveat not yet reproduced.** tentenco article flagged this. Wrappers set `YTSTACK_NON_INTERACTIVE=1` pre-emptively — but we haven't verified superpowers actually respects this env var. Possible that we need a different propagation mechanism.
 - [ ] **`test-driven-development` wrapper assumes superpowers has stable tool-name conventions.** If superpowers' `test-driven-development/SKILL.md` shifts in a subtree-pull, our wrapper's "follow vendored procedure" may break silently.
 
