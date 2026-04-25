@@ -1,7 +1,7 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-04-24T18:08:52Z
+last_updated: 2026-04-25T00:50:00Z
 current_milestone: review + post-M009-patches
 active_slice: none
 active_task: none
@@ -9,7 +9,7 @@ active_task: none
 
 # State
 
-**Status:** Full build cycle complete + post-M009 patches landing. 38/39 roadmap tasks done; 1 deferred (GitHub repo creation + push + v0.1.0 tag -- user action). End-of-cycle review in progress. First interactive smoke-test of `init-project` done 2026-04-24 (partial; surfaced multiple items -- see REVIEW-NOTES).
+**Status:** Full build cycle complete + post-M009 patches landing. 38/39 roadmap tasks done; 1 deferred (v0.1.0 tag + push -- user action). End-of-cycle review in progress. First interactive smoke-test of `init-project` done 2026-04-24 (partial; surfaced multiple items -- see REVIEW-NOTES). Three workflow infographics now in README as visual reference for upcoming brownfield + debug live-tests.
 
 **Post-M009 patches since 2026-04-23:** using-ytstack skill + session-start hook behavior-priming rewrite; 3 subagent definitions (architect / implementer / verifier); `docs/ux/agent-structure.md` contract; git init + initial scaffold commit; superpowers + gstack subtrees added.
 
@@ -19,6 +19,13 @@ active_task: none
 - `.claude/skills/check-consistency/SKILL.md` -- project-meta audit skill (NOT plugin-shipped). Runs 9 checks (skill-count drift, wrapped/native vs disk, hook inventory, artifact list, workflow refs, em-dash, skip-claims, and skill-description quality via semantic-selection hints). Note: the earlier "trigger-map coverage" and "banned-words" checks are retired per DECISIONS 2026-04-24 "Skill selection is semantic" + "drop banned-vocabulary list".
 - `CLAUDE.md` -- "Read first" pointer added (concept → DECISIONS → VENDOR-INVENTORY before architectural proposals).
 - `REVIEW-NOTES.md` -- 4+ new entries: pathname-confound, Denglisch-leak (policy: skills stay consistently English), greenfield-flow-first-skill-miss (open design point), skill-count-drift candidate for check-consistency.
+
+**Session 2026-04-25 additions:**
+- Three workflow infographics shipped: `docs/ytstack-greenfield-flow.{excalidraw,png}` (existing), `docs/ytstack-brownfield-flow.{excalidraw,png}` (new), `docs/ytstack-debugging-flow.{excalidraw,png}` (new). README Workflows section embeds all three via `<details>` blocks; greenfield is `<details open>` (default expanded) per DECISIONS 2026-04-25.
+- Tagline change: "Working memory for AI coding agents." → "An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng." -- README header + docs/concept.md §1.1 synced. See DECISIONS 2026-04-25.
+- Consistency check re-run 2026-04-25T00:22Z: 8 PASS, 1 WARN (2 meta-em-dashes in CLAUDE.md teaching phrases, not drift), 0 FAIL. Report at `.ytstack/CONSISTENCY-REPORT.md`.
+- KNOWLEDGE.md gains three lessons: Excalidraw esm.sh version pin (`@0.18.0`), dark mode is `appState.exportWithDarkMode = true` (not color-swap), GFM `<details open>` for default-expanded collapsibles.
+- GitHub repo metadata edits in flight (user-action): description aligned with new tagline; topics suggested `claude-code claude-code-plugin claude-code-skills ai-agents agentic-workflow anthropic developer-tools project-management tdd yesterday-ai` -- pending user save.
 
 ```
 Progress:  [####################]  37/39 tasks (95%)
@@ -35,12 +42,13 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Resume review.** Two blocking items before further smoke-testing:
+**Live-test brownfield + debugging workflows** using the new infographics as visual reference. Diagrams are now embedded in README; pick a small real task (e.g. "where were we" → resume-session, then drive a task through plan-task → TDD → verify → summarize) and capture deviations in REVIEW-NOTES.
 
+Background items still open:
 1. **Review DRAFT `docs/concept.md`** -- approve, amend, or reject. Until approved, README remains the sole source of truth.
-2. **Run `/check-consistency`** -- surfaces doc/code drift across the repo. Triage the report before accepting code changes.
-
-Then: re-do init-project smoke-test in a neutral sandbox path (avoid "ytstack" substring to isolate the directive-effect from pathname-confound -- see REVIEW-NOTES 2026-04-24). Then work through REVIEW-NOTES open items, especially the greenfield-flow reorder open design point.
+2. **Re-do init-project smoke-test in a neutral sandbox path** (avoid "ytstack" substring to isolate the directive-effect from pathname-confound -- see REVIEW-NOTES 2026-04-24).
+3. **Tag v0.1.0 + push tag** (only remaining M008 user-action besides eventual public marketplace listing).
+4. **Save GitHub repo topics** (user-action; see Session 2026-04-25 additions for suggested list).
 
 **Full-cycle review.** See `.ytstack/REVIEW-NOTES.md` for the batch of items flagged during the build. Review categories:
 

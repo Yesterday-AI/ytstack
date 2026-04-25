@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-04-23T17:55:00Z
+last_updated: 2026-04-25T00:50:00Z
 review_cadence: end-of-full-cycle
 next_review_gate: after M009 complete, before v0.1 publication (M008 final gate)
 ---
