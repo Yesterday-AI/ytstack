@@ -444,3 +444,27 @@ REVIEW-NOTES 2026-04-24 "Greenfield-flow first-skill is wrong" and docs/concept.
 - Future ship wrapper is the first concrete test of this stance; concrete fall-out goes to REVIEW-NOTES.
 
 **Supersedes:** none. Locks an aspect of wrapper mechanism (2026-04-24) that was implicit until now.
+
+---
+
+## 2026-04-25: M011 scope -- 5-skill cherry-pick from gstack + superpowers
+
+**Context:** Initial M011 framing (per the 2026-04-25 lifecycle-heuristic decision) was "ship + 1 post-ship skill (canary or document-release)". User requested a re-read of the two comparison articles cited in `docs/concept.md` (dev.to, medium) before locking the milestone scope. The articles clarified: gstack is the only framework with a complete release pipeline (ship / land-and-deploy / canary / document-release / qa); superpowers covers pre-merge closure (verification-before-completion + finishing-a-development-branch + requesting-/receiving-code-review); GSD has no shipping equivalent ("stabilizer, not builder").
+
+**Options considered:**
+- A) ship + (canary OR document-release) -- gstack-only, original scope, 2 skills
+- B) ship + finishing-a-development-branch + requesting-code-review + receiving-code-review + document-release -- mixed cherry-pick, 5 skills (3 superpowers + 2 gstack), balances ship-mechanics with PR-review discipline
+- C) ship + land-and-deploy + canary + document-release -- gstack-only complete pipeline, 4 skills, full deployment + monitoring coverage
+
+**Chose:** B.
+
+**Reason:** Matches ytstack's "non-overlapping best of both" pattern (concept §3). gstack owns ship-mechanics (VERSION / CHANGELOG / PR-creation / docs sync); superpowers owns PR-review-cycle discipline -- neither framework has the other's strength in the post-summarize arc. Option A leaves a gap (no PR-review skills between summarize and ship). Option C piles up gstack-preamble-drift exposure on 4 wrappers instead of 2 and pulls in deployment + monitoring -- a different skill-class (infra / observability) that belongs in a separate future milestone if demand emerges. B keeps `land-and-deploy`, `canary`, `setup-deploy`, `qa` explicitly out of M011 scope.
+
+**How to apply:**
+- M011 wraps 5 skills total: 2 gstack (`ship`, `document-release`), 3 superpowers (`finishing-a-development-branch`, `requesting-code-review`, `receiving-code-review`).
+- Concept §3.6 "Future candidates (deferred)" no longer applies to `requesting-code-review` / `receiving-code-review` -- they move into M011 active scope. Update §3.6 accordingly when M011 lands.
+- Order in normal flow: `summarize-task` -> `finishing-a-development-branch` -> `requesting-code-review` -> `receiving-code-review` (loop until approved) -> `ship` -> `document-release`.
+- ROADMAP M011 entry updated with the 5-skill scope + cross-reference to this DECISIONS entry.
+- All 5 wrappers fall under the "Vendored-preamble drift accepted" decision (2026-04-25); gstack-side preamble calls fail silently on `ship` and `document-release`, ytstack injects own context via wrapper preamble.
+
+**Supersedes:** none. Refines (not retracts) the M011 scope hint that lived inside the 2026-04-25 "Lifecycle-phase as the curation heuristic" entry; that entry only justified ship in core, not the specific cherry-pick.

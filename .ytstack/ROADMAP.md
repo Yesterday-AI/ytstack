@@ -1,9 +1,9 @@
 ---
 project: ytstack
-last_updated: 2026-04-23T20:30:00Z
-total_milestones: 9
+last_updated: 2026-04-25T16:00:00Z
+total_milestones: 11
 completed_milestones: 9
-current_milestone: review
+current_milestone: review (M010 + M011 planned, not started)
 ---
 
 # ytstack Roadmap
@@ -27,8 +27,10 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M007 | Quality Gates (PreToolUse hooks) | **done** | 3 | 3 |
 | M008 | Publishing & Marketplace | **done (2 user-action)** | 4 | 2 |
 | M009 | Docs & Community | **done** | 4 | 4 |
+| M010 | Workflow Reorder + Brownfield-Without-.ytstack | planned | TBD | 0 |
+| M011 | Post-Summarize Lifecycle (5-skill cherry-pick: ship + closure + PR-review + document-release) | planned | TBD | 0 |
 
-**Total:** 39 tasks, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation).
+**Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 + M011 task counts pending milestone planning.
 
 ---
 
@@ -149,6 +151,54 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 - [ ] `QUICKSTART.md` with a worked example
 - [ ] `CONTRIBUTING.md` with PR guidelines (no third-party content copying, strict UX contract adherence)
 - [ ] Methodology attribution writeup (which external concepts we adapted and how -- without naming sources)
+
+---
+
+## M010 -- Workflow Reorder + Brownfield-Without-.ytstack (planned)
+
+**Goal:** Two-part scope. Part 1 finishes the greenfield-flow reorder originally planned 2026-04-24. Part 2 adds explicit handling for users running ytstack inside an existing repo that has no `.ytstack/` directory yet (third workflow case alongside greenfield and brownfield-with-.ytstack).
+
+**Exit criteria:**
+- Greenfield smoke-test ("baue mir eine cli...") routes to `office-hours` first (not `plan-milestone` or `init-project`), per DECISIONS 2026-04-24 "Greenfield-flow reorder".
+- Brownfield-without-.ytstack case: a user opens an existing project that has no `.ytstack/`, and ytstack offers explicit choice (init-project vs ad-hoc) instead of either silently bypassing or assuming greenfield.
+- README documents all three workflows with diagrams; QUICKSTART covers all three.
+
+**Scope reference:**
+- DECISIONS 2026-04-24 "Greenfield-flow reorder" + DECISIONS 2026-04-24 "Wrapper mechanism = shell-exec inject + cross-ref check" originally merged this with wrapper-refactor as a single milestone. The wrapper-refactor part was completed in scope of those decisions; what remains is the workflow-reorder part PLUS the new brownfield-without-.ytstack case identified 2026-04-25.
+
+**Plan via:** `ytstack:plan-milestone` -- not yet invoked.
+
+---
+
+## M011 -- Post-Summarize Lifecycle (5-skill cherry-pick) (planned)
+
+**Goal:** Close the lifecycle arc between `summarize-task` and a released version. Today ytstack covers Plan -> Code -> Verify -> Close (`summarize-task`) and stops. Per DECISIONS 2026-04-25 "Lifecycle-phase as the curation heuristic" + 2026-04-25 "M011 scope -- 5-skill cherry-pick", ytstack covers the full dev-loop with a balanced cherry-pick across gstack (ship-mechanics) and superpowers (PR-review-cycle discipline).
+
+**Exit criteria:**
+
+Five new wrapper skills, in normal-flow order:
+
+| # | Skill | Source | Purpose |
+|---|---|---|---|
+| 1 | `ytstack:finishing-a-development-branch` | `vendor/superpowers/skills/finishing-a-development-branch` | pre-ship closure discipline; ergaenzt verification-before-completion |
+| 2 | `ytstack:requesting-code-review` | `vendor/superpowers/skills/requesting-code-review` | prepare + open PR with structured review request |
+| 3 | `ytstack:receiving-code-review` | `vendor/superpowers/skills/receiving-code-review` | handle review feedback; classify, apply, re-request (loops with #2 until approved) |
+| 4 | `ytstack:ship` | `vendor/gstack/ship` | bumps VERSION, writes CHANGELOG, creates PR-body, pre-merge safety checks, push, PR |
+| 5 | `ytstack:document-release` | `vendor/gstack/document-release` | post-ship docs sync (README, ARCHITECTURE, CLAUDE.md, CHANGELOG, VERSION) |
+
+Plus: README + QUICKSTART updated with the post-summarize loop diagram.
+
+**Explicit out-of-scope** (per DECISIONS 2026-04-25 "M011 scope" Option C-rejection):
+- `land-and-deploy`, `canary`, `setup-deploy` (gstack) -- deployment + monitoring are a different skill-class (infra / observability), planned for a future milestone if demand emerges.
+- `qa` (gstack) -- testing methodology overlaps with ytstack's existing TDD + verification-before-completion.
+
+**Scope reference:**
+- DECISIONS 2026-04-25 "M011 scope -- 5-skill cherry-pick from gstack + superpowers" -- justifies the specific cherry-pick after re-reading the dev.to + medium comparison articles cited in `docs/concept.md`.
+- DECISIONS 2026-04-25 "Lifecycle-phase as the curation heuristic" -- justifies bringing the ship-arc into ytstack core (lifecycle-gap, requires `.ytstack/` state for SUMMARY/STATE/DECISIONS reads).
+- DECISIONS 2026-04-25 "Vendored-preamble drift accepted for wrapped skills" -- applies to all 5 wrappers; gstack-side preamble calls fail silently on `ship` and `document-release`, ytstack injects own context via wrapper preamble.
+- Concept §3.6 "Future candidates (deferred)" listed `requesting-code-review` / `receiving-code-review` as v0.2 candidates; M011 pulls them forward.
+
+**Plan via:** `ytstack:plan-milestone` -- not yet invoked.
 
 ---
 

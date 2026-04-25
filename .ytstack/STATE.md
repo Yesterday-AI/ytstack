@@ -1,15 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-04-25T00:50:00Z
-current_milestone: review + post-M009-patches
+last_updated: 2026-04-25T16:00:00Z
+current_milestone: review + post-M009-patches (M010 + M011 planned)
 active_slice: none
 active_task: none
 ---
 
 # State
 
-**Status:** Full build cycle complete + post-M009 patches landing. 38/39 roadmap tasks done; 1 deferred (v0.1.0 tag + push -- user action). End-of-cycle review in progress. First interactive smoke-test of `init-project` done 2026-04-24 (partial; surfaced multiple items -- see REVIEW-NOTES). Three workflow infographics now in README as visual reference for upcoming brownfield + debug live-tests.
+**Status:** Full build cycle complete + post-M009 patches landing + plugin landscape architecture locked. 38/39 roadmap tasks done; 1 deferred (v0.1.0 tag + push -- user action). End-of-cycle review in progress. First interactive smoke-test of `init-project` done 2026-04-24 (partial; surfaced multiple items -- see REVIEW-NOTES). Three workflow infographics now in README as visual reference for upcoming brownfield + debug live-tests. Sibling-plugin landscape (`ystacks` catalog + `yastack` public + `ydstack` / `yastack-internal` subdirs) shipped 2026-04-25 (afternoon).
 
 **Post-M009 patches since 2026-04-23:** using-ytstack skill + session-start hook behavior-priming rewrite; 3 subagent definitions (architect / implementer / verifier); `docs/ux/agent-structure.md` contract; git init + initial scaffold commit; superpowers + gstack subtrees added.
 
@@ -27,6 +27,20 @@ active_task: none
 - KNOWLEDGE.md gains three lessons: Excalidraw esm.sh version pin (`@0.18.0`), dark mode is `appState.exportWithDarkMode = true` (not color-swap), GFM `<details open>` for default-expanded collapsibles.
 - GitHub repo metadata edits in flight (user-action): description aligned with new tagline; topics suggested `claude-code claude-code-plugin claude-code-skills ai-agents agentic-workflow anthropic developer-tools project-management tdd yesterday-ai` -- pending user save.
 
+**Session 2026-04-25 (afternoon) -- plugin landscape architecture:**
+- Locked 5-plugin family under `Yesterday-AI/ystacks` (private monorepo + catalog hybrid): `ytstack` (engineering), `ydstack` (daily-work), `yastack` (public agent core), `yastack-internal` (yesterday-bundle), `ycstack` (consulting separate-track).
+- Three new DECISIONS entries (2026-04-25, merged via PR #1): "Lifecycle-phase as the curation heuristic", "Marketplace consolidates on Yesterday-AI/ystacks (monorepo + catalog hybrid)" (supersedes 2026-04-24 §3.5), "Vendored-preamble drift accepted for wrapped skills".
+- README + QUICKSTART now show ystacks as primary install path; legacy self-marketplace path moved to a collapsed `<details>` block.
+- New repos shipped: `Yesterday-AI/ystacks` (private, monorepo + catalog) and `Yesterday-AI/yastack` (public, scaffold). Both have own minimal `.ytstack/` (PROJECT + DECISIONS + STATE) for dogfooding.
+- `agentic-foundation` identified as source pool for future ydstack + yastack skill migration (14 + 15 skills). Post-migration purpose of agentic-foundation undecided (archive vs repurpose).
+- Naming convention locked: `y{c}stack` (yt/yd/yc/ya) + `-internal` suffix for yesterday-bundles. yastack autonomy framing corrected to Levels-of-AGI 3-4 (Collaborator / Expert), not 4-5.
+- `docs/concept.md` §3.5 rewritten to reflect the new architecture (was deferred from PR #1 by design; landed in this STATE-refresh PR).
+- Two new milestones surface as next substantive work:
+  - **M010 Workflow Reorder + Brownfield-Without-.ytstack** -- covers the original M010 greenfield-reorder per DECISIONS 2026-04-24 PLUS adds the new "user runs ytstack inside an existing repo that has no `.ytstack/` yet" case as a third workflow alongside greenfield + brownfield-with-.ytstack.
+  - **M011 Post-Summarize Lifecycle** -- 5-skill cherry-pick across gstack (`ship`, `document-release`) and superpowers (`finishing-a-development-branch`, `requesting-code-review`, `receiving-code-review`). Scope locked 2026-04-25 after re-reading the comparison articles cited in `docs/concept.md`; full rationale in DECISIONS 2026-04-25 "M011 scope -- 5-skill cherry-pick from gstack + superpowers". Excludes `land-and-deploy`, `canary`, `qa` (different skill-class, deferred).
+
+  Both planned but not started; entries in `.ytstack/ROADMAP.md`.
+
 ```
 Progress:  [####################]  37/39 tasks (95%)
 M001 Foundation                  [######] 6/6  DONE
@@ -42,12 +56,15 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Live-test brownfield + debugging workflows** using the new infographics as visual reference. Diagrams are now embedded in README; pick a small real task (e.g. "where were we" → resume-session, then drive a task through plan-task → TDD → verify → summarize) and capture deviations in REVIEW-NOTES.
+**Plan + start M010 (Workflow Reorder + Brownfield-Without-.ytstack)** OR **Plan + start M011 (Post-Summarize Lifecycle)** -- both planned, neither started. M010 is the unfinished item from 2026-04-24; M011 is new from 2026-04-25 and depends on the lifecycle-heuristic landed today.
 
 Background items still open:
-1. **Review DRAFT `docs/concept.md`** -- approve, amend, or reject. Until approved, README remains the sole source of truth.
+1. **Review DRAFT `docs/concept.md`** -- approve, amend, or reject. Until approved, README remains the sole source of truth. §3.5 was rewritten 2026-04-25 (afternoon) to reflect ystacks consolidation.
 2. **Re-do init-project smoke-test in a neutral sandbox path** (avoid "ytstack" substring to isolate the directive-effect from pathname-confound -- see REVIEW-NOTES 2026-04-24).
-3. **Tag v0.1.0 + push tag** (only remaining M008 user-action besides eventual public marketplace listing).
+3. **Tag v0.1.0 + push tag** (M008 user-action). Command: `git tag -a v0.1.0 -m "v0.1.0: full build cycle complete + plugin landscape architecture locked" && git push origin v0.1.0`.
+4. **Save GitHub repo topics** (user-action). Suggested topics: `claude-code claude-code-plugin claude-code-skills ai-agents agentic-workflow anthropic developer-tools project-management tdd yesterday-ai`. Suggested description: "An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng." (matches README tagline).
+5. **Live-test brownfield + debugging workflows** using the new infographics as visual reference. Was previous session's "Next action"; deferred behind the architecture work but still relevant.
+6. **Eventual public marketplace listing** (M008 deferred): when ytstack visibility flips from private to public, list it in a public marketplace (e.g. anthropic-skills marketplace, or a future `Yesterday-AI/y-oss`).
 4. **Save GitHub repo topics** (user-action; see Session 2026-04-25 additions for suggested list).
 
 **Full-cycle review.** See `.ytstack/REVIEW-NOTES.md` for the batch of items flagged during the build. Review categories:
