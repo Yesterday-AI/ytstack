@@ -193,7 +193,7 @@ Starts a fresh Claude Code session with ytstack loaded. Skills appear as `/ytsta
 /plugin install ytstack@ystacks
 ```
 
-`Yesterday-AI/ystacks` is the canonical Yesterday plugin catalog -- a thin marketplace repo that lists ytstack and any future Yesterday plugins. Private-repo auth uses your existing `gh auth login` / git credential helper.
+`Yesterday-AI/ystacks` is Yesterday's PUBLIC plugin catalog -- a thin marketplace repo that lists ytstack alongside other public Yesterday plugins (yastack, yopstack, ydstack). No auth required for the public catalog. ytstack itself is currently a private repo; private-repo auth uses your existing `gh auth login` / git credential helper.
 
 <details>
 <summary><strong>Legacy: install via ytstack's self-marketplace</strong></summary>
