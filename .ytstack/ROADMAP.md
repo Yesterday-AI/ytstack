@@ -1,9 +1,9 @@
 ---
 project: ytstack
-last_updated: 2026-04-23T20:30:00Z
-total_milestones: 9
+last_updated: 2026-04-25T16:00:00Z
+total_milestones: 11
 completed_milestones: 9
-current_milestone: review
+current_milestone: review (M010 + M011 planned, not started)
 ---
 
 # ytstack Roadmap
@@ -27,8 +27,10 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M007 | Quality Gates (PreToolUse hooks) | **done** | 3 | 3 |
 | M008 | Publishing & Marketplace | **done (2 user-action)** | 4 | 2 |
 | M009 | Docs & Community | **done** | 4 | 4 |
+| M010 | Workflow Reorder + Brownfield-Without-.ytstack | planned | TBD | 0 |
+| M011 | Post-Summarize Lifecycle (ship + canary or document-release) | planned | TBD | 0 |
 
-**Total:** 39 tasks, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation).
+**Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 + M011 task counts pending milestone planning.
 
 ---
 
@@ -149,6 +151,39 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 - [ ] `QUICKSTART.md` with a worked example
 - [ ] `CONTRIBUTING.md` with PR guidelines (no third-party content copying, strict UX contract adherence)
 - [ ] Methodology attribution writeup (which external concepts we adapted and how -- without naming sources)
+
+---
+
+## M010 -- Workflow Reorder + Brownfield-Without-.ytstack (planned)
+
+**Goal:** Two-part scope. Part 1 finishes the greenfield-flow reorder originally planned 2026-04-24. Part 2 adds explicit handling for users running ytstack inside an existing repo that has no `.ytstack/` directory yet (third workflow case alongside greenfield and brownfield-with-.ytstack).
+
+**Exit criteria:**
+- Greenfield smoke-test ("baue mir eine cli...") routes to `office-hours` first (not `plan-milestone` or `init-project`), per DECISIONS 2026-04-24 "Greenfield-flow reorder".
+- Brownfield-without-.ytstack case: a user opens an existing project that has no `.ytstack/`, and ytstack offers explicit choice (init-project vs ad-hoc) instead of either silently bypassing or assuming greenfield.
+- README documents all three workflows with diagrams; QUICKSTART covers all three.
+
+**Scope reference:**
+- DECISIONS 2026-04-24 "Greenfield-flow reorder" + DECISIONS 2026-04-24 "Wrapper mechanism = shell-exec inject + cross-ref check" originally merged this with wrapper-refactor as a single milestone. The wrapper-refactor part was completed in scope of those decisions; what remains is the workflow-reorder part PLUS the new brownfield-without-.ytstack case identified 2026-04-25.
+
+**Plan via:** `ytstack:plan-milestone` -- not yet invoked.
+
+---
+
+## M011 -- Post-Summarize Lifecycle (ship + canary or document-release) (planned)
+
+**Goal:** Close the lifecycle gap between `summarize-task` and shipping a release. Today ytstack covers Plan -> Code -> Verify -> Close (`summarize-task`) and stops. Per DECISIONS 2026-04-25 "Lifecycle-phase as the curation heuristic", ytstack covers the full dev-loop; ship + post-deploy land in ytstack core.
+
+**Exit criteria:**
+- `ytstack:ship` wrapper exists -- wraps `vendor/gstack/ship/SKILL.md` per the 2026-04-25 wrapper-mechanism + vendored-preamble-drift DECISIONS. Bumps VERSION, writes CHANGELOG, creates PR with body, runs pre-merge safety checks.
+- One additional post-ship skill: `ytstack:canary` (visual monitor) OR `ytstack:document-release` (post-ship doc update). Choice deferred to milestone planning. Hard scope-limit: at most one. Other gstack ship-family skills (`land-and-deploy`, etc.) are explicitly out of scope per DECISIONS 2026-04-25 lifecycle-heuristic.
+- README + QUICKSTART updated with the post-summarize loop.
+
+**Scope reference:**
+- DECISIONS 2026-04-25 "Lifecycle-phase as the curation heuristic" justifies bringing ship into ytstack core (lifecycle-gap, requires `.ytstack/` state for SUMMARY/STATE/DECISIONS reads).
+- DECISIONS 2026-04-25 "Vendored-preamble drift accepted for wrapped skills" applies -- ship is the first concrete test; gstack-side preamble calls fail silently, ytstack injects own context via wrapper preamble.
+
+**Plan via:** `ytstack:plan-milestone` -- not yet invoked.
 
 ---
 

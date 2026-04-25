@@ -217,17 +217,31 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - `teammate-idle`, `task-created`, `task-completed` -- Agent Teams coordination
 - `pre-tool-use-edit`, `post-tool-use-bash` -- quality / safety gates
 
-### 3.5 Distribution (self-marketplace, one repo)
+### 3.5 Distribution (ystacks monorepo + catalog hybrid)
 
-Per DECISIONS 2026-04-24 "ytstack self-marketplaces, no separate `-marketplace` repo" and "Marketplace name equals plugin name":
+Per DECISIONS 2026-04-25 "Marketplace consolidates on Yesterday-AI/ystacks (monorepo + catalog hybrid)" -- supersedes the earlier 2026-04-24 "self-marketplace, no separate -marketplace repo" decision (its "pragmatic, not permanent" caveat invoked once a sibling plugin emerged).
 
-- Plugin source + marketplace manifest both live in `Yesterday-AI/ytstack` (private GitHub repo). `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are colocated; no separate `-marketplace` repo exists or is needed.
-- `marketplace.json` `"name"` = `"ytstack"` (same as the plugin). Install command is `/plugin marketplace add Yesterday-AI/ytstack` followed by `/plugin install ytstack@ytstack`.
-- `marketplace.json` `"source": "./"` for self-reference.
-- `plugin.json` is minimal: `name`, `version`, `description`, `author`, `homepage`, `repository`, `license`, `keywords`. No explicit `skills` / `agents` / `hooks` path pointers -- Claude Code auto-discovers from `skills/`, `agents/`, `hooks/hooks.json`. Adding those pointer fields triggers duplicate-load errors or schema-validation rejects (verified 2026-04-24 during the install debacle; see KNOWLEDGE.md).
-- Private-repo install works via the user's existing `gh auth login` + git credential helper. Background auto-updates require `GITHUB_TOKEN` / `GH_TOKEN` env var.
+**Marketplace catalog:** `Yesterday-AI/ystacks` (private monorepo). Hosts both `.claude-plugin/marketplace.json` (the listing Claude Code consumes) and a `plugins/<name>/` subdir for each plugin that shares ystacks's lifecycle. Install command: `/plugin marketplace add Yesterday-AI/ystacks` followed by `/plugin install <plugin-name>@ystacks`.
 
-**Pragmatic, not permanent:** the single-repo self-marketplace choice is scoped to the current state where ytstack is the only Yesterday-AI stack-plugin. If a sibling stack emerges later (e.g. `ycstack` for non-development workflows), the Yesterday-AI org would likely consolidate into a shared marketplace repo that catalogs multiple stacks -- at which point this decision would be superseded by a new DECISIONS entry covering the multi-stack marketplace layout. Today's form is not an architectural stance against separate marketplace repos; it is the minimum-maintenance choice while there is exactly one stack.
+**Five-plugin family** under the `y{c}stack` naming convention plus the `-internal` suffix for yesterday-bundles:
+
+| Plugin | Location | Visibility | Purpose |
+|---|---|---|---|
+| `ytstack` | own repo `Yesterday-AI/ytstack` | private (vorerst) | Engineering OS -- this paper's subject |
+| `ydstack` | ystacks subdir `plugins/ydstack/` | private | Daily-work, generic productivity skills |
+| `ycstack` | TBD (separate design track) | private | Consulting workflows |
+| `yastack` | own public repo `Yesterday-AI/yastack` | public | Generic autonomous-agent skills (Levels-of-AGI 3-4); externally installable without ystacks auth |
+| `yastack-internal` | ystacks subdir `plugins/yastack-internal/` | private (bundle) | Bundle plugin: yastack + Yesterday-internal service-plugin deps |
+
+**Per-plugin location decision:** plugins live in own repos when they need independent visibility (yastack public; ytstack pre-existing self-tracking) or release lifecycle (service-repos exist for the service itself). Plugins live as ystacks subdirs when they share ystacks's lifecycle and visibility.
+
+**Service-plugins:** Yesterday's internal services (`clawrag`, `llm-gateway`, `paperclip-companies`, `agent-services`, `openclaw`, ...) host their own `.claude-plugin/plugin.json` + `skills/<name>/SKILL.md` in their respective repos. ystacks marketplace.json lists each service-plugin via `source: { source: "github", repo: "Yesterday-AI/<name>" }` when the service-team is ready. No `yistack` sammelplugin -- per DECISIONS 2026-04-25 (ystacks DECISIONS), service-team owned skills.
+
+**ytstack's own legacy self-marketplace:** `Yesterday-AI/ytstack/.claude-plugin/marketplace.json` remains functional as a legacy install path (`/plugin marketplace add Yesterday-AI/ytstack` + `/plugin install ytstack@ytstack`). Both paths fetch the identical content. New installs should prefer the consolidated `ystacks` path. A future DECISIONS entry may deprecate the legacy path; today both coexist.
+
+**plugin.json shape (unchanged from 2026-04-24):** minimal -- `name`, `version`, `description`, `author`, `homepage`, `repository`, `license`, `keywords`. No explicit `skills` / `agents` / `hooks` path pointers; Claude Code auto-discovers from `skills/`, `agents/`, `hooks/hooks.json`. Adding pointer fields triggers duplicate-load errors (verified 2026-04-24 during the install debacle; see KNOWLEDGE.md).
+
+**Auth:** Private-repo install works via the user's existing `gh auth login` + git credential helper. Background auto-updates require `GITHUB_TOKEN` / `GH_TOKEN` env var.
 
 ### 3.6 Future candidates (deferred, not open questions)
 
