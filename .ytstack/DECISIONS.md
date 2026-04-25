@@ -468,3 +468,33 @@ REVIEW-NOTES 2026-04-24 "Greenfield-flow first-skill is wrong" and docs/concept.
 - All 5 wrappers fall under the "Vendored-preamble drift accepted" decision (2026-04-25); gstack-side preamble calls fail silently on `ship` and `document-release`, ytstack injects own context via wrapper preamble.
 
 **Supersedes:** none. Refines (not retracts) the M011 scope hint that lived inside the 2026-04-25 "Lifecycle-phase as the curation heuristic" entry; that entry only justified ship in core, not the specific cherry-pick.
+
+---
+
+## 2026-04-25: Marketplace architecture split into ystacks (public) + ystacks-internal (private), per-plugin own repos for plugins with architectural surface
+
+**Context:** Earlier 2026-04-25 "Marketplace consolidates on Yesterday-AI/ystacks (monorepo + catalog hybrid)" established a single private ystacks repo as monorepo + catalog. User reviewed this later same day and identified two issues:
+1. Mixed-visibility marketplace listing leaks plugin names + descriptions of internal plugins to externals if catalog goes public; staying private locks externals out of public-tauglich plugins entirely.
+2. Per-plugin DECISIONS history is load-bearing -- bundle plugins (deps-only) and skill collections (no methodology) can live as subdirs, but plugins with real architectural surface (yastack, yopstack) deserve own repos so their DECISIONS can evolve independently.
+
+Plus: ops-layer split during the same session (yopstack created as own public repo to host gstack ops-skills + opentofu migrated from yastack) created a new public plugin that needs a clean home.
+
+**Options considered:**
+- A) Stay with hybrid private monorepo + catalog -- accept either visibility-leak (going public) or no external discovery (staying private).
+- B) Two-marketplace split with each architectural-surface plugin as own repo: rename existing `ystacks` to `ystacks-internal` (private), scaffold new `ystacks` (public). Bundle plugins (yastack-internal, yopstack-internal) and skill collections (ydstack) live as subdirs in their respective marketplace repo. Plugins with own methodology/skills (yastack, yopstack, ytstack) live in own repos and are listed via github source. Cross-marketplace deps via `allowCrossMarketplaceDependenciesOn` enable bundle plugins to dep on public plugins.
+
+**Chose:** B (two-marketplace split + per-plugin own repos for architectural surface).
+
+**Reason:** Cleanest visibility-split (no leak, full external discovery on public side). Per-plugin DECISIONS preserved where it matters (architectural surface). Wrapper bundles + skill collections stay as subdirs because their DECISIONS surface is captured at the catalog level. ytstack (this repo) stays own repo with its own `.ytstack/`, cross-listed in private ystacks-internal while it's still private; will move to public ystacks when it flips public.
+
+**How to apply (executed 2026-04-25 afternoon):**
+- `gh repo rename Yesterday-AI/ystacks ystacks-internal` (done).
+- New public `Yesterday-AI/ystacks` scaffolded (catalog + ydstack subdir transplant) -- ready to push.
+- New public `Yesterday-AI/yopstack` scaffolded (ops-layer plugin, opentofu migrated from yastack + 3 gstack ops-skills planned) -- ready to push.
+- `Yesterday-AI/ystacks-internal` (renamed) -- marketplace.json scope-flipped to private-only, `allowCrossMarketplaceDependenciesOn: ["ystacks"]` added, plugin entries: ytstack (cross-listed while private), yastack-internal (subdir), yopstack-internal (subdir, NEW). ydstack subdir transplanted out.
+- `yastack-internal/plugin.json` updated: yastack dep declared as cross-mp `{ name: "yastack", marketplace: "ystacks" }`.
+- New `yopstack-internal/` subdir scaffolded in ystacks-internal: deps cross-mp on yopstack@ystacks + intra-mp on cloud (when ready).
+- yastack repo updated: opentofu out of skill list (moved to yopstack), companion section now references `ystacks-internal` (not `ystacks`).
+- All affected repos got their `.ytstack/DECISIONS.md` entries documenting their part of the split.
+
+**Supersedes:** "Marketplace consolidates on Yesterday-AI/ystacks (monorepo + catalog hybrid)" (2026-04-25, earlier today). The "monorepo + catalog hybrid" choice held for ~6 hours before the visibility-split realisation; superseded by this two-marketplace split. The earlier "Lifecycle-phase as the curation heuristic" entry remains valid (the heuristic still applies; only the marketplace topology changed).
