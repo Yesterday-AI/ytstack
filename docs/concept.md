@@ -217,31 +217,64 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - `teammate-idle`, `task-created`, `task-completed` -- Agent Teams coordination
 - `pre-tool-use-edit`, `post-tool-use-bash` -- quality / safety gates
 
-### 3.5 Distribution (ystacks monorepo + catalog hybrid)
+### 3.5 Distribution (two marketplaces split by visibility, per-plugin own repos)
 
-Per DECISIONS 2026-04-25 "Marketplace consolidates on Yesterday-AI/ystacks (monorepo + catalog hybrid)" -- supersedes the earlier 2026-04-24 "self-marketplace, no separate -marketplace repo" decision (its "pragmatic, not permanent" caveat invoked once a sibling plugin emerged).
+Per DECISIONS 2026-04-25 (afternoon) "Marketplace architecture -- split into ystacks (public) + ystacks-internal (private), per-plugin own repos" -- supersedes the morning's "ystacks monorepo + catalog hybrid" decision (its catalog-only-with-some-subdirs model leaked private plugin names through a public catalog and made cross-marketplace deps fragile).
 
-**Marketplace catalog:** `Yesterday-AI/ystacks` (private monorepo). Hosts both `.claude-plugin/marketplace.json` (the listing Claude Code consumes) and a `plugins/<name>/` subdir for each plugin that shares ystacks's lifecycle. Install command: `/plugin marketplace add Yesterday-AI/ystacks` followed by `/plugin install <plugin-name>@ystacks`.
+**Two marketplaces, split by visibility:**
 
-**Five-plugin family** under the `y{c}stack` naming convention plus the `-internal` suffix for yesterday-bundles:
+| Marketplace | Repo | Visibility | What it lists |
+|---|---|---|---|
+| `ystacks` | `Yesterday-AI/ystacks` | public | Generic-tauglich plugins (no Yesterday-infra deps): `yastack`, `yopstack`, `ydstack` |
+| `ystacks-internal` | `Yesterday-AI/ystacks-internal` | private | Yesterday-bundle plugins (`-internal` suffix), private plugins (e.g. `ytstack` while not yet flipped public), and Yesterday-infra service-plugins |
+
+Install commands:
+
+```
+# external users -- public family only
+/plugin marketplace add Yesterday-AI/ystacks
+/plugin install yastack@ystacks
+
+# Yesterday-team members -- both, with cross-marketplace deps resolved
+/plugin marketplace add Yesterday-AI/ystacks
+/plugin marketplace add Yesterday-AI/ystacks-internal
+/plugin install yastack-internal@ystacks-internal
+```
+
+**Cross-marketplace deps** are enabled by `allowCrossMarketplaceDependenciesOn: ["ystacks"]` in `ystacks-internal/marketplace.json`. The `-internal` bundles depend on the public siblings (`yastack@ystacks`, `yopstack@ystacks`); installing a bundle without the public marketplace produces an actionable error from `claude plugin install`.
+
+**Plugin family** under the `y{c}stack` naming convention:
 
 | Plugin | Location | Visibility | Purpose |
 |---|---|---|---|
-| `ytstack` | own repo `Yesterday-AI/ytstack` | private (vorerst) | Engineering OS -- this paper's subject |
-| `ydstack` | ystacks subdir `plugins/ydstack/` | private | Daily-work, generic productivity skills |
-| `ycstack` | TBD (separate design track) | private | Consulting workflows |
-| `yastack` | own public repo `Yesterday-AI/yastack` | public | Generic autonomous-agent skills (Levels-of-AGI 3-4); externally installable without ystacks auth |
-| `yastack-internal` | ystacks subdir `plugins/yastack-internal/` | private (bundle) | Bundle plugin: yastack + Yesterday-internal service-plugin deps |
+| `ytstack` | own repo `Yesterday-AI/ytstack` | private (cross-listed in ystacks-internal until flipped public) | Engineering OS -- this paper's subject |
+| `yastack` | own repo `Yesterday-AI/yastack` | public | Generic autonomous-agent skills (Levels-of-AGI 3-4); externally installable, no Yesterday-infra deps |
+| `yopstack` | own repo `Yesterday-AI/yopstack` | public | Generic ops/provisioning skills (`opentofu`, `land-and-deploy`, `canary`, `setup-deploy`); no Yesterday-infra deps |
+| `ydstack` | ystacks subdir `plugins/ydstack/` | public | Daily-work productivity skills; subdir because it has no real architectural-decision surface |
+| `yastack-internal` | ystacks-internal subdir `plugins/yastack-internal/` | private (bundle) | Bundle: `yastack` (cross-mp) + `yopstack-internal` (transitive ops + service mgmt) + `clawrag` + `agent-calendar` |
+| `yopstack-internal` | ystacks-internal subdir `plugins/yopstack-internal/` | private (bundle) | Bundle: `yopstack` (cross-mp) + `agent-services` + `cloud` + `llm-gateway`. Plus ships `paperclip-api` as own skill (temp home) |
+| `ycstack` | TBD (separate consulting design track) | private | Consulting workflows |
 
-**Per-plugin location decision:** plugins live in own repos when they need independent visibility (yastack public; ytstack pre-existing self-tracking) or release lifecycle (service-repos exist for the service itself). Plugins live as ystacks subdirs when they share ystacks's lifecycle and visibility.
+**Per-plugin location heuristic:** plugins live in their own repo when they have real architectural surface (their own `.ytstack/DECISIONS.md`, independent release lifecycle, or independent visibility). They live as marketplace-repo subdirs when they are wrapper bundles or skill collections with no architectural-decision surface (ydstack, yastack-internal, yopstack-internal).
 
-**Service-plugins:** Yesterday's internal services (`clawrag`, `llm-gateway`, `paperclip-companies`, `agent-services`, `openclaw`, ...) host their own `.claude-plugin/plugin.json` + `skills/<name>/SKILL.md` in their respective repos. ystacks marketplace.json lists each service-plugin via `source: { source: "github", repo: "Yesterday-AI/<name>" }` when the service-team is ready. No `yistack` sammelplugin -- per DECISIONS 2026-04-25 (ystacks DECISIONS), service-team owned skills.
+**Service-plugins (shipped 2026-04-25):** Yesterday's internal services host their own `.claude-plugin/plugin.json` in-repo and are listed in `ystacks-internal` marketplace.json:
 
-**ytstack's own legacy self-marketplace:** `Yesterday-AI/ytstack/.claude-plugin/marketplace.json` remains functional as a legacy install path (`/plugin marketplace add Yesterday-AI/ytstack` + `/plugin install ytstack@ytstack`). Both paths fetch the identical content. New installs should prefer the consolidated `ystacks` path. A future DECISIONS entry may deprecate the legacy path; today both coexist.
+| Service-plugin | Repo | Skill(s) shipped |
+|---|---|---|
+| `agent-calendar` | `Yesterday-AI/agent-calendar` | `agent-calendar` (cron sync, run reports, heartbeats) |
+| `agent-services` | `Yesterday-AI/agent-services` | `add-service` (ArgoCD deployment registry onboarding) |
+| `cloud` | `Yesterday-AI/cloud` | `yesterday-cloud` (K8s + ArgoCD + Infisical operations) |
+| `llm-gateway` | `Yesterday-AI/llm-gateway` | `llm-gateway-client` (OpenAI-compatible client at llm.yester.cloud) |
+| `clawrag` | `Yesterday-AI/clawrag` | `clawrag-api` (RAG Knowledge Base for AI agents) |
+| `openclaw-fleet` | `Yesterday-AI/openclaw-fleet` | `a2a-client`, `fleet-manager`, `self-diagnosis` |
 
-**plugin.json shape (unchanged from 2026-04-24):** minimal -- `name`, `version`, `description`, `author`, `homepage`, `repository`, `license`, `keywords`. No explicit `skills` / `agents` / `hooks` path pointers; Claude Code auto-discovers from `skills/`, `agents/`, `hooks/hooks.json`. Adding pointer fields triggers duplicate-load errors (verified 2026-04-24 during the install debacle; see KNOWLEDGE.md).
+`paperclip-companies` ships its skill as part of the `yopstack-internal` bundle until that repo is plugin-ready.
 
-**Auth:** Private-repo install works via the user's existing `gh auth login` + git credential helper. Background auto-updates require `GITHUB_TOKEN` / `GH_TOKEN` env var.
+**plugin.json shape (unchanged from 2026-04-24):** minimal -- `name`, `version`, `description`, `author`, `homepage`, `repository`, `license`, `keywords`. The schema also allows an explicit `skills: [...]` field with relative paths, but it has been reverted across-the-board after upstream issue [alirezarezvani/claude-skills#538](https://github.com/alirezarezvani/claude-skills/issues/538) confirmed the explicit field causes duplicate-load errors that override the default `skills/` auto-discovery. Claude Code auto-discovers `skills/`, `agents/`, `commands/`, `hooks/hooks.json` regardless of whether the explicit field is set; the safety goal of "no accidental leakage" is met by naming convention + repo-scoped code review (the auto-discovery walks the plugin root either way).
+
+**Why two marketplaces, not one mixed-visibility catalog:** a public marketplace.json that lists private plugins leaks names + descriptions to anyone who adds the marketplace, while users without auth can read but not install. The split was locked in the 2026-04-25 architecture session: each marketplace lists only what it can actually deliver to its audience.
+
+**Auth:** ystacks (public) requires no auth. ystacks-internal install works via the user's existing `gh auth login` + git credential helper. Background auto-updates of private repos require `GITHUB_TOKEN` / `GH_TOKEN` env var.
 
 ### 3.6 Future candidates (deferred, not open questions)
 
