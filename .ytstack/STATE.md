@@ -1,8 +1,8 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-04-25T16:00:00Z
-current_milestone: review + post-M009-patches (M010 + M011 planned)
+last_updated: 2026-04-25T19:00:00Z
+current_milestone: review + post-M009-patches (M010 + M011 planned; agentic-foundation skill migration next)
 active_slice: none
 active_task: none
 ---
@@ -41,6 +41,25 @@ active_task: none
 
   Both planned but not started; entries in `.ytstack/ROADMAP.md`.
 
+**Session 2026-04-25 (evening) -- marketplace split + service-plugin shipping:**
+- Marketplace architecture revised again -- split into TWO catalogs by visibility (DECISIONS 2026-04-25 "Marketplace architecture split into ystacks (public) + ystacks-internal (private)" -- merged via PR #3, supersedes the earlier same-day "monorepo + catalog hybrid" decision).
+  - `Yesterday-AI/ystacks` -- PUBLIC catalog, hosts ydstack as monorepo subdir, lists yastack + yopstack via github source.
+  - `Yesterday-AI/ystacks-internal` -- PRIVATE catalog (renamed from old ystacks), hosts yastack-internal + yopstack-internal as monorepo subdirs, lists ytstack (cross-listed while private) + service-plugins via github source. Has `allowCrossMarketplaceDependenciesOn: ["ystacks"]` so bundle plugins can dep on yastack/yopstack from public catalog.
+  - **Per-plugin own repos** for plugins with real architectural surface (ytstack, yastack, yopstack). Bundle plugins + skill collections (ydstack, yastack-internal, yopstack-internal) live as monorepo subdirs because no separate DECISIONS history needed.
+- New plugin: `Yesterday-AI/yopstack` (public) -- 4 ops-layer skills (`opentofu` migrated from yastack + 3 gstack-wrappers planned: `land-and-deploy`, `canary`, `setup-deploy`). yastack skill count adjusted 15 -> 14.
+- Six service-plugin PRs shipped + merged today, all to support yopstack-internal + yastack-internal bundle deps:
+  - `agent-calendar` (PR #48 + #49 follow-up that was closed) -- includes a sync-script-path fix in SKILL.md.
+  - `agent-services` (PR #89 + #90 follow-up that was closed).
+  - `cloud` (PR #17).
+  - `llm-gateway` (PR #55).
+  - `clawrag` (PR #103) -- noisy review: bugbot found 3 real upstream content bugs in scripts/. Two fixed in scope (`sources.sh` deleted -- redundant + had hardcoded dev API key); 1 deferred (`ingest.sh` `/tmp/clawrag_response.json` race). PR also went through a force-push squash (with `--force-with-lease`) after confused commit history -- lesson learned: ALWAYS `git pull main` before `git checkout -b new-branch`, otherwise diff-vs-current-main includes accidental reverts of others' work.
+  - `openclaw-fleet` (PR #144) -- 3 skills (a2a-client, fleet-manager, self-diagnosis).
+- Initial scaffold attempt added explicit `"skills": ["./skills/<name>/"]` field to all manifests for "no leakage" safety, but reverted across-the-board after upstream issue [alirezarezvani/claude-skills#538](https://github.com/alirezarezvani/claude-skills/issues/538) showed real-world reliability problems with explicit `skills` field paths. Default auto-discovery is the safer pattern. Plus user noted: explicit `skills` field only replaces default `skills/` scan -- `bin/`, `commands/`, `agents/`, `hooks/` etc. are still auto-discovered regardless, so "pin skills explicitly" was never the right safety boundary against unwanted plugin content; naming-convention + code-review is.
+- Plus PR #4 (this PR's predecessor): one-line README install-section fix -- ystacks is PUBLIC, not "canonical" + no auth required for the public catalog.
+- Cross-repo consistency audit (Explore agent, end-of-day): 2 critical fixes landed (yastack `skills/README.md` count 15 -> 14; ytstack README install-section wording). All other audit dimensions clean: naming convention, no internal-name leakage in public ystacks, agentic-foundation migration mentions consistent, logo/assets consistent.
+- Bundle deps now fully resolvable: `yastack-internal` (yastack@ystacks + yopstack-internal + clawrag + agent-calendar -- all listed) and `yopstack-internal` (yopstack@ystacks + agent-services + cloud + llm-gateway -- all listed).
+- This PR (the one introducing this STATE block) also rewrites `docs/concept.md` §3.5 to reflect the post-split architecture. The earlier rewrite (PR #2) described the now-superseded monorepo+catalog hybrid; this version describes the two-marketplace split + per-plugin-own-repos model.
+
 ```
 Progress:  [####################]  37/39 tasks (95%)
 M001 Foundation                  [######] 6/6  DONE
@@ -56,16 +75,19 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Plan + start M010 (Workflow Reorder + Brownfield-Without-.ytstack)** OR **Plan + start M011 (Post-Summarize Lifecycle)** -- both planned, neither started. M010 is the unfinished item from 2026-04-24; M011 is new from 2026-04-25 and depends on the lifecycle-heuristic landed today.
+**agentic-foundation skill migration** -- user-confirmed as next (2026-04-25 evening). 32 skills total to migrate: 14 -> ydstack, 14 -> yastack, 4 -> yopstack (incl. opentofu + 3 gstack-wrappers via vendor/gstack subtree-add). Eigene session pro plugin sinnvoll. Once migration completes, agentic-foundation goes obsolete (per user 2026-04-25 evening: "agentic-foundation wird obsolete sein -- baldigst").
+
+After migration: M010 + M011 are queued. M010 = Workflow Reorder + Brownfield-Without-.ytstack (unfinished from 2026-04-24). M011 = Post-Summarize Lifecycle (5-skill cherry-pick, scope locked).
 
 Background items still open:
-1. **Review DRAFT `docs/concept.md`** -- approve, amend, or reject. Until approved, README remains the sole source of truth. §3.5 was rewritten 2026-04-25 (afternoon) to reflect ystacks consolidation.
+1. **Review DRAFT `docs/concept.md`** -- approve, amend, or reject. Until approved, README remains the sole source of truth. §3.5 was rewritten twice today (PR #2 wave + this PR -- now reflects the two-marketplace split + per-plugin-own-repos model).
 2. **Re-do init-project smoke-test in a neutral sandbox path** (avoid "ytstack" substring to isolate the directive-effect from pathname-confound -- see REVIEW-NOTES 2026-04-24).
 3. **Tag v0.1.0 + push tag** (M008 user-action). Command: `git tag -a v0.1.0 -m "v0.1.0: full build cycle complete + plugin landscape architecture locked" && git push origin v0.1.0`.
-4. **Save GitHub repo topics** (user-action). Suggested topics: `claude-code claude-code-plugin claude-code-skills ai-agents agentic-workflow anthropic developer-tools project-management tdd yesterday-ai`. Suggested description: "An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng." (matches README tagline).
-5. **Live-test brownfield + debugging workflows** using the new infographics as visual reference. Was previous session's "Next action"; deferred behind the architecture work but still relevant.
-6. **Eventual public marketplace listing** (M008 deferred): when ytstack visibility flips from private to public, list it in a public marketplace (e.g. anthropic-skills marketplace, or a future `Yesterday-AI/y-oss`).
-4. **Save GitHub repo topics** (user-action; see Session 2026-04-25 additions for suggested list).
+4. **Live-test brownfield + debugging workflows** using the new infographics as visual reference. Was previous session's "Next action"; deferred behind the architecture work but still relevant.
+5. **Eventual public marketplace listing** (M008 deferred): when ytstack visibility flips from private to public, list it in the public ystacks catalog (today only listed in private ystacks-internal as cross-listed).
+6. **Skill content cleanup queue** (in `Yesterday-AI/ystacks-internal/.ytstack/STATE.md`): clawrag `ingest.sh` `/tmp` race condition + agent-calendar SKILL.md sync-script-path. Per user 2026-04-25 evening: skip upstream backports to agentic-foundation since the repo will become obsolete soon (skill migration absorbs all relevant content).
+
+GitHub repo topics + description -- DONE 2026-04-25 (user-action).
 
 **Full-cycle review.** See `.ytstack/REVIEW-NOTES.md` for the batch of items flagged during the build. Review categories:
 
