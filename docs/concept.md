@@ -266,7 +266,7 @@ Install commands:
 | `cloud` | `Yesterday-AI/cloud` | `yesterday-cloud` (K8s + ArgoCD + Infisical operations) |
 | `llm-gateway` | `Yesterday-AI/llm-gateway` | `llm-gateway-client` (OpenAI-compatible client at llm.yester.cloud) |
 | `clawrag` | `Yesterday-AI/clawrag` | `clawrag-api` (RAG Knowledge Base for AI agents) |
-| `openclaw-fleet` | `Yesterday-AI/openclaw-fleet` | `a2a-client`, `fleet-manager`, `self-diagnosis` |
+| `fleet` | `Yesterday-AI/fleet` | `a2a-client`, `fleet-manager`, `self-diagnosis` |
 
 `paperclip-companies` ships its skill as part of the `yopstack-internal` bundle until that repo is plugin-ready.
 
