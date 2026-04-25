@@ -326,6 +326,49 @@ REVIEW-NOTES 2026-04-24 "Greenfield-flow first-skill is wrong" and docs/concept.
 
 ---
 
+## 2026-04-25: Tagline -- "An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng."
+
+**Context:** Original tagline ("Working memory for AI coding agents.") captured only the GSD-inspired persistence layer and undersold the other two pillars (curation of gstack + superpowers; execution discipline via TDD / systematic-debugging / verification gates). User flagged: "ist 'Working memory for AI coding agents.' wirklich die beste tagline?"
+
+**Options considered:**
+- A) Keep "Working memory for AI coding agents." -- punchy, memorable, but lopsided.
+- B) "An opinionated OS for AI coding agents." -- covers all three pillars, generic on its own.
+- C) "Plan like a PM, execute like a senior eng -- with AI agents." -- plakativ, already in the README body as a claim.
+- D) Compound: "An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng." -- positioning + framing in two sentences.
+
+**Chose:** D.
+
+**Reason:** The compound form is the only one that lands all three positioning angles (curation, memory, discipline) without dropping the punch. Two short sentences read fine in the README header `<em>` slot and in `docs/concept.md` §1.1. Em-dash dropped per writing-style.md (the original `--` candidate `Plan like a PM, execute like a senior eng -- with AI agents` had a dangling redundancy with the leading "AI coding agents" phrase, which D eliminates).
+
+**How to apply:**
+- README.md header `<p><em>...</em></p>` updated.
+- `docs/concept.md` §1.1 (What) updated to keep concept paper in sync.
+- Future external surfaces (GitHub repo description, marketplace.json description, social previews) should mirror this exact phrasing or its short form ("An opinionated OS for AI coding agents.").
+- `marketplace.json` description currently reads "Yesterday Technologies Stack -- opinionated software-development OS for AI agents." which is consistent in spirit; do not edit defensively, but next time it touches, align fully.
+
+---
+
+## 2026-04-25: README workflow diagrams use collapsible `<details>` blocks; greenfield expanded by default
+
+**Context:** The three workflow infographics (greenfield, brownfield, debugging) are large PNGs. Embedding all three inline pushes the README's body content (Install / Compared-to / How-it-works) below the fold and overwhelms first-time readers.
+
+**Options considered:**
+- A) Inline all three PNGs (status quo before this decision).
+- B) Collapse all three behind `<details>` -- cleanest, but hides the primary visual on first load.
+- C) Expand greenfield (the canonical "what is this?" diagram) by default, collapse brownfield + debugging.
+
+**Chose:** C.
+
+**Reason:** Greenfield is the on-ramp for first-time readers and matches the README's sequencing (Why -> What it does -> Workflows -> Install). Brownfield + debugging are reference material for users who already know ytstack's shape, so collapsing them keeps the page scannable without burying the primary diagram. User explicit: "kannst du das greenfield standard ausgeklappt machen?"
+
+**How to apply:**
+- `<details open>` for the greenfield section, summary text reads "click to collapse".
+- Plain `<details>` for brownfield + debugging, summary text reads "click to expand".
+- All three `summary` lines use `<strong>` for visibility.
+- This convention applies to README only. QUICKSTART.md and concept.md don't embed images.
+
+---
+
 ## 2026-04-25: Lifecycle-phase as the curation heuristic
 
 **Context:** docs/concept.md §3.7 defines three "should this be a skill?" gates (distinct artifact, distinct from siblings, semantic description). Two unresolved questions remain after the 2026-04-25 architecture discussion: (a) ytstack covers planning -> execution -> close but stops before ship / post-deploy; (b) where do tool-style skills (browser wrappers, diagram tools) belong if ytstack adds them. Both resolve to "where does this skill live -- ytstack core, sibling plugin, or out-of-scope?"
