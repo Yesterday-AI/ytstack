@@ -323,3 +323,81 @@ REVIEW-NOTES 2026-04-24 "Greenfield-flow first-skill is wrong" and docs/concept.
 - Wrappers rewritten in scope of this change: `plan-ceo-review`, `plan-eng-review`, `office-hours` (vendor/gstack), `test-driven-development`, `systematic-debugging`, `verification-before-completion` (vendor/superpowers/skills).
 - Cross-ref check: extend `bin/ytstack-check` with a new validator that parses each vendored SKILL.md referenced by a wrapper, finds skill-name mentions inside the vendor text, and flags any reference that resolves to neither a ytstack-shipped skill nor a wrapped vendor skill. Output: REVIEW-NOTES drop-in with exact file:line of the dangling reference, so the human can decide (ship-additional-wrapper / rewrite-vendor-ref / accept-gap).
 - Scope impact on M010: merged into the greenfield-flow-reorder milestone as "Part 1: Wrapper refactor (6 skills thin-wrapped + cross-ref check added)", "Part 2: Greenfield-flow reorder (office-hours first, dual-mode ceo/eng, init-project split)".
+
+---
+
+## 2026-04-25: Lifecycle-phase as the curation heuristic
+
+**Context:** docs/concept.md §3.7 defines three "should this be a skill?" gates (distinct artifact, distinct from siblings, semantic description). Two unresolved questions remain after the 2026-04-25 architecture discussion: (a) ytstack covers planning -> execution -> close but stops before ship / post-deploy; (b) where do tool-style skills (browser wrappers, diagram tools) belong if ytstack adds them. Both resolve to "where does this skill live -- ytstack core, sibling plugin, or out-of-scope?"
+
+**Options considered:**
+- A) Add a 4th gate to §3.7 ("which dev-loop phase?"); ytstack core covers all phases.
+- B) Hard-cap ytstack at "plan-to-close" (no ship, no post-deploy); rely on user to pair gstack standalone.
+- C) Lifecycle-phase as pre-classification heuristic: skill needing `.ytstack/`-state -> ytstack core; generic tool-wrapper -> sibling plugin under ystacks; Yesterday-internal -> separate org-internal plugin.
+
+**Chose:** C.
+
+**Reason:** ytstack is committed to full dev-loop coverage (user explicit 2026-04-25: "ytstack full loop ja/nein ist keine frage -> definitiv ja, das war schon immer der plan"). The earlier "tool-skills brueche scope" framing was wrong -- skills like browse, qa, ship are methods with embedded tooling, not raw tools. The real sort is "does it need ytstack-state?", which subsumes the ship-gap question (ship reads STATE/SUMMARY/DECISIONS -> ytstack) and the future excalidraw-style question (no ytstack-state needed -> sibling plugin under ystacks).
+
+**How to apply:**
+- Update §3.7's first gate to ask "does this skill require `.ytstack/` artifacts to make sense?" before the existing artifact / distinctness / description gates.
+- Add §3.7.1 "Where to ship": skills needing ytstack-state ship in ytstack core; generic tools ship in a sibling plugin listed under `ystacks`; Yesterday-internal tools ship in a separate plugin not listed publicly.
+- Adding ship as ytstack core skill is now unambiguous (lifecycle gap, requires ytstack-state).
+- Adding excalidraw-style tool-skills to ytstack is now disallowed (no ytstack-state); they belong in a sibling plugin.
+
+**Supersedes:** none. Extends §3.7 (Curation principle) without retracting it.
+
+---
+
+## 2026-04-25: Marketplace consolidates on Yesterday-AI/ystacks (monorepo + catalog hybrid)
+
+**Context:** 2026-04-24 "ytstack self-marketplaces, no separate -marketplace repo" (concept §3.5) was scoped to single-plugin state with the explicit "consolidate when sibling emerges" caveat. 2026-04-25 architecture session locked: full-loop ytstack (ship + post-deploy land here), four planned sibling plugins (ydstack daily-work, ycstack consulting separate-track, yastack autonomous-agent core, yastack-internal yesterday-bundle), and Yesterday-internal service-repos managing their own skills + plugin manifests.
+
+**Options considered:**
+- A) Self-marketplace per plugin -- N marketplaces for N plugins.
+- B) Single shared catalog repo (`Yesterday-AI/ystacks`) listing each plugin via github source only. Plugins keep own repos.
+- C) Pure monorepo: collapse ytstack + all future plugins into one repo with `metadata.pluginRoot`. Loses independent versioning + history for plugins that need it.
+- D) Hybrid monorepo + catalog: ystacks contains BOTH the marketplace catalog AND some plugins as `plugins/<name>/` subdirs, while listing additional plugins from external repos via github source. Per-plugin decision: own repo (when independent visibility / release / lifecycle needed) or subdir (when shared lifecycle is fine).
+- E) Two marketplaces: public ystacks, private yistacks for infra-bound tools.
+
+**Chose:** D with `Yesterday-AI/ystacks` as the single private monorepo + catalog.
+
+**Reason:** E abandoned -- "internal" tools are functionally infra-bound, not secret; mixed-visibility marketplace listing leaks plugin names + descriptions while users cannot install. D beats B because: less repo proliferation (1 monorepo vs N plugin-repos), atomic cross-plugin commits, shared issue/PR/CI surface for plugins maintained by Yesterday-team. Plugins that need separate visibility or lifecycle (yastack public; ytstack pre-existing with own `.ytstack/` self-tracking; service-repos that exist for the service itself) live in own repos and are listed via github source. The `-internal` suffix (today: `yastack-internal`) is the convention for yesterday-bundle plugins -- a thin manifest with `dependencies` array, no skills of its own.
+
+**How to apply:**
+- `Yesterday-AI/ystacks` (private monorepo + catalog) scaffolded 2026-04-25. Contains: `.claude-plugin/marketplace.json`, `plugins/ydstack/`, `plugins/yastack-internal/`. README documents the visibility / source matrix.
+- `ytstack` stays in own repo `Yesterday-AI/ytstack` (private vorerst, public-tauglich -- decision deferred), listed in ystacks via github source.
+- `ydstack`, `ycstack` (later), `yastack-internal` -- live as `plugins/<name>/` subdirs in the ystacks monorepo.
+- `yastack` -- own public repo `Yesterday-AI/yastack` (planned), 15 generic agent skills, no Yesterday-infra deps. Listed in ystacks via github source. External users can install via direct github source without ystacks auth.
+- Yesterday service-repos (clawrag, llm-gateway, paperclip-companies, agent-services, openclaw, ...) -- bekommen `.claude-plugin/plugin.json` + `skills/<name>/SKILL.md` wenn ready, listed in ystacks via github source. Service-team owned skills.
+- `agentic-foundation` repo serves as source pool for ydstack + yastack skill migration; its post-migration purpose is undecided (archive vs repurpose).
+- `-internal` suffix is the convention for yesterday-bundle plugins. May graduate to a separate `ystacks-internal` marketplace if the count grows past ~3.
+- ytstack's own `.claude-plugin/marketplace.json` remains functional (legacy install path) until a future DECISIONS entry deprecates it.
+- Cross-marketplace deps (`allowCrossMarketplaceDependenciesOn`) NOT needed -- everything in one ystacks marketplace.
+- docs/concept.md §3.5 update is deferred to a separate change so this DECISIONS entry lands first as the source-of-truth.
+
+**Supersedes:** "ytstack self-marketplaces, no separate -marketplace repo" (2026-04-24, concept §3.5). The "pragmatic, not permanent" caveat there is now invoked.
+
+---
+
+## 2026-04-25: Vendored-preamble drift accepted for wrapped skills
+
+**Context:** Wrapper mechanism (2026-04-24 "shell-exec inject + cross-ref check") inlines vendored SKILL.md verbatim via `cat ${CLAUDE_PLUGIN_ROOT}/vendor/<src>/SKILL.md`. Vendored gstack skills carry deep gstack-specific preambles that source `~/.claude/skills/gstack/bin/gstack-update-check`, `gstack-config`, `gstack-repo-mode`, `gstack-telemetry-log`. When ytstack inlines these, the binaries don't exist (gstack isn't standalone-installed in the ytstack-only case), every call fails silently via `|| true`, and the inlined skill loses its gstack-side context (REPO_MODE detection, proactive flag, telemetry, explain-level). Identified during 2026-04-25 evaluation of `ship` as a candidate wrapped skill.
+
+**Options considered:**
+- A) Accept silent failure. ytstack injects its own context (project state, milestone paths) via the wrapper preamble; the gstack-side config is orthogonal to ytstack workflow.
+- B) Patch vendored preamble. Direct violation of "Never modify vendored content" hard rule (CLAUDE.md). Drifts on every `sync-upstream.sh`.
+- C) sed-strip the gstack preamble at `cat`-time. Pseudo-modification via runtime filter; preserves vendor-as-SSOT but obscures the deviation.
+- D) Bundle ytstack-side stubs at `~/.claude/skills/gstack/bin/` that no-op or return ytstack-equivalent values. Hijacks gstack's install path; breaks if user has standalone gstack installed.
+
+**Chose:** A.
+
+**Reason:** Lost gstack-side features (telemetry, REPO_MODE, proactive flag, explain-level) are gstack-internal UX, not behavior ytstack relies on. ytstack's own context-injection (`_YT_DIR`, `_CURRENT_MILESTONE`, artifact paths via wrapper preamble) is the relevant context. Preserves vendor-as-SSOT (no modification, no runtime filter), no install collision, and matches what already happens for the six existing wrapped skills (their gstack/superpowers preambles partially fail today; nothing breaks).
+
+**How to apply:**
+- Document in CLAUDE.md and docs/ux/skill-structure.md that wrapped skills with deep upstream-specific preambles WILL emit silent failures when their preambles run; this is by design.
+- `bin/ytstack-check` adds a soft-warning when a wrapped vendor skill references upstream-specific binary paths (e.g. `~/.claude/skills/gstack/bin/`). Surfaced to maintainer, not blocking.
+- Wrappers MAY add their own preamble values that emulate critical upstream signals if a downstream procedure depends on them (case-by-case during per-wrapper authoring; not a blanket policy).
+- Future ship wrapper is the first concrete test of this stance; concrete fall-out goes to REVIEW-NOTES.
+
+**Supersedes:** none. Locks an aspect of wrapper mechanism (2026-04-24) that was implicit until now.
