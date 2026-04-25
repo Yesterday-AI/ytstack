@@ -186,14 +186,28 @@ claude --plugin-dir /path/to/ytstack
 
 Starts a fresh Claude Code session with ytstack loaded. Skills appear as `/ytstack:<skill-name>`. No marketplace registration needed. Reload after edits with `/reload-plugins`.
 
-### Via marketplace
+### Via marketplace (recommended for shared use)
+
+```bash
+/plugin marketplace add Yesterday-AI/ystacks
+/plugin install ytstack@ystacks
+```
+
+`Yesterday-AI/ystacks` is the canonical Yesterday plugin catalog -- a thin marketplace repo that lists ytstack and any future Yesterday plugins. Private-repo auth uses your existing `gh auth login` / git credential helper.
+
+<details>
+<summary><strong>Legacy: install via ytstack's self-marketplace</strong></summary>
+
+ytstack also self-marketplaces from its own repo:
 
 ```bash
 /plugin marketplace add Yesterday-AI/ytstack
 /plugin install ytstack@ytstack
 ```
 
-ytstack self-marketplaces: `.claude-plugin/marketplace.json` lives in the plugin repo itself. No separate marketplace repo needed. Private-repo auth uses your existing `gh auth login` / git credential helper.
+This path predates the consolidation onto `ystacks` and remains functional. New installs should prefer `ystacks`. See [`.ytstack/DECISIONS.md`](./.ytstack/DECISIONS.md) for the consolidation decision.
+
+</details>
 
 ### Headless / CI
 
