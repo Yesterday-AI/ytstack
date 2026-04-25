@@ -28,7 +28,7 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M008 | Publishing & Marketplace | **done (2 user-action)** | 4 | 2 |
 | M009 | Docs & Community | **done** | 4 | 4 |
 | M010 | Workflow Reorder + Brownfield-Without-.ytstack | planned | TBD | 0 |
-| M011 | Post-Summarize Lifecycle (ship + canary or document-release) | planned | TBD | 0 |
+| M011 | Post-Summarize Lifecycle (5-skill cherry-pick: ship + closure + PR-review + document-release) | planned | TBD | 0 |
 
 **Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 + M011 task counts pending milestone planning.
 
@@ -170,18 +170,33 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 
 ---
 
-## M011 -- Post-Summarize Lifecycle (ship + canary or document-release) (planned)
+## M011 -- Post-Summarize Lifecycle (5-skill cherry-pick) (planned)
 
-**Goal:** Close the lifecycle gap between `summarize-task` and shipping a release. Today ytstack covers Plan -> Code -> Verify -> Close (`summarize-task`) and stops. Per DECISIONS 2026-04-25 "Lifecycle-phase as the curation heuristic", ytstack covers the full dev-loop; ship + post-deploy land in ytstack core.
+**Goal:** Close the lifecycle arc between `summarize-task` and a released version. Today ytstack covers Plan -> Code -> Verify -> Close (`summarize-task`) and stops. Per DECISIONS 2026-04-25 "Lifecycle-phase as the curation heuristic" + 2026-04-25 "M011 scope -- 5-skill cherry-pick", ytstack covers the full dev-loop with a balanced cherry-pick across gstack (ship-mechanics) and superpowers (PR-review-cycle discipline).
 
 **Exit criteria:**
-- `ytstack:ship` wrapper exists -- wraps `vendor/gstack/ship/SKILL.md` per the 2026-04-25 wrapper-mechanism + vendored-preamble-drift DECISIONS. Bumps VERSION, writes CHANGELOG, creates PR with body, runs pre-merge safety checks.
-- One additional post-ship skill: `ytstack:canary` (visual monitor) OR `ytstack:document-release` (post-ship doc update). Choice deferred to milestone planning. Hard scope-limit: at most one. Other gstack ship-family skills (`land-and-deploy`, etc.) are explicitly out of scope per DECISIONS 2026-04-25 lifecycle-heuristic.
-- README + QUICKSTART updated with the post-summarize loop.
+
+Five new wrapper skills, in normal-flow order:
+
+| # | Skill | Source | Purpose |
+|---|---|---|---|
+| 1 | `ytstack:finishing-a-development-branch` | `vendor/superpowers/skills/finishing-a-development-branch` | pre-ship closure discipline; ergaenzt verification-before-completion |
+| 2 | `ytstack:requesting-code-review` | `vendor/superpowers/skills/requesting-code-review` | prepare + open PR with structured review request |
+| 3 | `ytstack:receiving-code-review` | `vendor/superpowers/skills/receiving-code-review` | handle review feedback; classify, apply, re-request (loops with #2 until approved) |
+| 4 | `ytstack:ship` | `vendor/gstack/ship` | bumps VERSION, writes CHANGELOG, creates PR-body, pre-merge safety checks, push, PR |
+| 5 | `ytstack:document-release` | `vendor/gstack/document-release` | post-ship docs sync (README, ARCHITECTURE, CLAUDE.md, CHANGELOG, VERSION) |
+
+Plus: README + QUICKSTART updated with the post-summarize loop diagram.
+
+**Explicit out-of-scope** (per DECISIONS 2026-04-25 "M011 scope" Option C-rejection):
+- `land-and-deploy`, `canary`, `setup-deploy` (gstack) -- deployment + monitoring are a different skill-class (infra / observability), planned for a future milestone if demand emerges.
+- `qa` (gstack) -- testing methodology overlaps with ytstack's existing TDD + verification-before-completion.
 
 **Scope reference:**
-- DECISIONS 2026-04-25 "Lifecycle-phase as the curation heuristic" justifies bringing ship into ytstack core (lifecycle-gap, requires `.ytstack/` state for SUMMARY/STATE/DECISIONS reads).
-- DECISIONS 2026-04-25 "Vendored-preamble drift accepted for wrapped skills" applies -- ship is the first concrete test; gstack-side preamble calls fail silently, ytstack injects own context via wrapper preamble.
+- DECISIONS 2026-04-25 "M011 scope -- 5-skill cherry-pick from gstack + superpowers" -- justifies the specific cherry-pick after re-reading the dev.to + medium comparison articles cited in `docs/concept.md`.
+- DECISIONS 2026-04-25 "Lifecycle-phase as the curation heuristic" -- justifies bringing the ship-arc into ytstack core (lifecycle-gap, requires `.ytstack/` state for SUMMARY/STATE/DECISIONS reads).
+- DECISIONS 2026-04-25 "Vendored-preamble drift accepted for wrapped skills" -- applies to all 5 wrappers; gstack-side preamble calls fail silently on `ship` and `document-release`, ytstack injects own context via wrapper preamble.
+- Concept §3.6 "Future candidates (deferred)" listed `requesting-code-review` / `receiving-code-review` as v0.2 candidates; M011 pulls them forward.
 
 **Plan via:** `ytstack:plan-milestone` -- not yet invoked.
 

@@ -35,7 +35,11 @@ active_task: none
 - `agentic-foundation` identified as source pool for future ydstack + yastack skill migration (14 + 15 skills). Post-migration purpose of agentic-foundation undecided (archive vs repurpose).
 - Naming convention locked: `y{c}stack` (yt/yd/yc/ya) + `-internal` suffix for yesterday-bundles. yastack autonomy framing corrected to Levels-of-AGI 3-4 (Collaborator / Expert), not 4-5.
 - `docs/concept.md` §3.5 rewritten to reflect the new architecture (was deferred from PR #1 by design; landed in this STATE-refresh PR).
-- Two new milestones surface as next substantive work: **M010 Workflow Reorder + Brownfield-Without-.ytstack** (covers the original M010 greenfield-reorder per DECISIONS 2026-04-24 PLUS adds the new "user runs ytstack inside an existing repo that has no `.ytstack/` yet" case as a third workflow alongside greenfield + brownfield-with-.ytstack), and **M011 Post-Summarize Lifecycle** (closes the gap from `summarize-task` to `ship` and beyond -- ship + canary OR document-release wrappers, scope per DECISIONS 2026-04-25 lifecycle-heuristic). Both planned but not started; entries in `.ytstack/ROADMAP.md`.
+- Two new milestones surface as next substantive work:
+  - **M010 Workflow Reorder + Brownfield-Without-.ytstack** -- covers the original M010 greenfield-reorder per DECISIONS 2026-04-24 PLUS adds the new "user runs ytstack inside an existing repo that has no `.ytstack/` yet" case as a third workflow alongside greenfield + brownfield-with-.ytstack.
+  - **M011 Post-Summarize Lifecycle** -- 5-skill cherry-pick across gstack (`ship`, `document-release`) and superpowers (`finishing-a-development-branch`, `requesting-code-review`, `receiving-code-review`). Scope locked 2026-04-25 after re-reading the comparison articles cited in `docs/concept.md`; full rationale in DECISIONS 2026-04-25 "M011 scope -- 5-skill cherry-pick from gstack + superpowers". Excludes `land-and-deploy`, `canary`, `qa` (different skill-class, deferred).
+
+  Both planned but not started; entries in `.ytstack/ROADMAP.md`.
 
 ```
 Progress:  [####################]  37/39 tasks (95%)

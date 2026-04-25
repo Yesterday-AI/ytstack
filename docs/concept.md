@@ -245,7 +245,9 @@ Per DECISIONS 2026-04-25 "Marketplace consolidates on Yesterday-AI/ystacks (mono
 
 ### 3.6 Future candidates (deferred, not open questions)
 
-Logged in `.ytstack/REVIEW-NOTES.md`. Example: wrapping superpowers' `requesting-code-review` / `receiving-code-review` for PR-level review in v0.2. These are deferrals with acceptance criteria, not open architectural questions.
+Logged in `.ytstack/REVIEW-NOTES.md`. These are deferrals with acceptance criteria, not open architectural questions.
+
+**Note (2026-04-25):** the previously-listed v0.2 candidates `requesting-code-review` / `receiving-code-review` (superpowers) have been pulled forward into the M011 active scope per DECISIONS 2026-04-25 "M011 scope -- 5-skill cherry-pick from gstack + superpowers". They are no longer deferred. M011 also adds `finishing-a-development-branch` (superpowers), `ship` (gstack), `document-release` (gstack) to the same scope.
 
 ### 3.7 Curation principle (when to add a new skill)
 
