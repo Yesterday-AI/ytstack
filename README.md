@@ -266,7 +266,7 @@ See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example written i
 
 Ships:
 
-- 16 skills (project-OS lifecycle + gstack planning wrappers + superpowers execution wrappers + Agent Teams dispatch + `using-ytstack` directive that auto-injects to drive skill selection from natural-language intent)
+- 21 skills (project-OS lifecycle + gstack planning wrappers + superpowers execution wrappers + Agent Teams dispatch + `using-ytstack` directive + 5 engineering-OS additions migrated from agentic-foundation: `atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`)
 - 8 hooks (SessionStart / PreCompact / SessionEnd / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash). SessionStart-hook now injects the using-ytstack directive + project state.
 - Full docs (`CLAUDE.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest ready for publication
@@ -280,7 +280,7 @@ ytstack/
 ├── .claude-plugin/              plugin manifest + marketplace
 ├── .ytstack/                    dogfood: ytstack tracks itself
 ├── hooks/                       8 hook scripts + hooks.json
-├── skills/                      16 skill packages
+├── skills/                      21 skill packages
 ├── vendor/                      read-only subtrees (superpowers, gstack)
 ├── docs/
 │   ├── ux/                      mandatory skill-authoring contracts

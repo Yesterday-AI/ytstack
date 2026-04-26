@@ -17,5 +17,9 @@
     "artifact-discipline",
     "enterprise-software-development",
     "yesterday-ai"
+  ],
+  "dependencies": [
+    { "name": "skill-creator", "marketplace": "ystacks" },
+    { "name": "web-design", "marketplace": "ystacks" }
   ]
 }
