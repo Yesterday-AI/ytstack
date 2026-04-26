@@ -188,12 +188,20 @@ Starts a fresh Claude Code session with ytstack loaded. Skills appear as `/ytsta
 
 ### Via marketplace (recommended for shared use)
 
+ytstack is currently private and lives cross-listed in `Yesterday-AI/ystacks-internal` (Yesterday's PRIVATE plugin catalog). When ytstack flips public, it will list in `Yesterday-AI/ystacks` (the PUBLIC catalog).
+
 ```bash
-/plugin marketplace add Yesterday-AI/ystacks
-/plugin install ytstack@ystacks
+# Today (private):
+/plugin marketplace add Yesterday-AI/ystacks            # for cross-mp deps (skill-creator, web-design)
+/plugin marketplace add Yesterday-AI/ystacks-internal   # for ytstack itself + yesterday-brand cross-mp dep
+/plugin install ytstack@ystacks-internal
 ```
 
-`Yesterday-AI/ystacks` is Yesterday's PUBLIC plugin catalog -- a thin marketplace repo that lists ytstack alongside other public Yesterday plugins (yastack, yopstack, ydstack). No auth required for the public catalog. ytstack itself is currently a private repo; private-repo auth uses your existing `gh auth login` / git credential helper.
+ytstack declares cross-marketplace dependencies on:
+- `skill-creator` + `web-design` from `Yesterday-AI/ystacks` (public)
+- `yesterday-brand` from `Yesterday-AI/ystacks-internal` (private; brand guidelines)
+
+Both marketplaces are required for full dependency resolution. Private-repo auth uses your existing `gh auth login` / git credential helper.
 
 <details>
 <summary><strong>Legacy: install via ytstack's self-marketplace</strong></summary>
@@ -201,11 +209,13 @@ Starts a fresh Claude Code session with ytstack loaded. Skills appear as `/ytsta
 ytstack also self-marketplaces from its own repo:
 
 ```bash
+/plugin marketplace add Yesterday-AI/ystacks
+/plugin marketplace add Yesterday-AI/ystacks-internal
 /plugin marketplace add Yesterday-AI/ytstack
 /plugin install ytstack@ytstack
 ```
 
-This path predates the consolidation onto `ystacks` and remains functional. New installs should prefer `ystacks`. See [`.ytstack/DECISIONS.md`](./.ytstack/DECISIONS.md) for the consolidation decision.
+The self-marketplace declares `allowCrossMarketplaceDependenciesOn: ["ystacks", "ystacks-internal"]` so cross-mp deps resolve here too. This path predates the consolidation onto `ystacks` and remains functional. New installs should prefer the `@ystacks-internal` (or `@ystacks` once public) path. See [`.ytstack/DECISIONS.md`](./.ytstack/DECISIONS.md) for the consolidation decision.
 
 </details>
 
