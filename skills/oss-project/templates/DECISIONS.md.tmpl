@@ -1,0 +1,44 @@
+# Architecture Decisions
+
+This is the living log of iterative project decisions for `{{PROJECT_NAME}}`.
+
+- `CONTEXT.md` provides static background and architecture orientation.
+- `ROADMAP.md` captures future direction and priorities.
+- `DECISIONS.md` captures decisions that shape implementation over time.
+
+## Governance (Founder Mode)
+
+Current project governance is intentionally lean:
+
+- **Owner**: {{OWNER}}
+- **AI implementation agent**: {{AGENT}}
+
+Decision rules:
+
+- Use `DECISIONS.md` for non-trivial architecture changes.
+- New decisions start as `Status: proposed`.
+- Only {{OWNER}} marks a decision as `accepted` in founder mode.
+- Add new entries at the end with the next decision ID.
+
+Decision status values:
+
+- `proposed`
+- `accepted`
+- `superseded`
+
+Decision template:
+
+```md
+## DEC-00X: <Title>
+
+- **Status**: proposed
+- **Date**: YYYY-MM-DD
+- **Owner**: {{OWNER}}
+- **Proposed-by**: {{AGENT}}
+- **Accepted-by**: (pending)
+- **Decision**: <one sentence>
+- **Rationale**: <why this over alternatives>
+- **Supersedes**: DEC-00Y (optional)
+- **Affected modules**:
+    - `src/...`
+```

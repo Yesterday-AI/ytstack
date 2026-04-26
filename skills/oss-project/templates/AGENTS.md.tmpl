@@ -1,0 +1,66 @@
+# {{PROJECT_NAME}}
+
+{{SHORT_DESCRIPTION}}
+
+## Build & Test
+
+```bash
+{{INSTALL_CMD}}
+{{TYPECHECK_CMD}}
+{{BUILD_CMD}}
+{{TEST_CMD}}
+```
+
+## Code Conventions
+
+- {{LANG_CONVENTIONS}}
+- Error handling: throw descriptive errors early. Never swallow silently.
+- Comments: only non-obvious *why*. Never narrate what code does.
+- TSDoc / docstrings required on every exported function and class.
+- Reference decision IDs where relevant (`@see DEC-001`).
+
+## Architecture ({{FILE_COUNT}} files in `src/`)
+
+{{FILE_LIST}}
+
+## Key Decisions
+
+Read `DECISIONS.md` for full rationale. Summary:
+
+{{DECISIONS_SUMMARY}}
+
+## PR Checklist
+
+Before submitting:
+
+1. `{{TYPECHECK_CMD}}` — zero errors.
+2. `{{BUILD_CMD}}` — compiles clean.
+3. `{{TEST_CMD}}` — all tests pass.
+4. Add a changeset (skip for docs-only changes).
+5. Docs on any new/changed public API.
+6. Tests for any new/changed behavior.
+7. Update docs if architecture or decisions changed.
+
+## Decision Impact
+
+Every PR must declare decision impact:
+
+- **None**: no architecture decision touched.
+- **Implements existing**: references `DEC-xxx`.
+- **Proposes new**: adds `DEC-xxx` with `Status: proposed` in `DECISIONS.md`.
+
+## Governance
+
+{{GOVERNANCE_BLOCK}}
+
+## Reading Order
+
+1. `ROADMAP.md` — current priorities, constraints, and acceptance criteria.
+2. `DECISIONS.md` — architecture decisions with rationale.
+3. `CONTEXT.md` — static background and module dependency graph.
+4. `CONTRIBUTING.md` — full dev workflow, testing philosophy, documentation standards.
+5. `src/*.{{EXT}}` — inline docs are source of truth for implementation details.
+
+## Gotchas
+
+{{GOTCHAS}}
