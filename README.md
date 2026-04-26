@@ -13,7 +13,7 @@
     <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
     <img alt="version" src="https://img.shields.io/badge/version-0.1.0-FC4E14">
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
-    <img alt="skills" src="https://img.shields.io/badge/skills-16-FC4E14">
+    <img alt="skills" src="https://img.shields.io/badge/skills-21-FC4E14">
     <img alt="hooks" src="https://img.shields.io/badge/hooks-8-FC4E14">
   </p>
 
@@ -21,7 +21,7 @@
     <tr>
       <td align="center"><strong>1</strong><br/>install</td>
       <td align="center"><strong>0</strong><br/>separate runtimes</td>
-      <td align="center"><strong>16</strong><br/>curated skills</td>
+      <td align="center"><strong>21</strong><br/>curated skills</td>
       <td align="center"><strong>MIT</strong><br/>open source</td>
     </tr>
   </table>
