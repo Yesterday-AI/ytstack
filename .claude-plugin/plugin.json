@@ -20,6 +20,7 @@
   ],
   "dependencies": [
     { "name": "skill-creator", "marketplace": "ystacks" },
-    { "name": "web-design", "marketplace": "ystacks" }
+    { "name": "web-design", "marketplace": "ystacks" },
+    { "name": "yesterday-brand", "marketplace": "ystacks-internal" }
   ]
 }
