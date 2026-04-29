@@ -5,12 +5,12 @@
     "name": "Yesterday",
     "url": "https://github.com/Yesterday-AI"
   },
-  "allowCrossMarketplaceDependenciesOn": ["ystacks", "ystacks-internal"],
+  "allowCrossMarketplaceDependenciesOn": ["ystacks", "ystacks-internal", "claude-plugins-official"],
   "plugins": [
     {
       "name": "ytstack",
       "description": "Claude Code plugin. Project-OS artifact discipline + curated superpowers and gstack skill wrappers + Agent Teams orchestration.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "source": "./",
       "author": {
         "name": "Yesterday",
