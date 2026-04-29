@@ -1,6 +1,6 @@
 {
   "name": "ytstack",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Yesterday Technologies Stack -- opinionated software-development OS for AI agents. Curated superpowers + gstack skills plus Project-OS artifact discipline (PROJECT.md, DECISIONS.md, KNOWLEDGE.md, milestone/slice/task hierarchy), orchestrated via SessionStart hooks.",
   "author": {
     "name": "Yesterday",
@@ -19,7 +19,6 @@
     "yesterday-ai"
   ],
   "dependencies": [
-    { "name": "skill-creator", "marketplace": "claude-plugins-official" },
     { "name": "web-design", "marketplace": "ystacks" },
     { "name": "yesterday-brand", "marketplace": "ystacks-internal" }
   ]
