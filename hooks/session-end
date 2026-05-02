@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # ytstack SessionEnd hook
 #
-# Fires when Claude Code ends the session. Updates STATE.md's last_updated
-# timestamp and writes a journal entry with end-of-session marker.
+# Fires when Claude Code ends the session. Appends a journal entry with
+# end-of-session marker. Does NOT mutate STATE.md -- that file is a tracked
+# source-of-truth Markdown, written deliberately by skills as part of state
+# transitions. A hook firing on every session end has no business writing to
+# it (creates phantom diffs on every git status).
 #
 # Side-effects only. Does not emit stdout context.
 
@@ -25,17 +28,6 @@ fi
 STATE_FILE="$YT_DIR/STATE.md"
 JOURNAL_DIR="$YT_DIR/journal"
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-# Update last_updated field in STATE.md (portable BSD + GNU sed)
-if [ -f "$STATE_FILE" ]; then
-  if sed --version >/dev/null 2>&1; then
-    # GNU sed
-    sed -i "s/^last_updated: .*/last_updated: $TS/" "$STATE_FILE"
-  else
-    # BSD sed (macOS)
-    sed -i '' "s/^last_updated: .*/last_updated: $TS/" "$STATE_FILE"
-  fi
-fi
 
 # Append to journal (persistent log of sessions)
 mkdir -p "$JOURNAL_DIR"
