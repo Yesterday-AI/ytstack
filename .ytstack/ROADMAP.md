@@ -161,10 +161,40 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 **Exit criteria:**
 - Greenfield smoke-test ("baue mir eine cli...") routes to `office-hours` first (not `plan-milestone` or `init-project`), per DECISIONS 2026-04-24 "Greenfield-flow reorder".
 - Brownfield-without-.ytstack case: a user opens an existing project that has no `.ytstack/`, and ytstack offers explicit choice (init-project vs ad-hoc) instead of either silently bypassing or assuming greenfield.
+- Brownfield-without-.ytstack init MUST run a detect-analyze-migrate pass, not scaffold from empty templates. See "Scope clarification 2026-05-02" below.
 - README documents all three workflows with diagrams; QUICKSTART covers all three.
 
 **Scope reference:**
 - DECISIONS 2026-04-24 "Greenfield-flow reorder" + DECISIONS 2026-04-24 "Wrapper mechanism = shell-exec inject + cross-ref check" originally merged this with wrapper-refactor as a single milestone. The wrapper-refactor part was completed in scope of those decisions; what remains is the workflow-reorder part PLUS the new brownfield-without-.ytstack case identified 2026-04-25.
+
+**Scope clarification 2026-05-02 (from llm-wiki encounter):**
+
+When a brownfield repo without `.ytstack/` is detected, the workflow needs an explicit *detect-analyze-migrate* phase before scaffolding. Symptom that surfaced this: existing project (`docs/design-decisions.md`, `docs/concept.md`, `docs/PROCESS.md`, `docs/plans/`, README, claude-memory `project_*.md`) is not greenfield-unvalidated, so plain `init-project` would create empty stubs that duplicate or contradict what already exists. Greenfield flow (office-hours → plan-ceo-review → init-project) doesn't fit either, because the project is already validated by months of artifacts.
+
+What the brownfield-init flow needs:
+
+1. **Detect** -- scan repo for ytstack-equivalent artifacts:
+    - `docs/design-decisions.md`, `docs/decisions/*`, `docs/adr/*` -> candidate for `DECISIONS.md`
+    - `docs/concept.md`, README sections, vision docs -> candidate for `PROJECT.md`
+    - `docs/PROCESS.md`, `docs/runbook*`, `OPERATING.md` -> candidate for `RUNTIME.md`
+    - `docs/plans/`, `ROADMAP.md`, `BACKLOG.md` -> candidate for `.ytstack/backlog/` + `ROADMAP.md`
+    - `~/.claude/projects/<encoded>/memory/project_*.md` + `feedback_*.md` -> candidate for `KNOWLEDGE.md` + `PREFERENCES.md`
+    - Any `AGENTS.md` / `CLAUDE.md` already referencing ytstack-equivalent concepts
+2. **Analyze** -- present a mapping table to the user: what was found, where it would go, what's missing. Surface conflicts (e.g. two competing decision records). Surface gaps (no STATE.md equivalent exists anywhere).
+3. **Migrate (with user approval per item)** -- options per artifact:
+    - Move into `.ytstack/` (e.g. `docs/design-decisions.md` -> `.ytstack/DECISIONS.md`, update CLAUDE.md/README pointer)
+    - Copy/extract subset (e.g. distill `docs/concept.md` into `PROJECT.md` while keeping the long-form doc public-facing)
+    - Reference-only via pointer header (when the existing doc must stay where it is for external reasons)
+    - Leave alone (artifact is genuinely public-doc, not project-memory)
+4. **Scaffold gaps** -- only after migration, create empty `.ytstack/` files for slots that had no source artifact (typically `STATE.md`, `OFFICE-HOURS.md`-current).
+5. **Update entry-point docs** -- CLAUDE.md / AGENTS.md / README pointers updated to reflect the new shape.
+
+This is **not** a one-shot prompt; it's an interactive multi-step workflow with per-artifact user decision. Likely a new skill (`ytstack:adopt-brownfield` or similar) that `using-ytstack` routes to when it detects "no `.ytstack/` AND repo has >N candidate artifacts AND is not greenfield-empty".
+
+Open design questions for `ytstack:plan-milestone` to resolve:
+- Does the detect step produce a single migration-plan artifact (`.ytstack/ADOPTION-PLAN.md`) the user reviews before any moves happen, or per-artifact prompts inline?
+- Where do non-trivial historical docs land (e.g. multi-year ADR archive) -- inline in `.ytstack/DECISIONS.md` or `decisions/archive/`?
+- How does the migration interact with `office-hours` -- skip it (project already validated by track record), or run a retroactive condensed version to extract the implicit pitch?
 
 **Plan via:** `ytstack:plan-milestone` -- not yet invoked.
 
