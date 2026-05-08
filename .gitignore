@@ -43,8 +43,10 @@ vendor/**/build/
 vendor/**/.next/
 vendor/**/__pycache__/
 
-# Agents
+# Agents local user settings
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/worktrees/
 
 # Tmp
 ~*.md

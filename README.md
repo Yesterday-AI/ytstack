@@ -193,15 +193,14 @@ ytstack is currently private and lives cross-listed in `Yesterday-AI/ystacks-int
 ```bash
 # Today (private):
 /plugin marketplace add Yesterday-AI/ystacks            # for cross-mp deps (skill-creator, web-design)
-/plugin marketplace add Yesterday-AI/ystacks-internal   # for ytstack itself + yesterday-brand cross-mp dep
+/plugin marketplace add Yesterday-AI/ystacks-internal   # for ytstack itself
 /plugin install ytstack@ystacks-internal
 ```
 
 ytstack declares cross-marketplace dependencies on:
 - `skill-creator` + `web-design` from `Yesterday-AI/ystacks` (public)
-- `yesterday-brand` from `Yesterday-AI/ystacks-internal` (private; brand guidelines)
 
-Both marketplaces are required for full dependency resolution. Private-repo auth uses your existing `gh auth login` / git credential helper.
+Private-repo auth uses your existing `gh auth login` / git credential helper.
 
 <details>
 <summary><strong>Legacy: install via ytstack's self-marketplace</strong></summary>
