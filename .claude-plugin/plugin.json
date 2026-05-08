@@ -19,6 +19,6 @@
     "yesterday"
   ],
   "dependencies": [
-    { "name": "web-design" }
+    { "name": "web-design", "marketplace": "yesterday-public-plugins"}
   ]
 }

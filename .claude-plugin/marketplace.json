@@ -5,7 +5,7 @@
     "name": "Yesterday",
     "url": "https://github.com/Yesterday-AI"
   },
-  "allowCrossMarketplaceDependenciesOn": ["ystacks", "ystacks-internal"],
+  "allowCrossMarketplaceDependenciesOn": ["yesterday-public-plugins"],
   "plugins": [
     {
       "name": "ytstack",
@@ -21,7 +21,7 @@
         "agentic",
         "development-methodology",
         "project-management",
-        "yesterday-ai"
+        "yesterday"
       ]
     }
   ]
