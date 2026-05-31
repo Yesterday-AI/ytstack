@@ -571,6 +571,29 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - Single cross-mp dependency: `web-design`.
 - README §Install + §Status reconciled in the same change; version aligned to 0.1.5 across `plugin.json`, `marketplace.json`, README badge.
 
-**Open follow-up (not blocking, flagged to maintainer):** ytstack's `plugin.json` points the `web-design` dep at marketplace `yesterday-public-plugins`, but `Yesterday-AI/skills/marketplace.json` currently lists only `ytstack` (no `web-design` entry). Verify the dependency actually resolves on a clean install, or repoint it to the marketplace that hosts `web-design`.
+**Open follow-up (not blocking, maintainer-owned, not a ytstack-repo edit):** ytstack's `plugin.json` points the `web-design` dep at marketplace `yesterday-public-plugins` -- the correct public catalog name (repo `Yesterday-AI/skills`) -- but that catalog currently lists only `ytstack`. `web-design` previously lived in the now-deleted `ystacks` catalog. The live marketplaces are `yesterday-public-plugins` (`Yesterday-AI/skills`) and `yesterday-private-plugins` (`Yesterday-AI/yesterday-skills`); `web-design` still needs migrating into the public one for the dep to resolve on a clean install. The dep target name in ytstack's manifests is already right, so no ytstack-repo change is needed here.
 
-**Supersedes:** the ytstack-listing portions of "2026-04-25: Marketplace architecture split into ystacks (public) + ystacks-internal (private)" and the install commands in "2026-04-24: Marketplace name equals plugin name". The self-marketplace mechanism itself remains valid.
+**Supersedes:** the ytstack-listing portions of "2026-04-25: Marketplace architecture split into ystacks (public) + ystacks-internal (private)" and the install commands in "2026-04-24: Marketplace name equals plugin name". The self-marketplace mechanism itself remains valid. Note 2026-05-31: the `ystacks` / `ystacks-internal` catalogs are now deleted; the live marketplaces are `yesterday-public-plugins` (`Yesterday-AI/skills`) and `yesterday-private-plugins` (`Yesterday-AI/yesterday-skills`).
+
+---
+
+## 2026-05-31: Add `kind: reference` skill class (exempt from procedure-section contract)
+
+**Context:** `bin/ytstack-check` failed 10 errors across 5 native skills migrated from agentic-foundation (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`): each missing `## Checklist` and `## Terminal State`. These are methodology / lookup references, not numbered procedures, so the procedure-skill contract did not fit them. The contract previously said "every skill, no exception", which contradicted the shipped skills. `using-ytstack` already had an analogous exemption via `kind: directive` (the check skips structural sections for it).
+
+**Options considered:**
+- A) Add `## Checklist` + `## Terminal State` to all 5, forcing them into the procedure template.
+- B) Introduce a `kind: reference` skill class that, like `kind: directive`, is exempt from the structural-section checks (Checklist / Terminal State / Preamble / Procedure) but still gets em-dash hygiene. Document it in `skill-structure.md`.
+- C) Leave the failures, document as a known deviation.
+
+**Chose:** B.
+
+**Reason:** These skills genuinely are not procedures; option A would distort reference content into a checklist shape it does not have. `kind: directive` already established the precedent that non-procedural skill classes skip the structural contract. A parallel `kind: reference` class matches what the skills are and removes the contradiction without weakening the contract for real procedure skills.
+
+**How to apply:**
+- `bin/ytstack-check`: `is_reference = fm.get("kind") == "reference"`; the early-return that skips structural sections now fires for `is_directive or is_reference`.
+- The 5 skills above get `kind: reference` in frontmatter.
+- `docs/ux/skill-structure.md` documents the two non-procedural classes (`directive`, `reference`) and warns against using `reference` to dodge writing a checklist on a real procedure skill.
+- `bin/ytstack-check` now passes with no failures (warnings only: pre-existing vendor sibling-skill references, accepted per 2026-04-25 "Vendored-preamble drift accepted").
+
+**Supersedes:** none. Extends the structural contract with a class distinction the contract did not previously name.

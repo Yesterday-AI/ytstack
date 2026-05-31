@@ -7,6 +7,7 @@ description: >
   reviewing, or restructuring frontend components.
 tier: core
 version: 0.1.0
+kind: reference
 allowed-tools:
   - Read
   - Glob

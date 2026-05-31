@@ -33,6 +33,7 @@ name: <skill-name>              # kebab-case, matches folder name
 description: <one-sentence>     # trigger description, see writing-style.md
 tier: core|task|background      # Kontext-Pyramide tier
 version: 1.0.0                  # semver
+kind: directive|reference       # OPTIONAL, see "Skill classes" below
 allowed-tools:                  # explicit allowlist
   - Bash
   - Read
@@ -40,6 +41,17 @@ allowed-tools:                  # explicit allowlist
   - AskUserQuestion
 ---
 ```
+
+## Skill classes (`kind`)
+
+Most skills are **procedure skills**: they run a numbered checklist and end in a terminal state. They MUST have `## Checklist` and `## Terminal State`. Omit `kind` for these (the default).
+
+Two non-procedural classes are exempt from the structural-section requirements (they still get em-dash hygiene):
+
+- `kind: directive` -- meta-primers that prime the agent rather than run a procedure (e.g. `using-ytstack`). The procedure lives in the skills the directive points at.
+- `kind: reference` -- methodology or lookup references with no numbered procedure to run (e.g. `atomic-design`, `software-craftsmanship`, the `*-api` lookup skills, `oss-project`). They carry principles, rules, and patterns the agent applies in context.
+
+`bin/ytstack-check` skips `## Checklist` / `## Terminal State` / `## Preamble` / `## Procedure` for both classes. Do not reach for `kind: reference` to dodge writing a checklist on a skill that really is a procedure -- if it has discrete steps with a terminal state, it is a procedure skill.
 
 ## HARD-GATE (pre-empt premature action)
 

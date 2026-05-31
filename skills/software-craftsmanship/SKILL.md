@@ -3,6 +3,7 @@ name: software-craftsmanship
 description: Clean code, robust architecture, no test slop. Foundational skill for high-quality software engineering, code structure, and reviews.
 tier: core
 version: 0.1.0
+kind: reference
 allowed-tools:
   - Read
   - Glob

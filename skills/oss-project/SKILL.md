@@ -9,6 +9,7 @@ description: >
   Outputs repo description and tags at the end.
 tier: core
 version: 0.1.0
+kind: reference
 allowed-tools:
   - Bash
   - Read

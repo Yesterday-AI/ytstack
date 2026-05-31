@@ -3,6 +3,7 @@ name: deutschland-stack-api
 description: Use when picking technologies for German public-sector projects (Bund/Länder/Kommunen), EU digital sovereignty contexts, or when user mentions Deutschland-Stack / DS-konform / Verwaltungs-IT. Biases tech choices toward the 128 graduated open-source standards catalogued by the German government. Fetches live data from technologie.deutschland-stack.gov.de.
 tier: core
 version: 0.1.0
+kind: reference
 allowed-tools:
   - Bash
   - Read

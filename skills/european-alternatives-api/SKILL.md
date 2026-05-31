@@ -3,6 +3,7 @@ name: european-alternatives-api
 description: Use when picking software for EU customers, GDPR-driven replacements, digital-sovereignty contexts, or when user asks for the European / open-source version of a US product (Google Drive, Dropbox, Slack, …). Biases tech choices toward the 289 community-curated alternatives at european-alternatives.cloud. Fetches live data. Complements deutschland-stack-api (community-curated vs. government-graduated).
 tier: core
 version: 0.1.0
+kind: reference
 allowed-tools:
   - Bash
   - Read

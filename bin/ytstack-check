@@ -123,9 +123,13 @@ def check_skill(path, root):
     if not fm.get("description"):
         fails.append(f"{path}: missing description")
 
-    # kind: directive skills are meta-primers (like using-ytstack),
-    # not procedural. They skip the structural-section checks.
-    is_directive = fm.get("kind") == "directive"
+    # kind: directive skills are meta-primers (like using-ytstack);
+    # kind: reference skills are methodology / lookup references (no
+    # numbered procedure to run). Neither is procedural, so both skip
+    # the structural-section checks (Checklist / Terminal State / ...).
+    kind = fm.get("kind")
+    is_directive = kind == "directive"
+    is_reference = kind == "reference"
 
     # Thin-wrapper skills inline a vendor SKILL.md via the shell-exec
     # injection pattern (```!  cat .../vendor/.../SKILL.md  ```). The
@@ -151,10 +155,11 @@ def check_skill(path, root):
                 warns.append(f"{path}:{i}: em-dash in prose (use comma/period/...)")
         return fails, warns
 
-    if is_directive:
-        # Directives get em-dash hygiene but skip structural-section
-        # requirements (Checklist / Terminal State / Preamble / Procedure
-        # live in the vendored flow or the action skill, not the primer).
+    if is_directive or is_reference:
+        # Directives (meta-primers) and references (methodology / lookup)
+        # get em-dash hygiene but skip structural-section requirements
+        # (Checklist / Terminal State / Preamble / Procedure assume a
+        # numbered procedure these skill classes do not have).
         for i, line in enumerate(body.split("\n"), 1):
             if "—" in line and not line.strip().startswith("|"):
                 warns.append(f"{path}:{i}: em-dash in prose (use comma/period/...)")
