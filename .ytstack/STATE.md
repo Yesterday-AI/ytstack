@@ -1,7 +1,7 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-05-31T10:10:00Z
+last_updated: 2026-05-31T11:00:00Z
 current_milestone: M012
 active_slice: none
 active_task: none
@@ -77,7 +77,11 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**M012 shipped (v0.1.5, pushed). Issues #16/#19/#20/#21 closed.** Remaining / queued:
+**NEXT (agreed 2026-05-31): tackle issue #22** -- `post-tool-use-bash` hook appends duplicate "Commits-so-far", produces never-settling draft summaries, and breaks worktree dispatch. Possibly implicated in the M012 worktree-swarm oddities. Start: `systematic-debugging` on the hook (`hooks/post-tool-use-bash`), reproduce via a piped Bash-tool payload + a teammate-worktree scenario, then plan a fix slice. User will run this after `/compact`.
+
+---
+
+**M012 shipped (v0.1.5, pushed). Issues #16/#19/#20/#21 closed. Workflow infographics regenerated (premium hand-drawn) + pushed.** Remaining / queued:
 1. **`/plugin update`** to 0.1.5 in any active session to make the fixes live (cached 0.1.4 still active here).
 2. **Cross-repo marketplace sync** (NOT done -- needs separate authorization): the `ystacks-internal` catalog lists ytstack; confirm it picks up v0.1.5 (per the "Plugin-Marketplace-Aenderung = README-Update" rule). Out of this repo's scope.
 3. **M014 -- vendor symlink dereferencing for RemotePluginSync** (separate): uncommitted draft + README "Desktop + SSH" workaround live in the `claude/thirsty-bhabha-a03490` worktree; salvage or re-plan separately. Worktree intentionally left in place (holds the only copy).
