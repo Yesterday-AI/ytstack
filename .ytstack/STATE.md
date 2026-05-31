@@ -9,7 +9,7 @@ active_task: none
 
 # State
 
-**Status (2026-05-31, M015):** Fixed issue #22 via `systematic-debugging` (root cause empirically reproduced, not trusted from the report). The `post-tool-use-bash` hook is now **stub-once** (creates the draft `T##-SUMMARY.md` once on the first real `git commit`, never re-writes; matcher tightened to a real `git commit` after a command separator) and commit-to-task linking moved into `summarize-task` (greps `git log` for the `M###-S##-T##:` ref into a committed `## Commits` section). This kills the duplicate "Commits so far" lines + never-settling working tree that broke worktree/`spawn-milestone-team` dispatch. New regression test `tests/post-tool-use-bash.test.sh` (10 cases, all green). Version bumped 0.1.5 -> **0.1.6**. DECISIONS entry "post-tool-use-bash is stub-once" + KNOWLEDGE gotcha added. **NOT yet committed/pushed** (awaiting diff review + explicit "commit"/"push"). **NOT released, issue #22 NOT closed** (awaiting authorization). Cache caveat: live for users only after `/plugin update` to 0.1.6.
+**Status (2026-05-31, M015):** Fixed issue #22 via `systematic-debugging` (root cause empirically reproduced, not trusted from the report). The `post-tool-use-bash` hook is now **stub-once** (creates the draft `T##-SUMMARY.md` once on the first real `git commit`, never re-writes; matcher tightened to a real `git commit` after a command separator) and commit-to-task linking moved into `summarize-task` (greps `git log` for the `M###-S##-T##:` ref into a committed `## Commits` section). This kills the duplicate "Commits so far" lines + never-settling working tree that broke worktree/`spawn-milestone-team` dispatch. New regression test `tests/post-tool-use-bash.test.sh` (10 cases, all green). Version bumped 0.1.5 -> **0.1.6**. DECISIONS entry "post-tool-use-bash is stub-once" + KNOWLEDGE gotcha added. **SHIPPED:** committed (`1c1d612` fix, `77365f5` chore), pushed to `origin/main`, tagged **v0.1.6** (pushed), CHANGELOG.md created, **issue #22 CLOSED**. Cache caveat: live for users only after `/plugin update` to 0.1.6.
 
 **Prior status:** M012 DONE + RELEASED as **v0.1.5** (tagged + pushed). All 4 slices landed on `main` and pushed to origin. Executed via worktree-isolated swarm (3 general-purpose teammates in `Agent(isolation:'worktree')` + 1 verifier; the ytstack:implementer/verifier agent types crashed on spawn ON issue #20 itself -- live proof it was P0). Commits: `015f988` #19, `da41845` #20, `b7a5695` #21-RC1+#16, `2af326e` #21-RC2. Independently re-verified 2026-05-31: #19/#20/#21-RC2 behavior-tested; #21-RC1 bash+guard verified (frontmatter-write is prose, exercised only when the skill runs live). plan-eng-review locked 3 decisions: active_slice plan-task-owned + team-member-guarded; swarm commit discipline; ytstack encourages git worktree isolation (-> M013). **CACHE CAVEAT:** fixes go live for users after `/plugin update` to 0.1.5; in THIS session the cached 0.1.4 is still active (so #20 still reproduces here). **M012 numbering collision:** a prior uncommitted plan in the `claude/thirsty-bhabha-a03490` worktree had named the vendor-symlink work "M012" -- reserved as **M014** (separate, to be planned). Queued: M010, M011, M013, M014. See `M012-ROADMAP.md` + DECISIONS.md.
 
@@ -79,13 +79,9 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Issue #22 -- DONE (M015), pending review.** Fix implemented + tested (see Status above). Immediate to-dos before this is truly closed:
-1. **Review the diff** (hook + summarize-task + tests + artifacts + version bump), then commit (path-scoped, `M015-S01-T01:` message) -- awaiting explicit go.
-2. **Push** + (optionally) tag v0.1.6 -- awaiting explicit "push"/"release".
-3. **Close issue #22** with the commit ref -- awaiting authorization.
-4. `/plugin update` to 0.1.6 to make it live (cached older plugin still active in-session).
+**Issue #22 -- CLOSED, shipped as v0.1.6 (M015).** Fix committed (`1c1d612`/`77365f5`), pushed, tagged `v0.1.6`, issue closed. Only residual: `/plugin update` to 0.1.6 to make it live (cached older plugin still active in-session); cross-repo marketplace sync (`yesterday-public-plugins` catalog) if relevant -- separate authorization, out of this repo's scope.
 
-**Then queued:** M010 (brownfield = #18), M011 (post-summarize lifecycle), M013 (worktree mode), M014 (vendor symlink), agentic-foundation migration.
+**Next queued:** M010 (brownfield = #18), M011 (post-summarize lifecycle), M013 (worktree mode), M014 (vendor symlink), agentic-foundation migration.
 
 ---
 
