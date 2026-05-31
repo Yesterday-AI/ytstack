@@ -597,3 +597,25 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - `bin/ytstack-check` now passes with no failures (warnings only: pre-existing vendor sibling-skill references, accepted per 2026-04-25 "Vendored-preamble drift accepted").
 
 **Supersedes:** none. Extends the structural contract with a class distinction the contract did not previously name.
+
+---
+
+## 2026-05-31: Contributor guide is AGENTS.md; CLAUDE.md is a symlink to it
+
+**Context:** The agent-facing contributor guide lived in `CLAUDE.md`. `AGENTS.md` is the emerging cross-tool convention for agent instructions, while Claude Code still loads `CLAUDE.md` natively. Sibling repo `clawrag/` already uses an `AGENTS.md` + `CLAUDE.md`-symlink layout.
+
+**Options considered:**
+- A) Keep `CLAUDE.md` as the only file.
+- B) Rename to `AGENTS.md` and make `CLAUDE.md` a tracked symlink to it.
+- C) Maintain two real files (`AGENTS.md` + `CLAUDE.md`) with duplicated content.
+
+**Chose:** B (`git mv CLAUDE.md AGENTS.md && ln -s AGENTS.md CLAUDE.md`).
+
+**Reason:** One source of truth, named by the cross-tool convention, with zero behavior change for Claude Code (the symlink, git mode 120000, resolves transparently for native load, `[ -f CLAUDE.md ]`, and Read/Edit/Write). Matches the workspace precedent set by `clawrag/`. Option C drifts; option A keeps the non-conventional name.
+
+**How to apply:**
+- Prose docs name `AGENTS.md` as the contributor guide; `CLAUDE.md` appears only as "symlinks to it" mentions.
+- Leave generic Claude-Code-convention references (e.g. `skills/using-ytstack/SKILL.md` "User's explicit instructions (CLAUDE.md, ...)") and vendor paths (`vendor/**/CLAUDE.md`) untouched -- the skill ships to projects where the user's file genuinely is `CLAUDE.md`.
+- No `.ytstack/` artifact sweep for the rename (append-only / hook-managed); the symlink keeps any historical references valid.
+
+**Supersedes:** none.
