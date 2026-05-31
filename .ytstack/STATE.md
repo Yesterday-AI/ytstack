@@ -1,15 +1,17 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-05-31T11:00:00Z
-current_milestone: M012
+last_updated: 2026-05-31T10:37:54Z
+current_milestone: M015
 active_slice: none
 active_task: none
 ---
 
 # State
 
-**Status:** M012 DONE + RELEASED as **v0.1.5** (tagged + pushed). All 4 slices landed on `main` and pushed to origin. Executed via worktree-isolated swarm (3 general-purpose teammates in `Agent(isolation:'worktree')` + 1 verifier; the ytstack:implementer/verifier agent types crashed on spawn ON issue #20 itself -- live proof it was P0). Commits: `015f988` #19, `da41845` #20, `b7a5695` #21-RC1+#16, `2af326e` #21-RC2. Independently re-verified 2026-05-31: #19/#20/#21-RC2 behavior-tested; #21-RC1 bash+guard verified (frontmatter-write is prose, exercised only when the skill runs live). plan-eng-review locked 3 decisions: active_slice plan-task-owned + team-member-guarded; swarm commit discipline; ytstack encourages git worktree isolation (-> M013). **CACHE CAVEAT:** fixes go live for users after `/plugin update` to 0.1.5; in THIS session the cached 0.1.4 is still active (so #20 still reproduces here). **M012 numbering collision:** a prior uncommitted plan in the `claude/thirsty-bhabha-a03490` worktree had named the vendor-symlink work "M012" -- reserved as **M014** (separate, to be planned). Queued: M010, M011, M013, M014. See `M012-ROADMAP.md` + DECISIONS.md.
+**Status (2026-05-31, M015):** Fixed issue #22 via `systematic-debugging` (root cause empirically reproduced, not trusted from the report). The `post-tool-use-bash` hook is now **stub-once** (creates the draft `T##-SUMMARY.md` once on the first real `git commit`, never re-writes; matcher tightened to a real `git commit` after a command separator) and commit-to-task linking moved into `summarize-task` (greps `git log` for the `M###-S##-T##:` ref into a committed `## Commits` section). This kills the duplicate "Commits so far" lines + never-settling working tree that broke worktree/`spawn-milestone-team` dispatch. New regression test `tests/post-tool-use-bash.test.sh` (10 cases, all green). Version bumped 0.1.5 -> **0.1.6**. DECISIONS entry "post-tool-use-bash is stub-once" + KNOWLEDGE gotcha added. **NOT yet committed/pushed** (awaiting diff review + explicit "commit"/"push"). **NOT released, issue #22 NOT closed** (awaiting authorization). Cache caveat: live for users only after `/plugin update` to 0.1.6.
+
+**Prior status:** M012 DONE + RELEASED as **v0.1.5** (tagged + pushed). All 4 slices landed on `main` and pushed to origin. Executed via worktree-isolated swarm (3 general-purpose teammates in `Agent(isolation:'worktree')` + 1 verifier; the ytstack:implementer/verifier agent types crashed on spawn ON issue #20 itself -- live proof it was P0). Commits: `015f988` #19, `da41845` #20, `b7a5695` #21-RC1+#16, `2af326e` #21-RC2. Independently re-verified 2026-05-31: #19/#20/#21-RC2 behavior-tested; #21-RC1 bash+guard verified (frontmatter-write is prose, exercised only when the skill runs live). plan-eng-review locked 3 decisions: active_slice plan-task-owned + team-member-guarded; swarm commit discipline; ytstack encourages git worktree isolation (-> M013). **CACHE CAVEAT:** fixes go live for users after `/plugin update` to 0.1.5; in THIS session the cached 0.1.4 is still active (so #20 still reproduces here). **M012 numbering collision:** a prior uncommitted plan in the `claude/thirsty-bhabha-a03490` worktree had named the vendor-symlink work "M012" -- reserved as **M014** (separate, to be planned). Queued: M010, M011, M013, M014. See `M012-ROADMAP.md` + DECISIONS.md.
 
 **Prior status (full build cycle):** Full build cycle complete + post-M009 patches landing + plugin landscape architecture locked. 38/39 roadmap tasks done; 1 deferred (v0.1.0 tag + push -- user action). End-of-cycle review in progress. First interactive smoke-test of `init-project` done 2026-04-24 (partial; surfaced multiple items -- see REVIEW-NOTES). Three workflow infographics now in README as visual reference for upcoming brownfield + debug live-tests. Sibling-plugin landscape (`ystacks` catalog + `yastack` public + `ydstack` / `yastack-internal` subdirs) shipped 2026-04-25 (afternoon).
 
@@ -77,7 +79,13 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**NEXT (agreed 2026-05-31): tackle issue #22** -- `post-tool-use-bash` hook appends duplicate "Commits-so-far", produces never-settling draft summaries, and breaks worktree dispatch. Possibly implicated in the M012 worktree-swarm oddities. Start: `systematic-debugging` on the hook (`hooks/post-tool-use-bash`), reproduce via a piped Bash-tool payload + a teammate-worktree scenario, then plan a fix slice. User will run this after `/compact`.
+**Issue #22 -- DONE (M015), pending review.** Fix implemented + tested (see Status above). Immediate to-dos before this is truly closed:
+1. **Review the diff** (hook + summarize-task + tests + artifacts + version bump), then commit (path-scoped, `M015-S01-T01:` message) -- awaiting explicit go.
+2. **Push** + (optionally) tag v0.1.6 -- awaiting explicit "push"/"release".
+3. **Close issue #22** with the commit ref -- awaiting authorization.
+4. `/plugin update` to 0.1.6 to make it live (cached older plugin still active in-session).
+
+**Then queued:** M010 (brownfield = #18), M011 (post-summarize lifecycle), M013 (worktree mode), M014 (vendor symlink), agentic-foundation migration.
 
 ---
 
@@ -149,7 +157,7 @@ These are referenced by `skills/spawn-milestone-team/SKILL.md` as the default te
 - `task-created` (M006) -- scope-drift check against milestone roadmap
 - `task-completed` (M006) -- auto-draft T##-SUMMARY.md
 - `pre-tool-use-edit` (M007) -- scope + schema drift check before file edits
-- `post-tool-use-bash` (M007) -- auto-append commit to task summary
+- `post-tool-use-bash` (M007; stub-once since M015) -- creates a draft T##-SUMMARY.md once on a task's first commit; commit-to-task linking lives in `summarize-task`
 
 **Docs:**
 

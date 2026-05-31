@@ -32,6 +32,7 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M012 | Swarm Fix-Pack (issues #16/#19/#20/#21: verification crash, advisory-hook exit, slice/task SSOT, session_id, backlog-sweep) | **done** (released v0.1.5) | 11 | 11 |
 | M013 | spawn-milestone-team worktree mode (default-on worktree-per-teammate for parallel slices + merge step + shared-tree opt-out; per DECISIONS 2026-05-31 "ytstack encourages git worktree isolation") | planned | TBD | 0 |
 | M014 | Vendor symlink dereferencing for RemotePluginSync compatibility (number reserved 2026-05-31 to resolve the M012 collision; uncommitted draft + README "Desktop + SSH" workaround in the `claude/thirsty-bhabha-a03490` worktree -- salvage/re-plan separately) | planned | TBD | 0 |
+| M015 | post-tool-use-bash hook fix (issue #22): stub-once hook + commit-to-task linking moved to summarize-task; kills the duplicate "Commits so far" churn + never-settling tree that broke worktree/swarm dispatch. Regression test `tests/post-tool-use-bash.test.sh`. (v0.1.6) | **done** | 1 | 1 |
 
 **Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 + M011 task counts pending milestone planning.
 
