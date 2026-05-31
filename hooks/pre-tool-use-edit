@@ -11,9 +11,10 @@
 #      check whether a migration file is being edited in the same turn.
 #      Editing models without migrations is a classic drift.
 #
-# Both gates emit exit-2 warnings, not blocks. The lead sees the warning
-# and decides. User-driven session with explicit scope creep is still
-# valid work; the goal is to make it conscious.
+# Both gates emit non-blocking warnings (exit 0 — NOT exit 2, which Claude Code
+# treats as a hard block). The lead sees the warning and decides. User-driven
+# session with explicit scope creep is still valid work; the goal is to make it
+# conscious. ytstack's own process/meta files are exempted entirely (see below).
 
 set -uo pipefail
 
@@ -54,6 +55,22 @@ esac
 REL_PATH="${ABS_PATH#$PROJECT_DIR/}"
 
 # ----------------------------------------
+# Allow ytstack's own process / meta files unconditionally
+# ----------------------------------------
+# These are never "scope drift" — they ARE the framework operating:
+# summarize-task writes SUMMARY/STATE/PLAN/ROADMAP outside any task's Files
+# section; ad-hoc DECISIONS/KNOWLEDGE/CONTEXT/backlog additions surface mid-task.
+# Gating them made the lifecycle skills trip their own guardrail (forcing Bash
+# workarounds). Allow silently.
+case "$REL_PATH" in
+  .ytstack/*|*/.ytstack/*) exit 0 ;;
+esac
+case "$(basename "$REL_PATH")" in
+  STATE.md|DECISIONS.md|KNOWLEDGE.md|CONTEXT.md|PROJECT.md|RUNTIME.md|PREFERENCES.md|ROADMAP.md|*-SUMMARY.md|*-PLAN.md|*-ROADMAP.md|*-CONTEXT.md)
+    exit 0 ;;
+esac
+
+# ----------------------------------------
 # Gate 1: Scope drift against active T##-PLAN.md
 # ----------------------------------------
 
@@ -90,7 +107,7 @@ case "$REL_PATH" in
 esac
 
 # ----------------------------------------
-# Emit warnings (exit 2) if any drift detected
+# Emit warnings (non-blocking — exit 0) if any drift detected
 # ----------------------------------------
 
 if [ "$SCOPE_DRIFT" = "yes" ] || [ "$SCHEMA_DRIFT" = "yes" ]; then
@@ -120,7 +137,10 @@ if [ "$SCOPE_DRIFT" = "yes" ] || [ "$SCHEMA_DRIFT" = "yes" ]; then
 
     echo "  Proceeding anyway -- the edit will happen."
   } >&2
-  exit 2
+  # exit 0, NOT exit 2: Claude Code treats a PreToolUse exit 2 as a hard BLOCK
+  # (the edit fails). This hook is advisory — the messages above say so. exit 0
+  # surfaces the warning on stderr and lets the edit proceed, as intended.
+  exit 0
 fi
 
 exit 0
