@@ -29,6 +29,8 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M009 | Docs & Community | **done** | 4 | 4 |
 | M010 | Workflow Reorder + Brownfield-Without-.ytstack | planned | TBD | 0 |
 | M011 | Post-Summarize Lifecycle (5-skill cherry-pick: ship + closure + PR-review + document-release) | planned | TBD | 0 |
+| M012 | Swarm Fix-Pack (issues #16/#19/#20/#21: verification crash, advisory-hook exit, slice/task SSOT, session_id, backlog-sweep) | planned (L, 4 parallel slices) | TBD | 0 |
+| M013 | spawn-milestone-team worktree mode (default-on worktree-per-teammate for parallel slices + merge step + shared-tree opt-out; per DECISIONS 2026-05-31 "ytstack encourages git worktree isolation") | planned | TBD | 0 |
 
 **Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 + M011 task counts pending milestone planning.
 

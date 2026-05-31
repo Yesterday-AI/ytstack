@@ -1,15 +1,17 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-04-25T19:00:00Z
-current_milestone: review + post-M009-patches (M010 + M011 planned; agentic-foundation skill migration next)
+last_updated: 2026-05-31T09:05:00Z
+current_milestone: M012
 active_slice: none
 active_task: none
 ---
 
 # State
 
-**Status:** Full build cycle complete + post-M009 patches landing + plugin landscape architecture locked. 38/39 roadmap tasks done; 1 deferred (v0.1.0 tag + push -- user action). End-of-cycle review in progress. First interactive smoke-test of `init-project` done 2026-04-24 (partial; surfaced multiple items -- see REVIEW-NOTES). Three workflow infographics now in README as visual reference for upcoming brownfield + debug live-tests. Sibling-plugin landscape (`ystacks` catalog + `yastack` public + `ydstack` / `yastack-internal` subdirs) shipped 2026-04-25 (afternoon).
+**Status:** M012 sliced + eng-reviewed (L) -- swarm fix-pack, ready to execute. Four file-disjoint slices: S01 #20 (verification crash), S02 #21-RC1 + #16 (active_slice SSOT + backlog-sweep), S03 #21-RC2 (session_id stdin), S04 #19 (pre-tool-use-edit advisory exit-0). All five items verified against repo code 2026-05-31. plan-eng-review (2026-05-31) locked 3 decisions: active_slice is plan-task-owned + team-member-guarded; swarm commit discipline (M012 shared-tree, lead commits path-scoped); + a product decision that ytstack encourages git worktree isolation for parallel swarms (-> new milestone M013, spawn-milestone-team worktree mode, out of M012 scope). M012 jumps ahead of M010/M011 (still queued) as a low-effort/high-impact defect sweep. See `M012-CONTEXT.md` + `M012-ROADMAP.md` + DECISIONS.md (3 new entries 2026-05-31).
+
+**Prior status (full build cycle):** Full build cycle complete + post-M009 patches landing + plugin landscape architecture locked. 38/39 roadmap tasks done; 1 deferred (v0.1.0 tag + push -- user action). End-of-cycle review in progress. First interactive smoke-test of `init-project` done 2026-04-24 (partial; surfaced multiple items -- see REVIEW-NOTES). Three workflow infographics now in README as visual reference for upcoming brownfield + debug live-tests. Sibling-plugin landscape (`ystacks` catalog + `yastack` public + `ydstack` / `yastack-internal` subdirs) shipped 2026-04-25 (afternoon).
 
 **Post-M009 patches since 2026-04-23:** using-ytstack skill + session-start hook behavior-priming rewrite; 3 subagent definitions (architect / implementer / verifier); `docs/ux/agent-structure.md` contract; git init + initial scaffold commit; superpowers + gstack subtrees added.
 
@@ -74,6 +76,12 @@ M009 Docs & Community            [####]   4/4  DONE
 ```
 
 ## Next action
+
+**Execute M012.** Slicing + eng-review done; all decisions locked. Run `/ytstack:plan-task` for S01-T01 (sequential) OR `/ytstack:spawn-milestone-team` for parallel execution. Swarm requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` + Claude Code v2.1.32+; M012 runs shared-tree with lead-commits-path-scoped discipline (worktree mode lands in M013, not yet built). Per-slice plans: `M012-S0{1..4}-PLAN.md`.
+
+---
+
+**Previously queued (still open, after M012):**
 
 **agentic-foundation skill migration** -- user-confirmed as next (2026-04-25 evening). 32 skills total to migrate: 14 -> ydstack, 14 -> yastack, 4 -> yopstack (incl. opentofu + 3 gstack-wrappers via vendor/gstack subtree-add). Eigene session pro plugin sinnvoll. Once migration completes, agentic-foundation goes obsolete (per user 2026-04-25 evening: "agentic-foundation wird obsolete sein -- baldigst").
 

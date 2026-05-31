@@ -498,3 +498,55 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - All affected repos got their `.ytstack/DECISIONS.md` entries documenting their part of the split.
 
 **Supersedes:** "Marketplace consolidates on Yesterday-AI/ystacks (monorepo + catalog hybrid)" (2026-04-25, earlier today). The "monorepo + catalog hybrid" choice held for ~6 hours before the visibility-split realisation; superseded by this two-marketplace split. The earlier "Lifecycle-phase as the curation heuristic" entry remains valid (the heuristic still applies; only the marketplace topology changed).
+
+---
+
+## 2026-05-31: active_slice is plan-task-owned and team-member-guarded (M012 / issue #21-RC1)
+
+**Context:** issue #21 -- `journal/sessions.jsonl` records `slice:"none"`/`task:"none"` even mid-slice, because nothing writes `active_slice` back to STATE.md frontmatter. Code inspection: `plan-task` already COMPUTES the active slice (preamble fallback to the first open slice in the roadmap, then uses it for the task-plan frontmatter + status body line) but never persists it to the `active_slice:` frontmatter field. Separately, `spawn-milestone-team` runs native Agent Teams in a SHARED working tree, and teammates invoke `plan-task`/`summarize-task` per task -- so a naive single-`active_slice` write races across parallel teammates.
+
+**Options considered:**
+- A) slice-milestone sets active_slice at slice-plan creation. Rejected: slice-milestone creates ALL slices at once, has no notion of which slice is "entered".
+- B) plan-task persists the already-computed active_slice (1 line next to the existing active_task write); summarize-task clears it in the existing all-tasks-`[x]` branch. No guard.
+- C) Option B PLUS a `CLAUDE_AGENT_TEAM_MEMBER` guard so teammates in a swarm never mutate STATE.md slice/task frontmatter.
+
+**Chose:** C.
+
+**Reason:** plan-task is the only lifecycle skill that already knows the active slice, so it owns the write -- minimal change, no new derivation logic, slice-milestone stays untouched. The single `active_slice` scalar is a SEQUENTIAL-mode concept; in parallel swarm execution there is no one active slice, and 4 teammates writing the same frontmatter field in a shared tree would race. Guarding the write on `CLAUDE_AGENT_TEAM_MEMBER` keeps issue #21's sequential journaling correct while preserving the parallel-execution model M012 itself depends on.
+
+**How to apply:** M012-S02. `plan-task`: add `active_slice: <old> -> active_slice: {ACTIVE_SLICE}` to the STATE.md edit step, wrapped in an `if [ -z "$CLAUDE_AGENT_TEAM_MEMBER" ]` guard (same env var that drives `_NON_INTERACTIVE` elsewhere). `summarize-task`: in the existing "slice fully complete (all tasks [x])" branch, also clear `active_slice -> none`, same guard.
+
+---
+
+## 2026-05-31: Swarm commit discipline -- lead commits path-scoped, teammates do not (M012)
+
+**Context:** `spawn-milestone-team` uses in-process Agent Teams sharing ONE working tree (no worktree isolation). `summarize-task` optionally stages git. Running M012's four slices in parallel would race on the shared git index, and a `git add -A` would sweep in unrelated dirty files (the repo currently has uncommitted `hooks/pre-tool-use-edit` from the #19 WT fix and an unrelated `.claude-plugin/plugin.json` change).
+
+**Options considered:**
+- A) Each teammate commits its own slice files path-scoped. Race-prone in a shared index; only safe with worktree isolation, which spawn-milestone-team does not use.
+- B) Teammates implement + test + summarize but do NOT commit; the lead commits each slice path-scoped (`git commit -- <slice-files>`) after that slice's verification passes.
+
+**Chose:** B.
+
+**Reason:** Serializes commits through a single actor (the lead), preserves the atomic-commit-per-logical-change rule, and prevents `git add -A` from capturing unrelated dirty files or half-finished teammate work in the shared tree. Aligns with the repo's hard git-safety rules (never blind `git add -A`, always path-scoped).
+
+**How to apply:** M012 execution. spawn-milestone-team teammates: implement + test + summarize, no `git commit`/`git add`. Lead: after each teammate reports a verified slice, `git commit -- <that slice's files>` with the slice's atomic message. Never `git add -A`. Leave the pre-existing dirty `plugin.json` out of all M012 commits (out of scope).
+
+---
+
+## 2026-05-31: ytstack encourages git worktree isolation for parallel swarm execution
+
+**Context:** `spawn-milestone-team` currently dispatches parallel teammates into ONE shared working tree (native Agent Teams). For file-disjoint, independent slices this forces commit-race-avoidance by discipline (see 2026-05-31 "Swarm commit discipline") rather than by structure, and leaves the shared index exposed to `git add -A` accidents. User call: ytstack should ENCOURAGE worktrees at usage time -- when a user runs a swarm, each parallel teammate should get its own worktree by default. Isolation should be structural, not a rule the operator has to remember.
+
+**Options considered:**
+- A) Keep shared-tree default; only recommend worktrees in docs.
+- B) Conditional: skill detects file-disjoint slices and recommends worktrees, shared-tree for coordination-heavy slices.
+- C) Default-on: for >1 parallel slice, dispatch each teammate into its own worktree + merge step at the end, with an explicit opt-out flag for the shared-tree model.
+
+**Chose:** C (default-on for parallel slices, opt-out to shared-tree).
+
+**Reason:** Strongest default hygiene -- the common parallel case (independent slices) gets real isolation with zero operator effort; commit-races and cross-contamination become structurally impossible. The shared-tree model stays reachable via opt-out for the minority of milestones whose slices need a common live state. Conditional detection (B) was rejected as too clever -- "is this slice-set truly disjoint?" is hard to detect reliably, and a wrong guess silently picks the riskier model.
+
+**How to apply:** New ytstack work item (ROADMAP M013) -- give `spawn-milestone-team` a default worktree-per-teammate dispatch (one worktree per parallel slice off a shared milestone branch), a conflict-free merge/integration step at milestone close (file-disjoint slices merge fast-forward), and an explicit shared-tree opt-out flag. Until M013 ships, M012 itself runs on the current shared-tree model under the 2026-05-31 "Swarm commit discipline" entry (lead commits path-scoped, teammates do not).
+
+**Relationship:** Sets the go-forward default. Does NOT supersede "Swarm commit discipline" (2026-05-31) -- that entry governs the shared-tree fallback, which the opt-out flag keeps alive.
