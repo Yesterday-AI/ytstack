@@ -128,7 +128,7 @@ You don't orchestrate the transitions -- the agent does, based on each skill's T
 
 ### 9. "Reassess between slices"
 
-At the end of each slice, say: "Does the roadmap still fit reality?" -> `ytstack:reassess-roadmap` reads recent summaries, surfaces deviations, prompts for roadmap changes (add / split / reorder / remove slices).
+At the end of each slice, say: "Does the roadmap still fit reality?" -> `ytstack:reassess-roadmap` reads recent summaries, surfaces deviations, prompts for roadmap changes (add / split / reorder / remove slices). At milestone close it also sweeps the backlog items that were folded into the milestone, prompting per item to keep, trim, or drop.
 
 ### 10. Close the milestone
 

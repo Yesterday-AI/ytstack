@@ -1,7 +1,7 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-05-31T09:30:00Z
+last_updated: 2026-05-31T10:10:00Z
 current_milestone: M012
 active_slice: none
 active_task: none
@@ -9,7 +9,7 @@ active_task: none
 
 # State
 
-**Status:** M012 DONE -- all 4 slices landed on `main` (not yet released). Executed via worktree-isolated swarm (3 general-purpose teammates in `Agent(isolation:'worktree')` + 1 verifier; the ytstack:implementer/verifier agent types crashed on spawn ON issue #20 itself -- live proof it was P0). Commits: `015f988` #19, `da41845` #20, `b7a5695` #21-RC1+#16, `2af326e` #21-RC2. plan-eng-review (2026-05-31) locked 3 decisions: active_slice plan-task-owned + team-member-guarded; swarm commit discipline; ytstack encourages git worktree isolation for parallel swarms (-> M013). **CACHE CAVEAT:** the fixes are in source on main but NOT live this session -- ytstack skills/hooks run from installed plugin cache 0.1.4; they activate only after a version bump + release + `/plugin update`. So #20's crash still reproduces if a ytstack skill with the buggy preamble is invoked in THIS session. Not pushed. M010/M011/M013 still queued. See `M012-ROADMAP.md` + DECISIONS.md (3 new entries 2026-05-31).
+**Status:** M012 DONE + RELEASED as **v0.1.5** (tagged + pushed). All 4 slices landed on `main` and pushed to origin. Executed via worktree-isolated swarm (3 general-purpose teammates in `Agent(isolation:'worktree')` + 1 verifier; the ytstack:implementer/verifier agent types crashed on spawn ON issue #20 itself -- live proof it was P0). Commits: `015f988` #19, `da41845` #20, `b7a5695` #21-RC1+#16, `2af326e` #21-RC2. Independently re-verified 2026-05-31: #19/#20/#21-RC2 behavior-tested; #21-RC1 bash+guard verified (frontmatter-write is prose, exercised only when the skill runs live). plan-eng-review locked 3 decisions: active_slice plan-task-owned + team-member-guarded; swarm commit discipline; ytstack encourages git worktree isolation (-> M013). **CACHE CAVEAT:** fixes go live for users after `/plugin update` to 0.1.5; in THIS session the cached 0.1.4 is still active (so #20 still reproduces here). **M012 numbering collision:** a prior uncommitted plan in the `claude/thirsty-bhabha-a03490` worktree had named the vendor-symlink work "M012" -- reserved as **M014** (separate, to be planned). Queued: M010, M011, M013, M014. See `M012-ROADMAP.md` + DECISIONS.md.
 
 **Prior status (full build cycle):** Full build cycle complete + post-M009 patches landing + plugin landscape architecture locked. 38/39 roadmap tasks done; 1 deferred (v0.1.0 tag + push -- user action). End-of-cycle review in progress. First interactive smoke-test of `init-project` done 2026-04-24 (partial; surfaced multiple items -- see REVIEW-NOTES). Three workflow infographics now in README as visual reference for upcoming brownfield + debug live-tests. Sibling-plugin landscape (`ystacks` catalog + `yastack` public + `ydstack` / `yastack-internal` subdirs) shipped 2026-04-25 (afternoon).
 
@@ -77,11 +77,11 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**M012 landed on main; decide release + closure.** Open items:
-1. **Push** `main` (4 M012 commits + the planning/#19 commits) when ready -- not pushed yet.
-2. **Version bump + release** (e.g. 0.1.5) so the fixes go live -- they are inert in the cached 0.1.4 plugin until released + `/plugin update`. `.claude-plugin/plugin.json` is already dirty (user edit) -- coordinate the version bump with that.
-3. **Formal milestone closure** via `ytstack:reassess-roadmap` (also dogfoods the new backlog-sweep) -- but note the cached 0.1.4 reassess-roadmap lacks our changes, so it would run the OLD behavior until release. Per-task SUMMARY files via `summarize-task` optional.
-4. Then the queued work: M010 (brownfield = issue #18), M011 (post-summarize lifecycle), M013 (spawn-milestone-team worktree mode), agentic-foundation migration.
+**M012 shipped (v0.1.5, pushed). Issues #16/#19/#20/#21 closed.** Remaining / queued:
+1. **`/plugin update`** to 0.1.5 in any active session to make the fixes live (cached 0.1.4 still active here).
+2. **Cross-repo marketplace sync** (NOT done -- needs separate authorization): the `ystacks-internal` catalog lists ytstack; confirm it picks up v0.1.5 (per the "Plugin-Marketplace-Aenderung = README-Update" rule). Out of this repo's scope.
+3. **M014 -- vendor symlink dereferencing for RemotePluginSync** (separate): uncommitted draft + README "Desktop + SSH" workaround live in the `claude/thirsty-bhabha-a03490` worktree; salvage or re-plan separately. Worktree intentionally left in place (holds the only copy).
+4. Queued milestones: M010 (brownfield = issue #18), M011 (post-summarize lifecycle), M013 (spawn-milestone-team worktree mode), M014 (vendor symlink). Plus agentic-foundation migration.
 
 ---
 
