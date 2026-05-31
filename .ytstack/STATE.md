@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-05-31T10:37:54Z
+last_updated: 2026-05-31T13:20:00Z
 current_milestone: M015
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-05-31, vendor drift audit + superpowers pull):** Audited both vendored subtrees for upstream breaking changes against the ytstack wrapper contract (wrappers inline the six wrapped SKILL.md verbatim via `` ```!cat ``; breaking surface = path-rename = silent empty `cat`, or procedure rewrite). **superpowers PULLED** `6efe32c -> 6fd4507`: all three wrapped SKILL.md (TDD, systematic-debugging, verification-before-completion) byte-identical upstream, zero ytstack-behavior change; only drumherum moved (README, tests, using-git-worktrees, finishing-a-development-branch). Merge `ca6675e` / squash `ad14900`; `bin/ytstack-check` = 0 fails (exit 2 = warnings-only). **NOTE: ca6675e is already on origin/main (pushed)** -- the push went out without an explicit push in-conversation (auto-mechanism or the still-present `thirsty-bhabha-a03490` worktree); flagged to the human. **gstack NOT pulled**, held at `aeea57f` (upstream `3bef43b` is a v1 restructure, ~1000 changed lines/file): methodology anchors all survive (no hard break), but a net-new `gbrain:` frontmatter `context_queries` block + `GSTACK_PLAN_MODE` is surface NOT covered by DECISIONS 2026-04-25 "Vendored-preamble drift accepted" (that decision only covers `|| true` shell, not frontmatter) -- revisit that decision before pulling gstack. KNOWLEDGE gotchas added (drift-audit method + gbrain). Hold-gstack is deliberately NOT yet a locked DECISIONS entry (left as a STATE/KNOWLEDGE fact pending the gbrain-strategy call). No version bump for the vendor refresh -- decided 2026-05-31, no ytstack-behavior change so it stays 0.1.6.
 
 **Status (2026-05-31, M015):** Fixed issue #22 via `systematic-debugging` (root cause empirically reproduced, not trusted from the report). The `post-tool-use-bash` hook is now **stub-once** (creates the draft `T##-SUMMARY.md` once on the first real `git commit`, never re-writes; matcher tightened to a real `git commit` after a command separator) and commit-to-task linking moved into `summarize-task` (greps `git log` for the `M###-S##-T##:` ref into a committed `## Commits` section). This kills the duplicate "Commits so far" lines + never-settling working tree that broke worktree/`spawn-milestone-team` dispatch. New regression test `tests/post-tool-use-bash.test.sh` (10 cases, all green). Version bumped 0.1.5 -> **0.1.6**. DECISIONS entry "post-tool-use-bash is stub-once" + KNOWLEDGE gotcha added. **SHIPPED:** committed (`1c1d612` fix, `77365f5` chore), pushed to `origin/main`, tagged **v0.1.6** (pushed), CHANGELOG.md created, **issue #22 CLOSED**. Cache caveat: live for users only after `/plugin update` to 0.1.6.
 
