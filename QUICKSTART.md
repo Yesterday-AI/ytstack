@@ -189,5 +189,5 @@ For everything else, just talk.
 
 - Full design: `.ytstack/PROJECT.md`, `.ytstack/DECISIONS.md`
 - Sources consulted: `docs/references.md`
-- Contributor rules: `CLAUDE.md`
+- Contributor rules: `AGENTS.md`
 - UX contracts all skills follow: `docs/ux/`

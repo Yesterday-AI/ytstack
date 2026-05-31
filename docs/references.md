@@ -97,7 +97,7 @@ From https://code.claude.com/docs/en/hooks.md (and the Agent Teams extension at 
 
 - **User direction:** ytstack is "Yesterday Technologies Stack" -- ESD-focused (Enterprise Software Development), enterprise-capable but equally useful for solo dev.
 - **yesterday-os project:** exploratory scratch folder, NOT a separate product. Contains material we used to understand agent-OS patterns. ytstack does not merge with it.
-- **User scope-discipline rule:** never modify files outside current project directory without asking. See repo root `CLAUDE.md` (contributor guide).
+- **User scope-discipline rule:** never modify files outside current project directory without asking. See repo root `AGENTS.md` (contributor guide; `CLAUDE.md` symlinks to it).
 - **Related Yesterday repos:** `Yesterday-AI/agentic-foundation` (sibling AI-foundation library, some skills installed as symlinks separately from ytstack).
 
 ## Not sources (clarifications)

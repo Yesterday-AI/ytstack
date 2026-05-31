@@ -9,7 +9,7 @@ sources_of_record:
   - /Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack/.ytstack/DECISIONS.md  (locked decisions, append-only)
   - /Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack/docs/methodology.md  (adaptation provenance)
   - /Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack/.ytstack/PROJECT.md  (one-liner + why it exists)
-  - /Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack/CLAUDE.md  (agent-facing contributor rules)
+  - /Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack/AGENTS.md  (agent-facing contributor rules; CLAUDE.md symlinks to it)
   - /Users/alex/Sync/home/alex/Code/WebDev/projects/yesterday-ai/ytstack/.ytstack/VENDOR-INVENTORY.md  (full upstream skill listing)
 source_articles_analyzed:
   - https://dev.to/imaginex/a-claude-code-skills-stack-how-to-combine-superpowers-gstack-and-gsd-without-the-chaos-44b3
@@ -384,7 +384,7 @@ Fix path: regression test first (TDD) → verification-before-completion → sum
 
 ## 6. Hard rules (locked; changes require superseding DECISIONS entry)
 
-Per `CLAUDE.md` + DECISIONS 2026-04-23:
+Per `AGENTS.md` + DECISIONS 2026-04-23:
 
 1. **Never modify content in `vendor/**`.** Upstream subtree mirrors. Edits get dropped on next `sync-upstream.sh`.
 2. **Never copy third-party methodology prose verbatim.** Concepts only; credit generically in `NOTICE`.
@@ -393,7 +393,7 @@ Per `CLAUDE.md` + DECISIONS 2026-04-23:
 5. **One namespace, one install.** All skills under `/ytstack:<name>`.
 6. **Intelligence in the system, not the agent.** Skills + hooks + artifacts carry the logic.
 
-## 7. Scope boundaries (verbatim from README §"Who this is for" + CLAUDE.md)
+## 7. Scope boundaries (verbatim from README §"Who this is for" + AGENTS.md)
 
 **Good fit:**
 - Projects that span more than one Claude Code session
