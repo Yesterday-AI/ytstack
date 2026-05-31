@@ -38,7 +38,8 @@ Run it anyway. It takes 2 minutes and either confirms the plan (good -- more con
 5. **If no, prompt for changes** -- add / split / reorder / remove slices
 6. **Update `M###-ROADMAP.md`** with agreed changes
 7. **Append decision to `M###-CONTEXT.md`** if the change is non-trivial
-8. **Update STATE.md** -- flip completed slice, set next `active_slice`
+8. **Update STATE.md** -- flip completed slice, set next `active_slice` (guarded)
+9. **Backlog sweep** (only if this was the last slice of the milestone) -- per-item prompt from `M###-CONTEXT.md` scope
 
 ## Preamble
 
@@ -50,6 +51,11 @@ if [ -d "$_PROJECT_DIR/.ytstack" ]; then _YT_DIR="$_PROJECT_DIR/.ytstack";
 elif [ -d "$HOME/.ytstack/projects/$_PROJECT_SLUG" ]; then _YT_DIR="$HOME/.ytstack/projects/$_PROJECT_SLUG";
 else _YT_DIR=""; fi
 _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
+
+_NON_INTERACTIVE=false
+if [ -n "$YTSTACK_NON_INTERACTIVE" ] || [ -n "$OPENCLAW_SESSION" ] || [ -n "$CLAUDE_AGENT_TEAM_MEMBER" ]; then
+  _NON_INTERACTIVE=true
+fi
 
 _CURRENT_MILESTONE=none; _ACTIVE_SLICE=none
 if [ -f "$_YT_DIR/STATE.md" ]; then
@@ -66,6 +72,7 @@ if [ -f "$_SLICE_PLAN" ]; then
 fi
 
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
+echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "ACTIVE_SLICE: $_ACTIVE_SLICE"
 echo "SLICE_COMPLETE: $_SLICE_COMPLETE"
@@ -130,12 +137,47 @@ Reason: {USER_REASON_IF_PROVIDED}
 ```
 
 **Step 8.** Update STATE.md:
-- Flip `active_slice` from completed slice to the next unfinished slice (next `- [ ] S##` in ROADMAP)
+
+If `YTSTACK_NON_INTERACTIVE` is `false` (i.e. `CLAUDE_AGENT_TEAM_MEMBER` is unset):
+- Flip `active_slice` from completed slice to the next unfinished slice (next `- [ ] S##` in ROADMAP), or `active_slice: none` if no unfinished slice remains
 - `active_task: none`
+
+If `YTSTACK_NON_INTERACTIVE` is `true` (running as swarm teammate): skip frontmatter writes. Log:
+> `[ytstack:reassess-roadmap] skipping STATE.md active_slice/active_task write -- running as swarm teammate (CLAUDE_AGENT_TEAM_MEMBER set)`
+
+Regardless of teammate mode:
 - Bump `last_updated`
 - Status line: `**Status:** {CURRENT_MILESTONE} -- slice {OLD_SLICE} complete. Next slice: {NEW_ACTIVE_SLICE}.`
 
 Also flip `- [ ] {OLD_SLICE}` → `- [x] {OLD_SLICE}` in `{CURRENT_MILESTONE}-ROADMAP.md` and bump `completed_slices`.
+
+**Step 9. Backlog sweep** (only if this was the last slice of the milestone -- no remaining `- [ ] S##` in ROADMAP).
+
+Read `{CURRENT_MILESTONE}-CONTEXT.md`. Extract any backlog items listed under a "Backlog" or "Deferred" heading (pattern: lines starting with `- ` under such a heading). If none found, skip this step and report "no backlog items found."
+
+For each backlog item, use AskUserQuestion (multi-choice):
+
+> Wrapping up **{CURRENT_MILESTONE}** -- sweeping backlog item: "{ITEM_DESCRIPTION}"
+>
+> This item was deferred into {CURRENT_MILESTONE} scope but not scheduled in any slice. Now that the milestone is done, decide its fate.
+>
+> RECOMMENDATION: A if the item shipped as part of normal work. B if it is genuinely needed but needs more work. C if it no longer applies.
+>
+> A) Fully shipped -- delete this item from the backlog. (Completeness: 10/10, tier: task)
+> B) Still needed -- trim to what remains and carry forward to the next milestone's CONTEXT.md. (Completeness: 8/10, tier: task)
+> C) Drop it -- not worth doing. Add a one-line DECISIONS.md note explaining why. (Completeness: 7/10, tier: task)
+
+For A: remove the item from the backlog section in `{CURRENT_MILESTONE}-CONTEXT.md`.
+For B: prompt "What is still needed? (one sentence)" then update the item text in `{CURRENT_MILESTONE}-CONTEXT.md` and copy the trimmed item to the next milestone CONTEXT.md (append under a "Carried from {CURRENT_MILESTONE}" heading) once the next milestone exists.
+For C: remove the item from `{CURRENT_MILESTONE}-CONTEXT.md` and append to `DECISIONS.md`:
+
+```markdown
+## {ISO_DATE}: Drop backlog item "{ITEM_DESCRIPTION}" from {CURRENT_MILESTONE}
+
+**Context:** item was deferred into {CURRENT_MILESTONE} but not executed.
+**Chose:** drop
+**Reason:** {USER_REASON}
+```
 
 ## Report + return
 
@@ -149,7 +191,7 @@ Also flip `- [ ] {OLD_SLICE}` → `- [x] {OLD_SLICE}` in `{CURRENT_MILESTONE}-RO
 
 ## Terminal State
 
-- Return after ROADMAP + STATE + (optional) CONTEXT updates
+- Return after ROADMAP + STATE + (optional) CONTEXT updates + (optional) backlog sweep
 - Abort if slice not complete (Step 2 HARD-GATE)
 - Abort + recommend rerun if user picks "major rethink, restart milestone"
 

@@ -58,6 +58,11 @@ fi
 
 _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 
+_NON_INTERACTIVE=false
+if [ -n "$YTSTACK_NON_INTERACTIVE" ] || [ -n "$OPENCLAW_SESSION" ] || [ -n "$CLAUDE_AGENT_TEAM_MEMBER" ]; then
+  _NON_INTERACTIVE=true
+fi
+
 _CURRENT_MILESTONE=none
 _ACTIVE_SLICE=none
 _ACTIVE_TASK=none
@@ -72,6 +77,7 @@ _SLICE_PLAN="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md"
 _IS_GIT=$([ -d .git ] && echo yes || echo no)
 
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
+echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "ACTIVE_SLICE: $_ACTIVE_SLICE"
 echo "ACTIVE_TASK: $_ACTIVE_TASK"
@@ -205,8 +211,14 @@ Also bump `completed_tasks` in the slice-plan's frontmatter by 1.
 
 ### Step 10: Update STATE.md
 
-Edit STATE.md:
+If `YTSTACK_NON_INTERACTIVE` is `false` (i.e. `CLAUDE_AGENT_TEAM_MEMBER` is unset), edit STATE.md frontmatter:
 - `active_task: {ACTIVE_TASK}` → `active_task: none`
+- If the slice is now fully complete (all tasks `[x]`): also `active_slice: {ACTIVE_SLICE}` → `active_slice: none`
+
+If `YTSTACK_NON_INTERACTIVE` is `true` (running as swarm teammate): skip frontmatter writes. Log:
+> `[ytstack:summarize-task] skipping STATE.md active_task/active_slice write -- running as swarm teammate (CLAUDE_AGENT_TEAM_MEMBER set)`
+
+Regardless of teammate mode:
 - `last_updated: ...` → bump to current
 - Status line → `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} -- {N}/{TOTAL} tasks done in slice. Next task: pick from slice-plan or run `/ytstack:plan-task`.`
 

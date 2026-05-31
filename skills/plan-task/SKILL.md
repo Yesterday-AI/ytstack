@@ -64,6 +64,11 @@ fi
 
 _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 
+_NON_INTERACTIVE=false
+if [ -n "$YTSTACK_NON_INTERACTIVE" ] || [ -n "$OPENCLAW_SESSION" ] || [ -n "$CLAUDE_AGENT_TEAM_MEMBER" ]; then
+  _NON_INTERACTIVE=true
+fi
+
 _CURRENT_MILESTONE=none
 _ACTIVE_SLICE=none
 if [ -f "$_YT_DIR/STATE.md" ]; then
@@ -95,6 +100,7 @@ if [ -f "$_SLICE_PLAN" ]; then
 fi
 
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
+echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "ACTIVE_SLICE: $_ACTIVE_SLICE"
 echo "SLICE_PLAN: $_SLICE_PLAN"
@@ -215,7 +221,14 @@ Run `/ytstack:summarize-task` after execution to mark complete and advance STATE
 
 ### Step 9: Update STATE.md
 
-Use Edit tool. Change `active_task: <old>` → `active_task: {NEXT_TASK}`. Bump `last_updated`.
+Use Edit tool. If `YTSTACK_NON_INTERACTIVE` is `false` (i.e. `CLAUDE_AGENT_TEAM_MEMBER` is unset):
+- Change `active_slice: <old>` → `active_slice: {ACTIVE_SLICE}`
+- Change `active_task: <old>` → `active_task: {NEXT_TASK}`
+
+If `YTSTACK_NON_INTERACTIVE` is `true` (running as swarm teammate): skip both frontmatter writes. Log:
+> `[ytstack:plan-task] skipping STATE.md active_slice/active_task write -- running as swarm teammate (CLAUDE_AGENT_TEAM_MEMBER set)`
+
+Bump `last_updated` regardless.
 
 Update Status line: `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} / {NEXT_TASK} planned -- ready to execute.`
 
@@ -227,7 +240,8 @@ Report:
 >
 > File: `{SLICE_PLAN_DIR}/{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{NEXT_TASK}-PLAN.md`
 >
-> STATE.md: `active_task = {NEXT_TASK}`.
+> STATE.md: `active_slice = {ACTIVE_SLICE}`, `active_task = {NEXT_TASK}`.
+> (Skipped if running as swarm teammate.)
 >
 > Next: execute the task (manually, or dispatch to a subagent, or wait for `ytstack:spawn-milestone-team` M006). When the code is done and verification passes, run `/ytstack:summarize-task`.
 
