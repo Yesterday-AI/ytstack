@@ -3,9 +3,9 @@ milestone: M012
 project: ytstack
 size: L
 created: 2026-05-31T08:18:35Z
-status: planned
+status: done
 total_slices: 4
-completed_slices: 0
+completed_slices: 4
 parallel: true
 ---
 
@@ -25,10 +25,12 @@ parallel: true
 
 Slice detail lives in per-slice `M012-S##-PLAN.md` files, created by `ytstack:slice-milestone`.
 
-- [ ] S01 -- [#20] verification-before-completion preamble runs without a fence parse error (2 tasks). Files: `skills/verification-before-completion/SKILL.md`.
-- [ ] S02 -- [#21-RC1 + #16] STATE.md tracks active_slice/active_task; backlog swept on milestone close (4 tasks). Files: `skills/plan-task/`, `slice-milestone/`, `summarize-task/`, `reassess-roadmap/SKILL.md`.
-- [ ] S03 -- [#21-RC2] session-end records real session_id from stdin; hooks audited (3 tasks). Files: `hooks/session-end`, `pre-compact`, `session-start`.
-- [ ] S04 -- [#19] pre-tool-use-edit advisory exits 0; WT fix committed + tested (2 tasks). Files: `hooks/pre-tool-use-edit`.
+- [x] S01 -- [#20] verification-before-completion preamble runs without a fence parse error. Landed `da41845`. Files: `skills/verification-before-completion/SKILL.md`.
+- [x] S02 -- [#21-RC1 + #16] STATE.md tracks active_slice/active_task (plan-task-owned, team-guarded); backlog swept on milestone close. Landed `b7a5695`. Files: `skills/plan-task/`, `summarize-task/`, `reassess-roadmap/SKILL.md` (slice-milestone untouched per eng-review).
+- [x] S03 -- [#21-RC2] session-end records real session_id from stdin; pre-compact/session-start audited. Landed `2af326e`. Files: `hooks/session-end`, `pre-compact`, `session-start`.
+- [x] S04 -- [#19] pre-tool-use-edit advisory exits 0; WT fix tested + committed `015f988`, re-verified PASS by subagent. Files: `hooks/pre-tool-use-edit`.
+
+**NOTE:** all four landed in source on `main` but are NOT live in this session -- ytstack skills/hooks load from the installed plugin cache (0.1.4). The fixes take effect only after a version bump + release + `/plugin update`.
 
 ## Run order
 

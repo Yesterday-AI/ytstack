@@ -1,7 +1,7 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-05-31T09:05:00Z
+last_updated: 2026-05-31T09:30:00Z
 current_milestone: M012
 active_slice: none
 active_task: none
@@ -9,7 +9,7 @@ active_task: none
 
 # State
 
-**Status:** M012 sliced + eng-reviewed (L) -- swarm fix-pack, ready to execute. Four file-disjoint slices: S01 #20 (verification crash), S02 #21-RC1 + #16 (active_slice SSOT + backlog-sweep), S03 #21-RC2 (session_id stdin), S04 #19 (pre-tool-use-edit advisory exit-0). All five items verified against repo code 2026-05-31. plan-eng-review (2026-05-31) locked 3 decisions: active_slice is plan-task-owned + team-member-guarded; swarm commit discipline (M012 shared-tree, lead commits path-scoped); + a product decision that ytstack encourages git worktree isolation for parallel swarms (-> new milestone M013, spawn-milestone-team worktree mode, out of M012 scope). M012 jumps ahead of M010/M011 (still queued) as a low-effort/high-impact defect sweep. See `M012-CONTEXT.md` + `M012-ROADMAP.md` + DECISIONS.md (3 new entries 2026-05-31).
+**Status:** M012 DONE -- all 4 slices landed on `main` (not yet released). Executed via worktree-isolated swarm (3 general-purpose teammates in `Agent(isolation:'worktree')` + 1 verifier; the ytstack:implementer/verifier agent types crashed on spawn ON issue #20 itself -- live proof it was P0). Commits: `015f988` #19, `da41845` #20, `b7a5695` #21-RC1+#16, `2af326e` #21-RC2. plan-eng-review (2026-05-31) locked 3 decisions: active_slice plan-task-owned + team-member-guarded; swarm commit discipline; ytstack encourages git worktree isolation for parallel swarms (-> M013). **CACHE CAVEAT:** the fixes are in source on main but NOT live this session -- ytstack skills/hooks run from installed plugin cache 0.1.4; they activate only after a version bump + release + `/plugin update`. So #20's crash still reproduces if a ytstack skill with the buggy preamble is invoked in THIS session. Not pushed. M010/M011/M013 still queued. See `M012-ROADMAP.md` + DECISIONS.md (3 new entries 2026-05-31).
 
 **Prior status (full build cycle):** Full build cycle complete + post-M009 patches landing + plugin landscape architecture locked. 38/39 roadmap tasks done; 1 deferred (v0.1.0 tag + push -- user action). End-of-cycle review in progress. First interactive smoke-test of `init-project` done 2026-04-24 (partial; surfaced multiple items -- see REVIEW-NOTES). Three workflow infographics now in README as visual reference for upcoming brownfield + debug live-tests. Sibling-plugin landscape (`ystacks` catalog + `yastack` public + `ydstack` / `yastack-internal` subdirs) shipped 2026-04-25 (afternoon).
 
@@ -77,7 +77,11 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Execute M012.** Slicing + eng-review done; all decisions locked. Run `/ytstack:plan-task` for S01-T01 (sequential) OR `/ytstack:spawn-milestone-team` for parallel execution. Swarm requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` + Claude Code v2.1.32+; M012 runs shared-tree with lead-commits-path-scoped discipline (worktree mode lands in M013, not yet built). Per-slice plans: `M012-S0{1..4}-PLAN.md`.
+**M012 landed on main; decide release + closure.** Open items:
+1. **Push** `main` (4 M012 commits + the planning/#19 commits) when ready -- not pushed yet.
+2. **Version bump + release** (e.g. 0.1.5) so the fixes go live -- they are inert in the cached 0.1.4 plugin until released + `/plugin update`. `.claude-plugin/plugin.json` is already dirty (user edit) -- coordinate the version bump with that.
+3. **Formal milestone closure** via `ytstack:reassess-roadmap` (also dogfoods the new backlog-sweep) -- but note the cached 0.1.4 reassess-roadmap lacks our changes, so it would run the OLD behavior until release. Per-task SUMMARY files via `summarize-task` optional.
+4. Then the queued work: M010 (brownfield = issue #18), M011 (post-summarize lifecycle), M013 (spawn-milestone-team worktree mode), agentic-foundation migration.
 
 ---
 
