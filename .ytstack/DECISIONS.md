@@ -619,3 +619,23 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - No `.ytstack/` artifact sweep for the rename (append-only / hook-managed); the symlink keeps any historical references valid.
 
 **Supersedes:** none.
+
+## 2026-05-31: post-tool-use-bash is stub-once; summarize-task owns commit-to-task linking (M015 / issue #22)
+
+**Context:** The `post-tool-use-bash` hook appended a `## Commits so far` line to the active task's `T##-SUMMARY.md` on every command matching the glob `*git*commit*`. That glob fired on echoes, `git log | grep commit`, and doc strings; it appended the current `HEAD` with no new-commit check and no dedup (N duplicate lines, same SHA); and because it rewrote a tracked file after each commit and never staged it, the tree never settled (committing the draft re-fired the hook) and the churning draft was invisible to a worktree branched from `main`, breaking `spawn-milestone-team` dispatch. Separately, `summarize-task` overwrites the SUMMARY from a template with no commit section, so the hook's appends were discarded at task close anyway -- pure churn for zero durable value.
+
+**Options considered:**
+- A) Harden the append in place (tighten matcher + dedup by SHA). Still leaves the tree dirty per commit and self-perpetuates on the summary commit; does not fix the worktree/dispatch gap.
+- C) Stub-once: the hook creates the draft stub once and never re-writes it.
+- C+) Stub-once PLUS move commit-to-task linking into `summarize-task` (grep `git log` for the `M###-S##-T##:` commit ref into a committed `## Commits` section).
+
+**Chose:** C+.
+
+**Reason:** The hook can never settle a tracked file it writes after the commit it describes, so per-commit append is structurally incompatible with worktree dispatch. Commit-linking belongs in the deliberate skill that runs at task close, where it is accurate and committed. Stub-once makes the hook idempotent (settles after one commit), and the `M###-S##-T##:` commit convention gives `summarize-task` a reliable, durable commit list. The matcher is also tightened to require `git commit` after a command separator (start / `;` / `&&` / `||` / `|` / `(`), rejecting echoes and pipelines; the residual lexical ambiguity (e.g. `sudo git commit` not auto-stubbed) is harmless because `summarize-task` still writes the real summary.
+
+**How to apply:**
+- Hook: match a real `git commit` only; if the SUMMARY already exists, exit 0 (never append); otherwise create the draft stub once.
+- `summarize-task`: gather `git log --grep "^M###-S##-T##"` in the preamble and write a committed `## Commits` section.
+- Regression test: `tests/post-tool-use-bash.test.sh` (10 cases) is the contract guard.
+
+**Supersedes:** none.

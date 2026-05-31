@@ -34,13 +34,21 @@ if command -v jq >/dev/null 2>&1; then
   EXIT_CODE=$(echo "$INPUT" | jq -r '.tool_response.exit_code // .exit_code // empty' 2>/dev/null)
 fi
 
-# Only act on successful git commits
-case "$CMD" in
-  *git*commit*)
-    [ "${EXIT_CODE:-0}" -ne 0 ] && exit 0
-    ;;
-  *) exit 0 ;;
-esac
+# Only act on a REAL `git commit` invocation that succeeded.
+# A glob like *git*commit* (the pre-M015 matcher) fired on any string
+# containing "git" then "commit" -- echoes, `git log | grep commit`, doc
+# strings -- producing spurious appends (issue #22). Require `git commit` as an
+# actual command, i.e. preceded by a command separator (start-of-string, ; & |
+# ( or a chained &&/||), not merely whitespace. That accepts `git commit ...`,
+# `git add x && git commit ...`, `cd d; git commit ...`, `$(git commit ...)`,
+# while rejecting `echo "... git commit ..."` and `git log | grep commit`.
+# Trade-off: an exotic form like `sudo git commit` is not auto-stubbed (no harm
+# -- summarize-task still writes the real summary at task close).
+[ "${EXIT_CODE:-0}" -ne 0 ] && exit 0
+_GIT_COMMIT_RE='(^|[;&|()])[[:space:]]*git[[:space:]]+commit([[:space:]]|$)'
+if ! [[ "$CMD" =~ $_GIT_COMMIT_RE ]]; then
+  exit 0
+fi
 
 # Get active task from STATE.md
 CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$STATE_FILE" | head -1)
@@ -50,17 +58,25 @@ ACTIVE_TASK=$(sed -n 's/^active_task: *//p' "$STATE_FILE" | head -1)
 # No active task → nothing to link
 [ "$ACTIVE_TASK" = "none" ] || [ -z "$ACTIVE_TASK" ] && exit 0
 
-# Get the most recent commit SHA + message for the link
+SUMMARY_FILE="$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK-SUMMARY.md"
+
+# Stub-once (issue #22). The durable, accurate per-commit list is owned by
+# `ytstack:summarize-task` (it greps `git log` for the task ref at task close
+# and writes a committed `## Commits` section). The hook's only job is to drop
+# a draft stub ONCE on the first commit of a task, so an interrupted task still
+# leaves a closure artifact. It NEVER re-writes the file: that is what caused
+# the duplicate lines, the never-settling working tree, and the worktree /
+# spawn-milestone-team dispatch gap (an uncommitted, churning draft is invisible
+# to a worktree branched from main). Once this stub is committed, the tree
+# settles and stays clean for the rest of the task.
+[ -f "$SUMMARY_FILE" ] && exit 0
+
 COMMIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 COMMIT_MSG=$(git log -1 --pretty=format:%s 2>/dev/null || echo "")
-
-SUMMARY_FILE="$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK-SUMMARY.md"
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+PROJECT_NAME=$(sed -n 's/^name: *//p' "$YT_DIR/PROJECT.md" 2>/dev/null | head -1)
 
-# If no summary exists yet, create a draft; otherwise append a Commits section / entry
-if [ ! -f "$SUMMARY_FILE" ]; then
-  PROJECT_NAME=$(sed -n 's/^name: *//p' "$YT_DIR/PROJECT.md" 2>/dev/null | head -1)
-  cat > "$SUMMARY_FILE" <<EOF
+cat > "$SUMMARY_FILE" <<EOF
 ---
 milestone: $CURRENT_MILESTONE
 slice: $ACTIVE_SLICE
@@ -73,11 +89,9 @@ source: post-tool-use-bash-draft
 
 # $CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK -- Summary (draft)
 
-Auto-draft created by the \`post-tool-use-bash\` hook on first commit of this task. Run \`/ytstack:summarize-task\` to fill in Outcome / Deviations / Follow-ups / Verification.
+Auto-draft created by the \`post-tool-use-bash\` hook on the first commit of this task. Run \`/ytstack:summarize-task\` to fill in Outcome / Deviations / Follow-ups / Verification and the full commit list. This stub is written once and never re-touched by the hook.
 
-## Commits so far
-
-- \`$COMMIT_SHA\` -- $COMMIT_MSG ($TS)
+First commit of this task: \`$COMMIT_SHA\` -- $COMMIT_MSG ($TS)
 
 ## Outcome
 
@@ -95,26 +109,5 @@ Auto-draft created by the \`post-tool-use-bash\` hook on first commit of this ta
 
 (Fill in when task is done.)
 EOF
-else
-  # Append to existing "Commits so far" section, or add the section if missing
-  if grep -q "^## Commits so far" "$SUMMARY_FILE"; then
-    # Insert new commit line under the section header
-    if sed --version >/dev/null 2>&1; then
-      sed -i "/^## Commits so far/a - \`$COMMIT_SHA\` -- $COMMIT_MSG ($TS)" "$SUMMARY_FILE"
-    else
-      sed -i '' "/^## Commits so far/a\\
-- \`$COMMIT_SHA\` -- $COMMIT_MSG ($TS)
-" "$SUMMARY_FILE"
-    fi
-  else
-    # No section yet -- append one at end
-    cat >> "$SUMMARY_FILE" <<EOF
-
-## Commits so far
-
-- \`$COMMIT_SHA\` -- $COMMIT_MSG ($TS)
-EOF
-  fi
-fi
 
 exit 0

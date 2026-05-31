@@ -76,6 +76,17 @@ _PLAN_FILE="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$_ACTIVE_TASK-PLAN.md"
 _SLICE_PLAN="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md"
 _IS_GIT=$([ -d .git ] && echo yes || echo no)
 
+# Gather this task's commits for a durable, committed `## Commits` section.
+# ytstack's commit convention prefixes task commits with `M###-S##-T##:`
+# (see CLAUDE.md), so grep the log for that ref. This is the SINGLE owner of
+# commit-to-task linking; the post-tool-use-bash hook only drops a draft stub
+# and never maintains a commit list (issue #22 / M015).
+_TASK_REF="$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$_ACTIVE_TASK"
+_TASK_COMMITS=""
+if [ "$_IS_GIT" = yes ]; then
+  _TASK_COMMITS=$(git log --no-merges --pretty=format:'- `%h` -- %s' --grep "^$_TASK_REF" 2>/dev/null)
+fi
+
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
@@ -84,6 +95,9 @@ echo "ACTIVE_TASK: $_ACTIVE_TASK"
 echo "PLAN_FILE: $_PLAN_FILE"
 echo "SLICE_PLAN: $_SLICE_PLAN"
 echo "IS_GIT: $_IS_GIT"
+echo "TASK_COMMITS_BEGIN"
+echo "${_TASK_COMMITS:-(none found for $_TASK_REF)}"
+echo "TASK_COMMITS_END"
 ```
 
 ## Procedure
@@ -175,6 +189,10 @@ verification: {VERIFICATION_RESULT}
 ---
 
 # {CURRENT_MILESTONE}-{ACTIVE_SLICE}-{ACTIVE_TASK} -- Summary
+
+## Commits
+
+{The commit list captured between TASK_COMMITS_BEGIN / TASK_COMMITS_END in the preamble. If it reported "(none found ...)", write: "No commits matched `{TASK_REF}:` -- task shipped uncommitted or under a non-conventional message." This section replaces the throwaway hook draft; it is the durable commit-to-task link.}
 
 ## Outcome
 
