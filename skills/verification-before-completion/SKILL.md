@@ -26,9 +26,15 @@ if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STATE.md" ]; then
   _T=$(sed -n 's/^active_task: *//p' "$_YT_DIR/STATE.md" | head -1)
 fi
 _TASK_PLAN="$_YT_DIR/$_M-$_S-$_T-PLAN.md"
+_FENCE=$(printf '\140\140\140')
 _VERIFICATION=""
 if [ -f "$_TASK_PLAN" ]; then
-  _VERIFICATION=$(awk '/^## Verification/{flag=1; next} /^## /{flag=0} flag' "$_TASK_PLAN" | sed -n '/^```/,/^```$/{/^```/d; p}' | head -5)
+  _VERIFICATION=$(awk -v f="$_FENCE" '
+    /^## Verification/{in_section=1; next}
+    /^## /{in_section=0}
+    in_section && index($0,f)==1 { in_fence=!in_fence; next }
+    in_section && in_fence { print }
+  ' "$_TASK_PLAN" | head -5)
 fi
 echo "HAS_YTSTACK: $([ -n "$_YT_DIR" ] && echo yes || echo no)"
 echo "ACTIVE_TASK: $_M-$_S-$_T"
