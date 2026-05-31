@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contributor guide (humans)
+    url: https://github.com/Yesterday-AI/ytstack/blob/main/CONTRIBUTING.md
+    about: PR rules, scope philosophy, how to add a skill or hook.
+  - name: Agent guide
+    url: https://github.com/Yesterday-AI/ytstack/blob/main/AGENTS.md
+    about: Read this before letting an AI agent change anything in the repo.

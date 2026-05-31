@@ -2,7 +2,7 @@
 name: using-ytstack
 description: "Establishes how agents find and invoke ytstack skills. Requires Skill-tool invocation before any response when a ytstack skill applies. Auto-injected by the SessionStart hook. Not meant for direct user invocation."
 tier: core
-version: 0.2.0
+version: 0.2.1
 kind: directive
 user-invocable: false
 ---
@@ -90,6 +90,10 @@ digraph using_ytstack {
 ## After invoking a skill
 
 Follow its Checklist exactly. Create TodoWrite entries per item. Don't improvise steps. The skill's Terminal State section tells you what to do next -- respect it; don't auto-invoke the suggested follow-up skill unless the user explicitly asks for it.
+
+## Reporting ytstack issues
+
+If a ytstack skill, hook, or artifact misbehaves (the wrong skill fires, a hook errors, an artifact gets mangled), surface it to the human and suggest filing an issue at https://github.com/Yesterday-AI/ytstack/issues. Do not silently work around a ytstack bug -- a one-line report keeps the stack sharp.
 
 ## Summary
 

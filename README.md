@@ -11,7 +11,7 @@
 
   <p>
     <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
-    <img alt="version" src="https://img.shields.io/badge/version-0.1.0-FC4E14">
+    <img alt="version" src="https://img.shields.io/badge/version-0.1.5-FC4E14">
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
     <img alt="skills" src="https://img.shields.io/badge/skills-21-FC4E14">
     <img alt="hooks" src="https://img.shields.io/badge/hooks-8-FC4E14">
@@ -188,33 +188,26 @@ Starts a fresh Claude Code session with ytstack loaded. Skills appear as `/ytsta
 
 ### Via marketplace (recommended for shared use)
 
-ytstack is currently private and lives cross-listed in `Yesterday-AI/ystacks-internal` (Yesterday's PRIVATE plugin catalog). When ytstack flips public, it will list in `Yesterday-AI/ystacks` (the PUBLIC catalog).
+ytstack ships in Yesterday's public plugin catalog, `yesterday-public-plugins` (repo [`Yesterday-AI/skills`](https://github.com/Yesterday-AI/skills)), which imports ytstack from its own repo.
 
 ```bash
-# Today (private):
-/plugin marketplace add Yesterday-AI/ystacks            # for cross-mp deps (skill-creator, web-design)
-/plugin marketplace add Yesterday-AI/ystacks-internal   # for ytstack itself
-/plugin install ytstack@ystacks-internal
+/plugin marketplace add Yesterday-AI/skills
+/plugin install ytstack@yesterday-public-plugins
 ```
 
-ytstack declares cross-marketplace dependencies on:
-- `skill-creator` + `web-design` from `Yesterday-AI/ystacks` (public)
-
-Private-repo auth uses your existing `gh auth login` / git credential helper.
+ytstack declares one cross-marketplace dependency: `web-design` (from `yesterday-public-plugins`).
 
 <details>
-<summary><strong>Legacy: install via ytstack's self-marketplace</strong></summary>
+<summary><strong>Alternative: ytstack's own self-marketplace</strong></summary>
 
-ytstack also self-marketplaces from its own repo:
+ytstack also self-marketplaces from its own repo, useful when you want to pin directly to it:
 
 ```bash
-/plugin marketplace add Yesterday-AI/ystacks
-/plugin marketplace add Yesterday-AI/ystacks-internal
 /plugin marketplace add Yesterday-AI/ytstack
 /plugin install ytstack@ytstack
 ```
 
-The self-marketplace declares `allowCrossMarketplaceDependenciesOn: ["ystacks", "ystacks-internal"]` so cross-mp deps resolve here too. This path predates the consolidation onto `ystacks` and remains functional. New installs should prefer the `@ystacks-internal` (or `@ystacks` once public) path. See [`.ytstack/DECISIONS.md`](./.ytstack/DECISIONS.md) for the consolidation decision.
+The self-marketplace declares `allowCrossMarketplaceDependenciesOn: ["yesterday-public-plugins"]` so the `web-design` dependency resolves. See [`.ytstack/DECISIONS.md`](./.ytstack/DECISIONS.md) for the marketplace history.
 
 </details>
 
@@ -271,14 +264,14 @@ See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example written i
 
 ## Status
 
-**v0.1.0 -- full build cycle complete.** 37/39 tasks done; 2 deferred to user-action (git init + push, GitHub repo creation).
+**v0.1.5 -- shipping, actively dogfooded.** Full build cycle complete (38/39 roadmap tasks; 1 deferred to user action). ytstack tracks its own development in `.ytstack/`.
 
 Ships:
 
 - 21 skills (project-OS lifecycle + gstack planning wrappers + superpowers execution wrappers + Agent Teams dispatch + `using-ytstack` directive + 5 engineering-OS additions migrated from agentic-foundation: `atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`)
 - 8 hooks (SessionStart / PreCompact / SessionEnd / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash). SessionStart-hook now injects the using-ytstack directive + project state.
-- Full docs (`CLAUDE.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
-- Plugin manifest + marketplace manifest ready for publication
+- Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
+- Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
 
 See `.ytstack/ROADMAP.md` for the task list, `.ytstack/STATE.md` for progress, `.ytstack/REVIEW-NOTES.md` for deferred items.
 
@@ -295,7 +288,7 @@ ytstack/
 │   ├── ux/                      mandatory skill-authoring contracts
 │   ├── references.md            research sources
 │   └── methodology.md           what we adapted, from where, how
-├── CLAUDE.md                    contributor guide (for agents)
+├── AGENTS.md                    contributor guide (for agents; CLAUDE.md symlinks to it)
 ├── CONTRIBUTING.md              contributor guide (for humans)
 ├── QUICKSTART.md                worked example
 ├── README.md                    this file
@@ -317,7 +310,7 @@ ytstack/
 | Document | Purpose |
 |---|---|
 | [QUICKSTART.md](./QUICKSTART.md) | End-to-end worked example |
-| [CLAUDE.md](./CLAUDE.md) | Contributor guide for AI coding agents |
+| [AGENTS.md](./AGENTS.md) | Contributor guide for AI coding agents (`CLAUDE.md` symlinks to it) |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contributor guide for humans |
 | [docs/concept.md](./docs/concept.md) | Condensed reference paper -- what ytstack wraps, skips, adds |
 | [docs/methodology.md](./docs/methodology.md) | What we adapted from gstack / superpowers / GSD, and how |
@@ -328,9 +321,16 @@ ytstack/
 | [.ytstack/ROADMAP.md](./.ytstack/ROADMAP.md) | Milestone plan |
 | [.ytstack/STATE.md](./.ytstack/STATE.md) | Current status dashboard |
 
+## Issues and support
+
+Found a bug, hit a rough edge, or want a skill that does not exist yet? Open an issue at [Yesterday-AI/ytstack/issues](https://github.com/Yesterday-AI/ytstack/issues).
+
+- **Bug** -- use the bug-report template. Name the skill or hook, the session that triggered it, what you expected, and what happened.
+- **Feature / new skill** -- use the feature-request template. Trace it to a real session (see [CONTRIBUTING.md](./CONTRIBUTING.md) "Speculative features"); "might be useful" is not a problem statement.
+
 ## Contributing
 
-Read [CLAUDE.md](./CLAUDE.md) before modifying anything. See [CONTRIBUTING.md](./CONTRIBUTING.md) for PR rules and [docs/ux/](./docs/ux/) for the mandatory skill-authoring contracts.
+Read [AGENTS.md](./AGENTS.md) before modifying anything. See [CONTRIBUTING.md](./CONTRIBUTING.md) for PR rules and [docs/ux/](./docs/ux/) for the mandatory skill-authoring contracts.
 
 Key rules:
 

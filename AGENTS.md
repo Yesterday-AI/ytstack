@@ -14,7 +14,7 @@ ytstack is an opinionated software-development OS packaged as a Claude Code plug
 
 **Your job is to protect the human from shipping low-quality skills.** Before you open a PR or commit a skill change, you MUST:
 
-1. Read `docs/ux/askuserquestion-format.md`, `docs/ux/writing-style.md`, `docs/ux/skill-structure.md`. These are the mandatory contracts. CI rejects skills that violate them.
+1. Read `docs/ux/askuserquestion-format.md`, `docs/ux/writing-style.md`, `docs/ux/skill-structure.md`. These are the mandatory contracts. `bin/ytstack-check` flags violations locally; reviewers reject skills that break them.
 2. Read `.ytstack/PROJECT.md` and `.ytstack/ROADMAP.md` to understand current scope and where you are in the milestone plan.
 3. Read `.ytstack/DECISIONS.md` to see what has been locked in.
 4. Check `.ytstack/KNOWLEDGE.md` for gotchas that apply to what you're about to touch.
@@ -60,7 +60,7 @@ Credit generically in `NOTICE` as "inspired by external AI-first methodology wor
 
 ### Every skill follows the UX contracts
 
-Without exception. CI validates:
+Without exception. `bin/ytstack-check` validates these locally (run it before you commit); reviewers enforce the rest:
 
 - Frontmatter has `name`, `description`, `tier`, `version`, `allowed-tools`
 - Required sections: Anti-Pattern (optional but recommended), Checklist, Process Flow (for non-trivial skills), Preamble, Procedure, Terminal State
@@ -68,7 +68,7 @@ Without exception. CI validates:
 - No em-dashes (`—` U+2014) in prose per `docs/ux/writing-style.md` (autocorrect hazard)
 - Sentinel file names match `<skill-name>-<question-identifier>` convention
 
-Violations fail CI. No exceptions.
+Violations fail `bin/ytstack-check` or review. No exceptions.
 
 ### Preserve atomic commits
 
@@ -83,7 +83,7 @@ Every commit is one logical change. When you've made multiple changes (rename + 
 Run this mental checklist:
 
 1. Does this commit do ONE logical thing? (If no, split.)
-2. Does the skill still pass UX contract checks? (Run `ytstack-skill-check` once the tool exists -- M001.)
+2. Does the skill still pass UX contract checks? (Run `bin/ytstack-check` locally.)
 3. Did I update `.ytstack/STATE.md` with the new task status?
 4. Did I add a `DECISIONS.md` entry if this commit locks in a non-obvious choice?
 5. Did I show the human the diff before staging?

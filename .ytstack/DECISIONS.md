@@ -550,3 +550,27 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** New ytstack work item (ROADMAP M013) -- give `spawn-milestone-team` a default worktree-per-teammate dispatch (one worktree per parallel slice off a shared milestone branch), a conflict-free merge/integration step at milestone close (file-disjoint slices merge fast-forward), and an explicit shared-tree opt-out flag. Until M013 ships, M012 itself runs on the current shared-tree model under the 2026-05-31 "Swarm commit discipline" entry (lead commits path-scoped, teammates do not).
 
 **Relationship:** Sets the go-forward default. Does NOT supersede "Swarm commit discipline" (2026-05-31) -- that entry governs the shared-tree fallback, which the opt-out flag keeps alive.
+
+---
+
+## 2026-05-31: ytstack ships via the yesterday-public-plugins catalog (Yesterday-AI/skills)
+
+**Context:** Doc-consistency audit 2026-05-31 found the README install block still described the 2026-04-25 `ystacks` / `ystacks-internal` two-marketplace split (install `ytstack@ystacks-internal`, cross-mp deps on `skill-creator` + `web-design` from `ystacks`). The live manifests had already moved on: ytstack's own `plugin.json` declares a single dependency `web-design` from marketplace `yesterday-public-plugins` (commit 14f7c19), and `Yesterday-AI/skills/marketplace.json` (name `yesterday-public-plugins`, Yesterday's PUBLIC catalog) lists ytstack via github source `Yesterday-AI/ytstack`. The README could not be followed as written.
+
+**Options considered:**
+- A) Treat the README (ystacks/ystacks-internal) as truth, revert the manifests.
+- B) Treat the manifests (yesterday-public-plugins via Yesterday-AI/skills) as truth, reconcile the README to them.
+
+**Chose:** B.
+
+**Reason:** Maintainer confirmed 2026-05-31 that ytstack is a standalone plugin imported and bundled by the `yesterday-public-plugins` catalog in `Yesterday-AI/skills`. The manifests are the newer, intended state; the README simply lagged. The `ystacks`/`ystacks-internal` topology from the 2026-04-25 split is superseded for ytstack's listing.
+
+**How to apply:**
+- Primary install: `/plugin marketplace add Yesterday-AI/skills` then `/plugin install ytstack@yesterday-public-plugins`.
+- ytstack's own `.claude-plugin/marketplace.json` self-marketplace (name `ytstack`, source `./`, `allowCrossMarketplaceDependenciesOn: ["yesterday-public-plugins"]`) stays as a secondary/pin-direct path.
+- Single cross-mp dependency: `web-design`.
+- README §Install + §Status reconciled in the same change; version aligned to 0.1.5 across `plugin.json`, `marketplace.json`, README badge.
+
+**Open follow-up (not blocking, flagged to maintainer):** ytstack's `plugin.json` points the `web-design` dep at marketplace `yesterday-public-plugins`, but `Yesterday-AI/skills/marketplace.json` currently lists only `ytstack` (no `web-design` entry). Verify the dependency actually resolves on a clean install, or repoint it to the marketplace that hosts `web-design`.
+
+**Supersedes:** the ytstack-listing portions of "2026-04-25: Marketplace architecture split into ystacks (public) + ystacks-internal (private)" and the install commands in "2026-04-24: Marketplace name equals plugin name". The self-marketplace mechanism itself remains valid.

@@ -1,6 +1,6 @@
 # Contributing to ytstack
 
-Before you change anything, read this file and `CLAUDE.md` (agent guidelines).
+Before you change anything, read this file and `AGENTS.md` (agent guidelines; `CLAUDE.md` symlinks to it).
 
 ## Philosophy
 
@@ -23,7 +23,7 @@ ytstack is a curated, opinionated stack. Not every idea belongs. Before proposin
 Every PR MUST:
 
 1. **Solve a real, observed problem.** Not "might be useful" -- something that actually broke or blocked real work. Describe the session or scenario.
-2. **Preserve the UX contracts.** If your change touches a skill, re-read `docs/ux/*.md` and confirm the skill still passes. Run `ytstack-skill-check` (ships M008 pre-release) locally.
+2. **Preserve the UX contracts.** If your change touches a skill, re-read `docs/ux/*.md` and confirm the skill still passes. Run `bin/ytstack-check` locally.
 3. **Update REVIEW-NOTES.md.** If your PR closes an item there, strike it. If it opens new concerns, add them.
 4. **Update STATE.md.** If your PR is part of a milestone, bump the appropriate checkboxes.
 5. **Show the full diff to the human partner** before submitting, if working with an AI agent.
@@ -49,7 +49,7 @@ We DO:
 
 ### Never skip the UX contracts
 
-`docs/ux/askuserquestion-format.md`, `writing-style.md`, `skill-structure.md` are mandatory. CI validates. PRs that violate contracts without a compelling reason + eval evidence are rejected.
+`docs/ux/askuserquestion-format.md`, `writing-style.md`, `skill-structure.md` are mandatory. `bin/ytstack-check` validates them locally (run it before you commit); the rest is reviewer-enforced. PRs that violate contracts without a compelling reason + eval evidence are rejected.
 
 ### Atomic commits
 
@@ -60,9 +60,9 @@ Commit message format:
 - Infrastructure: `chore: <action>` (e.g. `chore: update ROADMAP counts after M005`)
 - Bugfix: `fix: <short desc>` (e.g. `fix: BSD sed compatibility in session-end hook`)
 
-### No AI vocabulary
+### Writing style
 
-See `docs/ux/writing-style.md` for the banned list. `grep -riE 'delve|robust|comprehensive|nuanced'` should return zero in your PR's diff.
+`docs/ux/writing-style.md` is the quality contract: short sentences, concrete nouns, outcome framing, jargon gloss. Only one rule is mechanically enforced -- no em-dashes (the U+2014 character; use `--`). `bin/ytstack-check` flags them. The earlier banned-words list (delve / robust / comprehensive / nuanced) was retracted as scope creep (DECISIONS 2026-04-24); treat the rest of writing-style.md as guidance reviewers apply, not a grep gate.
 
 ## What we won't accept
 
@@ -82,7 +82,7 @@ ytstack's approach differs from generic Claude Code skill conventions in specifi
 
 See above. Wrap, don't edit.
 
-### Schlenther-source-named attribution
+### Named attribution in public artifacts
 
 Per ytstack's design direction, we credit external methodology work generically, not by name. PRs that add specific named attribution to public artifacts (README, PROJECT.md, etc.) are rejected. `docs/references.md` is the one place where upstream source projects ARE named (superpowers, gstack, GSD).
 
@@ -122,8 +122,15 @@ Per ytstack's design direction, we credit external methodology work generically,
 - Version bumps follow semver: patch for bugfixes, minor for new skills, major for breaking changes to skill names / artifact paths.
 - Each minor release tags the commit and updates `.claude-plugin/plugin.json`'s version field.
 
+## Reporting issues
+
+Open an issue at [Yesterday-AI/ytstack/issues](https://github.com/Yesterday-AI/ytstack/issues):
+
+- **Bug** -- use the bug-report template. Name the skill or hook, the session that triggered it, what you expected, and what happened.
+- **Feature / new skill** -- use the feature-request template. Trace it back to a real session (see "Speculative features" above); "might be useful" gets closed.
+
 ## Getting help
 
 - Read `docs/references.md` for sources we've leaned on.
 - Check `.ytstack/REVIEW-NOTES.md` -- your question may already be logged.
-- Read `CLAUDE.md` for agent-specific guidance.
+- Read `AGENTS.md` for agent-specific guidance.
