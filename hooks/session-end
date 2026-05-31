@@ -11,6 +11,11 @@
 
 set -uo pipefail
 
+# Capture stdin immediately -- Claude Code delivers the hook payload (including
+# session_id) on stdin JSON. Must read before any subcommand consumes stdin.
+# There is no CLAUDE_SESSION_ID env var; session_id lives only in this payload.
+INPUT=$(cat)
+
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 cd "$PROJECT_DIR" 2>/dev/null || exit 0
 
@@ -38,6 +43,14 @@ CURRENT_MILESTONE=$(get_field current_milestone)
 ACTIVE_SLICE=$(get_field active_slice)
 ACTIVE_TASK=$(get_field active_task)
 
+# Extract session_id from the stdin payload captured above.
+# session_id arrives only on stdin JSON -- there is no CLAUDE_SESSION_ID env var.
+if command -v jq >/dev/null 2>&1; then
+  SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // "unknown"' 2>/dev/null || echo "unknown")
+else
+  SESSION_ID=$(printf '%s' "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('session_id','unknown'))" 2>/dev/null || echo "unknown")
+fi
+
 # Build JSONL entry. Prefer jq for safe encoding; fall back to python3.
 if command -v jq >/dev/null 2>&1; then
   jq -nc \
@@ -46,19 +59,19 @@ if command -v jq >/dev/null 2>&1; then
     --arg milestone "${CURRENT_MILESTONE:-none}" \
     --arg slice "${ACTIVE_SLICE:-none}" \
     --arg task "${ACTIVE_TASK:-none}" \
-    --arg session_id "${CLAUDE_SESSION_ID:-unknown}" \
+    --arg session_id "$SESSION_ID" \
     '{timestamp: $ts, event: $event, milestone: $milestone, slice: $slice, task: $task, session_id: $session_id}' \
     >> "$JOURNAL_FILE"
 elif command -v python3 >/dev/null 2>&1; then
   python3 -c "
-import json, os
+import json
 print(json.dumps({
   'timestamp': '$TS',
   'event': 'session-end',
   'milestone': '${CURRENT_MILESTONE:-none}',
   'slice': '${ACTIVE_SLICE:-none}',
   'task': '${ACTIVE_TASK:-none}',
-  'session_id': os.environ.get('CLAUDE_SESSION_ID', 'unknown')
+  'session_id': '$SESSION_ID'
 }))
 " >> "$JOURNAL_FILE"
 fi

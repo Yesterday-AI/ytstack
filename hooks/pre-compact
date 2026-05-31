@@ -9,6 +9,9 @@
 
 set -uo pipefail
 
+# Note: session_id arrives on stdin JSON (not via env). This hook does not use
+# session_id, so stdin is intentionally not consumed here.
+
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 cd "$PROJECT_DIR" 2>/dev/null || exit 0
 

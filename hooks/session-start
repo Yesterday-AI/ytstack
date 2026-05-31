@@ -14,6 +14,9 @@
 
 set -uo pipefail
 
+# Note: session_id arrives on stdin JSON (not via env). This hook does not use
+# session_id; it only emits additionalContext output JSON via stdout.
+
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 cd "$PROJECT_DIR" 2>/dev/null || exit 0
 
