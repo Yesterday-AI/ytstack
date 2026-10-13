@@ -96,12 +96,7 @@ class CodexPluginTests(unittest.TestCase):
         skill_paths = sorted((self.package / manifest["skills"]).glob("*/SKILL.md"))
         self.assertEqual([p.parent.name for p in skill_paths],
                          sorted(p.parent.name for p in (ROOT / "skills").glob("*/SKILL.md")))
-        for skill in skill_paths:
-            with self.subTest(skill=skill.parent.name):
-                references = re.findall(r"\]\(([^)]+adapter\.md)\)", skill.read_text())
-                self.assertTrue(references, "Direct skill invocation must reach the adapter")
-                for reference in references:
-                    self.assertTrue((skill.parent / reference).is_file(), reference)
+        self.assertEqual((self.package / manifest["skills"]).resolve(), self.package / "skills")
         hooks = json.loads((self.package / manifest["hooks"]).read_text())["hooks"]
         self.assertEqual(set(hooks), {"SessionStart", "PreCompact", "SessionEnd"})
         self.assertLessEqual(hooks["SessionEnd"][0]["hooks"][0]["timeout"], 3)
@@ -109,19 +104,19 @@ class CodexPluginTests(unittest.TestCase):
     def test_helper_uses_installed_skill_and_target_project(self):
         self.env.update(CLAUDE_PLUGIN_ROOT="/wrong-plugin", CLAUDE_PROJECT_DIR="/wrong-project",
                         CLAUDE_SKILL_DIR="/wrong-skill")
-        result = self.run_skill("plan-task", 'printf "%s\\n" "$YTSTACK_PLUGIN_ROOT" "$YTSTACK_SKILL_DIR" "$YTSTACK_PROJECT_DIR" "$YTSTACK_HOST"\n')
+        result = self.run_skill("plan-task", 'printf "%s\\n" "$CLAUDE_PLUGIN_ROOT" "$CLAUDE_SKILL_DIR" "$CLAUDE_PROJECT_DIR"\n')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), [
-            str(self.package), str(self.package / "codex/skills/plan-task"),
-            str(self.project), "codex",
+            str(self.package), str(self.package / "skills/plan-task"),
+            str(self.project),
         ])
 
     def test_wrapper_preambles_and_vendor_imports(self):
         self.write_state()
         imported = []
-        for skill in (self.package / "codex/skills").glob("*/SKILL.md"):
-            blocks = re.findall(r"^```bash\n(.*?)^```", skill.read_text(), re.M | re.S)
-            if not any('cat "${YTSTACK_PLUGIN_ROOT}/vendor/' in block for block in blocks):
+        for skill in (self.package / "skills").glob("*/SKILL.md"):
+            blocks = re.findall(r"^```!\n(.*?)^```", skill.read_text(), re.M | re.S)
+            if not blocks:
                 continue
             with self.subTest(skill=skill.parent.name):
                 context = self.run_skill(skill.parent.name, blocks[0])
@@ -149,7 +144,7 @@ class CodexPluginTests(unittest.TestCase):
         self.assertEqual(output["hookEventName"], "SessionStart")
         self.assertIn("scope: greenfield", output["additionalContext"])
         self.assertIn(str(self.package), output["additionalContext"])
-        self.assertIn("../../adapter.md", output["additionalContext"])
+        self.assertIn((self.package / "codex/adapter.md").read_text(), output["additionalContext"])
         self.assertFalse((self.project / ".ytstack").exists())
         (self.project / ".ytstack").mkdir()
         output = json.loads(self.fire_hook("SessionStart"))["hookSpecificOutput"]
@@ -212,35 +207,12 @@ class CodexPluginTests(unittest.TestCase):
         self.assertIn("via the `Skill` tool", context)
         self.assertNotIn("Codex", context)
 
-    def test_generated_distribution_is_current_and_contains_no_claude_env(self):
-        subprocess.run(["python3", str(ROOT / "bin/build-codex"), "--check"],
-                       check=True, capture_output=True, text=True)
-        for path in (self.package / "codex").rglob("*"):
-            if path.is_file():
-                self.assertNotRegex(path.read_text(), r"CLAUDE_[A-Z_]+", str(path))
-        self.assertNotIn("CLAUDE_", self.helper.read_text())
-
-    def test_generated_skill_resources_are_packaged(self):
-        for source in (ROOT / "skills").rglob("*"):
-            if source.is_file() and source.name != "SKILL.md":
-                target = self.package / "codex/skills" / source.relative_to(ROOT / "skills")
-                self.assertEqual(target.read_bytes(), source.read_bytes(), str(source))
-
-    def test_generator_detects_and_rebuilds_source_drift(self):
-        with tempfile.TemporaryDirectory(prefix="ytstack build ") as temp:
-            package = Path(temp) / "plugin"
-            shutil.copytree(self.package, package)
-            source = package / "skills/plan-task/SKILL.md"
-            source.write_text(source.read_text() + "\nNew procedure note.\n")
-            build = ["python3", str(package / "bin/build-codex")]
-            stale = subprocess.run(build + ["--check"], capture_output=True, text=True)
-            self.assertEqual(stale.returncode, 1)
-            self.assertIn("codex/skills/plan-task/SKILL.md", stale.stderr)
-            subprocess.run(build, check=True, capture_output=True)
-            subprocess.run(build + ["--check"], check=True, capture_output=True)
-            generated = package / "codex/skills/plan-task/SKILL.md"
-            self.assertIn("New procedure note.", generated.read_text())
-            self.assertNotIn("Codex", source.read_text())
+    def test_package_has_one_skill_and_hook_source(self):
+        self.assertFalse((self.package / "codex/skills").exists())
+        self.assertFalse((self.package / "codex/hooks").exists())
+        self.assertFalse((self.package / "bin/build-codex").exists())
+        for skill in (self.package / "skills").glob("*/SKILL.md"):
+            self.assertNotIn("Codex", skill.read_text())
 
     def test_claude_wrapper_preambles_and_vendor_imports(self):
         self.write_state()
@@ -264,7 +236,7 @@ class CodexPluginTests(unittest.TestCase):
         subprocess.run(["git", "init", "-q", str(self.project)], check=True, env=self.env)
         nested = self.project / "src/nested directory"
         nested.mkdir(parents=True)
-        result = self.run_skill("plan-task", 'printf "%s\\n" "$YTSTACK_PROJECT_DIR" "$PWD"; echo ok > proof.txt', cwd=nested)
+        result = self.run_skill("plan-task", 'printf "%s\\n" "$CLAUDE_PROJECT_DIR" "$PWD"; echo ok > proof.txt', cwd=nested)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), [str(self.project), str(self.project)])
         self.assertEqual((self.project / "proof.txt").read_text(), "ok\n")

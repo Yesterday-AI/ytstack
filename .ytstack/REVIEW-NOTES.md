@@ -168,3 +168,5 @@ Running list of items to verify, revisit, or polish at end-of-cycle review. Adde
 - Codex support deliberately excludes Claude Agent Teams and edit/commit hooks. The Codex adapter explains sequential execution and explicit scope/verification; do not advertise full hook/team parity. `docs/codex.md` records the boundary.
 
 - [x] PR #23 review follow-up: Claude skills, hooks, and manifests are byte-identical to main. Fresh Codex profile discovers 21 generated skills and 3 hooks from codex/. Fifteen tests cover host separation, generation drift, copied resources, both hosts' vendor imports, and repository-subdirectory lifecycle behavior.
+
+- [x] PR #23 simplification supersedes the generated-package notes above: all copied skills/resources/hooks and the generator removed. Both hosts load the original skills/ tree; 13 tests and fresh Codex discovery pass. Codex SessionStart includes the single runtime adapter; the documented no-hook path reads it explicitly. Claude startup receives no Codex instructions.

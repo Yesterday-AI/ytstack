@@ -684,3 +684,16 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - Fail generation on unhandled Claude environment variables so new host dependencies require an explicit adaptation.
 
 **Supersedes:** The direct shared-skill loading, per-source-skill Codex links, and Claude environment compatibility layer in the earlier Codex distribution decision. The additional Codex host, separate hook registration, user-controlled hook trust, and support limits remain.
+
+
+---
+
+## 2026-10-13: Remove generated Codex copies; load the existing skills directly
+
+**Context:** The maintainer rejected copying the skills and requested the minimal necessary Codex integration. The generated second tree was unnecessary.
+
+**Chose:** Both manifests select the existing skills/. Delete bin/build-codex and all generated skill, resource, and hook copies. No source skill receives Codex boilerplate or a content rewrite.
+
+**How to apply:** Keep Codex tool mappings in codex/adapter.md. The Codex SessionStart entry passes these as optional host context to the shared hook. Without trusted hooks, read the adapter explicitly before following skills. The small runtime helper supplies the shared scripts' existing CLAUDE_* inputs and resolves the repository root; those compatibility names do not require a Claude executable. All three lifecycle events use the original hook scripts. Do not reintroduce generated copies or a second skill tree.
+
+**Supersedes:** The earlier generated-package decision and per-skill Codex-link approach. The host-specific manifests, three-event Codex registration, hook trust, and repository-subdirectory fix remain.

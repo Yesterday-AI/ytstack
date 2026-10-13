@@ -17,9 +17,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Codex packaging and lifecycle integration
-        run: |
-          python3 bin/build-codex --check
-          python3 -m unittest discover -s tests -p 'codex_plugin_test.py' -v
+        run: python3 -m unittest discover -s tests -p 'codex_plugin_test.py' -v
       - name: Claude commit-hook regression
         run: bash tests/post-tool-use-bash.test.sh
       - name: Skill contracts

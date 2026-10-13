@@ -10,7 +10,7 @@
   "repository": "https://github.com/Yesterday-AI/ytstack",
   "license": "MIT",
   "keywords": ["codex", "project-management", "development-methodology"],
-  "skills": "./codex/skills/",
+  "skills": "./skills/",
   "hooks": "./codex/hooks.json",
   "interface": {
     "displayName": "ytstack",

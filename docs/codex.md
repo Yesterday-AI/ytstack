@@ -1,9 +1,8 @@
 # Use ytstack in Codex
 
-ytstack ships a Codex plugin manifest alongside its Claude Code manifest. Claude
-loads the existing `skills/` and `hooks/` unchanged. Codex loads a generated
-package under `codex/`, with the same 21 skill names, adapted host instructions,
-and three lifecycle hooks. Both use the unchanged vendored procedures.
+Both plugin manifests load the same `skills/` directory. Skills, references,
+templates, vendor files, and lifecycle scripts each have one source. Codex adds
+its manifest, a three-event hook configuration, and a small runtime adapter.
 
 ## Install
 
@@ -38,32 +37,33 @@ Windows shells and remote environments without these files are not covered.
 
 Start Codex in the project you want to work on. Repository subdirectories work
 as well: the helper resolves the Git root. Outside Git it uses the current directory.
-Select **using-ytstack** from ytstack in the skill picker (`$ytstack:using-ytstack`),
-then describe the task. To resume an initialized project, select
-`$ytstack:resume-session`. Plugin skills with duplicate names are distinguished by
-their ytstack origin in the picker.
+On local hosts with hook support, review and trust ytstack's hooks through
+Codex's hook controls. SessionStart then supplies the [runtime adapter](../codex/adapter.md),
+the shared `using-ytstack` directive, and project state. Installing the plugin
+does not grant hook trust.
 
-On local hosts that support plugin hooks, review and trust ytstack's hooks
-through Codex's hook controls. Installing the plugin does not grant hook trust.
-Trusted SessionStart hooks inject the directive and state automatically,
-including after compaction. Until hooks are trusted, explicit skill loading
-works and the adapter reads state from disk.
+Without trusted hooks, ask Codex to read `codex/adapter.md` from the installed
+ytstack plugin first, then load `$ytstack:using-ytstack` or the desired skill.
+This explicit bootstrap supplies the tool mappings and shell instructions that
+the hook would otherwise provide. Use `$ytstack:resume-session` and
+`$ytstack:handoff-session` for continuity; no automatic journal is promised.
 
-Each generated skill links to the [Codex adapter](../codex/adapter.md).
-`bin/ytstack-codex` runs its shell blocks with `YTSTACK_PLUGIN_ROOT`,
-`YTSTACK_SKILL_DIR`, and `YTSTACK_PROJECT_DIR`. The generated package uses no
-Claude environment variables. No Claude executable is needed. Codex-specific
-instructions are confined to this package; Claude skills contain none of them.
+`bin/ytstack-codex` runs shared shell blocks and hooks with their existing
+`CLAUDE_PLUGIN_ROOT`, `CLAUDE_SKILL_DIR`, and `CLAUDE_PROJECT_DIR` inputs. These
+names preserve the existing script contract, not a Claude runtime dependency.
+Codex itself supplies plugin-root compatibility aliases for hooks; the helper
+also resolves skill paths and the target repository root. No Claude executable
+is needed. Codex-specific tool mappings stay in `codex/adapter.md`.
 
 ## Supported behavior
 
 | Capability | Codex support |
 | --- | --- |
-| Planning, reviews, TDD, debugging, verification, project artifacts | Generated skills with the Codex adapter. |
+| Planning, reviews, TDD, debugging, verification, project artifacts | Existing skills with the runtime adapter. |
 | SessionStart, PreCompact, SessionEnd | Registered in `codex/hooks.json`; require a local host with hook support and hook trust. |
 | Resume and handoff without hooks | Explicit `resume-session` and `handoff-session` skills. No automatic journal. |
 | Claude edit/commit quality hooks | Not registered. Follow task scope and verification explicitly; `summarize-task` owns task closure. |
-| Claude Agent Teams and `agents/*.md` roles | Claude-only. `spawn-milestone-team` explains the limitation in Codex and suggests sequential execution. |
+| Claude Agent Teams and `agents/*.md` roles | Claude-only. The runtime adapter stops this workflow before its capability probe and offers sequential execution. |
 | Claude marketplace dependencies | Not installed by Codex. Optional design or gstack sibling tools must be available separately when needed. |
 
 This is a repository/local plugin distribution. It is not a public OpenAI
@@ -71,21 +71,12 @@ directory submission; packages with lifecycle hooks require manual local
 installation. Codex subagents are not presented as an equivalent to Claude's
 Agent Teams coordination.
 
-## Build and verify changes
+## Verify changes
 
-`skills/` and `hooks/` remain the sources. After editing them, run
-`python3 bin/build-codex` and commit the updated `codex/skills/` and
-`codex/hooks/` files. Reference files and templates are copied with the skills.
-The generator changes host paths, shell fences, and entry instructions; it
-never edits `vendor/`. The Agent Teams entry becomes an explicit support-limit
-notice. Changes to a host adaptation belong in `bin/build-codex` or
-`codex/adapter.md`, not in generated files.
-
-Generated files are committed so installation needs no build step. CI runs
-`--check` to reject stale output and unknown Claude environment dependencies.
+Edit `skills/` and `hooks/` directly. There is no generated package or build step.
+Test both hosts after changing a shared shell block or lifecycle script.
 
 ```bash
-python3 bin/build-codex --check
 python3 -m unittest discover -s tests -p 'codex_plugin_test.py' -v
 bin/ytstack-check
 bash tests/post-tool-use-bash.test.sh

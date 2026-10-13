@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Run the generated Codex skills and lifecycle hooks.
+# Run the existing skill blocks and hooks with their shared environment contract.
 set -euo pipefail
 
-export YTSTACK_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export CLAUDE_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null) || PROJECT_DIR="$PWD"
-export YTSTACK_PROJECT_DIR="$PROJECT_DIR"
+export CLAUDE_PROJECT_DIR="$PROJECT_DIR"
 cd "$PROJECT_DIR"
-export YTSTACK_HOST=codex
 
 usage() {
   echo 'Usage: ytstack-codex skill <name> [bash arguments...] | hook <session-start|pre-compact|session-end>' >&2
@@ -21,8 +20,8 @@ shift 2
 case "$MODE" in
   skill)
     [[ "$NAME" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || usage
-    export YTSTACK_SKILL_DIR="$YTSTACK_PLUGIN_ROOT/codex/skills/$NAME"
-    [ -f "$YTSTACK_SKILL_DIR/SKILL.md" ] || {
+    export CLAUDE_SKILL_DIR="$CLAUDE_PLUGIN_ROOT/skills/$NAME"
+    [ -f "$CLAUDE_SKILL_DIR/SKILL.md" ] || {
       echo "ytstack: skill not found: $NAME" >&2
       exit 2
     }
@@ -32,7 +31,12 @@ case "$MODE" in
     [ "$#" -eq 0 ] || usage
     case "$NAME" in
       session-start|pre-compact|session-end)
-        exec bash "$YTSTACK_PLUGIN_ROOT/codex/hooks/$NAME"
+        if [ "$NAME" = session-start ]; then
+          export YTSTACK_HOST_CONTEXT="[ytstack plugin root: $CLAUDE_PLUGIN_ROOT]
+
+$(cat "$CLAUDE_PLUGIN_ROOT/codex/adapter.md")"
+        fi
+        exec bash "$CLAUDE_PLUGIN_ROOT/hooks/$NAME"
         ;;
       *) usage ;;
     esac
