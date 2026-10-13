@@ -48,6 +48,11 @@ USING_YTSTACK_FILE="${CLAUDE_PLUGIN_ROOT:-$PROJECT_DIR}/skills/using-ytstack/SKI
 USING_YTSTACK_CONTENT=""
 if [ -f "$USING_YTSTACK_FILE" ]; then
   USING_YTSTACK_CONTENT=$(cat "$USING_YTSTACK_FILE")
+  if [ -n "${YTSTACK_HOST_CONTEXT:-}" ]; then
+    USING_YTSTACK_CONTENT="$YTSTACK_HOST_CONTEXT
+
+$USING_YTSTACK_CONTENT"
+  fi
 fi
 
 # Silent exit if the plugin itself is not available (no CLAUDE_PLUGIN_ROOT

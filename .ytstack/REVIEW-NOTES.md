@@ -158,3 +158,15 @@ Running list of items to verify, revisit, or polish at end-of-cycle review. Adde
 - **At v0.1 release:** items remaining must be annotated with target version (v0.1.1, v0.2, etc.) or closed as "intentionally out of scope."
 
 **File is append-only within a milestone.** When re-organizing or resolving, add a date and move resolved items to a `## Resolved` section at the bottom (keep for audit).
+
+
+## Codex compatibility (2026-10-13)
+
+- [x] Verified Codex CLI 0.162.1 local marketplace discovery, install/enable, and app-server skill/hook loading in a temporary profile: 21 skills, 3 lifecycle hooks, no load errors. Hooks remain untrusted until the user reviews them.
+- [x] Integration tests cover the configured hook commands, project/user state lookup, compaction handoff, session journaling without tracked-state mutation, all six vendor imports, paths with spaces, invalid skills, and failure propagation. Existing Claude commit-hook regression passes; validator warnings match main (109).
+- [ ] Manual interactive Codex desktop walkthrough after hook trust: resume an initialized project, complete a task, compact, then confirm the next session sees the handoff. Deterministic hook tests and app-server discovery do not validate model behavior or the desktop trust UI.
+- Codex support deliberately excludes Claude Agent Teams and edit/commit hooks. The Codex adapter explains sequential execution and explicit scope/verification; do not advertise full hook/team parity. `docs/codex.md` records the boundary.
+
+- [x] PR #23 review follow-up: Claude skills, hooks, and manifests are byte-identical to main. Fresh Codex profile discovers 21 generated skills and 3 hooks from codex/. Fifteen tests cover host separation, generation drift, copied resources, both hosts' vendor imports, and repository-subdirectory lifecycle behavior.
+
+- [x] PR #23 simplification supersedes the generated-package notes above: all copied skills/resources/hooks and the generator removed. Both hosts load the original skills/ tree; 13 tests and fresh Codex discovery pass. Codex SessionStart includes the single runtime adapter; the documented no-hook path reads it explicitly. Claude startup receives no Codex instructions.

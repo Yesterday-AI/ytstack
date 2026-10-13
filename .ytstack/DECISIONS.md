@@ -639,3 +639,61 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - Regression test: `tests/post-tool-use-bash.test.sh` (10 cases) is the contract guard.
 
 **Supersedes:** none.
+
+
+---
+
+## 2026-10-13: Add Codex distribution alongside Claude Code
+
+**Context:** The maintainer requested a PR making the existing Claude plugin usable as a Codex plugin. Codex could not discover ytstack in the active skill catalog. Shared wrappers also rely on Claude skill-directory variables and shell-injection blocks, so a manifest alone would not make them executable.
+
+**Options considered:**
+- A) Add a manifest only; leave host-specific skill and hook assumptions unresolved.
+- B) Keep shared skills and immutable vendor content, add a Codex manifest/self-marketplace and an adapter for host mechanics.
+- C) Fork all skills into a second Codex-only tree.
+
+**Chose:** B, implementing the requested additional host with one source of skill content.
+
+**Reason:** Both hosts can use the same artifacts and procedures. Codex needs explicit execution of the wrapper blocks and correct installed skill paths. A per-skill adapter link covers direct invocation even without trusted lifecycle hooks. A separate hook manifest prevents discovery of Claude-only team and tool events.
+
+**How to apply:**
+- `.codex-plugin/plugin.json` loads the existing `skills/`; `.agents/plugins/marketplace.json` self-marketplaces the repo root as `ytstack@ytstack`.
+- `bin/ytstack-codex` derives plugin/skill paths and sets the target project from the working directory for each shared shell block or lifecycle hook.
+- Codex registers SessionStart, PreCompact, and SessionEnd only. Hook trust remains the host's explicit user-controlled setting. Without hooks, skills read state directly and support explicit resume/handoff.
+- Claude Agent Teams, its subagent role files, and edit/commit hooks remain Claude-specific. Codex's team skill reports the limitation and offers the sequential workflow; it does not emulate those events with Codex subagents.
+- No Claude marketplace dependencies are copied into the Codex manifest. Required optional capabilities must be available separately.
+- Keep the two plugin manifest versions aligned. Existing Claude installation and vendored content remain unchanged.
+
+**Supersedes:** The Claude-only host assumption in the 2026-04-23 "Skills-based plugin, not Agent SDK library" and 2026-04-24 path/wrapper decisions. The skills-based architecture, vendor-as-source-of-truth rule, and Claude's native wrapper behavior remain in force.
+
+---
+
+## 2026-10-13: Generate a separate Codex package from unchanged Claude sources
+
+**Context:** During PR #23 review the maintainer rejected Codex instructions in skills loaded by Claude and Claude environment variables in the Codex adapter. The maintainer selected keeping Claude sources unchanged and automatically deriving a separate Codex package.
+
+**Chose:** Keep `skills/`, `hooks/`, and `.claude-plugin/` unchanged. `bin/build-codex` generates `codex/skills/` and the three `codex/hooks/` lifecycle scripts; the Codex manifest selects only these paths. Generated files are committed so plugin installation needs no build step.
+
+**Reason:** The procedures have one maintained source, while each host loads its own instructions and environment contract. Claude retains native dynamic shell injection. Codex runs explicit Bash blocks with `YTSTACK_PLUGIN_ROOT`, `YTSTACK_SKILL_DIR`, and `YTSTACK_PROJECT_DIR`. Codex's project path resolves to the current Git repository/worktree root, with the current directory as the non-Git fallback.
+
+**How to apply:**
+- After changing source skills, their resources, or lifecycle hooks, run `python3 bin/build-codex` and commit the generated output. CI runs `--check` to reject drift.
+- Keep host adaptations in the generator and `codex/adapter.md`. Never add Codex instructions to the Claude source skills.
+- Copy skill references and templates with their skills. Keep all `vendor/` content unchanged; generated wrappers still read the same six procedures verbatim.
+- Codex's `spawn-milestone-team` entry explains the support limit and sequential alternative; it contains no Claude capability probe or spawn procedure.
+- Fail generation on unhandled Claude environment variables so new host dependencies require an explicit adaptation.
+
+**Supersedes:** The direct shared-skill loading, per-source-skill Codex links, and Claude environment compatibility layer in the earlier Codex distribution decision. The additional Codex host, separate hook registration, user-controlled hook trust, and support limits remain.
+
+
+---
+
+## 2026-10-13: Remove generated Codex copies; load the existing skills directly
+
+**Context:** The maintainer rejected copying the skills and requested the minimal necessary Codex integration. The generated second tree was unnecessary.
+
+**Chose:** Both manifests select the existing skills/. Delete bin/build-codex and all generated skill, resource, and hook copies. No source skill receives Codex boilerplate or a content rewrite.
+
+**How to apply:** Keep Codex tool mappings in codex/adapter.md. The Codex SessionStart entry passes these as optional host context to the shared hook. Without trusted hooks, read the adapter explicitly before following skills. The small runtime helper supplies the shared scripts' existing CLAUDE_* inputs and resolves the repository root; those compatibility names do not require a Claude executable. All three lifecycle events use the original hook scripts. Do not reintroduce generated copies or a second skill tree.
+
+**Supersedes:** The earlier generated-package decision and per-skill Codex-link approach. The host-specific manifests, three-event Codex registration, hook trust, and repository-subdirectory fix remain.
