@@ -40,8 +40,8 @@ YTSTACK_BASH
 ```
 
 The helper derives `CLAUDE_PLUGIN_ROOT` and `CLAUDE_SKILL_DIR` from its own
-installed location and sets `CLAUDE_PROJECT_DIR` to the command's working
-directory. These names are compatibility inputs for the shared files, not a
+installed location and sets `CLAUDE_PROJECT_DIR` to the Git repository root,
+falling back to the working directory outside Git. It runs the block there. These names are compatibility inputs for the shared files, not a
 requirement to install Claude. Use the helper again for every shell call that
 needs them; exports from a previous tool call do not persist.
 

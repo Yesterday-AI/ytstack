@@ -3,7 +3,9 @@
 set -euo pipefail
 
 export CLAUDE_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export CLAUDE_PROJECT_DIR="$PWD"
+PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null) || PROJECT_DIR="$PWD"
+export CLAUDE_PROJECT_DIR="$PROJECT_DIR"
+cd "$PROJECT_DIR"
 export YTSTACK_HOST=codex
 
 usage() {

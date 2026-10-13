@@ -46,25 +46,26 @@ class CodexPluginTests(unittest.TestCase):
         self.env["PLUGIN_ROOT"] = str(self.package)
         self.helper = self.package / "bin/ytstack-codex"
 
-    def run_skill(self, name, script, **kwargs):
+    def run_skill(self, name, script, cwd=None, **kwargs):
         return subprocess.run(
             ["bash", str(self.helper), "skill", name], input=script,
-            cwd=self.project, env=self.env, text=True, capture_output=True,
+            cwd=cwd or self.project, env=self.env, text=True, capture_output=True,
             **kwargs,
         )
 
-    def fire_hook(self, event):
+    def fire_hook(self, event, cwd=None):
+        cwd = cwd or self.project
         config = json.loads((self.package / "hooks/codex.json").read_text())
         handlers = config["hooks"][event][0]["hooks"]
         self.assertEqual(len(handlers), 1)
         payload = {
             "session_id": 'codex-session-"quoted"',
-            "cwd": str(self.project), "hook_event_name": event,
+            "cwd": str(cwd), "hook_event_name": event,
             "source": "startup", "reason": "other",
         }
         result = subprocess.run(
             ["bash", "-c", handlers[0]["command"]],
-            input=json.dumps(payload), cwd=self.project, env=self.env,
+            input=json.dumps(payload), cwd=cwd, env=self.env,
             text=True, capture_output=True, timeout=handlers[0]["timeout"],
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -178,6 +179,26 @@ class CodexPluginTests(unittest.TestCase):
         self.assertEqual(self.fire_hook("PreCompact"), "")
         self.assertEqual(self.fire_hook("SessionEnd"), "")
         self.assertFalse((self.project / ".ytstack").exists())
+
+    def test_lifecycle_from_repository_subdirectory(self):
+        subprocess.run(["git", "init", "-q", str(self.project)], check=True, env=self.env)
+        nested = self.project / "src/nested directory"
+        nested.mkdir(parents=True)
+        for user_scope in (False, True):
+            with self.subTest(user_scope=user_scope):
+                directory = self.write_state(user_scope=user_scope)
+                state = (directory / "STATE.md").read_bytes()
+                context = json.loads(self.fire_hook("SessionStart", cwd=nested))["hookSpecificOutput"]["additionalContext"]
+                self.assertIn("scope: user" if user_scope else "scope: project", context)
+                self.assertIn("M123 / S02 / T03", context)
+                self.fire_hook("PreCompact", cwd=nested)
+                self.assertIn("current_milestone: M123", (directory / "HANDOFF.md").read_text())
+                self.fire_hook("SessionEnd", cwd=nested)
+                entry = json.loads((directory / "journal/sessions.jsonl").read_text())
+                self.assertEqual(entry["task"], "T03")
+                self.assertEqual((directory / "STATE.md").read_bytes(), state)
+                self.assertFalse((nested / ".ytstack").exists())
+                shutil.rmtree(directory)
 
     def test_claude_startup_still_works(self):
         self.write_state()
