@@ -15,9 +15,6 @@ triggers:
   - ytstack plan task
 ---
 
-**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
-
-
 # plan-task
 
 Take one task from the current slice's task list and turn it into a concrete plan: which files to touch, what code to write, how to verify. Output lives at `M###-S##-T##-PLAN.md`.

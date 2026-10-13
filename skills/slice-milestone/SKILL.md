@@ -16,9 +16,6 @@ triggers:
   - ytstack slice
 ---
 
-**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
-
-
 # slice-milestone
 
 Break an existing milestone into concrete slices. Each slice gets a goal + 1-7 tasks. Writes one `M###-S##-PLAN.md` per slice.

@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-10-13T09:17:17Z
+last_updated: 2026-10-13T09:25:37Z
 current_milestone: M015
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**PR #23 host separation (2026-10-13):** Implemented the maintainer-selected layout: unchanged Claude skills/hooks/manifests; a separately generated Codex package using only YTSTACK_* environment variables. All 21 namespaced skills and three lifecycle hooks load from codex/ in a fresh temporary Codex profile, with no errors or warnings. Fifteen integration tests pass, covering both hosts' six vendor imports, generated-file drift, resources, root/subdirectory state lookup, handoff, journaling, and relative file writes. The contract checker still reports 109 baseline warnings, no failures. The initial implementation status below is historical and superseded by this entry.
 
 **PR #23 review follow-up (2026-10-13):** Fixed repository-subdirectory startup in the Codex helper. All lifecycle hooks now find repository-root state; the regression covers project and user scope, handoff, journaling, and unchanged STATE.md. Ten integration tests pass. Host separation is under revision following maintainer feedback; this entry records the independent path fix.
 

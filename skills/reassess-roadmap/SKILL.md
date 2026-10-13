@@ -15,9 +15,6 @@ triggers:
   - ytstack reassess
 ---
 
-**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
-
-
 # reassess-roadmap
 
 Post-slice checkpoint. Looks at what was learned during the slice and asks whether the milestone roadmap still matches reality. Often the answer is yes -- but when it's no, catching it here is cheap; catching it at milestone-end is expensive.

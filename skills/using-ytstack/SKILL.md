@@ -1,24 +1,22 @@
 ---
 name: using-ytstack
-description: "Establishes how agents find and invoke ytstack skills. Use at session start or when selecting a ytstack workflow. Loaded by the SessionStart hook when available; can be loaded explicitly in Codex."
+description: "Establishes how agents find and invoke ytstack skills. Requires Skill-tool invocation before any response when a ytstack skill applies. Auto-injected by the SessionStart hook. Not meant for direct user invocation."
 tier: core
-version: 0.2.2
+version: 0.2.1
 kind: directive
 user-invocable: false
 ---
 
 # Using ytstack
 
-**In Codex:** Read [the Codex adapter](references/codex.md) before continuing. It defines skill loading, shell execution, question tools, and the supported lifecycle hooks.
-
 <SUBAGENT-STOP>
 If you were dispatched as an Agent Teams teammate to execute a specific slice or task, skip this skill -- your scope is bounded by the task plan the lead gave you.
 </SUBAGENT-STOP>
 
 <EXTREMELY-IMPORTANT>
-This project uses ytstack. The SessionStart hook supplies project state when available. Load skills with Claude Code's `Skill` tool or Codex's skill-loading mechanism described in the adapter.
+This project uses ytstack. A hook has injected project state into your context and you have access to ytstack's skills via the `Skill` tool.
 
-If you think there is even a 1% chance a ytstack skill applies to what the user asked, you ABSOLUTELY MUST load the skill using your host's skill-loading mechanism BEFORE any other action.
+If you think there is even a 1% chance a ytstack skill applies to what the user asked, you ABSOLUTELY MUST invoke the skill via the `Skill` tool BEFORE any other action.
 
 IF A YTSTACK SKILL APPLIES, YOU DO NOT HAVE A CHOICE. USE IT.
 
@@ -29,13 +27,13 @@ This is not negotiable. This is not optional. You cannot rationalize your way ou
 
 User instructions always take precedence:
 
-1. **User's explicit instructions** (`AGENTS.md`, `CLAUDE.md`, direct messages) -- highest priority. If the user says "skip ytstack for this change", honor it.
+1. **User's explicit instructions** (`CLAUDE.md`, direct messages) -- highest priority. If the user says "skip ytstack for this change", honor it.
 2. **ytstack skills** -- override default agent behavior when they apply.
 3. **Default agent behavior** -- lowest priority.
 
 ## The rule
 
-**Invoke the relevant ytstack skill BEFORE any response or action.** Each skill's frontmatter `description` field states when to use it. Match the user's intent against the descriptions semantically -- not against keyword lists or canonical phrasings. If any skill's description plausibly covers the situation, load it using your host's skill-loading mechanism to confirm. If the invoked skill turns out to be the wrong fit, that is fine; what is NOT fine is skipping the check.
+**Invoke the relevant ytstack skill BEFORE any response or action.** Each skill's frontmatter `description` field states when to use it. Match the user's intent against the descriptions semantically -- not against keyword lists or canonical phrasings. If any skill's description plausibly covers the situation, invoke it via the `Skill` tool to confirm. If the invoked skill turns out to be the wrong fit, that is fine; what is NOT fine is skipping the check.
 
 Skills you might need (consult each skill's description, not this list, for the actual when-to-use):
 
@@ -76,22 +74,22 @@ digraph using_ytstack {
     "User message received" [shape=doublecircle];
     "Match intent against skill descriptions" [shape=box];
     "Any skill plausibly applies?" [shape=diamond];
-    "Load selected skill" [shape=box];
+    "Invoke Skill tool" [shape=box];
     "Follow skill exactly" [shape=box];
     "Respond directly" [shape=doublecircle];
 
     "User message received" -> "Match intent against skill descriptions";
     "Match intent against skill descriptions" -> "Any skill plausibly applies?";
-    "Any skill plausibly applies?" -> "Load selected skill" [label="yes, even 1%"];
+    "Any skill plausibly applies?" -> "Invoke Skill tool" [label="yes, even 1%"];
     "Any skill plausibly applies?" -> "Respond directly" [label="definitely not"];
-    "Load selected skill" -> "Follow skill exactly";
+    "Invoke Skill tool" -> "Follow skill exactly";
     "Follow skill exactly" -> "Respond directly";
 }
 ```
 
 ## After invoking a skill
 
-Follow its Checklist exactly. Track each item with TodoWrite in Claude Code, or the available plan/checklist mechanism in Codex. Don't improvise steps. The skill's Terminal State section tells you what to do next -- respect it; don't auto-invoke the suggested follow-up skill unless the user explicitly asks for it.
+Follow its Checklist exactly. Create TodoWrite entries per item. Don't improvise steps. The skill's Terminal State section tells you what to do next -- respect it; don't auto-invoke the suggested follow-up skill unless the user explicitly asks for it.
 
 ## Reporting ytstack issues
 

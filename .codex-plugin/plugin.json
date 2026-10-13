@@ -10,8 +10,8 @@
   "repository": "https://github.com/Yesterday-AI/ytstack",
   "license": "MIT",
   "keywords": ["codex", "project-management", "development-methodology"],
-  "skills": "./skills/",
-  "hooks": "./hooks/codex.json",
+  "skills": "./codex/skills/",
+  "hooks": "./codex/hooks.json",
   "interface": {
     "displayName": "ytstack",
     "shortDescription": "Plan, build, and resume work across sessions",

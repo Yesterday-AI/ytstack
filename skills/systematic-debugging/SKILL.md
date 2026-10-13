@@ -9,9 +9,6 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
-
-
 # ytstack:systematic-debugging
 
 Thin wrapper around the vendored superpowers `systematic-debugging` skill (`vendor/superpowers/skills/systematic-debugging/SKILL.md`). Injects ytstack project context, then inlines the vendored procedure verbatim. Findings are routed into ytstack artifacts. Vendor is single source of truth.

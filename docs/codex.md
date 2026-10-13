@@ -1,9 +1,9 @@
 # Use ytstack in Codex
 
-ytstack ships a Codex plugin manifest alongside its Claude Code manifest. Both
-hosts load the same 21 skills and vendored procedures. Codex uses a separate
-hook configuration and a small shell adapter; Claude Code keeps its existing
-installation and hooks.
+ytstack ships a Codex plugin manifest alongside its Claude Code manifest. Claude
+loads the existing `skills/` and `hooks/` unchanged. Codex loads a generated
+package under `codex/`, with the same 21 skill names, adapted host instructions,
+and three lifecycle hooks. Both use the unchanged vendored procedures.
 
 ## Install
 
@@ -36,7 +36,8 @@ Windows shells and remote environments without these files are not covered.
 
 ## First session
 
-Start Codex in the project you want to work on, not the plugin's source tree.
+Start Codex in the project you want to work on. Repository subdirectories work
+as well: the helper resolves the Git root. Outside Git it uses the current directory.
 Select **using-ytstack** from ytstack in the skill picker (`$ytstack:using-ytstack`),
 then describe the task. To resume an initialized project, select
 `$ytstack:resume-session`. Plugin skills with duplicate names are distinguished by
@@ -48,18 +49,18 @@ Trusted SessionStart hooks inject the directive and state automatically,
 including after compaction. Until hooks are trusted, explicit skill loading
 works and the adapter reads state from disk.
 
-The shared skill text uses Claude tool names and fenced `!` shell blocks.
-Every skill links to the [Codex adapter](../skills/using-ytstack/references/codex.md),
-which maps those operations and uses `bin/ytstack-codex` to set the correct
-skill, plugin, and project paths. No Claude executable is needed for those
-workflows.
+Each generated skill links to the [Codex adapter](../codex/adapter.md).
+`bin/ytstack-codex` runs its shell blocks with `YTSTACK_PLUGIN_ROOT`,
+`YTSTACK_SKILL_DIR`, and `YTSTACK_PROJECT_DIR`. The generated package uses no
+Claude environment variables. No Claude executable is needed. Codex-specific
+instructions are confined to this package; Claude skills contain none of them.
 
 ## Supported behavior
 
 | Capability | Codex support |
 | --- | --- |
-| Planning, reviews, TDD, debugging, verification, project artifacts | Shared skills with the Codex adapter. |
-| SessionStart, PreCompact, SessionEnd | Registered in `hooks/codex.json`; require a local host with hook support and hook trust. |
+| Planning, reviews, TDD, debugging, verification, project artifacts | Generated skills with the Codex adapter. |
+| SessionStart, PreCompact, SessionEnd | Registered in `codex/hooks.json`; require a local host with hook support and hook trust. |
 | Resume and handoff without hooks | Explicit `resume-session` and `handoff-session` skills. No automatic journal. |
 | Claude edit/commit quality hooks | Not registered. Follow task scope and verification explicitly; `summarize-task` owns task closure. |
 | Claude Agent Teams and `agents/*.md` roles | Claude-only. `spawn-milestone-team` explains the limitation in Codex and suggests sequential execution. |
@@ -70,9 +71,21 @@ directory submission; packages with lifecycle hooks require manual local
 installation. Codex subagents are not presented as an equivalent to Claude's
 Agent Teams coordination.
 
-## Verify changes
+## Build and verify changes
+
+`skills/` and `hooks/` remain the sources. After editing them, run
+`python3 bin/build-codex` and commit the updated `codex/skills/` and
+`codex/hooks/` files. Reference files and templates are copied with the skills.
+The generator changes host paths, shell fences, and entry instructions; it
+never edits `vendor/`. The Agent Teams entry becomes an explicit support-limit
+notice. Changes to a host adaptation belong in `bin/build-codex` or
+`codex/adapter.md`, not in generated files.
+
+Generated files are committed so installation needs no build step. CI runs
+`--check` to reject stale output and unknown Claude environment dependencies.
 
 ```bash
+python3 bin/build-codex --check
 python3 -m unittest discover -s tests -p 'codex_plugin_test.py' -v
 bin/ytstack-check
 bash tests/post-tool-use-bash.test.sh

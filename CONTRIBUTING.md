@@ -107,10 +107,13 @@ Per ytstack's design direction, we credit external methodology work generically,
 
 ## Codex compatibility
 
-Both plugin manifests load `skills/`. Keep the Codex adapter link at the top
-of each skill so direct invocation works without a SessionStart hook.
-Host mappings live in `skills/using-ytstack/references/codex.md`; do not fork
-vendored procedures. Register only supported events in `hooks/codex.json`.
+Claude loads `skills/` and `hooks/` directly. Codex loads the generated
+`codex/skills/` and `codex/hooks/` package. Run `python3 bin/build-codex` after
+changing source skills, resources, or lifecycle hooks, and commit the output.
+Do not add Codex instructions to Claude skills or edit generated files by hand.
+Host adaptations live in `bin/build-codex` and `codex/adapter.md`; supported
+hook events are registered in `codex/hooks.json`. Vendor content stays unchanged.
+CI runs `python3 bin/build-codex --check` to catch stale output.
 Keep `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json` versions aligned.
 
 Run `python3 -m unittest discover -s tests -p 'codex_plugin_test.py' -v` and

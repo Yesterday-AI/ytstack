@@ -16,9 +16,6 @@ triggers:
   - start ytstack project
 ---
 
-**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
-
-
 # init-project
 
 Initialize a `.ytstack/` directory with the core project-memory artifacts that every other ytstack skill depends on.

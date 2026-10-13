@@ -665,3 +665,22 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - Keep the two plugin manifest versions aligned. Existing Claude installation and vendored content remain unchanged.
 
 **Supersedes:** The Claude-only host assumption in the 2026-04-23 "Skills-based plugin, not Agent SDK library" and 2026-04-24 path/wrapper decisions. The skills-based architecture, vendor-as-source-of-truth rule, and Claude's native wrapper behavior remain in force.
+
+---
+
+## 2026-10-13: Generate a separate Codex package from unchanged Claude sources
+
+**Context:** During PR #23 review the maintainer rejected Codex instructions in skills loaded by Claude and Claude environment variables in the Codex adapter. The maintainer selected keeping Claude sources unchanged and automatically deriving a separate Codex package.
+
+**Chose:** Keep `skills/`, `hooks/`, and `.claude-plugin/` unchanged. `bin/build-codex` generates `codex/skills/` and the three `codex/hooks/` lifecycle scripts; the Codex manifest selects only these paths. Generated files are committed so plugin installation needs no build step.
+
+**Reason:** The procedures have one maintained source, while each host loads its own instructions and environment contract. Claude retains native dynamic shell injection. Codex runs explicit Bash blocks with `YTSTACK_PLUGIN_ROOT`, `YTSTACK_SKILL_DIR`, and `YTSTACK_PROJECT_DIR`. Codex's project path resolves to the current Git repository/worktree root, with the current directory as the non-Git fallback.
+
+**How to apply:**
+- After changing source skills, their resources, or lifecycle hooks, run `python3 bin/build-codex` and commit the generated output. CI runs `--check` to reject drift.
+- Keep host adaptations in the generator and `codex/adapter.md`. Never add Codex instructions to the Claude source skills.
+- Copy skill references and templates with their skills. Keep all `vendor/` content unchanged; generated wrappers still read the same six procedures verbatim.
+- Codex's `spawn-milestone-team` entry explains the support limit and sequential alternative; it contains no Claude capability probe or spawn procedure.
+- Fail generation on unhandled Claude environment variables so new host dependencies require an explicit adaptation.
+
+**Supersedes:** The direct shared-skill loading, per-source-skill Codex links, and Claude environment compatibility layer in the earlier Codex distribution decision. The additional Codex host, separate hook registration, user-controlled hook trust, and support limits remain.

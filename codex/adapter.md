@@ -1,21 +1,20 @@
 # Running ytstack skills in Codex
 
-Read this adapter before following a ytstack skill in Codex. It applies to
-the shared skills and their vendored procedures; Claude Code keeps its native
-tool and shell-injection behavior.
+Read this adapter before following a ytstack skill in Codex. It applies only to the
+generated Codex package and its vendored procedures.
 
 ## Load skills and context
 
 Use Codex's skill loader when available. Otherwise read the selected
-`skills/<name>/SKILL.md` from this installed plugin and follow it. A reference
+`codex/skills/<name>/SKILL.md` from this installed plugin and follow it. A reference
 to `ytstack:<name>` or `/ytstack:<name>` means that skill, not a shell command.
 Users can select it with `$ytstack:<name>` in Codex's skill picker; choose the entry
 from ytstack if another plugin provides the same name.
 
-The plugin root is two directories above the selected `SKILL.md` directory.
-For this adapter it is three directories above `references/`. Resolve it from
+The plugin root is three directories above the selected `SKILL.md` directory.
+For this adapter it is the parent of `codex/`. Resolve it from
 the loaded file's actual location, not the project checkout or a guessed cache
-version. `hooks/session-start` also reports the installed plugin root.
+version. `codex/hooks/session-start` also reports the installed plugin root.
 
 If the SessionStart hook did not provide project context, read the
 `using-ytstack` skill and the project's `.ytstack/STATE.md`, `DECISIONS.md`, and
@@ -25,11 +24,11 @@ codebase is a new project; follow the user's requested scope.
 
 ## Run shell blocks explicitly
 
-Codex does not evaluate the shared skills' fenced `!` blocks as Claude dynamic
-context. Execute those blocks explicitly, in order, using Bash from the target
-project directory. Honor each hard gate before loading its vendored procedure.
-Run ordinary Bash preambles the same way. Each block is a separate process;
-use its printed values in subsequent prose steps.
+Run the selected skill's Bash preamble explicitly from the target project.
+Honor each hard gate before running its vendor `cat` block and following that
+procedure. Other shell blocks run only when the procedure calls for them;
+examples and output templates are not setup commands. Each block is a separate
+process; use its printed values in subsequent prose steps.
 
 For every block, use the bundled helper with the current skill name:
 
@@ -39,11 +38,11 @@ bash "/absolute/plugin/root/bin/ytstack-codex" skill plan-task <<'YTSTACK_BASH'
 YTSTACK_BASH
 ```
 
-The helper derives `CLAUDE_PLUGIN_ROOT` and `CLAUDE_SKILL_DIR` from its own
-installed location and sets `CLAUDE_PROJECT_DIR` to the Git repository root,
-falling back to the working directory outside Git. It runs the block there. These names are compatibility inputs for the shared files, not a
-requirement to install Claude. Use the helper again for every shell call that
-needs them; exports from a previous tool call do not persist.
+The helper derives `YTSTACK_PLUGIN_ROOT` and `YTSTACK_SKILL_DIR` from its own
+installed location and sets `YTSTACK_PROJECT_DIR` to the Git repository root,
+falling back to the working directory outside Git. It runs the block there.
+Use the helper again for every shell call that needs these variables; exports
+from a previous tool call do not persist.
 
 Read the entire output of the wrapper's vendor `cat` block, including any
 referenced files needed for the task. Vendor files remain unchanged. Keep
@@ -54,7 +53,7 @@ inventing a tool or installing a dependency silently.
 
 ## Map tools to the host
 
-| Shared instruction | Codex behavior |
+| Instruction | Codex behavior |
 | --- | --- |
 | `Skill` | Load/read the selected skill as described above. |
 | `Bash`, `Read`, `Write`, `Edit`, `Grep`, `Glob` | Use available shell, file, patch, and search tools. |
@@ -65,7 +64,7 @@ inventing a tool or installing a dependency silently.
 A missing question tool does not imply non-interactive mode or consent.
 Honor authorization already given in the conversation. User instructions and
 the host's tool, approval, and sandbox rules take precedence over this adapter
-and any shared or vendored skill instructions.
+and any generated or vendored skill instructions.
 
 ## Lifecycle and teams
 
@@ -78,8 +77,8 @@ Claude's edit/commit hooks and Agent Teams events are not registered in Codex.
 Check task scope before editing, run the verification command, and use
 `summarize-task` to close work; no automatic draft summary is created on commit.
 
-`spawn-milestone-team` remains a Claude Code workflow. In Codex, stop before its
-Claude capability probe or spawn procedure and explain that limitation.
+`spawn-milestone-team` remains a Claude Code workflow. The generated Codex
+entry explains that limitation without a capability probe or spawn procedure.
 Suggest the sequential `plan-task` -> implementation ->
 `verification-before-completion` -> `summarize-task` flow. Do not pretend Codex
 subagents provide Claude's shared team/task hooks or start another host.

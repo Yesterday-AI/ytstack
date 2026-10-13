@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Build the Codex distribution without changing the Claude sources or vendor."""
+
+import argparse
+from pathlib import Path
+import re
+import sys
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def replace_required(text, old, new):
+    if old not in text:
+        raise ValueError(f"Codex adaptation needs review; source text changed: {old!r}")
+    return text.replace(old, new)
+
+
+def adapt_skill(path):
+    text = path.read_text()
+    name = path.parent.name
+    if name == "spawn-milestone-team":
+        frontmatter = text.split("---", 2)[1]
+        frontmatter = re.sub(r'^description:.*$', 'description: "Explains the Agent Teams support boundary when parallel milestone execution is requested in Codex."', frontmatter, flags=re.M)
+        text = "---" + frontmatter + "---\n\n# Milestone teams in Codex\n\n" + (
+            "This workflow requires Claude Code Agent Teams and its coordination hooks.\n"
+            "They are not provided by this Codex package.\n\n"
+            "## Checklist\n\n1. Explain the limitation.\n2. Offer sequential execution.\n\n"
+            "## Procedure\n\nStop before any capability probe or team spawn. Do not start another host.\n"
+            "Offer `plan-task` -> implementation -> `verification-before-completion`\n"
+            "-> `summarize-task` for each task instead.\n\n"
+            "## Terminal State\n\nReturn after explaining the supported workflow. Do not spawn agents or\n"
+            "invoke another skill unless the user requests it.\n"
+        )
+    else:
+        text = text.replace('${CLAUDE_SKILL_DIR}/../../vendor/', '${YTSTACK_PLUGIN_ROOT}/vendor/')
+        text = text.replace('CLAUDE_PROJECT_DIR', 'YTSTACK_PROJECT_DIR')
+        text = text.replace(' || [ -n "$CLAUDE_AGENT_TEAM_MEMBER" ]', '')
+        text = text.replace('(i.e. `CLAUDE_AGENT_TEAM_MEMBER` is unset)', '(interactive mode)')
+        text = text.replace('(CLAUDE_AGENT_TEAM_MEMBER set)', '(non-interactive mode)')
+        if name == "using-ytstack":
+            text = re.sub(r"<SUBAGENT-STOP>.*?</SUBAGENT-STOP>\n\n", "", text, flags=re.S)
+            for old, new in (
+                ('Requires Skill-tool invocation before any response when a ytstack skill applies. Auto-injected by the SessionStart hook. Not meant for direct user invocation.',
+                 'Load at session start or before selecting a workflow. The SessionStart hook supplies it when trusted; it can also be loaded explicitly.'),
+                ("A hook has injected project state into your context and you have access to ytstack's skills via the `Skill` tool.",
+                 'Load project state and skills as described in the Codex adapter. Trusted SessionStart hooks supply state automatically.'),
+                ('invoke the skill via the `Skill` tool', 'load the skill using the Codex adapter'),
+                ('invoke it via the `Skill` tool', 'load it using the Codex adapter'),
+                ('(`CLAUDE.md`, direct messages)', '(`AGENTS.md`, direct messages)'),
+                ('- Orchestration: `spawn-milestone-team`', '- Parallel milestone execution: `spawn-milestone-team` explains the unsupported capability and sequential alternative.'),
+                ('Invoke Skill tool', 'Load selected skill'),
+                ('Create TodoWrite entries per item.', 'Track each item with the available plan tool or a checklist in the conversation.'),
+            ):
+                text = replace_required(text, old, new)
+
+    # Native dynamic-context fences become explicit shell blocks in Codex.
+    text = text.replace('```!\n', '```bash\n')
+    header = (
+        f'<!-- Generated from skills/{name}/SKILL.md by bin/build-codex. Do not edit. -->\n\n'
+        '**Codex:** Read [the host adapter](../../adapter.md) before following this skill.\n\n'
+    )
+    frontmatter, body = text.split('\n---\n', 1)
+    return frontmatter + '\n---\n\n' + header + body.lstrip('\n')
+
+
+def adapt_hook(path):
+    text = path.read_text()
+    text = text.replace('CLAUDE_PROJECT_DIR', 'YTSTACK_PROJECT_DIR')
+    text = text.replace('CLAUDE_PLUGIN_ROOT', 'YTSTACK_PLUGIN_ROOT')
+    text = text.replace('CLAUDE_SESSION_ID', 'YTSTACK_SESSION_ID')
+    text = text.replace('Claude Code', 'Codex')
+    if path.name == 'session-start':
+        text = replace_required(text, '/skills/using-ytstack/SKILL.md', '/codex/skills/using-ytstack/SKILL.md')
+        text = replace_required(text, 'USING_YTSTACK_CONTENT=$(cat "$USING_YTSTACK_FILE")',
+                                'USING_YTSTACK_CONTENT="[ytstack plugin root: $YTSTACK_PLUGIN_ROOT]\n\n$(cat "$USING_YTSTACK_FILE")"')
+        text = replace_required(text, "For all other skills, use the 'Skill' tool:",
+                                'Load other skills using the Codex adapter:')
+    return text.replace('#!/usr/bin/env bash\n', f'#!/usr/bin/env bash\n# Generated from hooks/{path.name} by bin/build-codex. Do not edit.\n', 1)
+
+
+def generated_files():
+    files = {Path('codex/skills') / path.relative_to(ROOT / 'skills'): adapt_skill(path)
+             for path in sorted((ROOT / 'skills').glob('*/SKILL.md'))}
+    for path in (ROOT / 'skills').rglob('*'):
+        if path.is_file() and path.name != 'SKILL.md':
+            files[Path('codex/skills') / path.relative_to(ROOT / 'skills')] = path.read_text()
+    for name in ('session-start', 'pre-compact', 'session-end'):
+        files[Path('codex/hooks') / name] = adapt_hook(ROOT / 'hooks' / name)
+    for path, text in files.items():
+        if re.search(r'CLAUDE_[A-Z_]+', text):
+            raise ValueError(f'{path}: unmapped Claude environment variable; update the Codex adapter')
+    return files
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check', action='store_true', help='fail if committed Codex files are out of date')
+    args = parser.parse_args()
+    files = generated_files()
+    existing = {path.relative_to(ROOT) for folder in ('codex/skills', 'codex/hooks')
+                for path in (ROOT / folder).rglob('*') if path.is_file()}
+    stale = existing - files.keys()
+    changed = [path for path, text in files.items()
+               if not (ROOT / path).is_file() or (ROOT / path).read_text() != text]
+    if args.check:
+        for path in sorted(stale | set(changed)):
+            print(f'Out of date: {path}', file=sys.stderr)
+        if stale or changed:
+            print('Run python3 bin/build-codex and commit the generated files.', file=sys.stderr)
+            return 1
+    else:
+        for path in stale:
+            (ROOT / path).unlink()
+        for path in changed:
+            (ROOT / path).parent.mkdir(parents=True, exist_ok=True)
+            (ROOT / path).write_text(files[path])
+    print(f'Codex distribution: {len(files)} generated files {"verified" if args.check else "built"}.')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

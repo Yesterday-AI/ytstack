@@ -7,9 +7,6 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
-
-
 # ytstack:verification-before-completion
 
 Thin wrapper around the vendored superpowers `verification-before-completion` skill (`vendor/superpowers/skills/verification-before-completion/SKILL.md`). Injects the current task's verification command extracted from the task-plan, then inlines the vendored procedure verbatim. Vendor is single source of truth.

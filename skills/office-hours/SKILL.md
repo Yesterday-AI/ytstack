@@ -8,9 +8,6 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
-
-
 # ytstack:office-hours
 
 Thin wrapper around the vendored gstack `office-hours` skill (`vendor/gstack/office-hours/SKILL.md`). Runs the six forcing questions verbatim, then writes the outcome as a ytstack artifact. Vendor is single source of truth.

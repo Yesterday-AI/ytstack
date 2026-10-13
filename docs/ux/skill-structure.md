@@ -2,11 +2,6 @@
 
 Every ytstack skill (`skills/*/SKILL.md`) MUST follow this structure. CI validates it. Skills that fail validation are not shipped.
 
-Each shared skill also links to `skills/using-ytstack/references/codex.md` near
-the top of its body. Codex reads that adapter before following the procedure;
-Claude Code keeps its native tool and shell-injection behavior. The adapter
-changes host mechanics, not the skill's artifacts or UX contract.
-
 ## Required sections, in order
 
 ```

@@ -188,8 +188,8 @@ codex plugin add ytstack@ytstack
 
 Start a new session and select `$ytstack:using-ytstack` from ytstack in the skill picker.
 On local hosts with hook support, review and trust the plugin hooks for automatic
-startup context, compaction handoff, and session journaling. The same 21 skills
-are packaged for both hosts. Claude Agent Teams and edit/commit hooks remain
+startup context, compaction handoff, and session journaling. The existing Claude skills remain unchanged; a generated Codex package
+provides the same 21 skill names. Claude Agent Teams and edit/commit hooks remain
 Claude-only; Codex uses the sequential task flow and explicit verification.
 See [Codex setup and compatibility](docs/codex.md) for local development,
 hook-free usage, and validation.
@@ -290,7 +290,7 @@ Ships:
 - 8 hooks (SessionStart / PreCompact / SessionEnd / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash). SessionStart-hook now injects the using-ytstack directive + project state.
 - Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
-- Codex manifest + self-marketplace, shared skills, and 3 lifecycle hooks; see [host support](docs/codex.md#supported-behavior)
+- Codex manifest + self-marketplace, generated skills, and 3 lifecycle hooks; see [host support](docs/codex.md#supported-behavior)
 
 See `.ytstack/ROADMAP.md` for the task list, `.ytstack/STATE.md` for progress, `.ytstack/REVIEW-NOTES.md` for deferred items.
 

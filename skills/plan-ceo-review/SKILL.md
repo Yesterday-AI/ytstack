@@ -8,9 +8,6 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
-
-
 # ytstack:plan-ceo-review
 
 Thin wrapper around the vendored gstack `plan-ceo-review` skill (`vendor/gstack/plan-ceo-review/SKILL.md`). Injects ytstack milestone context, then inlines the vendored procedure verbatim so it runs without adapt / fork drift. Vendor is single source of truth; upstream updates flow through.

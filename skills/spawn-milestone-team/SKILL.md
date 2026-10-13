@@ -15,9 +15,6 @@ triggers:
   - ytstack team
 ---
 
-**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
-
-
 # spawn-milestone-team
 
 Ask Claude Code to create an Agent Team for the current milestone. Each teammate gets a slice. Teammates work in parallel with isolated contexts, coordinate via the shared task list. This is ytstack's answer to GSD's fresh-subprocess-per-task model -- we use Claude Code's native Agent Teams feature instead of building our own runtime.

@@ -1,0 +1,102 @@
+<div align="center">
+
+# {{PROJECT_NAME}}
+
+**{{SHORT_DESCRIPTION}}**
+
+[![npm version](https://img.shields.io/npm/v/{{PACKAGE_NAME}}?style=flat-square&color=cb3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/{{PACKAGE_NAME}})
+[![license](https://img.shields.io/npm/l/{{PACKAGE_NAME}}?style=flat-square)](./LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![CI](https://img.shields.io/github/actions/workflow/status/{{REPO_SLUG}}/ci.yml?style=flat-square&label=CI&logo=githubactions&logoColor=white)](https://github.com/{{REPO_SLUG}}/actions/workflows/ci.yml)
+
+</div>
+
+---
+
+## How It Works
+
+```
+{{PIPELINE_DIAGRAM}}
+```
+
+---
+
+## Features
+
+- 🎯 **Feature 1** — description
+- 🔧 **Feature 2** — description
+- 📦 **Feature 3** — description
+
+---
+
+## Install
+
+```bash
+npm install {{PACKAGE_NAME}}
+```
+
+## Quick Start
+
+```bash
+{{QUICK_START}}
+```
+
+### Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `API_KEY` | Yes | Primary API key |
+
+---
+
+## CLI
+
+```bash
+{{CLI_NAME}} <command> [options]
+```
+
+| Command | Description |
+|---|---|
+| `command1` | Description |
+| `command2` | Description |
+
+---
+
+## Programmatic Usage
+
+```ts
+import { MainExport } from '{{PACKAGE_NAME}}';
+```
+
+---
+
+## CI & Security
+
+**CI** (`.github/workflows/ci.yml`):
+- Build + typecheck
+- Secret detection via [Gitleaks](https://github.com/gitleaks/gitleaks)
+
+**Release** (`.github/workflows/release.yml`):
+- Automated release PRs via [Changesets](https://github.com/changesets/changesets)
+- npm publish with provenance
+
+---
+
+## Roadmap
+
+See [`ROADMAP.md`](./ROADMAP.md) for full details, priorities, and acceptance criteria.
+
+---
+
+## Contributing
+
+- **AI agents**: Start with [`AGENTS.md`](./AGENTS.md).
+- **Everyone**: See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+---
+
+<div align="center">
+
+**[npm](https://www.npmjs.com/package/{{PACKAGE_NAME}})** · **[GitHub](https://github.com/{{REPO_SLUG}})** · **[Issues](https://github.com/{{REPO_SLUG}}/issues)**
+
+</div>

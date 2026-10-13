@@ -1,5 +1,5 @@
 {
-  "description": "Codex lifecycle hooks. Claude tool and Agent Teams events stay in hooks.json.",
+  "description": "Codex lifecycle hooks. Only the three supported lifecycle events are registered.",
   "hooks": {
     "SessionStart": [
       {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ytstack PreCompact hook
 #
-# Fires before the host compacts the conversation. Writes a handoff snapshot
+# Fires before Claude Code compacts the conversation. Writes a handoff snapshot
 # to .ytstack/HANDOFF.md so the post-compaction session can re-orient quickly
 # from on-disk state.
 #
@@ -50,7 +50,7 @@ active_task: ${ACTIVE_TASK:-none}
 
 # Pre-Compaction Handoff
 
-The agent host was about to compact the conversation at $TS. This file is a
+Claude Code was about to compact the conversation at $TS. This file is a
 breadcrumb so the next session (or post-compact continuation) can re-orient
 from on-disk state without relying on compressed conversation memory.
 

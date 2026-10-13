@@ -25,7 +25,7 @@ If you can't verify all five above, stop and tell the human what you can't verif
 ## What ytstack is (and is not)
 
 **Is:**
-- A Claude Code and Codex plugin (shared skills, host-specific manifests and hooks; see `docs/codex.md` for the support boundary)
+- A Claude Code and Codex plugin (Claude sources plus a generated Codex package, host-specific manifests and hooks; see `docs/codex.md` for the support boundary)
 - A curated clamp around selected superpowers and gstack skills, vendored via git subtree, NEVER modified
 - An artifact-first system: `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, milestone/slice/task hierarchy
 - SessionStart-hook-driven context injection (following superpowers' using-superpowers pattern)

@@ -10,9 +10,6 @@ allowed-tools:
   - WebFetch
 ---
 
-**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
-
-
 # Deutschland-Stack
 
 Offizieller Technologiekatalog des Bundes für Verwaltungs-IT. 128 Open-Source-Projekte, alle graduated oder sandbox, BSI-auditiert. Quelle: <https://technologie.deutschland-stack.gov.de/>.
