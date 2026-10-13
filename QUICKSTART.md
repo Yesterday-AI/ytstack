@@ -4,6 +4,10 @@ From zero to a tracked, shipped task -- the way you actually use ytstack: by tal
 
 ## Install
 
+For Codex, follow [Codex setup](docs/codex.md). The workflow below uses Claude
+Code command names; in Codex select the corresponding skill from ytstack with
+`$ytstack:<skill-name>`. Claude Agent Teams are not available through the Codex adapter.
+
 ### Local dev (recommended for first try)
 
 ```bash

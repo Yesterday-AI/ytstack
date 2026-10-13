@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Run shared ytstack shell blocks and lifecycle hooks in Codex.
+set -euo pipefail
+
+export CLAUDE_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export CLAUDE_PROJECT_DIR="$PWD"
+export YTSTACK_HOST=codex
+
+usage() {
+  echo 'Usage: ytstack-codex skill <name> [bash arguments...] | hook <session-start|pre-compact|session-end>' >&2
+  exit 2
+}
+
+[ "$#" -ge 2 ] || usage
+MODE="$1"
+NAME="$2"
+shift 2
+
+case "$MODE" in
+  skill)
+    [[ "$NAME" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || usage
+    export CLAUDE_SKILL_DIR="$CLAUDE_PLUGIN_ROOT/skills/$NAME"
+    [ -f "$CLAUDE_SKILL_DIR/SKILL.md" ] || {
+      echo "ytstack: skill not found: $NAME" >&2
+      exit 2
+    }
+    exec bash "$@"
+    ;;
+  hook)
+    [ "$#" -eq 0 ] || usage
+    case "$NAME" in
+      session-start|pre-compact|session-end)
+        exec bash "$CLAUDE_PLUGIN_ROOT/hooks/$NAME"
+        ;;
+      *) usage ;;
+    esac
+    ;;
+  *) usage ;;
+esac

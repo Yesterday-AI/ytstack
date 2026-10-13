@@ -16,6 +16,9 @@ triggers:
   - close task
 ---
 
+**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
+
+
 # summarize-task
 
 Close a task: capture what actually happened (often different from the plan), flip checkboxes, advance STATE.md. Produces an append-to-history artifact future sessions can read.

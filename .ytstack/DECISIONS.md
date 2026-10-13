@@ -639,3 +639,29 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - Regression test: `tests/post-tool-use-bash.test.sh` (10 cases) is the contract guard.
 
 **Supersedes:** none.
+
+
+---
+
+## 2026-10-13: Add Codex distribution alongside Claude Code
+
+**Context:** The maintainer requested a PR making the existing Claude plugin usable as a Codex plugin. Codex could not discover ytstack in the active skill catalog. Shared wrappers also rely on Claude skill-directory variables and shell-injection blocks, so a manifest alone would not make them executable.
+
+**Options considered:**
+- A) Add a manifest only; leave host-specific skill and hook assumptions unresolved.
+- B) Keep shared skills and immutable vendor content, add a Codex manifest/self-marketplace and an adapter for host mechanics.
+- C) Fork all skills into a second Codex-only tree.
+
+**Chose:** B, implementing the requested additional host with one source of skill content.
+
+**Reason:** Both hosts can use the same artifacts and procedures. Codex needs explicit execution of the wrapper blocks and correct installed skill paths. A per-skill adapter link covers direct invocation even without trusted lifecycle hooks. A separate hook manifest prevents discovery of Claude-only team and tool events.
+
+**How to apply:**
+- `.codex-plugin/plugin.json` loads the existing `skills/`; `.agents/plugins/marketplace.json` self-marketplaces the repo root as `ytstack@ytstack`.
+- `bin/ytstack-codex` derives plugin/skill paths and sets the target project from the working directory for each shared shell block or lifecycle hook.
+- Codex registers SessionStart, PreCompact, and SessionEnd only. Hook trust remains the host's explicit user-controlled setting. Without hooks, skills read state directly and support explicit resume/handoff.
+- Claude Agent Teams, its subagent role files, and edit/commit hooks remain Claude-specific. Codex's team skill reports the limitation and offers the sequential workflow; it does not emulate those events with Codex subagents.
+- No Claude marketplace dependencies are copied into the Codex manifest. Required optional capabilities must be available separately.
+- Keep the two plugin manifest versions aligned. Existing Claude installation and vendored content remain unchanged.
+
+**Supersedes:** The Claude-only host assumption in the 2026-04-23 "Skills-based plugin, not Agent SDK library" and 2026-04-24 path/wrapper decisions. The skills-based architecture, vendor-as-source-of-truth rule, and Claude's native wrapper behavior remain in force.

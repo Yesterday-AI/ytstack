@@ -10,6 +10,9 @@ allowed-tools:
   - WebFetch
 ---
 
+**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
+
+
 # European Alternatives
 
 Community-kuratierter Katalog unter <https://european-alternatives.cloud/en>. 289 Einträge über 46 Kategorien, überwiegend DE/CH/FR/NL. Quelle: <https://github.com/TheMorpheus407/european-alternatives>.

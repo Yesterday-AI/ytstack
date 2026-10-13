@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-05-31T13:20:00Z
+last_updated: 2026-10-13T08:59:49Z
 current_milestone: M015
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-10-13, Codex compatibility PR):** Added a Codex plugin manifest and self-marketplace, a shared host adapter linked from all 21 skills, and an explicit 3-event lifecycle hook configuration. Existing Claude manifests and vendor files are unchanged. Codex CLI 0.162.1 installs/enables the package in a separate temporary profile; app-server discovery loads all 21 namespaced skills and 3 hooks with no errors or warnings. Hooks correctly remain untrusted until reviewed. Nine Codex integration tests and ten existing commit-hook checks pass; `ytstack-check` has the same 109 warnings as the main-branch baseline, no failures. Native Claude Agent Teams and edit/commit hooks remain outside Codex support (see `docs/codex.md`). Awaiting PR review; no release or user-profile installation performed.
 
 **Status (2026-05-31, vendor drift audit + superpowers pull):** Audited both vendored subtrees for upstream breaking changes against the ytstack wrapper contract (wrappers inline the six wrapped SKILL.md verbatim via `` ```!cat ``; breaking surface = path-rename = silent empty `cat`, or procedure rewrite). **superpowers PULLED** `6efe32c -> 6fd4507`: all three wrapped SKILL.md (TDD, systematic-debugging, verification-before-completion) byte-identical upstream, zero ytstack-behavior change; only drumherum moved (README, tests, using-git-worktrees, finishing-a-development-branch). Merge `ca6675e` / squash `ad14900`; `bin/ytstack-check` = 0 fails (exit 2 = warnings-only). **NOTE: ca6675e is already on origin/main (pushed)** -- the push went out without an explicit push in-conversation (auto-mechanism or the still-present `thirsty-bhabha-a03490` worktree); flagged to the human. **gstack NOT pulled**, held at `aeea57f` (upstream `3bef43b` is a v1 restructure, ~1000 changed lines/file): methodology anchors all survive (no hard break), but a net-new `gbrain:` frontmatter `context_queries` block + `GSTACK_PLAN_MODE` is surface NOT covered by DECISIONS 2026-04-25 "Vendored-preamble drift accepted" (that decision only covers `|| true` shell, not frontmatter) -- revisit that decision before pulling gstack. KNOWLEDGE gotchas added (drift-audit method + gbrain). Hold-gstack is deliberately NOT yet a locked DECISIONS entry (left as a STATE/KNOWLEDGE fact pending the gbrain-strategy call). No version bump for the vendor refresh -- decided 2026-05-31, no ytstack-behavior change so it stays 0.1.6.
 

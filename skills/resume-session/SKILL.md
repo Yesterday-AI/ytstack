@@ -13,6 +13,9 @@ triggers:
   - ytstack resume
 ---
 
+**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
+
+
 # resume-session
 
 Quick-orient at session start. Reads the on-disk state and produces a 3-paragraph briefing the user can scan in 10 seconds. Complements the SessionStart hook (which auto-injects on every session start) by giving the user an on-demand, richer version.

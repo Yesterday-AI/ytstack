@@ -9,6 +9,9 @@ allowed-tools:
   - AskUserQuestion
 ---
 
+**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
+
+
 # ytstack:test-driven-development
 
 Thin wrapper around the vendored superpowers `test-driven-development` skill (`vendor/superpowers/skills/test-driven-development/SKILL.md`). Injects the current task's plan (Files + Verification sections) as context, then inlines the vendored procedure verbatim. Vendor is single source of truth.

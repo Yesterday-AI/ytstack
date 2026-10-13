@@ -8,6 +8,9 @@ allowed-tools:
   - AskUserQuestion
 ---
 
+**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
+
+
 # ytstack:plan-eng-review
 
 Thin wrapper around the vendored gstack `plan-eng-review` skill (`vendor/gstack/plan-eng-review/SKILL.md`). Injects ytstack slice-plan context, then inlines the vendored procedure verbatim. Vendor is single source of truth.

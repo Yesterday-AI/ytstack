@@ -16,6 +16,9 @@ triggers:
   - define milestone
 ---
 
+**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
+
+
 # plan-milestone
 
 Define the next milestone for a ytstack project: goal, exit criteria, rough size. Produces a milestone roadmap skeleton; slice-level detail comes from the next skill (`slice-milestone`).

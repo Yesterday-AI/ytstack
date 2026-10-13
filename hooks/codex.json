@@ -1,0 +1,40 @@
+{
+  "description": "Codex lifecycle hooks. Claude tool and Agent Teams events stay in hooks.json.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${PLUGIN_ROOT}/bin/ytstack-codex\" hook session-start",
+            "timeout": 10,
+            "additionalContextLimit": 5000
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${PLUGIN_ROOT}/bin/ytstack-codex\" hook pre-compact",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${PLUGIN_ROOT}/bin/ytstack-codex\" hook session-end",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -15,6 +15,9 @@ triggers:
   - ytstack handoff
 ---
 
+**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
+
+
 # handoff-session
 
 Create a `.ytstack/HANDOFF.md` that lets the next session (yours or someone else's) pick up exactly where this one left off. This is the user-triggered equivalent of the automatic `pre-compact` hook -- but richer, because the user decides what matters.

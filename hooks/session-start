@@ -47,7 +47,9 @@ STATE_FILE="${YT_DIR:+$YT_DIR/STATE.md}"
 USING_YTSTACK_FILE="${CLAUDE_PLUGIN_ROOT:-$PROJECT_DIR}/skills/using-ytstack/SKILL.md"
 USING_YTSTACK_CONTENT=""
 if [ -f "$USING_YTSTACK_FILE" ]; then
-  USING_YTSTACK_CONTENT=$(cat "$USING_YTSTACK_FILE")
+  USING_YTSTACK_CONTENT="[ytstack plugin root: $(cd "$(dirname "$USING_YTSTACK_FILE")/../.." && pwd)]
+
+$(cat "$USING_YTSTACK_FILE")"
 fi
 
 # Silent exit if the plugin itself is not available (no CLAUDE_PLUGIN_ROOT
@@ -82,7 +84,7 @@ Greenfield flow per the using-ytstack directive above:
 4. Then \`ytstack:init-project\` to scaffold \`.ytstack/\` (populates PROJECT.md from the pitch, no cold PM questions)."
 
   emit_json "<EXTREMELY_IMPORTANT>
-You have ytstack. Below is the full content of your 'ytstack:using-ytstack' skill, which tells you how to find and invoke ytstack skills based on user intent. Follow it. For all other skills, use the 'Skill' tool:
+You have ytstack. Below is the full content of your 'ytstack:using-ytstack' skill, which tells you how to find and invoke ytstack skills based on user intent. Follow it. Load other skills using your host's skill-loading mechanism (see the Codex adapter when running in Codex):
 
 $USING_YTSTACK_CONTENT
 </EXTREMELY_IMPORTANT>
@@ -152,7 +154,7 @@ The files in $YT_DIR are the source of truth for this project's state. Read STAT
 # the specific where-we-are facts. USING_YTSTACK_CONTENT is always
 # non-empty here (early-exit above if missing).
 FULL_CONTEXT="<EXTREMELY_IMPORTANT>
-You have ytstack. Below is the full content of your 'ytstack:using-ytstack' skill, which tells you how to find and invoke ytstack skills based on user intent. Follow it. For all other skills, use the 'Skill' tool:
+You have ytstack. Below is the full content of your 'ytstack:using-ytstack' skill, which tells you how to find and invoke ytstack skills based on user intent. Follow it. Load other skills using your host's skill-loading mechanism (see the Codex adapter when running in Codex):
 
 $USING_YTSTACK_CONTENT
 </EXTREMELY_IMPORTANT>

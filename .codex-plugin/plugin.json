@@ -1,0 +1,22 @@
+{
+  "name": "ytstack",
+  "version": "0.1.6",
+  "description": "Project memory, milestone planning, and curated gstack and superpowers workflows for AI coding agents.",
+  "author": {
+    "name": "Yesterday",
+    "url": "https://github.com/Yesterday-AI"
+  },
+  "homepage": "https://github.com/Yesterday-AI/ytstack",
+  "repository": "https://github.com/Yesterday-AI/ytstack",
+  "license": "MIT",
+  "keywords": ["codex", "project-management", "development-methodology"],
+  "skills": "./skills/",
+  "hooks": "./hooks/codex.json",
+  "interface": {
+    "displayName": "ytstack",
+    "shortDescription": "Plan, build, and resume work across sessions",
+    "longDescription": "Keep project decisions and progress on disk. Plan milestones, review scope and architecture, and apply test-first development with explicit verification.",
+    "developerName": "Yesterday",
+    "category": "Developer Tools"
+  }
+}

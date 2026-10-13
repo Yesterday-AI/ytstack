@@ -14,6 +14,9 @@ allowed-tools:
   - Grep
 ---
 
+**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
+
+
 # Atomic Design -- Frontend Component Architecture
 
 Reference: Brad Frost, *Atomic Design* (https://atomicdesign.bradfrost.com/)

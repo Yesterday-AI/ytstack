@@ -18,6 +18,9 @@ allowed-tools:
   - Glob
 ---
 
+**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
+
+
 # OSS Project
 
 Bootstrap, polish, and publish open-source projects with AI-first documentation

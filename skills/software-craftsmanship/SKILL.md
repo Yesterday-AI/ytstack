@@ -11,6 +11,9 @@ allowed-tools:
   - Bash
 ---
 
+**Codex:** Before running this skill, read the [Codex adapter](../using-ytstack/references/codex.md).
+
+
 # Software Craftsmanship Skill 🛠️✨
 
 > **Clean Code. Robust Architecture. No Test Slop.**

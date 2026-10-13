@@ -6,13 +6,14 @@
   <p><em>An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng.</em></p>
 
   <p>
-    A Claude Code plugin that turns multi-session, multi-week projects into something your agent can actually hold onto. Project memory on disk, curated skill set, parallel execution via native Agent Teams. One install, one namespace, no stack to maintain.
+    A plugin for Claude Code and Codex that turns multi-session, multi-week projects into something your agent can actually hold onto. Project memory on disk, curated skill set, and native Agent Teams in Claude Code. One install, one namespace, no stack to maintain.
   </p>
 
   <p>
     <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
     <img alt="version" src="https://img.shields.io/badge/version-0.1.5-FC4E14">
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
+    <img alt="Codex" src="https://img.shields.io/badge/Codex-plugin-0A0A0A">
     <img alt="skills" src="https://img.shields.io/badge/skills-21-FC4E14">
     <img alt="hooks" src="https://img.shields.io/badge/hooks-8-FC4E14">
   </p>
@@ -178,6 +179,23 @@ Source: [`docs/ytstack-debugging-flow.excalidraw`](docs/ytstack-debugging-flow.e
 
 ## Install
 
+### Codex
+
+```bash
+codex plugin marketplace add Yesterday-AI/ytstack
+codex plugin add ytstack@ytstack
+```
+
+Start a new session and select `$ytstack:using-ytstack` from ytstack in the skill picker.
+On local hosts with hook support, review and trust the plugin hooks for automatic
+startup context, compaction handoff, and session journaling. The same 21 skills
+are packaged for both hosts. Claude Agent Teams and edit/commit hooks remain
+Claude-only; Codex uses the sequential task flow and explicit verification.
+See [Codex setup and compatibility](docs/codex.md) for local development,
+hook-free usage, and validation.
+
+The installation methods below are for Claude Code.
+
 ### Local dev (recommended for first try)
 
 ```bash
@@ -272,6 +290,7 @@ Ships:
 - 8 hooks (SessionStart / PreCompact / SessionEnd / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash). SessionStart-hook now injects the using-ytstack directive + project state.
 - Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
+- Codex manifest + self-marketplace, shared skills, and 3 lifecycle hooks; see [host support](docs/codex.md#supported-behavior)
 
 See `.ytstack/ROADMAP.md` for the task list, `.ytstack/STATE.md` for progress, `.ytstack/REVIEW-NOTES.md` for deferred items.
 
