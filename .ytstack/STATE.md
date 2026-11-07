@@ -1,10 +1,10 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-07T12:35:00Z
+last_updated: 2026-11-07T12:45:00Z
 current_milestone: M016
 active_slice: S02
-active_task: T04
+active_task: T05
 ---
 
 # State
@@ -81,7 +81,7 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Status:** M016 / S02 -- S01 DONE (6/6; all eight hooks on `git-ctx.sh`, out-of-tree state, 218 tests in six suites). Reassessment at the slice boundary: S02/S03 unchanged except S03-T03 also bumps `marketplace.json` (stale 0.1.5). S02 3/5 done (T01 preambles, T02 commit discovery, T03 gitignore + sentinels; git-ctx 65/65). S02-T04 (resume-session / handoff-session read the auto handoff) planned, executing. Operator instruction 2026-11-07: run the whole milestone through without per-task check-ins; push and issue-closing stay operator actions. Milestone shape: S01 hooks on `git-ctx.sh` + out-of-tree state (6), S02 skill preambles + commit discovery + gitignore + `ytstack-check` rules (5), S03 tests + docs + release 0.2.0 (4). Plans in `M016-S0{1,2,3}-PLAN.md`. Next: `ytstack:plan-task` for M016-S01-T01 (`hooks/lib/git-ctx.sh`), sequential execution recommended -- S02/S03 depend on the lib from S01, so `spawn-milestone-team` only pays off from S02 onwards. Then M017 (vendor strategy: superpowers -> v7.0.2, gstack de-vendored; closes #25), then M010 (brownfield, #18), M018, M019.
+**Status:** M016 / S02 -- S01 DONE (6/6; all eight hooks on `git-ctx.sh`, out-of-tree state, 218 tests in six suites). Reassessment at the slice boundary: S02/S03 unchanged except S03-T03 also bumps `marketplace.json` (stale 0.1.5). S02 4/5 done (T01 preambles, T02 commit discovery, T03 gitignore + sentinels, T04 handoff reading; skill-preambles 192/192). S02-T05 (`ytstack-check` banned-pattern rules) planned, executing. Operator instruction 2026-11-07: run the whole milestone through without per-task check-ins; push and issue-closing stay operator actions. Milestone shape: S01 hooks on `git-ctx.sh` + out-of-tree state (6), S02 skill preambles + commit discovery + gitignore + `ytstack-check` rules (5), S03 tests + docs + release 0.2.0 (4). Plans in `M016-S0{1,2,3}-PLAN.md`. Next: `ytstack:plan-task` for M016-S01-T01 (`hooks/lib/git-ctx.sh`), sequential execution recommended -- S02/S03 depend on the lib from S01, so `spawn-milestone-team` only pays off from S02 onwards. Then M017 (vendor strategy: superpowers -> v7.0.2, gstack de-vendored; closes #25), then M010 (brownfield, #18), M018, M019.
 
 **Status (2026-11-07, triage + research):** Deep research + audit of 17 local consumer repos written to `docs/research/2026-11-07-modernisierung-best-practices.md` (+ 5 note files under `docs/research/2026-11-07-notes/`). GitHub triage done: labels `P0/P1/P2/security/worktrees/hooks` created; #27 P0 (root cause: `CLAUDE_PROJECT_DIR` does not follow worktrees), #24 P1, #18 P1 (-> M010), #25 P2 (-> M017), #26 closed as duplicate of #27 (2026-11-07). Vendor hold on gstack `aeea57f` remains until M017.
 
