@@ -719,3 +719,22 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** `skills/adopt-brownfield/SKILL.md`; `init-project` Step 3 routes at `BROWNFIELD_SIGNALS >= 2` and `PITCH = none`; `hooks/session-start` greenfield branch; tests in `tests/git-ctx.test.sh`, `tests/skill-preambles.test.sh`, `tests/hooks-readonly.test.sh`.
 
 **Supersedes:** none (extends 2026-04-24 "Greenfield-flow reorder": office-hours stays the greenfield entry; existing codebases get their own door).
+
+---
+
+## 2026-11-07: No hard plugin dependencies
+
+**Context:** The first `claude plugin eval` run (M019-S02-T01) scored `skill-fired` 0x on every case: the init line of the eval sandbox listed `plugin_errors: [{"plugin":"ytstack@inline","type":"dependency-unsatisfied","message":"Dependency \"web-design@yesterday-public-plugins\" is not installed"}]` and loaded only the builtin plugins. The platform treats a `dependencies` entry as hard: an unsatisfied dependency disables the dependent plugin at load time (plugins/dependencies: "the install completes without the dependency and your plugin then fails to load"); there is no optional flag. Eval runs load nothing installed, so a dependency can never be satisfied there; `claude --plugin-dir ytstack` fails the same way on a machine without web-design. Nothing in ytstack calls web-design: no skill, hook or agent references it; the dependency was a bundling convenience from the 2026-04/05 marketplace work.
+
+**Options considered:**
+- A) Keep the dependency; evals impossible, local dev needs web-design installed first.
+- B) Drop the dependency; document web-design as a recommended companion in README.
+- C) Keep it only in the marketplace entry (not plugin.json); same load-time failure, no gain.
+
+**Chose:** B.
+
+**Reason:** A dependency that no code uses buys nothing and costs the eval suite, CI and clean-machine local dev. The self-marketplace's `allowCrossMarketplaceDependenciesOn` goes with it (nothing left to allow).
+
+**How to apply:** `.claude-plugin/plugin.json` has no `dependencies`; `.claude-plugin/marketplace.json` has no `allowCrossMarketplaceDependenciesOn`; README Install names web-design as recommended with its own install command. Re-add a dependency only when a ytstack skill actually invokes that plugin, and then with a `version` range.
+
+**Supersedes:** the "Single cross-mp dependency: `web-design`" line of 2026-05-31 "ytstack ships via the yesterday-public-plugins catalog". The catalog decision itself stands.

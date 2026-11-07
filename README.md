@@ -202,7 +202,7 @@ ytstack ships in Yesterday's public plugin catalog, `yesterday-public-plugins` (
 /plugin install ytstack@yesterday-public-plugins
 ```
 
-ytstack declares one cross-marketplace dependency: `web-design` (from `yesterday-public-plugins`).
+ytstack declares no plugin dependencies (DECISIONS 2026-11-07 "No hard plugin dependencies"): `web-design` from the same catalog is recommended for frontend work and installs separately with `/plugin install web-design@yesterday-public-plugins`.
 
 <details>
 <summary><strong>Alternative: ytstack's own self-marketplace</strong></summary>
@@ -214,7 +214,7 @@ ytstack also self-marketplaces from its own repo, useful when you want to pin di
 /plugin install ytstack@ytstack
 ```
 
-The self-marketplace declares `allowCrossMarketplaceDependenciesOn: ["yesterday-public-plugins"]` so the `web-design` dependency resolves. See [`.ytstack/DECISIONS.md`](./.ytstack/DECISIONS.md) for the marketplace history.
+See [`.ytstack/DECISIONS.md`](./.ytstack/DECISIONS.md) for the marketplace history.
 
 </details>
 

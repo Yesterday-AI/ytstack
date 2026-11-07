@@ -17,8 +17,5 @@
     "artifact-discipline",
     "enterprise-software-development",
     "yesterday"
-  ],
-  "dependencies": [
-    { "name": "web-design", "marketplace": "yesterday-public-plugins"}
   ]
 }
