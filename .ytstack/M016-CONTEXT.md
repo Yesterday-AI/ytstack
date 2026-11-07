@@ -34,6 +34,8 @@ M -- see `M016-ROADMAP.md` for slice breakdown. Borderline to L; `slice-mileston
 - 2026-11-07: milestone number M016 assigned in ROADMAP.md although the highest `M###-*.md` on disk is M012 (M013/M014 reserved, M015 shipped without milestone files); the preamble's computed `M013` is overridden.
 - 2026-11-07: PowerShell hook variants (exit criterion "powershell variant") deferred to M019 -- no Windows consumer exists; the bash lib is the contract to port from. `"shell": "bash"` ships in M016.
 - 2026-11-07: sliced into S01 hooks (6 tasks), S02 skills (5), S03 tests + release (4) = 15 tasks; stays M, no fourth slice.
+- 2026-11-07 (T06): no `onFailure: "block"` on any hook, including `pre-tool-use-edit` -- that hook is advisory by design (issue #19 made a blocking exit a P0) and a crash in an advisory hook must not block edits. Exit criterion amended: all hooks fail-open.
+- 2026-11-07 (T03): keys are md5-based 16-hex (fast C binary) rather than sha256; same shape and uniqueness for this purpose; perl `shasum` cost ~110 ms per call against the 1.5 s SessionEnd budget.
 - 2026-11-07: journal keeps existing only if `resume-session` consumes it ("last N sessions touched M/S/T"); otherwise it is dropped. Audit evidence: 80-100 % `task: none`, no reader.
 
 ## Open questions
