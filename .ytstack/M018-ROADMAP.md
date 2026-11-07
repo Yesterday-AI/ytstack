@@ -5,7 +5,7 @@ size: M
 created: 2026-11-07T16:00:00Z
 status: planned
 total_slices: 3
-completed_slices: 1
+completed_slices: 2
 ---
 
 # M018 Roadmap
@@ -17,7 +17,7 @@ completed_slices: 1
 ## Slices
 
 - [x] S01 -- Preferences + states + quick lane: `yt_pref`, PREFERENCES template fields, `granularity`/`autonomy` honoured by plan-task / slice-milestone / summarize-task, state enum incl. `dropped`/`shipped-informally` in reassess-roadmap, `ytstack:quick-task` (4 tasks; done 2026-11-07)
-- [ ] S02 -- Pointer lint + reconcile + minimal-code guard: `yt_state_lint` + session-start warnings, `ytstack:reconcile`, `skills/minimal-code` directive + injection, user-owned-artifacts rule in using-ytstack (4 tasks; after M010 merge)
+- [x] S02 -- Pointer lint + reconcile + minimal-code guard: `yt_state_lint` + session-start warnings, `ytstack:reconcile`, `skills/minimal-code` directive + injection, user-owned-artifacts rule in using-ytstack (4 tasks; done 2026-11-07 after the M010 merge)
 - [ ] S03 -- Scalable layouts read-side + docs + tests + CHANGELOG (3 tasks)
 
 ## Run order
