@@ -681,3 +681,24 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - Regression tests in `tests/` for main checkout, linked worktree (`.git` as file), session in main with commands in a worktree, two concurrent sessions; acceptance per #26: main is byte-identical before and after each hook.
 
 **Supersedes:** none (extends 2026-05-31 "post-tool-use-bash is stub-once").
+
+## 2026-11-07: Ceremony scales with the change -- granularity, autonomy, quick lane and minimal-code guard are project preferences with loud defaults
+
+**Context:** The 17-repo audit showed the M/S/T loop working only for greenfield, single-session, auto-chained projects; three repos invented "Ralph-loop" autonomy in PREFERENCES because typing `/ytstack:` per step was too much friction; fast-agent and fleet skipped task plans under delivery pressure with no state for it; moderation-tools wrote `M00X-SUMMARY.md` at milestone granularity; llm-wiki carries 19 committed draft stubs. Peers converged in 2026 on self-sizing ceremony (BMAD 6.12 "Build sizes its ceremony", Kiro Quick Spec, Anthropic "if you could describe the diff in one sentence, skip the plan") and on always-on minimal-code guards (ponytail, 186k stars).
+
+**Options considered:**
+- A) Keep one ceremony; document "skip steps if you must". Leaves the skipping invisible and the artifacts inconsistent.
+- B) Add project preferences the skills honour: `granularity: milestone|slice|task`, `autonomy: step|loop`, `quick_lane: on|off`, `minimal_code: on|off`; a `quick-task` lane with its own `Q###` artifacts; explicit milestone states `dropped` / `shipped-informally`; a `reconcile` skill for leftovers; a `minimal-code` directive injected at session start.
+- C) Replace the M/S/T hierarchy with a flat task list. Throws away the part of ytstack that the audit shows working (DECISIONS/KNOWLEDGE/STATE + milestone framing).
+
+**Chose:** B, with defaults `task / loop / on / on`.
+
+**Reason:** The hierarchy stays the default for projects that want it, but the artifacts now say what actually happened (`dropped` is data, not prose; a `Q###` pair is a legitimate closure for a one-sentence change) and the agent stops asking for permission to continue inside a slice. The minimal-code guard is the only piece that adds text to every session; it stays under 60 lines and is a preference.
+
+**How to apply:**
+- Lib: `yt_pref`, `yt_prefs`, `yt_state_lint`, `yt_find_artifacts`. Skills read preferences in the preamble and echo them.
+- `autonomy: loop` means: inside a slice, do not ask before the next plan-task / TDD / verify / summarize step; stop at slice boundaries (reassess-roadmap) and on any HARD-GATE.
+- `.ytstack` artifacts are user-owned: agents never delete, move or revert them outside the `reconcile` consent flow.
+- ponytail is credited in NOTICE as the source of the minimal-code ladder concept; the prose is ytstack's own.
+
+**Supersedes:** none (extends 2026-05-31 "ytstack encourages git worktree isolation" and the M012 SSOT decisions).
