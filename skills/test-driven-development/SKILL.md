@@ -1,5 +1,8 @@
 ---
 name: test-driven-development
+metadata:
+  tier: core
+  version: 0.1.0
 description: "RED-GREEN-REFACTOR: write a failing test, watch it fail, write minimal code, watch it pass, commit. Thin ytstack wrapper around the vendored superpowers test-driven-development procedure, injecting the current task's plan as context. Use during task execution."
 allowed-tools:
   - Bash

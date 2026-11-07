@@ -44,8 +44,9 @@ def parse_frontmatter(path):
     """Extract YAML frontmatter (between --- markers) as a plain dict.
 
     Deliberately naive — handles simple key: value, multi-line block-scalars
-    (`description: |`), and list items (`- value`). Good enough for skill +
-    agent frontmatter; does NOT support nested maps or flow style.
+    (`description: |`), list items (`- value`), and exactly one level of
+    nested map for `metadata:` (M019: ytstack's own keys live there). No
+    flow style.
     """
     text = path.read_text(encoding="utf-8")
     m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
@@ -58,6 +59,8 @@ def parse_frontmatter(path):
     current_key = None
     current_list = None
     current_block = None
+    current_map = None      # dict being filled for `metadata:`
+    map_list_key = None     # list key inside the map (`  triggers:`)
 
     for line in raw.split("\n"):
         # Block scalar continuation (description: |)
@@ -70,6 +73,25 @@ def parse_frontmatter(path):
                 current_block = None
                 current_key = None
 
+        # Nested map continuation (metadata:)
+        if current_map is not None:
+            nm = re.match(r"^  ([a-zA-Z_][a-zA-Z0-9_-]*):\s*(.*)$", line)
+            if nm:
+                k, v = nm.group(1), nm.group(2)
+                if v == "":
+                    map_list_key = k
+                    current_map[k] = []
+                else:
+                    map_list_key = None
+                    current_map[k] = v.strip()
+                continue
+            if map_list_key is not None and line.startswith("    - "):
+                current_map[map_list_key].append(line[6:].strip())
+                continue
+            current_map = None
+            map_list_key = None
+            current_key = None
+
         # List item continuation
         if current_list is not None:
             if line.startswith("  - "):
@@ -80,13 +102,17 @@ def parse_frontmatter(path):
                 current_list = None
                 current_key = None
 
-        # Key: value on one line, or key: | / key: (start of list)
+        # Key: value on one line, or key: | / key: (start of list or map)
         km = re.match(r"^([a-zA-Z_][a-zA-Z0-9_-]*):\s*(.*)$", line)
         if km:
             key, val = km.group(1), km.group(2)
             if val == "|":
                 current_key = key
                 current_block = []
+            elif val == "" and key == "metadata":
+                current_key = key
+                current_map = {}
+                fm[key] = current_map
             elif val == "":
                 # Either empty (skip) or list follows
                 current_key = key
@@ -101,6 +127,29 @@ def parse_frontmatter(path):
         fm[current_key] = current_list
 
     return fm, body
+
+
+# ytstack's own frontmatter keys. Agent Skills spec: only name, description,
+# license, compatibility, metadata, allowed-tools are portable; everything
+# else hard-errors on packaging/upload. So tier / version / kind / triggers
+# live under `metadata:` (M019-S01-T01). Top-level is read as legacy.
+YT_META_KEYS = ("tier", "version", "kind", "triggers")
+
+
+def skill_meta(fm):
+    """Merged view of ytstack keys: metadata.* first, top-level as fallback."""
+    meta = fm.get("metadata") if isinstance(fm.get("metadata"), dict) else {}
+    out = {}
+    for k in YT_META_KEYS:
+        if k in meta:
+            out[k] = meta[k]
+        elif k in fm:
+            out[k] = fm[k]
+    return out
+
+
+def legacy_meta_keys(fm):
+    return [k for k in YT_META_KEYS if k in fm]
 
 
 # ---------- check: skill ----------
@@ -123,11 +172,25 @@ def check_skill(path, root):
     if not fm.get("description"):
         fails.append(f"{path}: missing description")
 
+    # metadata: contract (M019-S01-T01)
+    meta = skill_meta(fm)
+    legacy = legacy_meta_keys(fm)
+    if legacy:
+        warns.append(
+            f"{path}: legacy top-level {', '.join(legacy)} -- move under metadata: "
+            f"(Agent Skills spec; packaging/upload rejects unknown top-level keys)"
+        )
+    missing_meta = [k for k in ("tier", "version") if k not in meta]
+    if missing_meta:
+        warns.append(
+            f"{path}: missing metadata.{' / metadata.'.join(missing_meta)}"
+        )
+
     # kind: directive skills are meta-primers (like using-ytstack);
     # kind: reference skills are methodology / lookup references (no
     # numbered procedure to run). Neither is procedural, so both skip
     # the structural-section checks (Checklist / Terminal State / ...).
-    kind = fm.get("kind")
+    kind = meta.get("kind")
     is_directive = kind == "directive"
     is_reference = kind == "reference"
 

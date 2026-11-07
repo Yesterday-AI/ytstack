@@ -161,6 +161,69 @@ else
   eq "versions differ ($PV vs $MV): warning emitted" 1 "$(printf '%s' "$OUT" | grep -c 'marketplace.json.*version')"
 fi
 
+# ---- 5. metadata: migration (M019-S01-T01) ----------------------------------
+echo "# metadata"
+FIX_META="$ROOT/skills/zz-fixture-meta"; mkdir -p "$FIX_META"
+cat > "$FIX_META/SKILL.md" <<'EOF'
+---
+name: zz-fixture-meta
+description: "Fixture with legacy top-level keys."
+tier: core
+version: 0.0.1
+kind: reference
+triggers:
+  - legacy fixture
+allowed-tools: Read
+---
+
+# zz-fixture-meta
+EOF
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "legacy top-level tier/version/kind/triggers -> one 'move under metadata' warning" 1 "$(printf '%s' "$OUT" | grep -c 'zz-fixture-meta.*move under metadata')"
+eq "legacy kind: reference still recognised (no Checklist fail)" 0 "$(printf '%s' "$OUT" | grep -c 'zz-fixture-meta.*Checklist')"
+cat > "$FIX_META/SKILL.md" <<'EOF'
+---
+name: zz-fixture-meta
+description: "Fixture with metadata block."
+metadata:
+  tier: core
+  version: 0.0.1
+  kind: reference
+  triggers:
+    - new fixture
+allowed-tools: Read
+---
+
+# zz-fixture-meta
+EOF
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "metadata block -> no legacy warning" 0 "$(printf '%s' "$OUT" | grep -c 'zz-fixture-meta.*move under metadata')"
+eq "metadata.kind: reference recognised (no Checklist fail)" 0 "$(printf '%s' "$OUT" | grep -c 'zz-fixture-meta.*Checklist')"
+eq "metadata.tier/version present -> no missing warning" 0 "$(printf '%s' "$OUT" | grep -c 'zz-fixture-meta.*missing metadata')"
+cat > "$FIX_META/SKILL.md" <<'EOF'
+---
+name: zz-fixture-meta
+description: "Fixture without tier/version anywhere."
+allowed-tools: Read
+---
+
+# zz-fixture-meta
+
+## Checklist
+
+You MUST do it.
+
+## Terminal State
+
+Return.
+EOF
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "no tier/version anywhere -> 'missing metadata.tier/version' warning" 1 "$(printf '%s' "$OUT" | grep -c 'zz-fixture-meta.*missing metadata')"
+rm -rf "$FIX_META"
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "real tree: zero legacy top-level warnings" 0 "$(printf '%s' "$OUT" | grep -c 'move under metadata')"
+eq "real tree: zero missing metadata warnings"  0 "$(printf '%s' "$OUT" | grep -c 'missing metadata')"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

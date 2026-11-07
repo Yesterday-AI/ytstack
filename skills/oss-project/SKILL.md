@@ -7,9 +7,10 @@ description: >
   onboarding AI agents to a codebase, or creating standard community files
   (README, LICENSE, CONTRIBUTING, CHANGELOG, CI pipelines, issue templates).
   Outputs repo description and tags at the end.
-tier: core
-version: 0.1.0
-kind: reference
+metadata:
+  tier: core
+  version: 0.1.0
+  kind: reference
 allowed-tools:
   - Bash
   - Read

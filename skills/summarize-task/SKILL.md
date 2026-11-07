@@ -1,19 +1,20 @@
 ---
 name: summarize-task
 description: "After executing a task, write its outcome summary. Reads M###-S##-T##-PLAN.md, prompts for what happened, writes M###-S##-T##-SUMMARY.md, flips checkbox in slice-plan, updates STATE.md. Optionally stages git. Run once per task completion."
-tier: core
-version: 0.1.0
+metadata:
+  tier: core
+  version: 0.1.0
+  triggers:
+    - summarize task
+    - task done
+    - ytstack task complete
+    - close task
 allowed-tools:
   - Bash
   - Read
   - Write
   - Edit
   - AskUserQuestion
-triggers:
-  - summarize task
-  - task done
-  - ytstack task complete
-  - close task
 ---
 
 # summarize-task

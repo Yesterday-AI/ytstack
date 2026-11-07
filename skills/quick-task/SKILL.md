@@ -1,8 +1,9 @@
 ---
 name: quick-task
 description: "Use for a change you can describe in one sentence (fix, tweak, rename, bump, small refactor) in a project that has .ytstack/ and PREFERENCES quick_lane on. Writes Q###-PLAN/SUMMARY under .ytstack/quick/, requires a verification command, skips pitch, review and milestone bookkeeping. Not for new features, migrations, unknown root causes or more than ~3 files -- use plan-task or systematic-debugging."
-tier: core
-version: 0.1.0
+metadata:
+  tier: core
+  version: 0.1.0
 allowed-tools:
   - Bash
   - Read

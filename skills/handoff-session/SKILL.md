@@ -1,18 +1,19 @@
 ---
 name: handoff-session
 description: "User-triggered session handoff. Writes a detailed HANDOFF.md with current state, open items, pending decisions, and recommended resume prompt. Use before switching machines, before long breaks, or when you need to clear context intentionally. Parallel to the automatic pre-compact hook."
-tier: task
-version: 0.1.0
+metadata:
+  tier: task
+  version: 0.1.0
+  triggers:
+    - handoff session
+    - pause work
+    - save context for later
+    - ytstack handoff
 allowed-tools:
   - Bash
   - Read
   - Write
   - AskUserQuestion
-triggers:
-  - handoff session
-  - pause work
-  - save context for later
-  - ytstack handoff
 ---
 
 # handoff-session

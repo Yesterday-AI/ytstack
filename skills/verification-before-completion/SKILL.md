@@ -1,5 +1,8 @@
 ---
 name: verification-before-completion
+metadata:
+  tier: core
+  version: 0.1.0
 description: "Run verification commands and confirm output before claiming work is complete. Evidence before assertions. Thin ytstack wrapper around the vendored superpowers verification-before-completion procedure, injecting the current task's verification command. Use before commit, before PR, before summarize-task, before any 'done' claim."
 allowed-tools:
   - Bash

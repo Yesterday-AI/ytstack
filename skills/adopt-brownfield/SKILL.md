@@ -1,8 +1,15 @@
 ---
 name: adopt-brownfield
 description: "Bring an existing codebase into ytstack without a greenfield pitch. Use when a repo has no `.ytstack/` yet but is clearly not a new idea: it has a README, docs/, a CHANGELOG, ADRs, months of commits, a shipped product. Detects what the repo already documents, maps it onto PROJECT.md / DECISIONS.md / KNOWLEDGE.md / RUNTIME.md, asks per artifact how to handle it (reference / extract / move / leave), writes a codebase map from four read-only subagents, and scaffolds only the gaps. Never runs office-hours: the track record is the validation. Pair with init-project, which handles the greenfield case and routes mature repos here."
-tier: core
-version: 0.1.0
+metadata:
+  tier: core
+  version: 0.1.0
+  triggers:
+    - adopt ytstack
+    - existing project
+    - brownfield import
+    - onboard this codebase
+    - map the codebase
 allowed-tools:
   - Bash
   - Read
@@ -10,12 +17,6 @@ allowed-tools:
   - Edit
   - Agent
   - AskUserQuestion
-triggers:
-  - adopt ytstack
-  - existing project
-  - brownfield import
-  - onboard this codebase
-  - map the codebase
 ---
 
 # adopt-brownfield

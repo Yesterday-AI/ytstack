@@ -1,19 +1,20 @@
 ---
 name: slice-milestone
 description: "Break the current milestone into slices. Reads M###-ROADMAP.md, asks for slice content until all slices are filled. Creates M###-S##-PLAN.md per slice. Enforces 1-7 tasks per slice (iron rule). Run after plan-milestone, before plan-task."
-tier: core
-version: 0.1.0
+metadata:
+  tier: core
+  version: 0.1.0
+  triggers:
+    - slice milestone
+    - plan slices
+    - break milestone into slices
+    - ytstack slice
 allowed-tools:
   - Bash
   - Read
   - Write
   - Edit
   - AskUserQuestion
-triggers:
-  - slice milestone
-  - plan slices
-  - break milestone into slices
-  - ytstack slice
 ---
 
 # slice-milestone

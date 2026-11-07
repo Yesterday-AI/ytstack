@@ -5,9 +5,10 @@ description: >
   Defines five levels (atoms, molecules, organisms, templates, pages) with hard
   import rules, classification tests, and anti-patterns. Use when creating,
   reviewing, or restructuring frontend components.
-tier: core
-version: 0.1.0
-kind: reference
+metadata:
+  tier: core
+  version: 0.1.0
+  kind: reference
 allowed-tools:
   - Read
   - Glob

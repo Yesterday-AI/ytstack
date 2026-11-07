@@ -31,9 +31,12 @@ Required fields:
 ---
 name: <skill-name>              # kebab-case, matches folder name
 description: <one-sentence>     # trigger description, see writing-style.md
-tier: core|task|background      # Kontext-Pyramide tier
-version: 1.0.0                  # semver
-kind: directive|reference       # OPTIONAL, see "Skill classes" below
+metadata:                       # ytstack's own keys live here (M019)
+  tier: core|task|background    # Kontext-Pyramide tier
+  version: 1.0.0                # semver
+  kind: directive|reference     # OPTIONAL, see "Skill classes" below
+  triggers:                     # OPTIONAL, example phrasings (documentation only)
+    - plan task
 allowed-tools:                  # explicit allowlist
   - Bash
   - Read
@@ -41,6 +44,8 @@ allowed-tools:                  # explicit allowlist
   - AskUserQuestion
 ---
 ```
+
+Why `metadata:`: the Agent Skills spec allows only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` at the top level for portable skills; Claude Code ignores unknown keys, but packaging and claude.ai upload hard-error on them. `metadata` is a free key/value map, so ytstack's `tier`, `version`, `kind`, `triggers` live there. `bin/ytstack-check` reads `metadata.*` first, still understands the legacy top-level form, and warns "move under metadata:" when it sees it. Claude Code's own keys (`allowed-tools`, `user-invocable`, `disable-model-invocation`, `when_to_use`, `context`, `agent`, `hooks`, ...) stay top-level.
 
 ## Artifact states (M018)
 

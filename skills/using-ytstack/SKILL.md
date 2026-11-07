@@ -1,9 +1,10 @@
 ---
 name: using-ytstack
 description: "Establishes how agents find and invoke ytstack skills. Requires Skill-tool invocation before any response when a ytstack skill applies. Auto-injected by the SessionStart hook. Not meant for direct user invocation."
-tier: core
-version: 0.2.1
-kind: directive
+metadata:
+  tier: core
+  version: 0.2.1
+  kind: directive
 user-invocable: false
 ---
 

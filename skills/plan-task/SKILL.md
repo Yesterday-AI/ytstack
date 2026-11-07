@@ -1,18 +1,19 @@
 ---
 name: plan-task
 description: "Flesh out a single task within the current slice. Reads M###-S##-PLAN.md, picks the next unplanned task, writes M###-S##-T##-PLAN.md with exact file paths + verification steps. Enforces fits-one-context-window rule. Run after slice-milestone, before executing the task."
-tier: core
-version: 0.1.0
+metadata:
+  tier: core
+  version: 0.1.0
+  triggers:
+    - plan task
+    - detail next task
+    - ytstack plan task
 allowed-tools:
   - Bash
   - Read
   - Write
   - Edit
   - AskUserQuestion
-triggers:
-  - plan task
-  - detail next task
-  - ytstack plan task
 ---
 
 # plan-task

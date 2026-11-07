@@ -1,16 +1,17 @@
 ---
 name: resume-session
 description: "Reconstruct working context at the start of a new session. Reads STATE.md + HANDOFF.md (if present) + latest 3 T##-SUMMARY.md files and synthesizes a 'where we are' briefing. Run at session start before doing anything else."
-tier: core
-version: 0.1.0
+metadata:
+  tier: core
+  version: 0.1.0
+  triggers:
+    - resume session
+    - where were we
+    - pick up where I left off
+    - ytstack resume
 allowed-tools:
   - Bash
   - Read
-triggers:
-  - resume session
-  - where were we
-  - pick up where I left off
-  - ytstack resume
 ---
 
 # resume-session

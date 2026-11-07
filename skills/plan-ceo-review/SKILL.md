@@ -1,5 +1,8 @@
 ---
 name: plan-ceo-review
+metadata:
+  tier: core
+  version: 0.1.0
 description: "Challenge premise, scope, and ambition via four modes: SCOPE EXPANSION, SELECTIVE EXPANSION, HOLD SCOPE, SCOPE REDUCTION. Auto-detects mode: concept-mode reviews a pitch (OFFICE-HOURS.md) before any scaffolding exists; milestone-mode reviews a committed milestone (M###-CONTEXT.md + M###-ROADMAP.md) before slicing. Use concept-mode right after office-hours to stress-test the pitch; use milestone-mode after plan-milestone and before slice-milestone. Thin ytstack wrapper around the installed gstack plan-ceo-review skill (pinned v1.96.0.0, needs bun >= 1.4.2)."
 allowed-tools:
   - Bash

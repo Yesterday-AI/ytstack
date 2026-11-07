@@ -1,18 +1,19 @@
 ---
 name: reassess-roadmap
 description: "After a slice completes, review whether the milestone roadmap still fits reality. Reads recent summaries, surfaces deviations, prompts for roadmap changes (add/split/reorder/remove slices). Run at slice boundaries, not mid-slice."
-tier: task
-version: 0.1.0
+metadata:
+  tier: task
+  version: 0.1.0
+  triggers:
+    - reassess roadmap
+    - review milestone plan
+    - ytstack reassess
 allowed-tools:
   - Bash
   - Read
   - Write
   - Edit
   - AskUserQuestion
-triggers:
-  - reassess roadmap
-  - review milestone plan
-  - ytstack reassess
 ---
 
 # reassess-roadmap
