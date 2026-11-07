@@ -18,7 +18,7 @@ completed_slices: 1
 
 - [x] S01 -- Skill metadata + descriptions: `metadata:` migration, trigger-only descriptions, invocability flags for reference skills, checker rules (3 tasks; done 2026-11-07)
 - [ ] S02 -- Evals + CI: `evals/` suite for `claude plugin eval`, GitHub Actions workflow for the shell suites + checker, README badge (3 tasks)
-- [ ] S03 -- New lifecycle skills: `code-review`, `finish-branch`, `grill` (superpowers inline), `retro`, `ship`, `document-release` (installed gstack); using-ytstack routing; M011 absorbed (5 tasks)
+- [x] S03 -- New lifecycle skills: `code-review`, `finish-branch`, `grill` (superpowers inline), `retro`, `ship`, `document-release` (installed gstack); using-ytstack routing; M011 absorbed (5 tasks; done 2026-11-07)
 - [ ] S04 -- Execution model: `spawn-milestone-team` as orchestrator + worktree subagents, agents/*.md to the subagent contract, advisory `Stop` hook (4 tasks)
 - [ ] S05 -- Release 0.4.0: CHANGELOG from Unreleased (M010/M018/M019), manifests, README, clean-clone verification, tag, operator notes (3 tasks)
 
