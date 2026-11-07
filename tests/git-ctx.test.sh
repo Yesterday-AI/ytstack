@@ -248,6 +248,39 @@ eq "prefs: invalid granularity -> default + warning" "task|loop|on|off|granulari
 printf 'explain_level=brutal\n' > "$PY/PREFERENCES.md"
 eq "pref: key=value legacy form accepted"    brutal "$(pref "$PY" explain_level default)"
 
+# ---- 13. STATE lint -----------------------------------------------------------
+echo "# state lint"
+SL=$(new_repo statelint); mkdir -p "$SL/.ytstack"
+lint() { ( . "$LIB"; yt_state_lint "$1" >/dev/null; printf '%s|%s' "${YT_STATE_WARN_COUNT:-x}" "${YT_STATE_WARNINGS:-}" ); }
+write_state() { printf -- '---\nproject: fx\nlast_updated: %s\ncurrent_milestone: %s\nactive_slice: %s\nactive_task: %s\n---\n# State\n' "$1" "$2" "$3" "$4" > "$SL/.ytstack/STATE.md"; }
+NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+write_state "$NOW" M003 S01 T02
+printf -- '---\nmilestone: M003\n---\n' > "$SL/.ytstack/M003-CONTEXT.md"; printf -- '---\nmilestone: M003\nstatus: in-progress\n---\n' > "$SL/.ytstack/M003-ROADMAP.md"
+( cd "$SL" && git add -A && git commit -qm "state" ) >/dev/null 2>&1
+eq "lint: clean state -> 0 warnings"                 "0|" "$(lint "$SL/.ytstack")"
+rm -f "$SL/.ytstack/STATE.md"
+case "$(lint "$SL/.ytstack")" in 1\|*STATE.md\ missing*) ok "lint: missing STATE.md -> single warning";; *) bad "lint: missing STATE.md" "$(lint "$SL/.ytstack")";; esac
+write_state "yesterday" M3 S1 T02
+case "$(lint "$SL/.ytstack")" in 3\|*) ok "lint: three malformed fields -> 3 warnings";; *) bad "lint: malformed fields" "$(lint "$SL/.ytstack")";; esac
+case "$(lint "$SL/.ytstack")" in *last_updated*) ok "lint: names last_updated";; *) bad "lint: names last_updated";; esac
+write_state "$NOW" M003 S01 T02
+printf -- '---\nmilestone: M005\n---\n' > "$SL/.ytstack/M005-CONTEXT.md"
+case "$(lint "$SL/.ytstack")" in *"behind"*M005*) ok "lint: pointer behind newest milestone (M005)";; *) bad "lint: pointer behind" "$(lint "$SL/.ytstack")";; esac
+rm -f "$SL/.ytstack/M005-CONTEXT.md"
+printf -- '---\ntask: T02\nclosed: 2026-01-01T00:00:00Z\n---\n' > "$SL/.ytstack/M003-S01-T02-SUMMARY.md"
+case "$(lint "$SL/.ytstack")" in *"already has a summary"*) ok "lint: active task already summarized";; *) bad "lint: closed task active" "$(lint "$SL/.ytstack")";; esac
+printf -- '---\ntask: T02\nclosed: draft\n---\n' > "$SL/.ytstack/M003-S01-T02-SUMMARY.md"
+eq "lint: draft stub does not count as closed"       "0|" "$(lint "$SL/.ytstack")"
+rm -f "$SL/.ytstack/M003-S01-T02-SUMMARY.md"
+write_state "$NOW" none S01 T02
+case "$(lint "$SL/.ytstack")" in *"milestone is none"*) ok "lint: slice/task set while milestone none";; *) bad "lint: slice while none" "$(lint "$SL/.ytstack")";; esac
+write_state "2020-01-01T00:00:00Z" M003 S01 T02
+( cd "$SL" && echo x > .ytstack/KNOWLEDGE.md && git add -A && git commit -qm "touch ytstack" ) >/dev/null 2>&1
+case "$(lint "$SL/.ytstack")" in *"older than the newest commit"*) ok "lint: stale last_updated vs newest .ytstack commit";; *) bad "lint: stale last_updated" "$(lint "$SL/.ytstack")";; esac
+write_state "$NOW" M003 S01 T02
+printf -- '---\nmilestone: M003\nstatus: done\n---\n' > "$SL/.ytstack/M003-ROADMAP.md"
+case "$(lint "$SL/.ytstack")" in *"status: done"*) ok "lint: done milestone still current with open slice";; *) bad "lint: done but current" "$(lint "$SL/.ytstack")";; esac
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

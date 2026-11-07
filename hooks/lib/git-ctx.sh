@@ -371,6 +371,73 @@ yt_prefs() {
   return 0
 }
 
+# ---- STATE pointer lint (M018) ----------------------------------------------
+# yt_state_lint <yt_dir>: sets YT_STATE_WARNINGS (one line per finding, "" when
+# clean) and YT_STATE_WARN_COUNT. Read-only. Findings:
+#   W1 malformed frontmatter values   W2 pointer behind the newest milestone
+#   W3 active task already summarized W4 slice/task set while milestone none
+#   W5 last_updated older than the newest commit touching <yt_dir>
+#   W6 current milestone marked done while a slice is still active
+yt_state_lint() {
+  local ytd="$1" sf="$1/STATE.md" m s t lu w="" n=0
+  _yt_warn() { w="${w:+$w
+}$1"; n=$((n+1)); }
+  YT_STATE_WARNINGS=""; YT_STATE_WARN_COUNT=0
+  if [ ! -f "$sf" ]; then
+    YT_STATE_WARNINGS="STATE.md missing in $ytd"; YT_STATE_WARN_COUNT=1; return 0
+  fi
+  m=$(sed -n 's/^current_milestone: *//p' "$sf" | head -1)
+  s=$(sed -n 's/^active_slice: *//p' "$sf" | head -1)
+  t=$(sed -n 's/^active_task: *//p' "$sf" | head -1)
+  lu=$(sed -n 's/^last_updated: *//p' "$sf" | head -1)
+  # W1
+  case "$m" in M[0-9][0-9][0-9]|none) ;; *) _yt_warn "current_milestone '$m' is not M### or none" ;; esac
+  case "$s" in S[0-9][0-9]|all|none) ;; *) _yt_warn "active_slice '$s' is not S##, all or none" ;; esac
+  case "$t" in T[0-9][0-9]|all|none) ;; *) _yt_warn "active_task '$t' is not T##, all or none" ;; esac
+  case "$lu" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) ;; *) _yt_warn "last_updated '$lu' is not ISO-8601 (YYYY-MM-DDTHH:MM:SSZ)" ;; esac
+  # W2: newest M###-CONTEXT/ROADMAP number vs pointer
+  local newest cur_n new_n f
+  newest=$(ls "$ytd"/M[0-9][0-9][0-9]-CONTEXT.md "$ytd"/M[0-9][0-9][0-9]-ROADMAP.md 2>/dev/null | sed -E 's/.*\/(M[0-9]{3})-.*/\1/' | sort -u | tail -1)
+  case "$m" in M[0-9][0-9][0-9])
+    if [ -n "$newest" ]; then
+      cur_n=$((10#${m#M})); new_n=$((10#${newest#M}))
+      [ "$new_n" -gt "$cur_n" ] && _yt_warn "current_milestone $m is behind the newest milestone on disk ($newest)"
+    fi ;;
+  esac
+  # W3: active task already has a non-draft summary
+  if [ "$t" != none ] && [ "$t" != all ] && [ "$s" != none ] && [ "$s" != all ]; then
+    f="$ytd/$m-$s-$t-SUMMARY.md"
+    if [ -f "$f" ] && [ "$(sed -n 's/^closed: *//p' "$f" | head -1)" != draft ]; then
+      _yt_warn "active_task $t already has a summary ($m-$s-$t-SUMMARY.md); advance the pointer"
+    fi
+  fi
+  # W4
+  if [ "$m" = none ] && { [ "$s" != none ] || [ "$t" != none ]; }; then
+    _yt_warn "active_slice/active_task set while current_milestone is none"
+  fi
+  # W5: last_updated older than newest commit touching the ytstack dir
+  local newest_commit
+  newest_commit=$(git -C "$ytd" log -1 --format=%cI -- . 2>/dev/null | head -1)
+  if [ -n "$newest_commit" ] && [ -n "$lu" ]; then
+    # compare as sortable strings after normalising the commit date to UTC Z form
+    local nc_utc
+    nc_utc=$(printf '%s' "$newest_commit" | sed -E 's/\+00:00$/Z/')
+    case "$nc_utc" in *Z) ;; *) nc_utc=$(TZ=UTC date -u -j -f '%Y-%m-%dT%H:%M:%S%z' "$(printf '%s' "$newest_commit" | sed -E 's/:([0-9][0-9])$/\1/')" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "$newest_commit" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "$nc_utc") ;; esac
+    if [ "$lu" \< "$nc_utc" ]; then
+      _yt_warn "last_updated $lu is older than the newest commit touching .ytstack ($nc_utc)"
+    fi
+  fi
+  # W6: current milestone done but a slice still active
+  if [ "$m" != none ] && [ -f "$ytd/$m-ROADMAP.md" ] && [ "$s" != none ]; then
+    if [ "$(sed -n 's/^status: *//p' "$ytd/$m-ROADMAP.md" | head -1)" = done ]; then
+      _yt_warn "$m-ROADMAP.md has status: done but STATE still points at $m / $s"
+    fi
+  fi
+  YT_STATE_WARNINGS="$w"; YT_STATE_WARN_COUNT=$n
+  unset -f _yt_warn
+  return 0
+}
+
 # yt_resolve_yt_dir -> the .ytstack dir for the resolved toplevel: project
 # scope (<toplevel>/.ytstack) first, then user scope keyed by YT_REPO_KEY.
 # Sets YT_DIR and YT_SCOPE (project|user|none). No basename slugs.
