@@ -5,62 +5,16 @@ All notable changes to ytstack are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - 2026-11-07
-
-### Changed
-
-- **gstack is an installed, tag-pinned dependency instead of a vendored
-  subtree.** Upstream (v1.9x) turned its skills into skeletons that load
-  `sections/*.md` and run `~/.claude/skills/gstack/bin/gstack-skill-start`
-  from the install path, and deprecated vendored installs; a `cat`-inlined
-  copy no longer rendered the procedure. `office-hours`, `plan-ceo-review`
-  and `plan-eng-review` now run a precheck (`yt_gstack_ctx`: install at
-  `${GSTACK_HOME:-~/.claude/skills/gstack}`, `VERSION` >= pin 1.96.0.0,
-  bun >= 1.4.2), stop with the one-line install command when gstack is
-  missing, and otherwise invoke the installed gstack skill through the Skill
-  tool before applying the ytstack post-processing. **New prerequisite** for
-  those three skills: `git clone --branch v1.96.0.0
-  https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd
-  ~/.claude/skills/gstack && ./setup --no-browser)`. All other skills and
-  hooks need neither gstack nor bun. See DECISIONS 2026-11-07 "Vendor
-  strategy".
-- **superpowers subtree pulled to v7.0.2** (`6fd4507` -> `22f0b46`). The
-  three superpowers wrappers gained a `## Namespace note` that maps
-  `superpowers:<skill>` to `ytstack:<skill>` and anchors relative links;
-  `bin/ytstack-check` fails on unhandled leaks in inlined vendor text.
-- `bin/ytstack-check` also enforces the gstack wrapper contract (precheck,
-  install command, Skill-tool invocation, no `vendor/gstack`).
-- AGENTS.md, NOTICE, README, QUICKSTART, `docs/concept.md`,
-  `docs/methodology.md`, `.ytstack/VENDOR-INVENTORY.md` describe the two
-  consumption models (vendored superpowers, installed gstack).
-
-### Added
-
-- `hooks/lib/git-ctx.sh`: `yt_gstack_ctx`, `yt_gstack_skill_ok`, `yt_vergte`,
-  `YT_GSTACK_PIN`, `YT_BUN_MIN`.
-- `tests/gstack-live.test.sh` -- opt-in (`GSTACK_HOME=...`) validation of a
-  real gstack install (layout, version, wrapper flags); `tests/run-all.sh`
-  prints a skip line without it.
-- `SECURITY.md`.
-
-### Removed
-
-- `vendor/gstack/` (641 files, 39 MB). History keeps the `aeea57f` squash.
-
-### Security
-
-- Resolves [#25]: the vendored upstream `Dockerfile.ci` pinning Node
-  22.20.0 (CVE-2026-111497) is gone with the subtree. ytstack never built
-  it; see `SECURITY.md`.
-
-### Notes
-
-- `/plugin update` to 0.3.0, then install gstack once if you use the three
-  planning skills.
-
-[#25]: https://github.com/Yesterday-AI/ytstack/issues/25
-
 ## [Unreleased]
+
+Nothing yet.
+
+## [0.4.0] - 2026-11-07
+
+Three milestones in one release: brownfield import (M010), ceremony scaling
+(M018) and the 2026 skill bar (M019: `metadata:` frontmatter, trigger-only
+descriptions, evals, CI, six lifecycle skills, worktree-subagent execution
+model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.md`.
 
 ### Added
 
@@ -183,6 +137,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `adopt-brownfield`, not office-hours); the injection stays at ~6.6k of the
   10,000-char cap and `tests/hooks-readonly.test.sh` guards it.
 - **`using-ytstack`** lists `adopt-brownfield` and the routing rule.
+
+### Notes
+
+- `/plugin update` to 0.4.0. New gstack-backed skills (`retro`, `ship`,
+  `document-release`) need the same gstack install as the planning wrappers;
+  everything else runs without it.
+- `.ytstack/PREFERENCES.md` of existing projects: add the `## Ceremony`
+  block (`granularity`, `autonomy`, `quick_lane`, `minimal_code`, `team`) or
+  accept the defaults (task / loop / on / on / off).
+
+## [0.3.0] - 2026-11-07
+
+### Changed
+
+- **gstack is an installed, tag-pinned dependency instead of a vendored
+  subtree.** Upstream (v1.9x) turned its skills into skeletons that load
+  `sections/*.md` and run `~/.claude/skills/gstack/bin/gstack-skill-start`
+  from the install path, and deprecated vendored installs; a `cat`-inlined
+  copy no longer rendered the procedure. `office-hours`, `plan-ceo-review`
+  and `plan-eng-review` now run a precheck (`yt_gstack_ctx`: install at
+  `${GSTACK_HOME:-~/.claude/skills/gstack}`, `VERSION` >= pin 1.96.0.0,
+  bun >= 1.4.2), stop with the one-line install command when gstack is
+  missing, and otherwise invoke the installed gstack skill through the Skill
+  tool before applying the ytstack post-processing. **New prerequisite** for
+  those three skills: `git clone --branch v1.96.0.0
+  https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd
+  ~/.claude/skills/gstack && ./setup --no-browser)`. All other skills and
+  hooks need neither gstack nor bun. See DECISIONS 2026-11-07 "Vendor
+  strategy".
+- **superpowers subtree pulled to v7.0.2** (`6fd4507` -> `22f0b46`). The
+  three superpowers wrappers gained a `## Namespace note` that maps
+  `superpowers:<skill>` to `ytstack:<skill>` and anchors relative links;
+  `bin/ytstack-check` fails on unhandled leaks in inlined vendor text.
+- `bin/ytstack-check` also enforces the gstack wrapper contract (precheck,
+  install command, Skill-tool invocation, no `vendor/gstack`).
+- AGENTS.md, NOTICE, README, QUICKSTART, `docs/concept.md`,
+  `docs/methodology.md`, `.ytstack/VENDOR-INVENTORY.md` describe the two
+  consumption models (vendored superpowers, installed gstack).
+
+### Added
+
+- `hooks/lib/git-ctx.sh`: `yt_gstack_ctx`, `yt_gstack_skill_ok`, `yt_vergte`,
+  `YT_GSTACK_PIN`, `YT_BUN_MIN`.
+- `tests/gstack-live.test.sh` -- opt-in (`GSTACK_HOME=...`) validation of a
+  real gstack install (layout, version, wrapper flags); `tests/run-all.sh`
+  prints a skip line without it.
+- `SECURITY.md`.
+
+### Removed
+
+- `vendor/gstack/` (641 files, 39 MB). History keeps the `aeea57f` squash.
+
+### Security
+
+- Resolves [#25]: the vendored upstream `Dockerfile.ci` pinning Node
+  22.20.0 (CVE-2026-111497) is gone with the subtree. ytstack never built
+  it; see `SECURITY.md`.
+
+### Notes
+
+- `/plugin update` to 0.3.0, then install gstack once if you use the three
+  planning skills.
+
+[#25]: https://github.com/Yesterday-AI/ytstack/issues/25
 
 ## [0.2.0] - 2026-11-07
 
@@ -324,6 +342,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.4.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.0
+[0.3.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.3.0
+[0.2.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.2.0
 [0.1.6]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.1.6
 [0.1.5]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.1.5
 [0.1.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.1.0
