@@ -130,7 +130,7 @@ echo "# static"
 MISSING=$(grep -L 'lib/git-ctx.sh' "$H"/session-start "$H"/pre-tool-use-edit "$H"/task-created "$H"/task-completed "$H"/teammate-idle "$H"/pre-compact "$H"/session-end "$H"/post-tool-use-bash)
 eq  "static: every hook sources the lib" "" "$MISSING"
 # Code lines only (comments may explain why CLAUDE_PROJECT_DIR is not used).
-LEAK=$(grep -l '^[^#]*CLAUDE_PROJECT_DIR' "$H"/* 2>/dev/null | grep -v '/lib/' || true)
+LEAK=$(grep -l '^[^#]*CLAUDE_PROJECT_DIR' "$H"/* 2>/dev/null | grep -v '/lib/' | grep -v '\.json$' || true)
 eq  "static: no hook uses CLAUDE_PROJECT_DIR" "" "$LEAK"
 SLUG=$(grep -l 'basename "$(git rev-parse --show-toplevel' "$H"/* 2>/dev/null || true)
 eq  "static: no basename slug in hooks" "" "$SLUG"

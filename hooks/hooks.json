@@ -1,12 +1,13 @@
 {
-  "description": "ytstack lifecycle hooks: inject project state at session boundaries, persist state on compaction and end-of-session",
+  "description": "ytstack lifecycle hooks: inject project state at session boundaries, persist volatile session state OUT OF TREE on compaction and end-of-session, link commits to tasks. All hooks resolve the checkout from the payload cwd via hooks/lib/git-ctx.sh (never CLAUDE_PROJECT_DIR) and fail open (no onFailure: block). SessionEnd hooks get a 1.5 s default budget from Claude Code; the hook runs in ~0.3-0.5 s.",
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume|clear|compact",
+        "matcher": "startup|resume|clear|compact|fork",
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start\"",
             "async": false,
             "timeout": 10
@@ -19,6 +20,7 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact\"",
             "async": false,
             "timeout": 5
@@ -31,9 +33,10 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end\"",
             "async": false,
-            "timeout": 5
+            "timeout": 2
           }
         ]
       }
@@ -43,6 +46,7 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/teammate-idle\"",
             "async": false,
             "timeout": 5
@@ -55,6 +59,7 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/task-created\"",
             "async": false,
             "timeout": 5
@@ -67,6 +72,7 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/task-completed\"",
             "async": false,
             "timeout": 5
@@ -80,6 +86,7 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use-edit\"",
             "async": false,
             "timeout": 5
@@ -93,6 +100,7 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use-bash\"",
             "async": false,
             "timeout": 5
