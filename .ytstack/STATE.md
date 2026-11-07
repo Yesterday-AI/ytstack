@@ -83,7 +83,7 @@ M009 Docs & Community            [####]   4/4  DONE
 
 **Status:** M016 planned (M, 3 slices). Ready to slice. Run `ytstack:slice-milestone` to break M016 into concrete slices and tasks (`M016-CONTEXT.md` holds goal, 10 exit criteria, locked decisions, open questions; `M016-ROADMAP.md` proposes S01 hook lib + hooks, S02 skill preambles + init-project, S03 tests + release 0.2.0). Then M017 (vendor strategy: superpowers -> v7.0.2, gstack de-vendored; closes #25), then M010 (brownfield, #18), M018, M019.
 
-**Status (2026-11-07, triage + research):** Deep research + audit of 17 local consumer repos written to `docs/research/2026-11-07-modernisierung-best-practices.md` (+ 5 note files under `docs/research/2026-11-07-notes/`). GitHub triage done: labels `P0/P1/P2/security/worktrees/hooks` created; #27 P0 (root cause: `CLAUDE_PROJECT_DIR` does not follow worktrees), #24 P1, #18 P1 (-> M010), #25 P2 (-> M017), #26 labelled duplicate of #27 -- **still open, close is a user action** (`gh issue close 26 --reason "not planned"`). Vendor hold on gstack `aeea57f` remains until M017.
+**Status (2026-11-07, triage + research):** Deep research + audit of 17 local consumer repos written to `docs/research/2026-11-07-modernisierung-best-practices.md` (+ 5 note files under `docs/research/2026-11-07-notes/`). GitHub triage done: labels `P0/P1/P2/security/worktrees/hooks` created; #27 P0 (root cause: `CLAUDE_PROJECT_DIR` does not follow worktrees), #24 P1, #18 P1 (-> M010), #25 P2 (-> M017), #26 closed as duplicate of #27 (2026-11-07). Vendor hold on gstack `aeea57f` remains until M017.
 
 ---
 
