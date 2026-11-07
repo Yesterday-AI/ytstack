@@ -1,53 +1,47 @@
 ---
 name: spawn-milestone-team
-description: "Dispatches the current milestone's slices to parallel agents, one slice per teammate with its own context. Use after slice-milestone and plan-eng-review when the slices are independent, or when the user says spawn the team, run the slices in parallel, dispatch the milestone. Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1. Not for a single slice or sequential work (plan-task)."
+description: "Dispatches the current milestone's slices to parallel workers: by default one worktree-isolated implementer subagent per slice plus a fresh verifier per slice, orchestrated from the main session which never edits source; with PREFERENCES team on, a Claude Code Agent Team instead. Use after slice-milestone and plan-eng-review when the slices are independent, or when the user says spawn the team, run the slices in parallel, dispatch the milestone. Not for a single slice or sequential work (plan-task)."
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.2.0
   triggers:
     - spawn team
     - dispatch milestone
-    - agent team
+    - run slices in parallel
     - parallel slice execution
     - ytstack team
 allowed-tools:
   - Bash
   - Read
+  - Edit
+  - Agent
   - AskUserQuestion
 ---
 
 # spawn-milestone-team
 
-Ask Claude Code to create an Agent Team for the current milestone. Each teammate gets a slice. Teammates work in parallel with isolated contexts, coordinate via the shared task list. This is ytstack's answer to GSD's fresh-subprocess-per-task model -- we use Claude Code's native Agent Teams feature instead of building our own runtime.
-
-## Prerequisites
-
-- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` set in shell or settings.json
-- Claude Code v2.1.32 or later
-- Current milestone has sliced plans (`M###-S##-PLAN.md` exists for each slice)
-- Milestone has passed `plan-eng-review` (recommended -- catches architecture issues before parallel work starts)
+Run a sliced milestone in parallel. The main session becomes a thin orchestrator: it dispatches one `ytstack:implementer` subagent per slice into its own git worktree, one `ytstack:verifier` subagent per finished slice into a fresh worktree, merges the slice branches it accepts, and advances `STATE.md`. The orchestrator never edits source files; its context stays small because the work happens in the subagents' contexts. Claude Code Agent Teams remain available as an explicit opt-in (`team: on` in PREFERENCES) for milestones that need teammates to talk to each other.
 
 ## Anti-Pattern: "Just execute the slices sequentially myself"
 
-That works. Agent Teams add coordination overhead and token cost. Use sequential execution when:
-- Slices have heavy cross-dependencies
-- The milestone is small (M or S -- 1-3 slices)
-- You want tight human oversight per slice
+That works, and it is the right call when slices share files, when the milestone is S or M with one or two slices, or when you want to watch every step. Parallel dispatch pays off when slices are independent (no file overlap, no cross-references), the milestone is L, and you want to step away.
 
-Use Agent Teams when:
-- Slices are genuinely independent (no file overlap, no cross-references)
-- You want to step away and let work run
-- The milestone is L (4-5 slices)
+## Anti-Pattern: "Agent Teams are the parallel mode"
+
+Teams are experimental, cannot be resumed after `/resume`, ignore the agents' `skills` preload, and cost more tokens because teammates coordinate through a mailbox. Worktree subagents are first-class: isolated checkout, preloaded skills, resumable, cleaned up when nothing changed. Teams buy inter-agent discussion; most milestones do not need it.
 
 ## Checklist
 
-1. **Run preamble** -- detect Agent Teams capability + milestone state
-2. **HARD-GATE** -- env var + version + slice-plans present
-3. **Check slice independence** -- warn if slices overlap files
-4. **Ask team size** -- typically one teammate per slice, with architect-reviewer override
-5. **Construct team spawn instruction** -- natural-language prompt Claude will execute
-6. **Emit instruction** -- Claude takes over from there
-7. **Do not block** -- Agent Teams are long-running; this skill completes quickly
+You MUST create a TodoWrite task for each of these items:
+
+1. **Run preamble** -- execution mode, milestone state, slice plans, overlap, branch state
+2. **HARD-GATE** -- `.ytstack`, milestone, slice plans, clean working tree
+3. **Check slice independence** -- stop or accept the risk when slices overlap
+4. **Confirm the dispatch plan** -- one question: workers, branches, verifier, merge policy
+5. **Dispatch implementers** -- one `Agent` call per slice, `isolation: worktree`, run in parallel
+6. **Verify each finished slice** -- one `Agent` call per slice branch, fresh verifier
+7. **Merge accepted slices** -- slice branch into the working branch, `STATE.md` from the orchestrator's side
+8. **Report + return** -- per slice: branch, verdict, merge result; next step `reassess-roadmap`
 
 ## Preamble
 
@@ -56,154 +50,187 @@ Use Agent Teams when:
 _LIB="${CLAUDE_SKILL_DIR}/../../hooks/lib/git-ctx.sh"
 if [ -f "$_LIB" ]; then
   . "$_LIB"; yt_git_ctx "$PWD"; yt_resolve_yt_dir >/dev/null
-  _PROJECT_DIR="$YT_TOPLEVEL"; _YT_DIR="$YT_DIR"; _YT_SCOPE="$YT_SCOPE"; _IS_GIT="$YT_IS_GIT"; _PROJECT_KEY="$YT_REPO_KEY"
+  _PROJECT_DIR="$YT_TOPLEVEL"; _YT_DIR="$YT_DIR"; _YT_SCOPE="$YT_SCOPE"; _IS_GIT="$YT_IS_GIT"; _PROJECT_KEY="$YT_REPO_KEY"; _IS_LINKED="$YT_IS_LINKED"
 else
   # Host did not substitute CLAUDE_SKILL_DIR (e.g. Codex adapter): project scope only.
   _IS_GIT=$([ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" = true ] && echo yes || echo no)
   _PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
-  _YT_DIR=""; _YT_SCOPE=none; _PROJECT_KEY=""
+  _YT_DIR=""; _YT_SCOPE=none; _PROJECT_KEY=""; _IS_LINKED=no
   [ -d "$_PROJECT_DIR/.ytstack" ] && { _YT_DIR="$_PROJECT_DIR/.ytstack"; _YT_SCOPE=project; }
 fi
 cd "$_PROJECT_DIR" 2>/dev/null || true
 _PROJECT_SLUG=$(basename "$_PROJECT_DIR")
 _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 
+# Execution mode (M019-S04): PREFERENCES team off (default) -> worktree subagents; on -> Agent Teams.
+if command -v yt_prefs >/dev/null 2>&1; then yt_prefs "$_YT_DIR" >/dev/null; else YT_PREF_TEAM=off; YT_PREF_WARNINGS=""; fi
+_EXECUTION=$([ "${YT_PREF_TEAM:-off}" = on ] && echo team || echo subagents)
+
 _CURRENT_MILESTONE=none
 [ -f "$_YT_DIR/STATE.md" ] && _CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$_YT_DIR/STATE.md" | head -1)
 
 _SLICE_PLANS=""
-if [ -n "$_CURRENT_MILESTONE" ] && [ -d "$_YT_DIR" ]; then
+if [ "$_CURRENT_MILESTONE" != none ] && [ -d "$_YT_DIR" ]; then
   _SLICE_PLANS=$(ls "$_YT_DIR"/$_CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md 2>/dev/null)
 fi
+_SLICE_COUNT=$(printf '%s' "$_SLICE_PLANS" | grep -c . 2>/dev/null || echo 0)
 
-_SLICE_COUNT=$(echo -n "$_SLICE_PLANS" | grep -c . 2>/dev/null || echo 0)
-
-# Agent Teams enabled?
-_AT_ENABLED=$([ "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" = "1" ] && echo yes || echo no)
-
-# Claude Code version (v2.1.32+ required)
-_CC_VERSION=$(claude --version 2>/dev/null | head -1 | awk '{print $1}')
-_VERSION_OK=no
-if [ -n "$_CC_VERSION" ]; then
-  # Parse major.minor.patch and compare to 2.1.32
-  IFS='.' read -r MAJ MIN PAT <<< "$_CC_VERSION"
-  if [ "${MAJ:-0}" -gt 2 ] || { [ "${MAJ:-0}" -eq 2 ] && [ "${MIN:-0}" -gt 1 ]; } || { [ "${MAJ:-0}" -eq 2 ] && [ "${MIN:-0}" -eq 1 ] && [ "${PAT:-0}" -ge 32 ]; }; then
-    _VERSION_OK=yes
-  fi
+# Open slices (status not done) and file overlap between their task plans / Files sections.
+_OPEN_SLICES=""; _OVERLAP=""
+for p in $_SLICE_PLANS; do
+  s=$(printf '%s' "$p" | sed -E 's/.*-(S[0-9][0-9])-PLAN\.md$/\1/')
+  [ "$(sed -n 's/^status: *//p' "$p" | head -1)" = done ] && continue
+  _OPEN_SLICES="$_OPEN_SLICES $s"
+done
+if [ -n "$_OPEN_SLICES" ]; then
+  _TMPF=$(mktemp "${TMPDIR:-/tmp}/ytspawn.XXXXXX")
+  for s in $_OPEN_SLICES; do
+    # file-like tokens: backticked `path.ext`, "Create/Modify/Delete: path", or bare dir/file.ext in the slice + task plans
+    cat "$_YT_DIR"/$_CURRENT_MILESTONE-$s-PLAN.md "$_YT_DIR"/$_CURRENT_MILESTONE-$s-T[0-9][0-9]-PLAN.md 2>/dev/null \
+      | grep -oE '(`[^` ]+\.[A-Za-z0-9]+`|(Create|Modify|Delete): *[A-Za-z0-9_./-]+\.[A-Za-z0-9]+|[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+\.[A-Za-z0-9]+)' \
+      | sed -E 's/^(Create|Modify|Delete): *//' | tr -d '`' | sort -u | sed "s/^/$s /"
+  done > "$_TMPF"
+  _OVERLAP=$(awk '{f[$2]=f[$2]" "$1; n[$2]++} END{for (k in n) if (n[k]>1) print k":"f[k]}' "$_TMPF" | sort)
+  rm -f "$_TMPF"
 fi
 
+_BRANCH=$(git branch --show-current 2>/dev/null || echo unknown)
+_DIRTY=$([ -n "$(git status --porcelain 2>/dev/null)" ] && echo yes || echo no)
+_EXISTING_SLICE_BRANCHES=$(git branch --list "ytstack/$_CURRENT_MILESTONE-S*" 2>/dev/null | sed 's/^[* ]*//' | tr '\n' ' ')
+_AT_ENABLED=$([ "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" = "1" ] && echo yes || echo no)
+
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
+echo "EXECUTION: $_EXECUTION"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "SLICE_COUNT: $_SLICE_COUNT"
+echo "OPEN_SLICES: ${_OPEN_SLICES:-none}"
+echo "OVERLAP: ${_OVERLAP:-none}"
+echo "BRANCH: $_BRANCH"
+echo "IS_LINKED_WORKTREE: $_IS_LINKED"
+echo "DIRTY: $_DIRTY"
+echo "EXISTING_SLICE_BRANCHES: ${_EXISTING_SLICE_BRANCHES:-none}"
 echo "AGENT_TEAMS_ENABLED: $_AT_ENABLED"
-echo "CC_VERSION: ${_CC_VERSION:-unknown}"
-echo "VERSION_OK: $_VERSION_OK"
+[ -n "${YT_PREF_WARNINGS:-}" ] && echo "PREF_WARNINGS: $YT_PREF_WARNINGS"
+exit 0
 ```
 
 ## Procedure
 
-**Step 2 HARD-GATE.**
+### Step 2: HARD-GATE
 
-- `HAS_YTSTACK=no` → abort
-- `CURRENT_MILESTONE=none` → abort "run plan-milestone first"
-- `SLICE_COUNT=0` → abort "run slice-milestone first -- no slice-plans found"
-- `AGENT_TEAMS_ENABLED=no` → abort "set `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in your env or `settings.json` then restart Claude Code"
-- `VERSION_OK=no` → abort "Claude Code v2.1.32+ required. Current: {CC_VERSION}. Upgrade before running this skill."
+- `HAS_YTSTACK=no`: abort "run init-project first".
+- `CURRENT_MILESTONE=none`: abort "run plan-milestone first".
+- `SLICE_COUNT=0` or `OPEN_SLICES=none`: abort "nothing to dispatch; run slice-milestone, or the milestone is done".
+- `DIRTY=yes`: abort "commit or stash-free: commit the working tree first; slice branches fork from it".
+- `IS_LINKED_WORKTREE=yes`: abort "run the orchestrator from the main checkout; nested worktrees are not supported".
+- `EXECUTION=team` and `AGENT_TEAMS_ENABLED=no`: abort "PREFERENCES team: on needs CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1; set it or switch team: off".
 
-**Step 3 -- Check slice independence.** Read each slice-plan's Files section. Compare across slices. If two slices touch the same file path:
+### Step 3: Check slice independence
 
-Report:
-> Slice overlap detected:
-> - {path} touched by: {slice1}, {slice2}
+`OVERLAP` lists files named in more than one open slice (`path:S01 S02`). If it is not `none`, use AskUserQuestion:
+
+> Slices share files: {OVERLAP}. Running them in parallel means merge conflicts on those files.
 >
-> Running these in parallel risks merge conflicts. Consider:
-> - Sequential execution (skip this skill, run `plan-task` + `test-driven-development` per slice)
-> - Re-slice to separate the overlapping files (re-run `slice-milestone`)
-> - Explicitly accept the risk -- the last writer wins, earlier changes may need manual merge
-
-Use AskUserQuestion:
-> A) Accept risk, spawn team anyway (Completeness: 6/10, risk: medium)
-> B) Stop, re-slice first (Completeness: 10/10)
-> C) Stop, execute sequentially instead (Completeness: 10/10)
+> RECOMMENDATION: B. A re-slice costs minutes; a conflicted merge of two subagents' work costs an afternoon.
+>
+> A) Accept the risk, dispatch anyway; the orchestrator resolves conflicts at merge time. (Completeness: 6/10, risk: medium)
+> B) Stop, re-run `ytstack:slice-milestone` to separate the files. (Completeness: 10/10)
+> C) Stop, execute sequentially (`ytstack:plan-task` per task). (Completeness: 10/10)
 
 If B or C: STOP.
 
-**Step 4 -- Ask team size.** Use AskUserQuestion:
+### Step 4: Confirm the dispatch plan
 
-> Milestone **{CURRENT_MILESTONE}** has {SLICE_COUNT} slice(s). Team size?
+One AskUserQuestion with the plan spelled out:
+
+> Dispatch **{CURRENT_MILESTONE}** ({OPEN_SLICES}) from branch `{BRANCH}`:
 >
-> RECOMMENDATION: A -- one teammate per slice plus an architect-lead reviewer gives best coverage without excessive coordination overhead.
+> - one `ytstack:implementer` per slice, each in its own worktree on branch `ytstack/{CURRENT_MILESTONE}-S##` (forked from `{BRANCH}`), working through the slice's tasks with plan-task -> TDD -> verification -> summarize-task;
+> - one `ytstack:verifier` per finished slice in a fresh worktree, running every task plan's verification command on the slice branch;
+> - merge of each verified slice branch into `{BRANCH}` by the orchestrator (fast-forward or merge commit; `STATE.md` kept from `{BRANCH}` and re-pointed), then `ytstack:reassess-roadmap`.
 >
-> A) {SLICE_COUNT} implementers + 1 architect-reviewer. (Completeness: 10/10)
-> B) {SLICE_COUNT} implementers only -- no reviewer. (Completeness: 8/10, cheaper)
-> C) Fewer teammates than slices -- one teammate picks up multiple slices sequentially. (Completeness: 10/10, slower but token-cheaper)
-> D) Custom count -- I'll specify. (Completeness: 10/10)
+> RECOMMENDATION: A.
+>
+> A) Dispatch as described. (Completeness: 10/10)
+> B) Dispatch, but stop before merging: leave the slice branches for me to merge. (Completeness: 9/10)
+> C) Fewer workers than slices: one implementer takes two slices in sequence. (Completeness: 10/10, slower, cheaper)
 
-Remember as `_TEAM_CONFIG`.
+Remember as `_MERGE_POLICY` (A = orchestrator merges, B = branches only) and `_WORKERS`.
 
-**Step 5 -- Construct spawn instruction.** Build natural-language for Claude:
+### Step 5: Dispatch implementers (EXECUTION=subagents)
+
+For every open slice, in one message so they run concurrently, call the Agent tool:
 
 ```
-I want to dispatch milestone {CURRENT_MILESTONE} of project {PROJECT_NAME} to an Agent Team.
-
-Create a team with {TEAM_SIZE} teammate(s) using these roles:
-{If architect-lead:} - 1 architect-lead: reviews plans before each teammate starts implementation. Uses the `architect` subagent type if defined, else fresh session with plan-approval mode.
-{For each slice:}
-- 1 implementer: works on slice {SLICE_ID}. Task list from {SLICE_PLAN_PATH}. Use subagent type `implementer` if defined, else fresh session.
-
-Shared task list: derive from M###-ROADMAP.md slices + per-slice T## task lists.
-
-Each teammate MUST:
-1. Read `.ytstack/STATE.md`, `.ytstack/DECISIONS.md`, `.ytstack/KNOWLEDGE.md`, and their slice plan before claiming a task
-2. Use `ytstack:plan-task` (already-shipped skill) if they need to elaborate a task
-3. Use `ytstack:test-driven-development` for implementation
-4. Use `ytstack:verification-before-completion` before marking a task complete
-5. Use `ytstack:summarize-task` to close each task
-6. NOT invoke `ytstack:reassess-roadmap` mid-slice -- that's for the lead after slice completes
-
-Lead (main session) coordinates, checks teammate progress, assembles findings. When all slices are complete, lead runs `ytstack:reassess-roadmap` and reports back.
-
-Non-interactive mode: teammates have YTSTACK_NON_INTERACTIVE=1 in their environment to prevent AskUserQuestion from blocking.
-
-Start when I say "go".
+Agent(
+  subagent_type: "ytstack:implementer",
+  isolation: "worktree",
+  name: "impl-{CURRENT_MILESTONE}-S##",
+  description: "Implement slice S## of {CURRENT_MILESTONE}",
+  prompt: <the implementer brief below>
+)
 ```
 
-**Step 6 -- Emit.** Present the instruction to the user:
+The implementer brief (fill the placeholders; the agent definition carries the rules, the brief carries the facts):
 
-> Ready to spawn team for **{CURRENT_MILESTONE}** ({TEAM_SIZE} teammates).
->
-> Instruction preview (this will be sent to Claude next):
->
-> ---
-> {instruction block above}
-> ---
->
-> Say "go" to dispatch, or "cancel" to stop. If "go", Claude will create the team; from that point, you can monitor teammates via Shift+Down cycling or split panes.
+```
+Milestone {CURRENT_MILESTONE}, slice S## of project {PROJECT_NAME}.
+Checkout: your worktree is a fresh copy branched from the default branch. First run
+  git checkout -B ytstack/{CURRENT_MILESTONE}-S## {BRANCH}
+so you work on top of the orchestrator's branch ({BRANCH}, commit {HEAD_SHA}).
+Slice plan: .ytstack/{CURRENT_MILESTONE}-S##-PLAN.md (tasks T##..). Read .ytstack/PROJECT.md, DECISIONS.md, KNOWLEDGE.md first.
+Per task: ytstack:plan-task (if no T##-PLAN exists) -> ytstack:test-driven-development -> ytstack:verification-before-completion -> ytstack:summarize-task. Commit each task with the prefix "{CURRENT_MILESTONE}-S##-T##:".
+STATE.md in your worktree is your copy; update it as the skills do. Do not touch files outside your task plans' Files sections; do not run reassess-roadmap; do not merge or push.
+When every task of the slice has a summary, stop and report: branch name, commits (git log --oneline {BRANCH}..HEAD), the verification commands you ran with their exit codes, anything the plan got wrong.
+```
 
-Wait for user confirmation. If "go", the user sends the instruction as their next prompt; Claude then invokes Agent Teams. This skill does not directly invoke the Agent Teams API -- Claude owns that.
+Do not wait idle: while implementers run, the orchestrator may plan the next milestone's context or answer the user, but it does not edit source files.
 
-**Step 7 -- Report + return.**
+### Step 6: Verify each finished slice
 
-> Team spawn instruction emitted. Claude will execute on your "go".
->
-> Expected behavior:
-> - Lead creates `~/.claude/teams/ytstack-{CURRENT_MILESTONE}/` with config
-> - Task list lives at `~/.claude/tasks/ytstack-{CURRENT_MILESTONE}/`
-> - Teammates self-claim tasks, report via mailbox
-> - ytstack hooks (`task-created`, `task-completed`, `teammate-idle` -- shipped in M006) react to team events
->
-> Monitor with Shift+Down (cycle teammates) or check `/plugin status` if split panes enabled.
+When an implementer reports, dispatch a verifier for that slice:
+
+```
+Agent(
+  subagent_type: "ytstack:verifier",
+  isolation: "worktree",
+  name: "verify-{CURRENT_MILESTONE}-S##",
+  description: "Verify slice S## on its branch",
+  prompt: "Branch ytstack/{CURRENT_MILESTONE}-S##. Run `git checkout ytstack/{CURRENT_MILESTONE}-S##` in your worktree, then for every .ytstack/{CURRENT_MILESTONE}-S##-T##-PLAN.md run its Verification command from a cold context and compare with the T##-SUMMARY.md claims. Report pass / pass-with-caveats / fail per task with the raw output. Do not edit anything."
+)
+```
+
+A `fail` sends the slice back: re-dispatch the implementer on the same branch with the verifier's output in the brief. Two consecutive fails: stop and report to the user.
+
+### Step 7: Merge accepted slices
+
+`_MERGE_POLICY = A`: for each verified slice, from the main checkout on `{BRANCH}`:
+
+```bash
+git merge --no-ff ytstack/{CURRENT_MILESTONE}-S##
+```
+
+If `.ytstack/STATE.md` conflicts, resolve it from the orchestrator's side (`git checkout --ours .ytstack/STATE.md && git add .ytstack/STATE.md`) and re-point `current_milestone / active_slice / active_task` by hand afterwards: the orchestrator owns the main pointer, the worktree copies were the workers'. Other `.ytstack` conflicts (slice plan checkboxes, summaries) are keep-both. Run the project's test suite on the merged result; a red suite stops the merge of further slices. Keep the slice branches until the milestone's reassess has run, then delete them (`git branch -d`).
+
+`_MERGE_POLICY = B`: leave the branches, list them.
+
+Never push, never open a PR here (`ytstack:ship` / `ytstack:finish-branch` do that on request).
+
+### Step 5-7 under EXECUTION=team
+
+With `team: on` and Agent Teams enabled, skip the subagent calls and emit the team instruction instead (unchanged from 0.1.x): one teammate per slice using the `ytstack:implementer` definition, an optional architect-lead, the shared task list from the roadmap, teammates with `YTSTACK_NON_INTERACTIVE=1`, the lead coordinating and running `reassess-roadmap` at the end. Present the instruction and wait for "go"; Claude Code creates the team from the next prompt. Teams cannot be resumed after `/resume`; say so once.
+
+### Step 8: Report + return
+
+> Dispatched {CURRENT_MILESTONE}: {per slice: branch, implementer result, verifier verdict, merge result}.
+> Next: `ytstack:reassess-roadmap` (slice boundaries), then `ytstack:finish-branch` or `ytstack:ship` for `{BRANCH}`.
 
 ## Terminal State
 
-Return after emitting the spawn instruction. Do NOT try to invoke Agent Teams directly -- Claude owns that API through the team-lead role. Do NOT invoke downstream skills; the teammates will handle their own lifecycle via the M003 skills.
+Return after the merge step (policy A) or after listing the slice branches (policy B), or after emitting the team instruction (team mode). Do NOT invoke `reassess-roadmap`, `finish-branch` or `ship` automatically. Abort at the HARD-GATE or on B / C in Steps 3-4.
 
 ## Limitations
 
-- **Experimental API.** Agent Teams API may change in future Claude Code versions. Pin Claude Code version in deployments.
-- **No session resume.** Claude Code's current Agent Teams cannot resume in-process teammates after `/resume`. If the main session reloads, the lead may message dead teammates. Workaround: tell the lead to spawn replacements.
-- **One team per session.** The lead can only manage one team at a time. Clean up before spawning another.
-- **Lead is fixed.** The session that creates the team IS the lead for its lifetime. You can't hand off leadership.
-- **Permission mode.** Teammates start with the lead's permission mode. Pre-approve common operations before spawning or you'll hit friction.
-
-See `.ytstack/REVIEW-NOTES.md` for open integration concerns.
+- Worktree subagents fork from the default branch, so the brief's first command re-bases them onto the orchestrator's branch; a dirty orchestrator tree is refused for that reason.
+- The verifier checks out the slice branch inside its own worktree; it never sees the orchestrator's uncommitted state (there is none).
+- Agent Teams (opt-in): experimental, no resume, one team per session, `skills` preload ignored for teammates, lead fixed for the team's lifetime.

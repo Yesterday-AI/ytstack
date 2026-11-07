@@ -368,6 +368,11 @@ yt_prefs() {
     YT_PREF_WARNINGS="${YT_PREF_WARNINGS:+$YT_PREF_WARNINGS
 }minimal_code: '$YT_PREF_MINIMAL_CODE' is not on|off (using on)"; YT_PREF_MINIMAL_CODE=on ;; esac
   YT_PREF_COMMIT_REF_PATTERN=$(yt_pref "$ytd" commit_ref_pattern "")
+  # team: off (default) = orchestrator + worktree subagents; on|true = Agent Teams (M019-S04)
+  YT_PREF_TEAM=$(yt_pref "$ytd" team off)
+  case "$YT_PREF_TEAM" in on|true) YT_PREF_TEAM=on ;; off|false) YT_PREF_TEAM=off ;; *)
+    YT_PREF_WARNINGS="${YT_PREF_WARNINGS:+$YT_PREF_WARNINGS
+}team: '$YT_PREF_TEAM' is not on|off (using off)"; YT_PREF_TEAM=off ;; esac
   return 0
 }
 

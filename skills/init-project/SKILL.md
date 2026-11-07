@@ -354,6 +354,7 @@ granularity: task        # task | slice | milestone -- smallest unit that gets a
 autonomy: loop           # loop = chain plan-task -> TDD -> verify -> summarize inside a slice without asking; step = ask before each step
 quick_lane: on           # one-sentence changes go through ytstack:quick-task (Q### artifacts), no pitch, no review
 minimal_code: on         # inject the minimal-code guard (YAGNI ladder, never-cut list) at session start
+team: off                # off = spawn-milestone-team dispatches worktree subagents (default); on = Claude Code Agent Teams (experimental)
 
 ## Model preferences
 

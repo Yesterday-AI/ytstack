@@ -158,6 +158,17 @@ for s in $SKILLS; do
       run_pre "$P" "$WT"
       has "$s: worktree -> TRACKER read from STATE.md" "$OUT" "TRACKER: linear"
       cp "$TMP/state.bak" "$WT/.ytstack/STATE.md" ;;
+    spawn-milestone-team)
+      has "$s: worktree -> EXECUTION subagents by default" "$OUT" "EXECUTION: subagents"
+      has "$s: worktree -> slice count from plans"         "$OUT" "SLICE_COUNT: 1"
+      has "$s: worktree -> S01 open"                       "$OUT" "OPEN_SLICES:  S01"
+      has "$s: worktree -> IS_LINKED_WORKTREE yes"         "$OUT" "IS_LINKED_WORKTREE: yes"
+      printf 'team: on\n' > "$WT/.ytstack/PREFERENCES.md"
+      printf -- '---\nmilestone: M999\nslice: S02\n---\n# plan\n\n- [ ] T01 -- also touches `a.ts`\n' > "$WT/.ytstack/M999-S02-PLAN.md"
+      run_pre "$P" "$WT"
+      has "$s: team: on -> EXECUTION team"                 "$OUT" "EXECUTION: team"
+      has "$s: two slices naming a.ts -> OVERLAP"          "$OUT" "a.ts: S01 S02"
+      rm -f "$WT/.ytstack/PREFERENCES.md" "$WT/.ytstack/M999-S02-PLAN.md" ;;
     code-review)
       has "$s: worktree -> task plan found" "$OUT" "TASK_PLAN_EXISTS: yes"
       has "$s: worktree -> COMMITS_SOURCE echoed" "$OUT" "COMMITS_SOURCE: "

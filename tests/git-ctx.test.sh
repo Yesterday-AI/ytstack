@@ -235,6 +235,12 @@ echo "# preferences"
 PY="$TMP/prefs"; mkdir -p "$PY"
 pref() { ( . "$LIB"; yt_pref "$@" ); }
 prefs() { ( . "$LIB"; yt_prefs "$1" >/dev/null; printf '%s|%s|%s|%s|%s' "$YT_PREF_GRANULARITY" "$YT_PREF_AUTONOMY" "$YT_PREF_QUICK_LANE" "$YT_PREF_MINIMAL_CODE" "${YT_PREF_WARNINGS:-}" ); }
+team_pref() { ( . "$LIB"; yt_prefs "$1" >/dev/null; printf '%s|%s' "$YT_PREF_TEAM" "${YT_PREF_WARNINGS:-}" ); }
+TP="$TMP/teamprefs"; mkdir -p "$TP"
+eq "team pref: default off"            "off|"  "$(team_pref "$TP")"
+printf 'team: on\n' > "$TP/PREFERENCES.md";   eq "team pref: on"   "on|"  "$(team_pref "$TP")"
+printf 'team: true\n' > "$TP/PREFERENCES.md"; eq "team pref: true -> on" "on|" "$(team_pref "$TP")"
+printf 'team: maybe\n' > "$TP/PREFERENCES.md"; case "$(team_pref "$TP")" in "off|team: 'maybe'"*) ok "team pref: invalid -> off + warning";; *) bad "team pref: invalid -> off + warning" "$(team_pref "$TP")";; esac
 eq "pref: absent file -> default"            task "$(pref "$PY" granularity task)"
 eq "pref: absent file, no default -> empty"  ""   "$(pref "$PY" granularity)"
 eq "prefs: defaults without file"            "task|loop|on|on|" "$(prefs "$PY")"
