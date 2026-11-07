@@ -31,6 +31,8 @@ User instructions always take precedence:
 2. **ytstack skills** -- override default agent behavior when they apply.
 3. **Default agent behavior** -- lowest priority.
 
+**`.ytstack/` artifacts are user-owned.** Never delete, move, truncate or revert them on your own judgement -- not even obvious leftovers such as draft summary stubs or stale plans. The only sanctioned cleanup is `ytstack:reconcile`, which asks per class and archives instead of deleting.
+
 ## The rule
 
 **Invoke the relevant ytstack skill BEFORE any response or action.** Each skill's frontmatter `description` field states when to use it. Match the user's intent against the descriptions semantically -- not against keyword lists or canonical phrasings. If any skill's description plausibly covers the situation, invoke it via the `Skill` tool to confirm. If the invoked skill turns out to be the wrong fit, that is fine; what is NOT fine is skipping the check.
