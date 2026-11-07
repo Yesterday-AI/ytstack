@@ -526,6 +526,22 @@ yt_brownfield_signals() {
   return 0
 }
 
+# ---- artifact lookup across layouts (M018-S03) --------------------------------
+# yt_find_artifacts <yt_dir> <glob> -> matching files, newest first, one per
+# line, from the flat layout and the layouts consumers already use:
+#   <yt_dir>/<glob>  milestones/<glob>  milestones/*/<glob>  decisions/<glob>
+#   backlog/<glob>   backlog/*/<glob>   quick/<glob>
+# Writing stays flat; only reading tolerates the alternatives.
+yt_find_artifacts() {
+  local ytd="$1" pat="$2" d
+  [ -d "$ytd" ] || return 0
+  for d in "$ytd" "$ytd"/milestones "$ytd"/milestones/* "$ytd"/decisions "$ytd"/backlog "$ytd"/backlog/* "$ytd"/quick; do
+    [ -d "$d" ] || continue
+    ls -t "$d"/$pat 2>/dev/null
+  done | awk 'NF && !seen[$0]++' | while IFS= read -r f; do printf '%s\t%s\n' "$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)" "$f"; done | sort -rn | cut -f2-
+  return 0
+}
+
 # yt_resolve_yt_dir -> the .ytstack dir for the resolved toplevel: project
 # scope (<toplevel>/.ytstack) first, then user scope keyed by YT_REPO_KEY.
 # Sets YT_DIR and YT_SCOPE (project|user|none). No basename slugs.

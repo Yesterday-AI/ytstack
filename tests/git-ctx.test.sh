@@ -324,6 +324,20 @@ eq "brownfield: existing .ytstack does not change the count" 6 "$(bf "$BF")"
 hint_has "brownfield: hint .ytstack present"            "$BF" ".ytstack/ present"
 eq "brownfield: one hint line per source (6 signals + 3 extras)" 9 "$(bfh "$BF" | grep -c .)"
 
+# ---- 15. artifact lookup across layouts (M018-S03) ----------------------------
+echo "# find artifacts"
+FA="$TMP/fa/.ytstack"; mkdir -p "$FA/milestones/M001" "$FA/decisions" "$FA/backlog/shipped" "$FA/quick"
+printf 'a\n' > "$FA/M002-S01-T01-SUMMARY.md"
+printf 'd\n' > "$FA/decisions/2026-01-01-x.md"; printf 'q\n' > "$FA/quick/Q001-SUMMARY.md"; printf 's\n' > "$FA/backlog/shipped/item.md"
+sleep 1; printf 'b\n' > "$FA/milestones/M001/M001-S01-T01-SUMMARY.md"   # written last -> newest
+fa() { ( . "$LIB"; yt_find_artifacts "$1" "$2" ); }
+eq "find: summaries across flat + milestones/ + quick/ (3)" 3 "$(fa "$FA" '*-SUMMARY.md' | grep -c .)"
+case "$(fa "$FA" '*-SUMMARY.md' | head -1)" in *M001-S01-T01-SUMMARY.md) ok "find: newest first (nested file written last)";; *) bad "find: newest first" "$(fa "$FA" '*-SUMMARY.md' | head -1)";; esac
+eq "find: decisions dir"        1 "$(fa "$FA" '*-x.md' | grep -c .)"
+eq "find: backlog subdirs"      1 "$(fa "$FA" 'item.md' | grep -c .)"
+eq "find: specific plan missing -> empty" "" "$(fa "$FA" 'M009-S01-T01-PLAN.md')"
+eq "find: missing dir -> empty" "" "$(fa "$TMP/nope" '*.md')"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -68,7 +68,11 @@ fi
 # Last 3 summaries by mtime
 _RECENT_SUMMARIES=""
 if compgen -G "$_YT_DIR"/*-SUMMARY.md > /dev/null 2>&1; then
-  _RECENT_SUMMARIES=$(ls -t "$_YT_DIR"/*-SUMMARY.md 2>/dev/null | head -3)
+  if command -v yt_find_artifacts >/dev/null 2>&1; then
+    _RECENT_SUMMARIES=$(yt_find_artifacts "$_YT_DIR" '*-SUMMARY.md' | head -3)   # flat + milestones/ + quick/ (M018-S03)
+  else
+    _RECENT_SUMMARIES=$(ls -t "$_YT_DIR"/*-SUMMARY.md 2>/dev/null | head -3)
+  fi
 fi
 
 echo "HAS_YTSTACK: $_HAS_YTSTACK"

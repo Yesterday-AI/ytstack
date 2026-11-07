@@ -120,12 +120,10 @@ LAST_UPDATED=$(get_field last_updated)
 NEXT_ACTION=$(awk '/^## Next action/{flag=1; next} /^## /{flag=0} flag' "$STATE_FILE" | sed '/^$/d' | head -5 | cut -c1-600)
 
 # Recent summary file names (last 3 by mtime)
-RECENT_SUMMARIES=""
-if compgen -G "$YT_DIR"/*-SUMMARY.md > /dev/null 2>&1; then
-  RECENT_SUMMARIES=$(ls -t "$YT_DIR"/*-SUMMARY.md 2>/dev/null | head -3 | while read -r f; do
-    basename "$f" .md
-  done | paste -sd, - | sed 's/,/, /g')
-fi
+# (M018-S03: flat layout plus milestones/, quick/ etc. via the lib)
+RECENT_SUMMARIES=$(yt_find_artifacts "$YT_DIR" '*-SUMMARY.md' | head -3 | while read -r f; do
+  basename "$f" .md
+done | paste -sd, - | sed 's/,/, /g')
 
 # Milestones in progress (M018 states): more than one is a pointer-drift smell.
 IN_PROGRESS=$(grep -l '^status: in-progress' "$YT_DIR"/M[0-9][0-9][0-9]-ROADMAP.md 2>/dev/null | while read -r f; do basename "$f" -ROADMAP.md; done | paste -sd, - | sed 's/,/, /g')

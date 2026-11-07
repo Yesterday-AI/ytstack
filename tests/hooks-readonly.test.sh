@@ -102,6 +102,14 @@ lacks "ss-main: clean STATE -> no lint block"   "$CTX" "STATE lint ("
 if [ "${#CTX}" -lt 9500 ]; then ok "ss-main: injection still under the guard (${#CTX})"; else bad "ss-main: injection under guard" "${#CTX}"; fi
 rm -f "$MAIN/.ytstack/PREFERENCES.md"
 
+# ---- 1d. session-start: nested milestones/ layout read-side (M018-S03) -----
+mkdir -p "$MAIN/.ytstack/milestones/M777"
+printf -- '---\nclosed: 2026-11-07T00:00:00Z\n---\n' > "$MAIN/.ytstack/milestones/M777/M777-S01-T01-SUMMARY.md"
+run session-start "{\"session_id\":\"s1f\",\"cwd\":$(jstr "$MAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has "ss-main: summary under milestones/M777/ listed in Recent tasks" "$CTX" "M777-S01-T01-SUMMARY"
+rm -rf "$MAIN/.ytstack/milestones"
+
 # ---- 2. session-start, greenfield (no .ytstack) ---------------------------
 BEFORE=$(find "$PD" -type d | wc -l | tr -d ' ')
 run session-start "{\"session_id\":\"s2\",\"cwd\":$(jstr "$PLAIN")}"

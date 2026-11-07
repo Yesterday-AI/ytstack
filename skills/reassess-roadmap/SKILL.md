@@ -90,7 +90,11 @@ for _rm in "$_YT_DIR"/M[0-9][0-9][0-9]-ROADMAP.md; do
   _m=$(basename "$_rm" -ROADMAP.md)
   _st=$(sed -n 's/^status: *//p' "$_rm" | head -1)
   case "$_st" in planned|in-progress) ;; *) continue ;; esac
-  [ -n "$(ls "$_YT_DIR"/$_m-*SUMMARY.md 2>/dev/null)" ] && continue
+  if command -v yt_find_artifacts >/dev/null 2>&1; then
+    [ -n "$(yt_find_artifacts "$_YT_DIR" "$_m-*SUMMARY.md")" ] && continue
+  else
+    [ -n "$(ls "$_YT_DIR"/$_m-*SUMMARY.md 2>/dev/null)" ] && continue
+  fi
   [ -n "$(find "$_YT_DIR" -maxdepth 1 -name "$_m-*.md" -mtime -14 2>/dev/null)" ] && continue
   _STALE_MILESTONES="${_STALE_MILESTONES:+$_STALE_MILESTONES }$_m"
 done

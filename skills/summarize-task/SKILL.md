@@ -82,6 +82,11 @@ if [ -f "$_YT_DIR/STATE.md" ]; then
 fi
 
 _PLAN_FILE="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$_ACTIVE_TASK-PLAN.md"
+# M018-S03: tolerate milestones/M###/ layouts on the read side
+if [ ! -f "$_PLAN_FILE" ] && command -v yt_find_artifacts >/dev/null 2>&1; then
+  _ALT=$(yt_find_artifacts "$_YT_DIR" "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$_ACTIVE_TASK-PLAN.md" | head -1)
+  [ -n "$_ALT" ] && _PLAN_FILE="$_ALT"
+fi
 _SLICE_PLAN="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md"
 
 # Gather this task's commits for a durable, committed `## Commits` section.
