@@ -38,10 +38,7 @@ ACTIVE_SLICE=$(get_field active_slice)
 ACTIVE_TASK=$(get_field active_task)
 NEXT_ACTION=$(awk '/^## Next action/{flag=1; next} /^## /{flag=0} flag' "$STATE_FILE" 2>/dev/null | sed '/^$/d' | head -5 | cut -c1-400)
 
-TRIGGER=""
-if [ -n "${YT_STDIN:-}" ] && command -v jq >/dev/null 2>&1; then
-  TRIGGER=$(printf '%s' "$YT_STDIN" | jq -r '.trigger // empty' 2>/dev/null)
-fi
+TRIGGER="${YT_TRIGGER:-}"
 
 WT_DIR=$(yt_state_wt_dir)
 SESS_DIR=$(yt_state_dir)

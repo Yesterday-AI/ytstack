@@ -19,15 +19,38 @@
 # so callers do not need `set -e` guards. Keys are the first 16 hex chars of
 # sha256 (readable paths; collision risk is irrelevant at this scale).
 
-# yt_sha16 <string> -> 16 hex chars
+# yt_sha16 <string> -> 16 hex chars. Keys only need to be stable and
+# collision-free at the scale of one machine's repos, so the fastest native
+# digest wins: md5 (C, ~5 ms) over shasum (perl, ~110 ms). Hooks run on a
+# 1.5 s budget and call this twice.
 yt_sha16() {
-  if command -v shasum >/dev/null 2>&1; then
+  if [ -x /sbin/md5 ]; then
+    printf '%s' "$1" | /sbin/md5 -q | cut -c1-16
+  elif command -v md5sum >/dev/null 2>&1; then
+    printf '%s' "$1" | md5sum | cut -c1-16
+  elif command -v shasum >/dev/null 2>&1; then
     printf '%s' "$1" | shasum -a 256 | cut -c1-16
   elif command -v sha256sum >/dev/null 2>&1; then
     printf '%s' "$1" | sha256sum | cut -c1-16
   else
     printf '%s' "$1" | cksum | cut -d' ' -f1
   fi
+}
+
+# yt_jq -> path of a real jq binary, preferring system/homebrew binaries over
+# version-manager shims (an asdf shim costs ~150-250 ms per call). Empty when
+# jq is unavailable or YT_FORCE_NO_JQ is set. Cached in YT_JQ.
+yt_jq() {
+  if [ -n "${YT_FORCE_NO_JQ:-}" ]; then YT_JQ=""; printf ''; return 0; fi
+  if [ -z "${YT_JQ+x}" ]; then
+    YT_JQ=""
+    local c
+    for c in /usr/bin/jq /opt/homebrew/bin/jq /usr/local/bin/jq; do
+      if [ -x "$c" ]; then YT_JQ="$c"; break; fi
+    done
+    if [ -z "$YT_JQ" ] && command -v jq >/dev/null 2>&1; then YT_JQ=$(command -v jq); fi
+  fi
+  printf '%s' "$YT_JQ"
 }
 
 # yt_canon <path> -> canonical absolute dir path (symlinks resolved), or the
@@ -40,6 +63,21 @@ yt_canon() {
   fi
 }
 
+# yt_python -> path of a real python3, preferring homebrew/local binaries over
+# version-manager shims and over the macOS /usr/bin/python3 stub (0.4-1 s
+# startup). Empty when none exists. Cached in YT_PY.
+yt_python() {
+  if [ -z "${YT_PY+x}" ]; then
+    YT_PY=""
+    local c
+    for c in /opt/homebrew/bin/python3 /usr/local/bin/python3; do
+      if [ -x "$c" ]; then YT_PY="$c"; break; fi
+    done
+    if [ -z "$YT_PY" ] && command -v python3 >/dev/null 2>&1; then YT_PY=$(command -v python3); fi
+  fi
+  printf '%s' "$YT_PY"
+}
+
 # yt_read_stdin: capture the hook payload once (idempotent) and parse the
 # fields hooks need. Uses jq, falls back to python3 (or YT_FORCE_NO_JQ=1).
 # YT_CWD is kept only when it names an existing directory.
@@ -48,18 +86,22 @@ yt_read_stdin() {
     if [ -t 0 ]; then YT_STDIN=""; else YT_STDIN=$(cat 2>/dev/null); fi
   fi
   YT_CWD=""; YT_SESSION_ID=""; YT_HOOK_EVENT=""; YT_TOOL_CMD=""; YT_TOOL_EXIT=""
+  YT_TRIGGER=""; YT_REASON=""
   [ -n "$YT_STDIN" ] || return 0
-  local out=""
-  if [ -z "${YT_FORCE_NO_JQ:-}" ] && command -v jq >/dev/null 2>&1; then
-    out=$(printf '%s' "$YT_STDIN" | jq -r '
+  local out="" jq_bin
+  jq_bin=$(yt_jq)
+  if [ -n "$jq_bin" ]; then
+    out=$(printf '%s' "$YT_STDIN" | "$jq_bin" -r '
       "YT_CWD="        + ((.cwd // "") | tostring | @sh) + " " +
       "YT_SESSION_ID=" + ((.session_id // "") | tostring | @sh) + " " +
       "YT_HOOK_EVENT=" + ((.hook_event_name // "") | tostring | @sh) + " " +
+      "YT_TRIGGER="    + ((.trigger // "") | tostring | @sh) + " " +
+      "YT_REASON="     + ((.reason // "") | tostring | @sh) + " " +
       "YT_TOOL_CMD="   + (((.tool_input | objects | .command) // "") | tostring | @sh) + " " +
       "YT_TOOL_EXIT="  + (((.tool_response | objects | .exit_code) // .exit_code // "") | tostring | @sh)
     ' 2>/dev/null) || out=""
-  elif command -v python3 >/dev/null 2>&1; then
-    out=$(printf '%s' "$YT_STDIN" | python3 -I -c '
+  elif [ -n "$(yt_python)" ]; then
+    out=$(printf '%s' "$YT_STDIN" | "$(yt_python)" -I -c '
 import json, shlex, sys
 try:
     d = json.load(sys.stdin)
@@ -74,8 +116,8 @@ tr = d.get("tool_response") if isinstance(d.get("tool_response"), dict) else {}
 ex = tr.get("exit_code")
 if ex is None:
     ex = d.get("exit_code")
-print("YT_CWD=%s YT_SESSION_ID=%s YT_HOOK_EVENT=%s YT_TOOL_CMD=%s YT_TOOL_EXIT=%s" % tuple(
-    shlex.quote(s(x)) for x in (d.get("cwd"), d.get("session_id"), d.get("hook_event_name"), ti.get("command"), ex)))
+print("YT_CWD=%s YT_SESSION_ID=%s YT_HOOK_EVENT=%s YT_TRIGGER=%s YT_REASON=%s YT_TOOL_CMD=%s YT_TOOL_EXIT=%s" % tuple(
+    shlex.quote(s(x)) for x in (d.get("cwd"), d.get("session_id"), d.get("hook_event_name"), d.get("trigger"), d.get("reason"), ti.get("command"), ex)))
 ' 2>/dev/null) || out=""
   fi
   if [ -n "$out" ]; then eval "$out"; fi
