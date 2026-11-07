@@ -5,7 +5,7 @@ project: ytstack
 created: 2026-11-07T11:05:00Z
 status: planned
 task_count: 6
-completed_tasks: 4
+completed_tasks: 5
 ---
 
 # M016-S01 -- Slice Plan
@@ -18,7 +18,7 @@ completed_tasks: 4
 - [x] T02 -- Rewrite `hooks/pre-compact`: consume stdin, `yt_git_ctx "$cwd"`, write the auto handoff to `$(yt_state_dir)/HANDOFF.auto.md` and refresh the `../latest-handoff` symlink atomically (`ln -sfn` to temp + `mv`); never open `.ytstack/HANDOFF.md` for writing; emit compaction instructions on stdout (position M/S/T, open decisions, next action, path to the auto handoff; under 10,000 chars).
 - [x] T03 -- Rewrite `hooks/session-end`: one `printf >>` of a JSON line into `$(yt_state_dir)/session.jsonl` (single writer per session, no `git` subprocess, fits the 1.5 s plugin budget); remove every write to `.ytstack/journal/`; `jq`-free encoding path for the fast case.
 - [x] T04 -- Rewrite `hooks/post-tool-use-bash`: resolve from stdin `cwd` (the directory the Bash call ran in), `yt_git_ctx` there, read HEAD subject via `git -C "$YT_TOPLEVEL" log -1 --pretty=%s`, stub the draft SUMMARY only when the subject matches `commit_ref_pattern` from that checkout's `PREFERENCES.md` (default `^M[0-9]{3}-S[0-9]{2}-T[0-9]{2}:`) AND the stub does not exist yet; write it into that checkout's `.ytstack/`, never into `CLAUDE_PROJECT_DIR`. Extend `tests/post-tool-use-bash.test.sh` with: commit in a linked worktree while `CLAUDE_PROJECT_DIR` points at main, commit without task ref (no stub).
-- [ ] T05 -- Migrate the read-only hooks to the lib: `session-start` (resolve from `cwd`, append a "latest auto handoff: <path>" line when the symlink resolves, measure total injection against the 10,000-char cap and warn on stderr when exceeded), `pre-tool-use-edit`, `task-created`, `task-completed`, `teammate-idle` (resolve `.ytstack` through `yt_resolve_yt_dir`, no `basename`). Replace `$(cat)` with `yt_read_stdin`; add `trap '' PIPE`.
+- [x] T05 -- Migrate the read-only hooks to the lib: `session-start` (resolve from `cwd`, append a "latest auto handoff: <path>" line when the symlink resolves, measure total injection against the 10,000-char cap and warn on stderr when exceeded), `pre-tool-use-edit`, `task-created`, `task-completed`, `teammate-idle` (resolve `.ytstack` through `yt_resolve_yt_dir`, no `basename`). Replace `$(cat)` with `yt_read_stdin`; add `trap '' PIPE`.
 - [ ] T06 -- Update `hooks/hooks.json`: `SessionStart` matcher `startup|resume|clear|compact|fork`; `"shell": "bash"` on every command hook; `onFailure: "block"` only on `pre-tool-use-edit`; drop the ineffective `"timeout": 5` on `SessionEnd` (document the 1.5 s plugin budget in a comment field via `description`). Validate with `claude plugin validate .` and `bin/ytstack-check`.
 
 ## Done when
