@@ -32,6 +32,10 @@ M -- 3 slices, ~12 tasks.
 - 2026-11-07: per-worktree `active_task` is deferred to M019's execution-model work (orchestrator + worktree subagents own the pointer); M018 only lints the single pointer.
 - 2026-11-07: M010 lands from the worktree agent before S02 (session-start / init-project edits) to avoid conflicts; S01 touches only new files and plan-task/slice-milestone/summarize-task.
 
+## Closing note (2026-11-07)
+
+Done: 11 tasks in 3 slices; every exit criterion met except the PowerShell/per-worktree items deferred by decision. Clean-clone verification at `a0faea3`: 12 suites green, checker 0 fails, plugin validate clean. Ships in 0.4.0 with M010 and M019.
+
 ## Open questions
 
 - Quick-task numbering `Q###` vs reusing `M###` with `granularity: milestone`: `Q###` chosen for grep-ability; revisit if consumers object.

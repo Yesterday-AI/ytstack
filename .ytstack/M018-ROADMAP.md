@@ -3,9 +3,9 @@ milestone: M018
 project: ytstack
 size: M
 created: 2026-11-07T16:00:00Z
-status: planned
+status: done
 total_slices: 3
-completed_slices: 2
+completed_slices: 3
 ---
 
 # M018 Roadmap
