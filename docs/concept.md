@@ -211,11 +211,13 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - Per-task: `M###-S##-T##-PLAN.md`, `M###-S##-T##-SUMMARY.md`
 - Per-pitch (greenfield input): `OFFICE-HOURS.md` (pre-init) -> `OFFICE-HOURS-<slug>.md` (post-init, moved into `.ytstack/`)
 
-**Hooks** (under `hooks/`, registered in `hooks/hooks.json`):
-- `session-start` -- injects `using-ytstack` directive (always) + STATE snapshot (brownfield) or greenfield next-step block (greenfield)
-- `pre-compact`, `session-end` -- context / state preservation
-- `teammate-idle`, `task-created`, `task-completed` -- Agent Teams coordination
-- `pre-tool-use-edit`, `post-tool-use-bash` -- quality / safety gates
+**Hooks** (under `hooks/`, registered in `hooks/hooks.json`; all source `hooks/lib/git-ctx.sh` and resolve the checkout from the payload `cwd`, never `CLAUDE_PROJECT_DIR` -- DECISIONS 2026-11-07):
+- `session-start` -- injects `using-ytstack` directive (always) + STATE snapshot with manual/automatic handoff pointers (brownfield) or greenfield next-step block (greenfield); fires on `startup|resume|clear|compact|fork`; guards the 10,000-char cap
+- `pre-compact` -- writes the automatic handoff OUT OF TREE (`${CLAUDE_PLUGIN_DATA}/repos/<repo-key>/worktrees/<wt-key>/sessions/<id>/HANDOFF.auto.md`, `latest-handoff` symlink) and emits compaction instructions on stdout; never touches `.ytstack/HANDOFF.md`
+- `session-end` -- appends one JSON line to the per-session `session.jsonl` out of tree (no `.ytstack/journal/`)
+- `teammate-idle`, `task-created`, `task-completed` -- Agent Teams coordination (resolved per checkout)
+- `pre-tool-use-edit` (advisory, exit 0), `post-tool-use-bash` (draft summary stub, once, only in the committing checkout and only for commits carrying the task ref) -- quality / safety gates
+- Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (10 suites incl. the #26 acceptance and concurrency suites)
 
 ### 3.5 Distribution (two marketplaces split by visibility, per-plugin own repos)
 

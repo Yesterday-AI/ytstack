@@ -154,9 +154,9 @@ Before stepping away for a break:
 
 > "I'm stepping away for a week -- do a handoff."
 
-Agent fires `ytstack:handoff-session`. Writes `.ytstack/HANDOFF.md` with current position + in-flight work + open decisions + warnings + a recommended resume prompt. Next session reads it.
+Agent fires `ytstack:handoff-session`. Writes `.ytstack/HANDOFF.md` with current position + in-flight work + open decisions + warnings + a recommended resume prompt. That file is yours: no hook ever overwrites it.
 
-The SessionStart hook also auto-injects state on every session start, so `resume-session` is for deep-dives when you want more than the hook's compact summary.
+Compaction writes a second, automatic handoff *outside* the repo (`${CLAUDE_PLUGIN_DATA}/repos/<repo-key>/worktrees/<worktree-key>/sessions/<session_id>/HANDOFF.auto.md`, newest via `latest-handoff`). `resume-session` reads the automatic one first, the manual one second, and opens its briefing with which it used. The SessionStart hook also auto-injects state (and both handoff pointers) on every session start, so `resume-session` is for deep-dives when you want more than the hook's compact summary.
 
 ## Debugging
 
@@ -180,7 +180,7 @@ For everything else, just talk.
 
 - **`claude -p` needs `--permission-mode acceptEdits`** or skills stall on Write prompts.
 - **Skill invocations are namespaced** under `ytstack:` when you do use slash-commands (`/ytstack:init-project`, not `/init-project`).
-- **Sentinel files accumulate in `~/.ytstack/.*-prompted`** -- don't worry about them; cleanup command ships later.
+- **Working in a git worktree?** Fine since 0.2.0: hooks and skills resolve the checkout from where you work, volatile state (auto handoff, journal) lives under `${CLAUDE_PLUGIN_DATA}` and the shared main checkout stays clean. Leftover `~/.ytstack/.*-prompted` sentinel files from older versions can be deleted; nothing reads them any more.
 - **`.ytstack/` goes in git.** That's the default. Team members inherit project memory on clone.
 - **One milestone at a time.** If you start a second before closing the first, the roadmap-tracking breaks. Close M### by flipping status in `.ytstack/ROADMAP.md`.
 - **Agent picks the wrong skill?** Sharpen that skill's `description:` field to cover the intent more explicitly. Don't reintroduce phrase-lists -- that's the antipattern the design principle #6 warns about (see README).

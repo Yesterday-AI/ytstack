@@ -247,6 +247,17 @@ Type `/ytstack:<skill-name>` only when you want to override the auto-pick, skip 
 
 See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example written in the same natural-language style.
 
+## Where ytstack writes
+
+Two kinds of state, two places (since 0.2.0; DECISIONS 2026-11-07):
+
+| Kind | Where | Written by | In git? |
+| --- | --- | --- | --- |
+| Project memory: `PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, `ROADMAP.md`, plans, summaries, the hand-written `HANDOFF.md` | `.ytstack/` in the checkout | you and the skills (`summarize-task`, `handoff-session`, ...) on purpose | yes |
+| Volatile session state: automatic pre-compaction handoff (`HANDOFF.auto.md`), session journal (`session.jsonl`) | `${CLAUDE_PLUGIN_DATA}/repos/<repo-key>/worktrees/<worktree-key>/sessions/<session_id>/` with a `latest-handoff` symlink per worktree (fallback `.ytstack/.local/`, gitignored by `init-project`) | the `pre-compact` and `session-end` hooks | no |
+
+Every hook and skill preamble resolves the checkout from where the agent actually works (the hook payload's `cwd`, via `hooks/lib/git-ctx.sh`), never from `CLAUDE_PROJECT_DIR`, which Claude Code pins to the session-start directory and does not move into a linked worktree. Consequences you can rely on: a session that works in a worktree never dirties the shared main checkout; `HANDOFF.md` is never overwritten by a hook; the draft `T##-SUMMARY.md` stub appears only in the checkout that committed and only when the commit subject carries the task ref (`commit_ref_pattern` in `PREFERENCES.md`, default `^M###-S##-T##:`); `resume-session` reads the automatic handoff first and the manual one second and tells you which it used. `tests/run-all.sh` (also `--linux`) proves all of this.
+
 ## Who this is for
 
 **Good fit:**
@@ -264,12 +275,13 @@ See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example written i
 
 ## Status
 
-**v0.1.5 -- shipping, actively dogfooded.** Full build cycle complete (38/39 roadmap tasks; 1 deferred to user action). ytstack tracks its own development in `.ytstack/`.
+**v0.2.0 -- shipping, actively dogfooded.** M016 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); ytstack tracks its own development in `.ytstack/`. Next up: vendor update (superpowers v7, gstack as installed dependency), brownfield import, ceremony scaling, skill quality + evals (`.ytstack/ROADMAP.md` M017-M019, M010).
 
 Ships:
 
 - 21 skills (project-OS lifecycle + gstack planning wrappers + superpowers execution wrappers + Agent Teams dispatch + `using-ytstack` directive + 5 engineering-OS additions migrated from agentic-foundation: `atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`)
-- 8 hooks (SessionStart / PreCompact / SessionEnd / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash). SessionStart-hook now injects the using-ytstack directive + project state.
+- 8 hooks (SessionStart / PreCompact / SessionEnd / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers.
+- Ten shell test suites (`tests/run-all.sh`, 488 cases, macOS bash 3.2 + Linux bash 5) and `bin/ytstack-check` (UX contracts + resolver contract).
 - Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
 
@@ -281,8 +293,9 @@ See `.ytstack/ROADMAP.md` for the task list, `.ytstack/STATE.md` for progress, `
 ytstack/
 ├── .claude-plugin/              plugin manifest + marketplace
 ├── .ytstack/                    dogfood: ytstack tracks itself
-├── hooks/                       8 hook scripts + hooks.json
+├── hooks/                       8 hook scripts + hooks.json + lib/git-ctx.sh (shared resolver)
 ├── skills/                      21 skill packages
+├── tests/                       10 shell test suites + run-all.sh (--linux via Docker)
 ├── vendor/                      read-only subtrees (superpowers, gstack)
 ├── docs/
 │   ├── ux/                      mandatory skill-authoring contracts
