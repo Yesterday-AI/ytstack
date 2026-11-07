@@ -73,7 +73,7 @@ _SLICE_PLANS=""
 if [ "$_CURRENT_MILESTONE" != none ] && [ -d "$_YT_DIR" ]; then
   _SLICE_PLANS=$(ls "$_YT_DIR"/$_CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md 2>/dev/null)
 fi
-_SLICE_COUNT=$(printf '%s' "$_SLICE_PLANS" | grep -c . 2>/dev/null || echo 0)
+_SLICE_COUNT=$(printf '%s' "$_SLICE_PLANS" | grep -c . 2>/dev/null); _SLICE_COUNT=${_SLICE_COUNT:-0}
 
 # Open slices (status not done) and file overlap between their task plans / Files sections.
 _OPEN_SLICES=""; _OVERLAP=""

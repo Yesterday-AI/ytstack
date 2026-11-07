@@ -102,6 +102,16 @@ lacks "ss-main: clean STATE -> no lint block"   "$CTX" "STATE lint ("
 if [ "${#CTX}" -lt 9500 ]; then ok "ss-main: injection still under the guard (${#CTX})"; else bad "ss-main: injection under guard" "${#CTX}"; fi
 rm -f "$MAIN/.ytstack/PREFERENCES.md"
 
+# ---- 1f. session-start: no roadmap in progress -> clean count, no stderr noise
+run session-start "{\"session_id\":\"s1j\",\"cwd\":$(jstr "$MAIN")}"
+eq "ss-main: no in-progress roadmap -> no 'integer expression' error on stderr" 0 "$(grep -c 'integer expression' "$ERR")"
+eq "ss-main: no in-progress roadmap -> no 'Milestones in progress' line" 0 "$(printf '%s' "$OUT" | grep -c 'Milestones in progress')"
+# host context (Codex adapter) is not counted against Claude Code's cap
+run session-start "{\"session_id\":\"s1k\",\"cwd\":$(jstr "$MAIN")}" YTSTACK_HOST_CONTEXT="$(printf 'H%.0s' $(seq 1 6000))"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has "ss-main: host context prepended" "$CTX" "HHHHHHHHHH"
+has "ss-main: host context does not shed Next action" "$CTX" "Do the thing."
+
 # ---- 1e. session-start: lifecycle hints after a closed slice / milestone (M019-S03)
 cp "$MAIN/.ytstack/M999-S01-PLAN.md" "$TMP/slice.good"
 printf -- '---\nmilestone: M999\nslice: S01\nstatus: done\n---\n# plan\n\n- [x] T01 -- done\n' > "$MAIN/.ytstack/M999-S01-PLAN.md"

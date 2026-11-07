@@ -4,6 +4,10 @@ From zero to a tracked, shipped task -- the way you actually use ytstack: by tal
 
 ## Install
 
+For Codex, follow [Codex setup](docs/codex.md). The workflow below uses Claude
+Code command names; in Codex select the corresponding skill from ytstack with
+`$ytstack:<skill-name>`. Claude Agent Teams and worktree subagents are not available through the Codex adapter.
+
 ### Prerequisites
 
 - Claude Code >= 2.1.214 (the plugin's hooks use `fork`-session matching and `CLAUDE_PLUGIN_DATA`).
@@ -13,7 +17,7 @@ From zero to a tracked, shipped task -- the way you actually use ytstack: by tal
   git clone --branch v1.96.0.0 https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd ~/.claude/skills/gstack && ./setup --no-browser)
   ```
 
-  Without it those three skills stop with this install command; everything else in ytstack works without gstack or bun.
+  Without it those skills stop with this install command; everything else in ytstack works without gstack or bun.
 
 ### Local dev (recommended for first try)
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ytstack PreCompact hook
 #
-# Fires before Claude Code compacts the conversation. Two jobs:
+# Fires before the host (Claude Code, or Codex via bin/ytstack-codex) compacts the conversation. Two jobs:
 #
 #   1. Write an automatic handoff breadcrumb OUT OF TREE, per session and per
 #      worktree, and refresh the worktree's `latest-handoff` symlink.
@@ -63,7 +63,7 @@ ytstack_dir: $YT_DIR
 
 # Pre-Compaction Handoff (automatic)
 
-Claude Code compacted the conversation at $TS in \`$YT_TOPLEVEL\`. This
+The agent host compacted the conversation at $TS in \`$YT_TOPLEVEL\`. This
 breadcrumb lets the continuation re-orient from on-disk state.
 
 ## Where we are

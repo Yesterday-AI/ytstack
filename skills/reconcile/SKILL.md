@@ -90,7 +90,7 @@ if [ -n "$_YT_DIR" ]; then
   [ -d "$_YT_DIR/.local" ] && _LOCAL_DIR=yes
   git -C "$_PROJECT_DIR" check-ignore -q "${_YT_DIR#$_PROJECT_DIR/}/.local/x" 2>/dev/null && _LOCAL_IGNORED=yes
 fi
-_count() { printf '%s' "$1" | grep -c . 2>/dev/null || echo 0; }
+_count() { local n; n=$(printf '%s' "$1" | grep -c . 2>/dev/null); printf '%s' "${n:-0}"; }
 
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "DRAFT_STUBS: $(_count "$_DRAFT_STUBS")"

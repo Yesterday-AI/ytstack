@@ -6,7 +6,7 @@
   <p><em>An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng.</em></p>
 
   <p>
-    A Claude Code plugin that turns multi-session, multi-week projects into something your agent can actually hold onto. Project memory on disk, curated skill set, parallel execution via worktree-isolated subagents. One install, one namespace, no stack to maintain.
+    A plugin for Claude Code and Codex that turns multi-session, multi-week projects into something your agent can actually hold onto. Project memory on disk, curated skill set, parallel execution via worktree-isolated subagents in Claude Code. One install, one namespace, no stack to maintain.
   </p>
 
   <p>
@@ -14,6 +14,7 @@
     <a href="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml/badge.svg"></a>
     <img alt="version" src="https://img.shields.io/badge/version-0.4.0-FC4E14">
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
+    <img alt="Codex" src="https://img.shields.io/badge/Codex-plugin-0A0A0A">
     <img alt="skills" src="https://img.shields.io/badge/skills-31-FC4E14">
     <img alt="hooks" src="https://img.shields.io/badge/hooks-9-FC4E14">
   </p>
@@ -192,7 +193,25 @@ Source: [`docs/ytstack-debugging-flow.excalidraw`](docs/ytstack-debugging-flow.e
 ### Prerequisites
 
 - Claude Code >= 2.1.214.
-- For `office-hours`, `plan-ceo-review` and `plan-eng-review`: gstack installed at `~/.claude/skills/gstack` (tested against v1.96.0.0) with bun >= 1.4.2 -- `git clone --branch v1.96.0.0 https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd ~/.claude/skills/gstack && ./setup --no-browser)`. Those three skills stop with this command when gstack is missing; the other 18 skills and all hooks need neither gstack nor bun.
+- For the six gstack-backed skills (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`): gstack installed at `~/.claude/skills/gstack` (tested against v1.96.0.0) with bun >= 1.4.2 -- `git clone --branch v1.96.0.0 https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd ~/.claude/skills/gstack && ./setup --no-browser)`. Those skills stop with this command when gstack is missing; the other 25 skills and all hooks need neither gstack nor bun.
+
+### Codex
+
+```bash
+codex plugin marketplace add Yesterday-AI/ytstack
+codex plugin add ytstack@ytstack
+```
+
+Start a new session. With trusted hooks, ytstack supplies its runtime context
+automatically. Without hooks, first ask Codex to read the installed plugin's
+`codex/adapter.md`, then select `$ytstack:using-ytstack` in the skill picker.
+On local hosts with hook support, review and trust the plugin hooks for automatic
+startup context, compaction handoff, and session journaling. Both hosts load the same 31 skill files. Worktree subagents, Claude Agent Teams and edit/commit hooks remain
+Claude-only; Codex uses the sequential task flow and explicit verification.
+See [Codex setup and compatibility](docs/codex.md) for local development,
+hook-free usage, and validation.
+
+The installation methods below are for Claude Code.
 
 ### Local dev (recommended for first try)
 
@@ -317,6 +336,7 @@ Ships:
 - Twelve shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks) and an eval suite for `claude plugin eval` (`evals/`, 13 cases).
 - Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
+- Codex manifest + self-marketplace, shared skills, and 3 lifecycle hooks; see [host support](docs/codex.md#supported-behavior)
 
 See `.ytstack/ROADMAP.md` for the task list, `.ytstack/STATE.md` for progress, `.ytstack/REVIEW-NOTES.md` for deferred items.
 

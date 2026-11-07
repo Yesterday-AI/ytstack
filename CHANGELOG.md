@@ -38,6 +38,22 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `ytstack-check` on ubuntu and macOS; README badge.
 - **Advisory `Stop` hook** (`hooks/stop`): one-line `systemMessage` when
   the agent stops with an unsummarized active task; never blocks.
+- **Codex plugin support** (PR #23, merged from `origin/main` into this
+  release): `.codex-plugin/plugin.json` + `.agents/plugins/marketplace.json`
+  self-marketplace, `bin/ytstack-codex` runs the shared skill blocks and the
+  three lifecycle hooks (SessionStart / PreCompact / SessionEnd) with the
+  existing environment contract, `codex/adapter.md` maps tools and shell
+  blocks, `docs/codex.md`. `tests/codex_plugin_test.py` now asserts the
+  0.2.0+ contract (out-of-tree handoff and journal, repo-key user scope,
+  compaction guidance on stdout). Host context a non-Claude adapter prepends
+  is not counted against Claude Code's 10,000-char SessionStart cap.
+
+### Fixed
+
+- `hooks/session-start`, `reconcile`, `spawn-milestone-team`: a
+  `grep -c . || echo 0` produced `0\n0` when nothing matched and broke the
+  integer test ("Milestones in progress") in projects without an
+  in-progress roadmap.
 
 ### Changed
 

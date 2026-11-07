@@ -105,6 +105,21 @@ Per ytstack's design direction, we credit external methodology work generically,
 5. Test standalone with mock `CLAUDE_PROJECT_DIR`.
 6. Add REVIEW-NOTES entry for integration-test-needed.
 
+## Codex compatibility
+
+Both hosts load `skills/` and reuse the lifecycle scripts in `hooks/`.
+Keep skill content in that one tree. Codex tool mappings live in
+`codex/adapter.md`; the Codex SessionStart path supplies them before the shared
+directive. `bin/ytstack-codex` supplies the existing script environment, including
+repository-root resolution. Register supported events in `codex/hooks.json`.
+There is no generation step, skill copy, or per-skill Codex boilerplate.
+Keep `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json` versions aligned.
+
+Run `python3 -m unittest discover -s tests -p 'codex_plugin_test.py' -v` and
+`bash tests/post-tool-use-bash.test.sh` alongside `bin/ytstack-check`. CI accepts
+the validator's warnings-only exit code (2) and rejects failures. See
+[Codex setup](docs/codex.md) for installation and manual discovery checks.
+
 ## How to add a new vendor subtree
 
 1. Verify the license is compatible (MIT / Apache-2.0 / similar permissive).

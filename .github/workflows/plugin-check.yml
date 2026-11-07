@@ -1,0 +1,30 @@
+name: Plugin checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Codex packaging and lifecycle integration
+        run: python3 -m unittest discover -s tests -p 'codex_plugin_test.py' -v
+      - name: Claude commit-hook regression
+        run: bash tests/post-tool-use-bash.test.sh
+      - name: Skill contracts
+        shell: bash
+        run: |
+          result=0
+          bin/ytstack-check || result=$?
+          if [ "$result" -ne 0 ] && [ "$result" -ne 2 ]; then
+            exit "$result"
+          fi
