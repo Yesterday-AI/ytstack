@@ -36,7 +36,19 @@ MAIN="$TMP/main"; mkdir -p "$MAIN/.ytstack"
   echo seed > f.txt; git add -A; git commit -qm "M999-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL fixture; exit 2; }
 WT="$TMP/wt"; git -C "$MAIN" worktree add -q -b wt-branch "$WT" >/dev/null 2>&1 || { echo FATAL worktree; exit 2; }
 
-SKILLS="handoff-session init-project plan-milestone plan-task reassess-roadmap resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review systematic-debugging test-driven-development verification-before-completion"
+SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task reassess-roadmap resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review systematic-debugging test-driven-development verification-before-completion"
+
+# Brownfield fixture (M010, issue #18): existing docs, no .ytstack -> >= 2 signals
+BF="$TMP/brown"; mkdir -p "$BF/docs/adr"
+( cd "$BF" || exit 2
+  git init -q && git config user.email t@t.t && git config user.name t
+  printf '# Acme\n\nAcme turns invoices into forecasts.\n' > README.md
+  i=0; while [ $i -lt 40 ]; do echo "line $i" >> README.md; i=$((i+1)); done
+  printf '# Guide\n' > docs/guide.md; printf '# Setup\n' > docs/setup.md; printf '# Ops\n' > docs/ops.md
+  printf '# ADR 1\n' > docs/adr/0001-x.md; printf '# Changelog\n' > CHANGELOG.md
+  git add -A; git commit -qm seed ) >/dev/null 2>&1 || { echo FATAL brownfield fixture; exit 2; }
+# bf_signals <preamble-output> -> the integer after "BROWNFIELD_SIGNALS: " (or empty)
+bf_signals() { printf '%s\n' "$1" | sed -n 's/^BROWNFIELD_SIGNALS: *//p' | head -1; }
 
 # extract <skill> -> path of a runnable script with ${CLAUDE_SKILL_DIR} substituted
 extract() {
@@ -92,6 +104,19 @@ for s in $SKILLS; do
       has "$s: fake install -> pin ok" "$OUT" "GSTACK_PIN_OK: yes"
       rm -rf "$TMP/home/.claude"
       grep -q 'vendor/gstack' "$ROOT/skills/$s/SKILL.md" && bad "$s: no vendor/gstack reference left" || ok "$s: no vendor/gstack reference left" ;;
+    adopt-brownfield)
+      has "$s: main (has .ytstack) -> IS_GIT yes" "$OUT" "IS_GIT: yes"
+      has "$s: main -> signals echoed (0 in the bare fixture)" "$OUT" "BROWNFIELD_SIGNALS: 0"
+      has "$s: main -> .ytstack present named as a candidate hint" "$OUT" ".ytstack/ present"
+      run_pre "$P" "$BF"
+      [ "$EC" -eq 0 ] && ok "$s: runs in brownfield fixture (exit 0)" || bad "$s: runs in brownfield fixture (exit 0)" "exit $EC"
+      has "$s: brownfield -> HAS_YTSTACK no" "$OUT" "HAS_YTSTACK: no"
+      N=$(bf_signals "$OUT")
+      [ -n "$N" ] && [ "$N" -ge 2 ] 2>/dev/null && ok "$s: brownfield -> BROWNFIELD_SIGNALS >= 2 ($N)" || bad "$s: brownfield -> BROWNFIELD_SIGNALS >= 2" "got '$N'"
+      has "$s: brownfield -> candidate README -> PROJECT.md" "$OUT" "README.md (4"
+      has "$s: brownfield -> candidate adr -> DECISIONS.md" "$OUT" "docs/adr/ (1 files) -> DECISIONS.md"
+      has "$s: brownfield -> README one-liner picked" "$OUT" "README_ONELINER: Acme turns invoices into forecasts."
+      has "$s: brownfield -> no entry doc" "$OUT" "ENTRY_DOC: none" ;;
     resume-session)
       has "$s: worktree -> no auto handoff there" "$OUT" "LATEST_AUTO_HANDOFF: none"
       run_pre "$P" "$MAIN"
@@ -113,6 +138,7 @@ has "fallback: IS_GIT yes in worktree" "$OUT" "IS_GIT: yes"
 echo "# tree hygiene"
 [ -z "$(git -C "$MAIN" status --porcelain)" ] && ok "main checkout clean after all preambles" || bad "main checkout clean" "$(git -C "$MAIN" status --porcelain | head -3 | tr '\n' ' ')"
 [ -e "$ELSEWHERE/.ytstack" ] && bad "nothing written under CLAUDE_PROJECT_DIR" || ok "nothing written under CLAUDE_PROJECT_DIR"
+[ -z "$(git -C "$BF" status --porcelain)" ] && ok "brownfield fixture clean after all preambles (read-only detection)" || bad "brownfield fixture clean" "$(git -C "$BF" status --porcelain | head -3 | tr '\n' ' ')"
 
 echo
 echo "$PASS passed, $FAIL failed"
