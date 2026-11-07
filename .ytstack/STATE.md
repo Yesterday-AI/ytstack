@@ -81,7 +81,7 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Status:** M016 planned (M, 3 slices). Ready to slice. Run `ytstack:slice-milestone` to break M016 into concrete slices and tasks (`M016-CONTEXT.md` holds goal, 10 exit criteria, locked decisions, open questions; `M016-ROADMAP.md` proposes S01 hook lib + hooks, S02 skill preambles + init-project, S03 tests + release 0.2.0). Then M017 (vendor strategy: superpowers -> v7.0.2, gstack de-vendored; closes #25), then M010 (brownfield, #18), M018, M019.
+**Status:** M016 sliced (M, 3 slices, 15 tasks): S01 hooks on `git-ctx.sh` + out-of-tree state (6), S02 skill preambles + commit discovery + gitignore + `ytstack-check` rules (5), S03 tests + docs + release 0.2.0 (4). Plans in `M016-S0{1,2,3}-PLAN.md`. Next: `ytstack:plan-task` for M016-S01-T01 (`hooks/lib/git-ctx.sh`), sequential execution recommended -- S02/S03 depend on the lib from S01, so `spawn-milestone-team` only pays off from S02 onwards. Then M017 (vendor strategy: superpowers -> v7.0.2, gstack de-vendored; closes #25), then M010 (brownfield, #18), M018, M019.
 
 **Status (2026-11-07, triage + research):** Deep research + audit of 17 local consumer repos written to `docs/research/2026-11-07-modernisierung-best-practices.md` (+ 5 note files under `docs/research/2026-11-07-notes/`). GitHub triage done: labels `P0/P1/P2/security/worktrees/hooks` created; #27 P0 (root cause: `CLAUDE_PROJECT_DIR` does not follow worktrees), #24 P1, #18 P1 (-> M010), #25 P2 (-> M017), #26 closed as duplicate of #27 (2026-11-07). Vendor hold on gstack `aeea57f` remains until M017.
 

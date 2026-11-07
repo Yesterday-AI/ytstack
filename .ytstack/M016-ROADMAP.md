@@ -18,9 +18,9 @@ completed_slices: 0
 
 Slice detail lives in per-slice `M016-S##-PLAN.md` files, created by `ytstack:slice-milestone`.
 
-- [ ] S01 -- (to be planned) proposed: `hooks/lib/git-ctx.sh` + rewrite of `pre-compact`, `session-end`, `post-tool-use-bash`, `pre-tool-use-edit`, `session-start` on top of it; out-of-tree state dir; `hooks.json` platform update
-- [ ] S02 -- (to be planned) proposed: skill preambles (`summarize-task`, `init-project`, `resume-session`, `handoff-session`, remaining `_PROJECT_DIR` users) on `git rev-parse`; configurable commit discovery; `.gitignore` block; sentinel removal; `bin/ytstack-check` banned-pattern rule
-- [ ] S03 -- (to be planned) proposed: `tests/` for all four write paths (main, linked worktree, main-session + worktree command, concurrent sessions); CHANGELOG, version bump 0.2.0, DECISIONS/KNOWLEDGE, issue closure with evidence
+- [ ] S01 -- Hooks resolve from stdin `cwd` via `hooks/lib/git-ctx.sh`, write volatile state out-of-tree only, `hooks.json` on current schema (6 tasks)
+- [ ] S02 -- Skill preambles on `git rev-parse` + shared lib, configurable commit discovery, `.gitignore` block, sentinels gone, `ytstack-check` banned patterns (5 tasks)
+- [ ] S03 -- #26 acceptance as tests (worktree + concurrency), docs for the state model, release 0.2.0 with #24/#27 closed on evidence (4 tasks)
 
 ## Run order
 

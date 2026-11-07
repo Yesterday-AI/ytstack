@@ -32,6 +32,8 @@ M -- see `M016-ROADMAP.md` for slice breakdown. Borderline to L; `slice-mileston
 
 - 2026-11-07: design locked in `DECISIONS.md` "Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree" (option C). Platform basis: hook stdin `cwd` follows the worktree, `CLAUDE_PROJECT_DIR` does not (code.claude.com worktrees docs; anthropics/claude-code#84723 closed not-planned 2026-10-05); `CLAUDE_PLUGIN_DATA` is the sanctioned durable plugin state dir.
 - 2026-11-07: milestone number M016 assigned in ROADMAP.md although the highest `M###-*.md` on disk is M012 (M013/M014 reserved, M015 shipped without milestone files); the preamble's computed `M013` is overridden.
+- 2026-11-07: PowerShell hook variants (exit criterion "powershell variant") deferred to M019 -- no Windows consumer exists; the bash lib is the contract to port from. `"shell": "bash"` ships in M016.
+- 2026-11-07: sliced into S01 hooks (6 tasks), S02 skills (5), S03 tests + release (4) = 15 tasks; stays M, no fourth slice.
 - 2026-11-07: journal keeps existing only if `resume-session` consumes it ("last N sessions touched M/S/T"); otherwise it is dropped. Audit evidence: 80-100 % `task: none`, no reader.
 
 ## Open questions
