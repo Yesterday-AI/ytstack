@@ -98,12 +98,13 @@ Remember as `_OPEN_DECISIONS`.
 
 Remember as `_WARNINGS`.
 
-**Step 7 -- Write HANDOFF.md.** Use Write tool. Path: `{YT_DIR}/HANDOFF.md`. Overwrites any hook-generated version.
+**Step 7 -- Write HANDOFF.md.** Use Write tool. Path: `{YT_DIR}/HANDOFF.md`. This file is user-owned: since M016 no hook writes it (automatic pre-compaction breadcrumbs live out of tree and `resume-session` reads both), so whatever is there was written by a person or by this skill -- read it before overwriting and carry forward anything still open.
 
 ```markdown
 ---
 kind: handoff
 event: user-triggered
+# user-owned: hooks never write this file; automatic handoffs live out of tree (see resume-session)
 timestamp: {ISO_TIMESTAMP}
 project: {PROJECT_NAME}
 branch: {BRANCH}

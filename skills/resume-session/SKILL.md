@@ -50,6 +50,20 @@ _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 _STATE_FILE="$_YT_DIR/STATE.md"
 _HANDOFF_FILE="$_YT_DIR/HANDOFF.md"
 _HAS_HANDOFF=$([ -f "$_HANDOFF_FILE" ] && echo yes || echo no)
+_MANUAL_HANDOFF_EVENT=none; _MANUAL_HANDOFF_TS=none
+if [ "$_HAS_HANDOFF" = yes ]; then
+  _MANUAL_HANDOFF_EVENT=$(sed -n 's/^event: *//p' "$_HANDOFF_FILE" | head -1)
+  _MANUAL_HANDOFF_TS=$(sed -n 's/^timestamp: *//p' "$_HANDOFF_FILE" | head -1)
+fi
+# Automatic handoff (written out of tree by the pre-compact hook, per worktree; M016)
+_LATEST_AUTO_HANDOFF=none; _AUTO_HANDOFF_TS=none
+if command -v yt_state_base >/dev/null 2>&1 && [ -n "${YT_REPO_KEY:-}" ]; then
+  _LATEST_LINK="$(yt_state_base)/repos/$YT_REPO_KEY/worktrees/$YT_WT_KEY/latest-handoff"
+  if [ -L "$_LATEST_LINK" ] && [ -f "$_LATEST_LINK" ]; then
+    _LATEST_AUTO_HANDOFF=$(readlink "$_LATEST_LINK")
+    _AUTO_HANDOFF_TS=$(sed -n 's/^timestamp: *//p' "$_LATEST_AUTO_HANDOFF" 2>/dev/null | head -1)
+  fi
+fi
 
 # Last 3 summaries by mtime
 _RECENT_SUMMARIES=""
@@ -60,6 +74,10 @@ fi
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "STATE_FILE: $_STATE_FILE"
 echo "HAS_HANDOFF: $_HAS_HANDOFF"
+echo "MANUAL_HANDOFF_EVENT: ${_MANUAL_HANDOFF_EVENT:-none}"
+echo "MANUAL_HANDOFF_TS: ${_MANUAL_HANDOFF_TS:-none}"
+echo "LATEST_AUTO_HANDOFF: $_LATEST_AUTO_HANDOFF"
+echo "AUTO_HANDOFF_TS: ${_AUTO_HANDOFF_TS:-none}"
 echo "RECENT_SUMMARIES_COUNT: $(echo "$_RECENT_SUMMARIES" | grep -c .)"
 ```
 
@@ -69,10 +87,13 @@ echo "RECENT_SUMMARIES_COUNT: $(echo "$_RECENT_SUMMARIES" | grep -c .)"
 > "ytstack isn't initialized in this project. If you expected state here, check the path. Otherwise run `/ytstack:init-project`."
 STOP.
 
-**Step 3 -- Synthesize briefing.** Read each of:
+**Step 3 -- Read handoffs, then synthesize.** Read each of:
 - `STATE.md` (frontmatter + Status + Next action sections)
-- `HANDOFF.md` if present (In-flight, Next action, Open decisions, Warnings)
+- The automatic handoff at `LATEST_AUTO_HANDOFF` if not `none` -- the freshest breadcrumb of *this* worktree, written out of tree by the pre-compact hook (position, Next action excerpt, reading list)
+- `HANDOFF.md` if present (`MANUAL_HANDOFF_EVENT` / `MANUAL_HANDOFF_TS`; In-flight, Next action, Open decisions, Warnings). When the manual handoff is newer than the automatic one, lean on the manual one; it was written on purpose.
 - Each file in `_RECENT_SUMMARIES` (Outcome first lines)
+
+Open the briefing with one line that names the sources: `Handoffs: automatic {AUTO_HANDOFF_TS} ({LATEST_AUTO_HANDOFF}) / manual {MANUAL_HANDOFF_EVENT} {MANUAL_HANDOFF_TS}` (or `none` for either).
 
 Produce a three-paragraph briefing:
 

@@ -46,11 +46,17 @@ extract() {
   printf '%s' "$out"
 }
 
+PD="$TMP/plugin-data"
 run_pre() { # run_pre <script> <cwd> -> sets OUT (stdout) and EC (exit code) in this shell
-  ( cd "$2" || exit 2; env CLAUDE_PROJECT_DIR="$ELSEWHERE" HOME="$TMP/home" bash "$1" 2>"$TMP/err" >"$TMP/out" ); EC=$?
+  ( cd "$2" || exit 2; env CLAUDE_PROJECT_DIR="$ELSEWHERE" CLAUDE_PLUGIN_DATA="$PD" HOME="$TMP/home" bash "$1" 2>"$TMP/err" >"$TMP/out" ); EC=$?
   OUT=$(cat "$TMP/out")
 }
 mkdir -p "$TMP/home"
+
+# Seed one automatic handoff for the main fixture (what pre-compact does on compaction)
+printf -- '---\nkind: handoff\nevent: user-triggered\ntimestamp: 2026-01-01T00:00:00Z\n---\n# manual\n' > "$MAIN/.ytstack/HANDOFF.md"
+( cd "$MAIN" && git add -A && git commit -qm "add manual handoff" ) >/dev/null 2>&1
+printf '{"session_id":"seed","cwd":%s}' "$(printf '%s' "$MAIN" | jq -Rs .)" | ( cd "$ELSEWHERE" && CLAUDE_PLUGIN_DATA="$PD" CLAUDE_PROJECT_DIR="$ELSEWHERE" bash "$ROOT/hooks/pre-compact" >/dev/null 2>&1 )
 
 for s in $SKILLS; do
   echo "# $s"
@@ -74,6 +80,13 @@ for s in $SKILLS; do
   case "$s" in
     summarize-task|init-project)
       has "$s: worktree -> IS_GIT yes (#24)" "$OUT" "IS_GIT: yes" ;;
+    resume-session)
+      has "$s: worktree -> no auto handoff there" "$OUT" "LATEST_AUTO_HANDOFF: none"
+      run_pre "$P" "$MAIN"
+      has "$s: main -> latest auto handoff from out-of-tree state" "$OUT" "LATEST_AUTO_HANDOFF: $PD/repos/"
+      has "$s: main -> auto handoff timestamp read" "$OUT" "AUTO_HANDOFF_TS: 20"
+      has "$s: main -> manual handoff event read" "$OUT" "MANUAL_HANDOFF_EVENT: user-triggered"
+      has "$s: main -> manual handoff timestamp read" "$OUT" "MANUAL_HANDOFF_TS: 2026-01-01T00:00:00Z" ;;
   esac
 done
 
