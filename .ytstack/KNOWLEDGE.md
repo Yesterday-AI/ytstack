@@ -88,6 +88,13 @@ Patterns, rules, and lessons learned while building ytstack. This file is read b
 - **The lint flags a STATE.md without `last_updated`; test fixtures must write it.** (M018-S02-T02) Fixtures that write `current_milestone/active_slice/active_task` only trip W1 and turn "clean" assertions red. W5 compares epochs with 120 s slack (`yt_epoch`) because skills bump `last_updated` and commit a few seconds later.
 - **`ls -t` across several directories does not sort globally.** (M018-S03-T01) `yt_find_artifacts` stamps each file with `stat -f %m` (macOS) / `stat -c %Y` (GNU) and sorts numerically; a test that relies on "newest first" must write the newest file last after a `sleep 1` (mtime resolution is one second).
 
+## Eval runs (`claude plugin eval`)
+
+- **2026-11-07, Claude Code 2.1.319, 11 cases, `--runs 1 --ablation none --max-cost-usd 10`:** overall 0.95, 10/11 cases at threshold 1.0, `skill-fired` passed on all 11 (every lifecycle skill triggered from a user-phrased prompt after the trigger-only descriptions of M019-S01), cost $3.55, 921 s wall clock. The one miss: `handoff-session` wrote `HANDOFF.md` but paraphrased "empty rows" (grader loosened to `empty[- ]rows?|timezone|gzip`). Per case about $0.30; `adopt-brownfield` (four read-only subagents) is the expensive one.
+- **The first run scored `skill-fired` 0x everywhere:** ytstack had not loaded at all (`plugin_errors: dependency-unsatisfied` on `web-design`). Eval runs load nothing installed, so a plugin dependency can never be satisfied there; see DECISIONS 2026-11-07 "No hard plugin dependencies". Read `plugin_errors` in the trace's init line before blaming prompts or descriptions.
+- **Headless answers:** `AskUserQuestion` is not granted in cases; the `append_system_prompt` tells the agent to take each skill's RECOMMENDATION. Skills that AskUserQuestion open-ended (summarize-task's outcome, plan-milestone's goal) still produced artifacts from the prompt text, so prompts must carry the answers.
+- **Listing cost:** `/skill-doctor` (in a session) and `claude plugin details ytstack` show the always-on token cost of the skill listing and which skills never fire; descriptions over the 1,536-char listing cap are the first to be shed.
+
 ## Terminology
 
 - **Milestone (M###):** a shippable chunk of the roadmap. 1-7 slices per milestone.

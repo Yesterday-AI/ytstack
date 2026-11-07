@@ -47,6 +47,8 @@ allowed-tools:                  # explicit allowlist
 
 Why `metadata:`: the Agent Skills spec allows only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` at the top level for portable skills; Claude Code ignores unknown keys, but packaging and claude.ai upload hard-error on them. `metadata` is a free key/value map, so ytstack's `tier`, `version`, `kind`, `triggers` live there. `bin/ytstack-check` reads `metadata.*` first, still understands the legacy top-level form, and warns "move under metadata:" when it sees it. Claude Code's own keys (`allowed-tools`, `user-invocable`, `disable-model-invocation`, `when_to_use`, `context`, `agent`, `hooks`, ...) stay top-level.
 
+The description is the trigger: third person, what + when + when-not (naming the skill to use instead), under 1,024 chars, never a summary of the procedure (`bin/ytstack-check` fails the budget and warns on procedure phrases). Whether a trimmed description still fires is measured, not guessed: `evals/<skill>/graders/skill-fired.md` (`claude plugin eval`, see `evals/README.md`).
+
 ## Artifact states (M018)
 
 Milestone (`M###-ROADMAP.md`), slice (`M###-S##-PLAN.md`) and task (`M###-S##-T##-PLAN.md`) frontmatter carries `status:` with exactly these values:
