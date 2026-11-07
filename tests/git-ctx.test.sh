@@ -146,6 +146,38 @@ plain_fallback_location() {
 }
 eq "state: non-ytstack toplevel falls back to tmp, not into the tree" "no-tree" "$(plain_fallback_location)"
 
+# ---- 8. commit ref pattern ---------------------------------------------------
+echo "# commit ref pattern"
+PREF="$TMP/pref"; mkdir -p "$PREF"
+pat() { ( . "$LIB"; yt_commit_ref_pattern "$@" ); }
+eq "pattern: default renders tokens"   '^M042-S03-T07:' "$(pat "$PREF" M042 S03 T07)"
+printf 'commit_ref_pattern: "^feat\\({task}\\)"\n' > "$PREF/PREFERENCES.md"
+eq "pattern: custom with {task}, quotes stripped" '^feat\(M042-S03-T07\)' "$(pat "$PREF" M042 S03 T07)"
+printf -- "---\ncommit_ref_pattern: '\\\\(#T##\\\\)'\n---\n" > "$PREF/PREFERENCES.md"
+eq "pattern: single quotes stripped, T## rendered" '\(#T07\)' "$(pat "$PREF" M042 S03 T07)"
+printf 'other: x\n' > "$PREF/PREFERENCES.md"
+eq "pattern: missing key -> default" '^M042-S03-T07:' "$(pat "$PREF" M042 S03 T07)"
+
+# ---- 9. task commit discovery ----------------------------------------------
+echo "# task commits"
+CR=$(new_repo commits)
+( cd "$CR" || exit 2
+  git branch -M main
+  echo 1 > a; git add a; git commit -qm "M042-S03-T07: add a"
+  echo 2 > b; git add b; git commit -qm "chore: unrelated"
+  echo 3 > c; git add c; git commit -qm "M042-S03-T07: add c" ) >/dev/null 2>&1
+disc() { ( . "$LIB"; yt_task_commits "$1" "$2"; printf '%s|%s' "$YT_COMMITS_SOURCE" "$(printf '%s' "$YT_COMMITS" | grep -c .)" ); }
+eq "commits: task-ref finds 2 of 3"      "task-ref|2" "$(disc "$CR" '^M042-S03-T07:')"
+( cd "$CR" || exit 2; git checkout -qb feature; echo 4 > d; git add d; git commit -qm "feat: d via conventional commit"; echo 5 > e; git add e; git commit -qm "fix: e" ) >/dev/null 2>&1
+eq "commits: branch fallback (2 since main)" "branch|2" "$(disc "$CR" '^M999-S99-T99:')"
+( cd "$CR" || exit 2; git checkout -qb empty-branch ) >/dev/null 2>&1
+eq "commits: branch fallback finds 2 on empty-branch too (base = main)" "branch|2" "$(disc "$CR" '^M999-S99-T99:')"
+( cd "$CR" || exit 2; git checkout -q main ) >/dev/null 2>&1
+eq "commits: none on main without ref match" "none|0" "$(disc "$CR" '^M999-S99-T99:')"
+CWT="$TMP/commits-wt"; git -C "$CR" worktree add -q -b wt-x "$CWT" >/dev/null 2>&1
+( cd "$CWT" || exit 2; echo 6 > f; git add f; git commit -qm "M042-S03-T08: in worktree" ) >/dev/null 2>&1
+eq "commits: worktree discovery uses the worktree HEAD" "task-ref|1" "$(disc "$CWT" '^M042-S03-T08:')"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

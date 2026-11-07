@@ -56,19 +56,9 @@ case "$ACTIVE_SLICE" in ""|none) exit 0 ;; esac
 
 TASK_REF="$CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK"
 
-# Commit-ref pattern: PREFERENCES.md `commit_ref_pattern: <ERE>` (quotes
-# optional), default `^M###-S##-T##:`. Tokens M###/S##/T##/{task} are rendered.
-PATTERN=""
-if [ -f "$YT_DIR/PREFERENCES.md" ]; then
-  PATTERN=$(sed -n 's/^commit_ref_pattern: *//p' "$YT_DIR/PREFERENCES.md" | head -1)
-  PATTERN="${PATTERN#\"}"; PATTERN="${PATTERN%\"}"
-  PATTERN="${PATTERN#\'}"; PATTERN="${PATTERN%\'}"
-fi
-[ -n "$PATTERN" ] || PATTERN='^M###-S##-T##:'
-PATTERN="${PATTERN//\{task\}/$TASK_REF}"
-PATTERN="${PATTERN//M###/$CURRENT_MILESTONE}"
-PATTERN="${PATTERN//S##/$ACTIVE_SLICE}"
-PATTERN="${PATTERN//T##/$ACTIVE_TASK}"
+# Commit-ref pattern (shared with summarize-task): PREFERENCES.md
+# `commit_ref_pattern`, default `^M###-S##-T##:`, tokens rendered by the lib.
+PATTERN=$(yt_commit_ref_pattern "$YT_DIR" "$CURRENT_MILESTONE" "$ACTIVE_SLICE" "$ACTIVE_TASK")
 
 SUBJECT=$(git -C "$YT_TOPLEVEL" log -1 --pretty=%s 2>/dev/null || echo "")
 if ! [[ "$SUBJECT" =~ $PATTERN ]]; then

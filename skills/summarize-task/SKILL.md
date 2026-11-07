@@ -85,8 +85,20 @@ _SLICE_PLAN="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md"
 # and never maintains a commit list (issue #22 / M015).
 _TASK_REF="$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$_ACTIVE_TASK"
 _TASK_COMMITS=""
+_TASK_COMMITS_SOURCE=none
+_TASK_COMMITS_BASE=""
+_COMMIT_PATTERN="^$_TASK_REF:"
 if [ "$_IS_GIT" = yes ]; then
-  _TASK_COMMITS=$(git log --no-merges --pretty=format:'- `%h` -- %s' --grep "^$_TASK_REF" 2>/dev/null)
+  if command -v yt_task_commits >/dev/null 2>&1; then
+    # Shared lib (M016): pattern from PREFERENCES.md `commit_ref_pattern` (default ^M###-S##-T##:),
+    # then branch fallback (merge-base with the default branch .. HEAD) for squash-merge repos.
+    _COMMIT_PATTERN=$(yt_commit_ref_pattern "$_YT_DIR" "$_CURRENT_MILESTONE" "$_ACTIVE_SLICE" "$_ACTIVE_TASK")
+    yt_task_commits "$_PROJECT_DIR" "$_COMMIT_PATTERN"
+    _TASK_COMMITS="$YT_COMMITS"; _TASK_COMMITS_SOURCE="$YT_COMMITS_SOURCE"; _TASK_COMMITS_BASE="$YT_COMMITS_BASE"
+  else
+    _TASK_COMMITS=$(git log --no-merges -E --grep "$_COMMIT_PATTERN" --pretty=format:'- `%h` -- %s' 2>/dev/null)
+    [ -n "$_TASK_COMMITS" ] && _TASK_COMMITS_SOURCE=task-ref
+  fi
 fi
 
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
@@ -97,8 +109,11 @@ echo "ACTIVE_TASK: $_ACTIVE_TASK"
 echo "PLAN_FILE: $_PLAN_FILE"
 echo "SLICE_PLAN: $_SLICE_PLAN"
 echo "IS_GIT: $_IS_GIT"
+echo "COMMIT_PATTERN: $_COMMIT_PATTERN"
+echo "TASK_COMMITS_SOURCE: $_TASK_COMMITS_SOURCE"
+echo "TASK_COMMITS_BASE: ${_TASK_COMMITS_BASE:-none}"
 echo "TASK_COMMITS_BEGIN"
-echo "${_TASK_COMMITS:-(none found for $_TASK_REF)}"
+echo "${_TASK_COMMITS:-(none found: no subject matched $_COMMIT_PATTERN and no commits on this branch past its base)}"
 echo "TASK_COMMITS_END"
 ```
 
@@ -194,7 +209,11 @@ verification: {VERIFICATION_RESULT}
 
 ## Commits
 
-{The commit list captured between TASK_COMMITS_BEGIN / TASK_COMMITS_END in the preamble. If it reported "(none found ...)", write: "No commits matched `{TASK_REF}:` -- task shipped uncommitted or under a non-conventional message." This section replaces the throwaway hook draft; it is the durable commit-to-task link.}
+{The commit list captured between TASK_COMMITS_BEGIN / TASK_COMMITS_END in the preamble, labelled by TASK_COMMITS_SOURCE:
+- `task-ref`: list the commits as captured (their subjects matched COMMIT_PATTERN).
+- `branch`: write "No commit subject matched `{COMMIT_PATTERN}`; commits on this branch since `{TASK_COMMITS_BASE}`:" followed by the list. Do NOT claim the task shipped uncommitted.
+- `none`: write "No commits found for this task: no subject matched `{COMMIT_PATTERN}` and the current branch has no commits past its base. Either the work is uncommitted or it landed under another ref -- say which after checking `git status`."
+This section replaces the throwaway hook draft; it is the durable commit-to-task link. The pattern comes from `PREFERENCES.md` `commit_ref_pattern` (default `^M###-S##-T##:`; tokens `M###`, `S##`, `T##`, `{task}`).}
 
 ## Outcome
 

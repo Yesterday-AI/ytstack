@@ -202,6 +202,52 @@ yt_state_dir() {
   printf '%s' "$YT_STATE_DIR"
 }
 
+# yt_commit_ref_pattern <yt_dir> <M###> <S##> <T##> -> ERE that identifies
+# this task's commits in `git log` subjects. Source: `commit_ref_pattern:` in
+# <yt_dir>/PREFERENCES.md (surrounding quotes stripped, otherwise literal),
+# default '^M###-S##-T##:'. Tokens M### / S## / T## / {task} are rendered.
+yt_commit_ref_pattern() {
+  local ytd="$1" m="$2" s="$3" t="$4" pat=""
+  if [ -n "$ytd" ] && [ -f "$ytd/PREFERENCES.md" ]; then
+    pat=$(sed -n 's/^commit_ref_pattern: *//p' "$ytd/PREFERENCES.md" | head -1)
+    pat="${pat#\"}"; pat="${pat%\"}"
+    pat="${pat#\'}"; pat="${pat%\'}"
+  fi
+  [ -n "$pat" ] || pat='^M###-S##-T##:'
+  pat="${pat//\{task\}/$m-$s-$t}"
+  pat="${pat//M###/$m}"
+  pat="${pat//S##/$s}"
+  pat="${pat//T##/$t}"
+  printf '%s' "$pat"
+}
+
+# yt_task_commits <toplevel> <pattern> -> YT_COMMITS (lines "- `sha` -- subject")
+# and YT_COMMITS_SOURCE=task-ref|branch|none.
+#   1. subjects matching <pattern> (ERE) anywhere in history
+#   2. else: commits on the current branch since its merge-base with the
+#      default branch (origin/HEAD, origin/main, main, master -- first that
+#      resolves and is not HEAD itself); squash-merge / conventional-commit
+#      repos land here
+#   3. else none
+yt_task_commits() {
+  local top="$1" pat="$2" base="" cand
+  YT_COMMITS=""; YT_COMMITS_SOURCE=none; YT_COMMITS_BASE=""
+  [ -d "$top" ] || return 0
+  YT_COMMITS=$(git -C "$top" log --no-merges -E --grep "$pat" --pretty=format:'- `%h` -- %s' 2>/dev/null)
+  if [ -n "$YT_COMMITS" ]; then YT_COMMITS_SOURCE=task-ref; return 0; fi
+  local head; head=$(git -C "$top" rev-parse HEAD 2>/dev/null) || return 0
+  for cand in origin/HEAD origin/main origin/master main master; do
+    base=$(git -C "$top" merge-base HEAD "$cand" 2>/dev/null) || continue
+    [ -n "$base" ] && [ "$base" != "$head" ] && break
+    base=""
+  done
+  if [ -n "$base" ]; then
+    YT_COMMITS=$(git -C "$top" log --no-merges --pretty=format:'- `%h` -- %s' "$base..HEAD" 2>/dev/null)
+    if [ -n "$YT_COMMITS" ]; then YT_COMMITS_SOURCE=branch; YT_COMMITS_BASE=$(git -C "$top" rev-parse --short "$base" 2>/dev/null); fi
+  fi
+  return 0
+}
+
 # yt_resolve_yt_dir -> the .ytstack dir for the resolved toplevel: project
 # scope (<toplevel>/.ytstack) first, then user scope keyed by YT_REPO_KEY.
 # Sets YT_DIR and YT_SCOPE (project|user|none). No basename slugs.
