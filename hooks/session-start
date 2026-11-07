@@ -1,79 +1,74 @@
 #!/usr/bin/env bash
 # ytstack SessionStart hook
 #
-# Injects two things as additionalContext when a `.ytstack/` directory is present:
+# Injects two things as additionalContext:
 #
 #   1. The full content of skills/using-ytstack/SKILL.md -- the directive that
 #      tells the agent to auto-invoke ytstack skills based on user intent
 #      (superpowers-style proactive skill selection).
 #
 #   2. The current project state from .ytstack/STATE.md -- so the agent knows
-#      where we are in the milestone/slice/task hierarchy.
+#      where we are in the milestone/slice/task hierarchy -- plus pointers to
+#      the user-written HANDOFF.md and the latest automatic (out-of-tree)
+#      handoff written by the pre-compact hook.
 #
-# Silent no-op for projects without ytstack tracking.
+# Resolution: payload `cwd` -> hooks/lib/git-ctx.sh (never CLAUDE_PROJECT_DIR,
+# which is pinned to the session-start dir and does not follow worktrees;
+# DECISIONS 2026-11-07). Read-only: writes nothing anywhere.
+#
+# Claude Code caps SessionStart additionalContext at 10,000 characters; the
+# hook measures its output and drops the Next-action excerpt first if needed.
 
 set -uo pipefail
+trap '' PIPE
 
-# Note: session_id arrives on stdin JSON (not via env). This hook does not use
-# session_id; it only emits additionalContext output JSON via stdout.
+. "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-cd "$PROJECT_DIR" 2>/dev/null || exit 0
-
-# Resolve ytstack state directory. Project-level takes precedence over user-level.
-# In greenfield (no .ytstack/ anywhere), YT_DIR stays empty and we still inject
-# the using-ytstack directive so the agent can route build-intent to office-hours.
-YT_DIR=""
-YT_SCOPE=""
-if [ -d "$PROJECT_DIR/.ytstack" ]; then
-  YT_DIR="$PROJECT_DIR/.ytstack"
-  YT_SCOPE="project"
-else
-  SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PROJECT_DIR")")
-  USER_YT="$HOME/.ytstack/projects/$SLUG"
-  if [ -d "$USER_YT" ]; then
-    YT_DIR="$USER_YT"
-    YT_SCOPE="user"
-  fi
-fi
+yt_read_stdin
+yt_git_ctx "${YT_CWD:-$PWD}"
+yt_resolve_yt_dir >/dev/null    # sets YT_DIR + YT_SCOPE (project|user|none) in this shell
 
 STATE_FILE="${YT_DIR:+$YT_DIR/STATE.md}"
 
 # Load the using-ytstack directive (source-of-truth lives in the plugin).
-# This is the core agent-behavior primer and must be injected on EVERY session
-# start where the ytstack plugin is active -- including greenfield sessions with
-# no .ytstack/ yet, because the directive's job is to route greenfield build-
-# intent to office-hours BEFORE any infra exists.
-USING_YTSTACK_FILE="${CLAUDE_PLUGIN_ROOT:-$PROJECT_DIR}/skills/using-ytstack/SKILL.md"
+# Injected on EVERY session start where the plugin is active -- including
+# greenfield sessions with no .ytstack/ yet, because the directive's job is to
+# route greenfield build-intent to office-hours BEFORE any infra exists.
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+USING_YTSTACK_FILE="$PLUGIN_ROOT/skills/using-ytstack/SKILL.md"
 USING_YTSTACK_CONTENT=""
 if [ -f "$USING_YTSTACK_FILE" ]; then
   USING_YTSTACK_CONTENT=$(cat "$USING_YTSTACK_FILE")
 fi
 
-# Silent exit if the plugin itself is not available (no CLAUDE_PLUGIN_ROOT
-# resolution). This is the only "no-op" case: we can't prime the agent if the
-# directive file does not exist on disk.
+# The only no-op case: we cannot prime the agent if the directive is missing.
 [ -z "$USING_YTSTACK_CONTENT" ] && exit 0
 
 # Helper: emit additionalContext JSON with the given string
 emit_json() {
-  local content="$1"
-  if command -v jq >/dev/null 2>&1; then
-    printf '%s' "$content" | jq -Rs '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: .}}'
-  elif command -v python3 >/dev/null 2>&1; then
-    printf '%s' "$content" | python3 -c 'import sys, json; print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": sys.stdin.read()}}))'
+  local content="$1" jq_bin py_bin
+  jq_bin=$(yt_jq); py_bin=$(yt_python)
+  if [ -n "$jq_bin" ]; then
+    printf '%s' "$content" | "$jq_bin" -Rs '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: .}}'
+  elif [ -n "$py_bin" ]; then
+    printf '%s' "$content" | "$py_bin" -I -c 'import sys, json; print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": sys.stdin.read()}}))'
   else
     # Last-resort raw -- won't safely handle embedded quotes/newlines
     printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$content"
   fi
 }
 
-# Greenfield: no .ytstack/ exists. Inject the directive with a greenfield state
-# block that tells the agent explicitly what to do with build-intent.
+DIRECTIVE="<EXTREMELY_IMPORTANT>
+You have ytstack. Below is the full content of your 'ytstack:using-ytstack' skill, which tells you how to find and invoke ytstack skills based on user intent. Follow it. For all other skills, use the 'Skill' tool:
+
+$USING_YTSTACK_CONTENT
+</EXTREMELY_IMPORTANT>"
+
+# Greenfield: no .ytstack/ exists for this checkout.
 if [ -z "$YT_DIR" ]; then
   GREENFIELD_STATE="[ytstack active -- scope: greenfield]
 
-No \`.ytstack/\` directory in $PROJECT_DIR (or any parent). This is greenfield.
+No \`.ytstack/\` directory in $YT_TOPLEVEL (or any parent). This is greenfield.
 
 Greenfield flow per the using-ytstack directive above:
 1. If the user expresses build-intent (\"baue mir X\", \"build me X\", \"new project\", \"I have an idea\"), invoke \`ytstack:office-hours\` FIRST to validate the pitch. Do NOT invoke plan-milestone or init-project directly.
@@ -81,11 +76,7 @@ Greenfield flow per the using-ytstack directive above:
 3. Optionally \`ytstack:plan-eng-review\` (concept mode) for feasibility.
 4. Then \`ytstack:init-project\` to scaffold \`.ytstack/\` (populates PROJECT.md from the pitch, no cold PM questions)."
 
-  emit_json "<EXTREMELY_IMPORTANT>
-You have ytstack. Below is the full content of your 'ytstack:using-ytstack' skill, which tells you how to find and invoke ytstack skills based on user intent. Follow it. For all other skills, use the 'Skill' tool:
-
-$USING_YTSTACK_CONTENT
-</EXTREMELY_IMPORTANT>
+  emit_json "$DIRECTIVE
 
 ---
 
@@ -95,12 +86,11 @@ fi
 
 # Brownfield: .ytstack/ exists. Handle missing STATE.md as anomaly.
 if [ ! -f "$STATE_FILE" ]; then
-  MSG="$USING_YTSTACK_CONTENT
+  emit_json "$DIRECTIVE
 
 ---
 
 [ytstack] $YT_DIR exists but STATE.md is missing. Run /ytstack:init-project to repair, or remove the directory."
-  emit_json "$MSG"
   exit 0
 fi
 
@@ -112,10 +102,10 @@ ACTIVE_SLICE=$(get_field active_slice)
 ACTIVE_TASK=$(get_field active_task)
 LAST_UPDATED=$(get_field last_updated)
 
-# Extract the "Next action" section body (up to the next ## header)
-NEXT_ACTION=$(awk '/^## Next action/{flag=1; next} /^## /{flag=0} flag' "$STATE_FILE" | sed '/^$/d' | head -5)
+# "Next action" body (up to the next ## header), trimmed
+NEXT_ACTION=$(awk '/^## Next action/{flag=1; next} /^## /{flag=0} flag' "$STATE_FILE" | sed '/^$/d' | head -5 | cut -c1-600)
 
-# Recent summary file names (last 3 T##-SUMMARY.md by mtime)
+# Recent summary file names (last 3 by mtime)
 RECENT_SUMMARIES=""
 if compgen -G "$YT_DIR"/*-SUMMARY.md > /dev/null 2>&1; then
   RECENT_SUMMARIES=$(ls -t "$YT_DIR"/*-SUMMARY.md 2>/dev/null | head -3 | while read -r f; do
@@ -123,43 +113,74 @@ if compgen -G "$YT_DIR"/*-SUMMARY.md > /dev/null 2>&1; then
   done | paste -sd, - | sed 's/,/, /g')
 fi
 
-# Build the state context block
-STATE_CONTEXT="[ytstack active -- scope: $YT_SCOPE]
+# Handoffs: the user-written one in the tree, the automatic one out of tree.
+HANDOFF_LINES=""
+if [ -f "$YT_DIR/HANDOFF.md" ]; then
+  H_EVENT=$(sed -n 's/^event: *//p' "$YT_DIR/HANDOFF.md" | head -1)
+  H_TS=$(sed -n 's/^timestamp: *//p' "$YT_DIR/HANDOFF.md" | head -1)
+  HANDOFF_LINES="Manual handoff: $YT_DIR/HANDOFF.md (event: ${H_EVENT:-unknown}${H_TS:+, $H_TS})"
+fi
+# Path computed without creating anything (read-only hook).
+LATEST_LINK="$(yt_state_base)/repos/$YT_REPO_KEY/worktrees/$YT_WT_KEY/latest-handoff"
+if [ -L "$LATEST_LINK" ] && [ -f "$LATEST_LINK" ]; then
+  A_TARGET=$(readlink "$LATEST_LINK")
+  A_TS=$(sed -n 's/^timestamp: *//p' "$A_TARGET" 2>/dev/null | head -1)
+  HANDOFF_LINES="${HANDOFF_LINES:+$HANDOFF_LINES
+}Latest automatic handoff: $A_TARGET${A_TS:+ ($A_TS)}"
+fi
+
+build_state_context() {
+  local next="$1"
+  local ctx="[ytstack active -- scope: $YT_SCOPE]
 
 Project: ${PROJECT:-unknown}
 Current: ${CURRENT_MILESTONE:-none}${ACTIVE_SLICE:+ / $ACTIVE_SLICE}${ACTIVE_TASK:+ / $ACTIVE_TASK}
-Last updated: ${LAST_UPDATED:-unknown}"
-
-if [ -n "$NEXT_ACTION" ]; then
-  STATE_CONTEXT="$STATE_CONTEXT
+Last updated: ${LAST_UPDATED:-unknown}
+Working tree: $YT_TOPLEVEL${YT_IS_LINKED:+ (linked worktree: $YT_IS_LINKED)}
+ytstack dir: $YT_DIR"
+  if [ -n "$next" ]; then
+    ctx="$ctx
 
 Next action:
-$NEXT_ACTION"
-fi
-
-if [ -n "$RECENT_SUMMARIES" ]; then
-  STATE_CONTEXT="$STATE_CONTEXT
+$next"
+  fi
+  if [ -n "$RECENT_SUMMARIES" ]; then
+    ctx="$ctx
 
 Recent tasks: $RECENT_SUMMARIES"
-fi
+  fi
+  if [ -n "$HANDOFF_LINES" ]; then
+    ctx="$ctx
 
-STATE_CONTEXT="$STATE_CONTEXT
+$HANDOFF_LINES"
+  fi
+  ctx="$ctx
 
 The files in $YT_DIR are the source of truth for this project's state. Read STATE.md for the full dashboard, DECISIONS.md for locked architectural choices, KNOWLEDGE.md for patterns and gotchas, ROADMAP.md for the task list. Do not rely on prior-conversation context for these facts."
+  printf '%s' "$ctx"
+}
 
-# Combine: using-ytstack directive first, then project state.
-# The directive primes the agent's behavior; the state gives it
-# the specific where-we-are facts. USING_YTSTACK_CONTENT is always
-# non-empty here (early-exit above if missing).
-FULL_CONTEXT="<EXTREMELY_IMPORTANT>
-You have ytstack. Below is the full content of your 'ytstack:using-ytstack' skill, which tells you how to find and invoke ytstack skills based on user intent. Follow it. For all other skills, use the 'Skill' tool:
-
-$USING_YTSTACK_CONTENT
-</EXTREMELY_IMPORTANT>
+STATE_CONTEXT=$(build_state_context "$NEXT_ACTION")
+FULL_CONTEXT="$DIRECTIVE
 
 ---
 
 $STATE_CONTEXT"
+
+# Claude Code drops SessionStart additionalContext beyond 10,000 chars (the
+# overflow is spilled to a file the agent is not told about). Shed the Next
+# action excerpt first, then warn.
+if [ "${#FULL_CONTEXT}" -gt 9500 ]; then
+  STATE_CONTEXT=$(build_state_context "(omitted: see STATE.md -- injection near the 10,000-char cap)")
+  FULL_CONTEXT="$DIRECTIVE
+
+---
+
+$STATE_CONTEXT"
+  if [ "${#FULL_CONTEXT}" -gt 9500 ]; then
+    echo "[ytstack session-start] injection is ${#FULL_CONTEXT} chars; Claude Code caps additionalContext at 10,000. Shorten skills/using-ytstack/SKILL.md." >&2
+  fi
+fi
 
 emit_json "$FULL_CONTEXT"
 exit 0

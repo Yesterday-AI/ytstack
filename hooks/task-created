@@ -9,18 +9,14 @@
 # On clean: exit 0, let the task be created.
 
 set -uo pipefail
+trap '' PIPE
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-cd "$PROJECT_DIR" 2>/dev/null || exit 0
-
-YT_DIR=""
-if [ -d "$PROJECT_DIR/.ytstack" ]; then
-  YT_DIR="$PROJECT_DIR/.ytstack"
-else
-  SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PROJECT_DIR")")
-  USER_YT="$HOME/.ytstack/projects/$SLUG"
-  [ -d "$USER_YT" ] && YT_DIR="$USER_YT"
-fi
+# Checkout = payload `cwd` via the shared lib (never CLAUDE_PROJECT_DIR;
+# DECISIONS 2026-11-07).
+. "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
+yt_read_stdin
+yt_git_ctx "${YT_CWD:-$PWD}"
+YT_DIR=$(yt_resolve_yt_dir)
 
 # Silent exit if not a ytstack project or no milestone active
 [ -z "$YT_DIR" ] && exit 0
@@ -31,13 +27,13 @@ STATE_FILE="$YT_DIR/STATE.md"
 CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$STATE_FILE" | head -1)
 [ -z "$CURRENT_MILESTONE" ] || [ "$CURRENT_MILESTONE" = "none" ] && exit 0
 
-# Read the task payload from stdin (hooks receive JSON on stdin)
-TASK_JSON=$(cat)
+# Task fields from the already-captured payload
 TASK_SUBJECT=""
 TASK_DESCRIPTION=""
-if command -v jq >/dev/null 2>&1; then
-  TASK_SUBJECT=$(echo "$TASK_JSON" | jq -r '.tool_input.subject // .subject // empty' 2>/dev/null)
-  TASK_DESCRIPTION=$(echo "$TASK_JSON" | jq -r '.tool_input.description // .description // empty' 2>/dev/null)
+JQ=$(yt_jq)
+if [ -n "$JQ" ] && [ -n "${YT_STDIN:-}" ]; then
+  TASK_SUBJECT=$(printf '%s' "$YT_STDIN" | "$JQ" -r '.tool_input.subject // .subject // empty' 2>/dev/null)
+  TASK_DESCRIPTION=$(printf '%s' "$YT_STDIN" | "$JQ" -r '.tool_input.description // .description // empty' 2>/dev/null)
 fi
 
 # If we can't parse the task, allow creation (don't block on parse failure)
