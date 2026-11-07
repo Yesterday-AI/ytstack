@@ -3,9 +3,9 @@ milestone: M016
 slice: S02
 project: ytstack
 created: 2026-11-07T11:05:00Z
-status: planned
+status: done
 task_count: 5
-completed_tasks: 4
+completed_tasks: 5
 ---
 
 # M016-S02 -- Slice Plan
@@ -18,7 +18,7 @@ completed_tasks: 4
 - [x] T02 -- `summarize-task` commit discovery: read `commit_ref_pattern` from `PREFERENCES.md` (default `^M###-S##-T##:` rendered for the active task); fallback when the grep is empty: `git log --no-merges <merge-base with default branch>..HEAD` on the current branch, labelled "branch commits (no task ref found)"; never claim "shipped uncommitted" when either list is non-empty. Test with a fixture repo using conventional commits.
 - [x] T03 -- `init-project`: write (or extend) `.gitignore` with a marked block `# ytstack local state` / `.ytstack/.local/`; replace the `~/.ytstack/.init-project-<slug>-completed` and `-scope-prompted` sentinels with `init_completed: <ISO>` and `scope: project|user` in `PROJECT.md` frontmatter; keep `HANDOFF.md` committable (not ignored); document in the skill's Procedure.
 - [x] T04 -- `resume-session` and `handoff-session`: `resume-session` reads `latest-handoff` from the state dir first, then `.ytstack/HANDOFF.md`, and says which one it used and how old each is; `handoff-session` keeps writing `.ytstack/HANDOFF.md` with `event: user-triggered` and adds a note that hooks never touch this file. Remove the "(future)" journal hint from `pre-compact` text and point to `session.jsonl` in the state dir.
-- [ ] T05 -- `bin/ytstack-check`: new FAIL rules for `skills/**/SKILL.md` and `hooks/*` (vendor excluded): `[ -d .git ]`, `basename "$(git rev-parse --show-toplevel`, `CLAUDE_PROJECT_DIR` used as the target of `>`/`>>`/`cat >`/`mkdir -p` in hooks, `~/.ytstack/.` sentinel paths. Run the checker; 0 fails on the migrated tree; add the rules to `docs/ux/skill-structure.md`.
+- [x] T05 -- `bin/ytstack-check`: new FAIL rules for `skills/**/SKILL.md` and `hooks/*` (vendor excluded): `[ -d .git ]`, `basename "$(git rev-parse --show-toplevel`, `CLAUDE_PROJECT_DIR` used as the target of `>`/`>>`/`cat >`/`mkdir -p` in hooks, `~/.ytstack/.` sentinel paths. Run the checker; 0 fails on the migrated tree; add the rules to `docs/ux/skill-structure.md`.
 
 ## Done when
 
