@@ -528,6 +528,20 @@ def main():
     all_fails.extend(f)
     all_warns.extend(w)
 
+    # --tests: run the shell test suites (tests/run-all.sh) and fold the result in
+    if "--tests" in args:
+        import subprocess
+        runner = root / "tests" / "run-all.sh"
+        if runner.is_file():
+            proc = subprocess.run(["bash", str(runner)], capture_output=True, text=True)
+            if not quiet:
+                sys.stdout.write(proc.stdout)
+            if proc.returncode != 0:
+                failed = [l.strip() for l in proc.stdout.splitlines() if l.strip().startswith("FAIL ")]
+                all_fails.append(f"tests: run-all.sh exit {proc.returncode}: {'; '.join(failed) or proc.stderr.strip()[:200]}")
+        else:
+            all_warns.append("tests: tests/run-all.sh not found")
+
     # Report
     if not quiet or all_fails or (strict and all_warns):
         if all_fails:
