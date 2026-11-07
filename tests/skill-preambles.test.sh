@@ -80,6 +80,18 @@ for s in $SKILLS; do
   case "$s" in
     summarize-task|init-project)
       has "$s: worktree -> IS_GIT yes (#24)" "$OUT" "IS_GIT: yes" ;;
+    office-hours|plan-ceo-review|plan-eng-review)
+      # gstack wrappers: precheck flags, empty HOME (no gstack) vs fake install
+      has "$s: no gstack -> GSTACK_AVAILABLE no" "$OUT" "GSTACK_AVAILABLE: no"
+      has "$s: no gstack -> install cmd names the pin" "$OUT" "--branch v1.96.0.0"
+      GSI="$TMP/home/.claude/skills/gstack"; mkdir -p "$GSI/office-hours" "$GSI/plan-ceo-review" "$GSI/plan-eng-review"
+      printf '1.96.0.0\n' > "$GSI/VERSION"; for g in office-hours plan-ceo-review plan-eng-review; do printf -- '---\nname: %s\n---\n' "$g" > "$GSI/$g/SKILL.md"; done
+      run_pre "$P" "$WT"
+      has "$s: fake install -> GSTACK_AVAILABLE yes" "$OUT" "GSTACK_AVAILABLE: yes"
+      has "$s: fake install -> skill ok" "$OUT" "GSTACK_SKILL_OK: yes"
+      has "$s: fake install -> pin ok" "$OUT" "GSTACK_PIN_OK: yes"
+      rm -rf "$TMP/home/.claude"
+      grep -q 'vendor/gstack' "$ROOT/skills/$s/SKILL.md" && bad "$s: no vendor/gstack reference left" || ok "$s: no vendor/gstack reference left" ;;
     resume-session)
       has "$s: worktree -> no auto handoff there" "$OUT" "LATEST_AUTO_HANDOFF: none"
       run_pre "$P" "$MAIN"
