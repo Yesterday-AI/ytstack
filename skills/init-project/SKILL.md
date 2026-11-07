@@ -1,6 +1,6 @@
 ---
 name: init-project
-description: "Scaffold a ytstack project's `.ytstack/` directory with the 6 core artifacts (PROJECT.md, DECISIONS.md, KNOWLEDGE.md, RUNTIME.md, STATE.md, PREFERENCES.md). Use AFTER a pitch has been validated via office-hours (and optionally plan-ceo-review / plan-eng-review in concept-mode) -- init-project reads OFFICE-HOURS.md frontmatter to populate PROJECT.md name + one-liner. Do NOT use as the greenfield entry-point for unvalidated ideas; run office-hours first."
+description: "Scaffold a ytstack project's `.ytstack/` directory with the 6 core artifacts (PROJECT.md, DECISIONS.md, KNOWLEDGE.md, RUNTIME.md, STATE.md, PREFERENCES.md). Use AFTER a pitch has been validated via office-hours (and optionally plan-ceo-review / plan-eng-review in concept-mode) -- init-project reads OFFICE-HOURS.md frontmatter to populate PROJECT.md name + one-liner. Do NOT use as the greenfield entry-point for unvalidated ideas; run office-hours first. For an existing codebase with its own README/docs/CHANGELOG/ADRs (>= 2 brownfield signals) and no pitch, this skill stops and points at adopt-brownfield instead of writing placeholders."
 tier: core
 version: 0.1.0
 allowed-tools:
@@ -28,34 +28,43 @@ If the user insists the project is too small for ytstack, don't force it. Tell t
 
 **Infra-only scope (DECISIONS 2026-04-24 "Greenfield-flow reorder"):** init-project does NOT ask for project name or one-liner. Those come from a pitch artifact produced by `ytstack:office-hours` (and optionally stress-tested by `plan-ceo-review` / `plan-eng-review`). If no pitch exists when init-project runs, PROJECT.md is scaffolded with explicit placeholders pointing the user at `office-hours`.
 
+## Anti-Pattern: "This project is too mature for greenfield ceremony, so I'll scaffold placeholders and move on"
+
+A repo with a 100-line README, a `docs/` folder, a CHANGELOG and a year of commits is not an unvalidated idea. Writing a placeholder one-liner that points at `office-hours` is wrong twice: the pitch interview on a shipped product is theater, and the placeholders duplicate or contradict docs that already exist. When the preamble reports `BROWNFIELD_SIGNALS` of 2 or more and no pitch, this skill stops and points at `ytstack:adopt-brownfield`, which links the existing docs instead of re-asking for them (Step 3).
+
 ## Checklist
 
 You MUST create a TodoWrite task for each of these items and complete them in order:
 
-1. **Run preamble** -- emit state flags about current project, ytstack status, and pitch-artifact presence
+1. **Run preamble** -- emit state flags about current project, ytstack status, pitch-artifact presence and brownfield signals
 2. **Handle already-initialized case** -- if HAS_YTSTACK=yes, report and exit cleanly
-3. **Ask scope question** -- project-level vs user-level storage (core tier)
-4. **Create artifact directory** -- `.ytstack/` or `~/.ytstack/projects/<slug>/` based on scope
-5. **Write all 6 artifact files** -- PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES. PROJECT.md pre-populated from pitch artifact if present; otherwise placeholders.
-6. **Write `.gitignore` block** -- `.ytstack/.local/` (fallback session-state dir) via `yt_ensure_gitignore`; completion + scope are recorded in `PROJECT.md` frontmatter, no sentinels
-7. **Report what was created** -- file list + pitch-status + next-step suggestion
-8. **Return control** -- do NOT auto-invoke any other skill
+3. **Route brownfield** (only if `BROWNFIELD_SIGNALS >= 2` and `PITCH = none`) -- report the signals, point at `ytstack:adopt-brownfield`, stop
+4. **Ask scope question** -- project-level vs user-level storage (core tier)
+5. **Create artifact directory** -- `.ytstack/` or `~/.ytstack/projects/<slug>/` based on scope
+6. **Write all 6 artifact files** -- PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES. PROJECT.md pre-populated from pitch artifact if present; otherwise placeholders.
+7. **Write `.gitignore` block** -- `.ytstack/.local/` (fallback session-state dir) via `yt_ensure_gitignore`; completion + scope are recorded in `PROJECT.md` frontmatter, no sentinels
+8. **Report what was created** -- file list + pitch-status + next-step suggestion
+9. **Return control** -- do NOT auto-invoke any other skill
 
 ## Process Flow
 
 ```dot
 digraph init_project {
-    "Run preamble (detects pitch)" [shape=box];
+    "Run preamble (detects pitch + brownfield signals)" [shape=box];
     "HAS_YTSTACK?" [shape=diamond];
     "Report already initialized" [shape=doublecircle];
+    "Signals >= 2 and no pitch?" [shape=diamond];
+    "Report: use adopt-brownfield" [shape=doublecircle];
     "Ask scope" [shape=box];
     "Write artifacts (pitch-populated or placeholder)" [shape=box];
     "Write .gitignore block" [shape=box];
     "Report + return" [shape=doublecircle];
 
-    "Run preamble (detects pitch)" -> "HAS_YTSTACK?";
+    "Run preamble (detects pitch + brownfield signals)" -> "HAS_YTSTACK?";
     "HAS_YTSTACK?" -> "Report already initialized" [label="yes"];
-    "HAS_YTSTACK?" -> "Ask scope" [label="no"];
+    "HAS_YTSTACK?" -> "Signals >= 2 and no pitch?" [label="no"];
+    "Signals >= 2 and no pitch?" -> "Report: use adopt-brownfield" [label="yes"];
+    "Signals >= 2 and no pitch?" -> "Ask scope" [label="no"];
     "Ask scope" -> "Write artifacts (pitch-populated or placeholder)";
     "Write artifacts (pitch-populated or placeholder)" -> "Write .gitignore block";
     "Write .gitignore block" -> "Report + return";
@@ -103,6 +112,12 @@ if [ -n "$_PITCH" ]; then
   _PITCH_NAME=$(sed -n 's/^name: *//p' "$_PITCH" | head -1)
   _PITCH_ONELINER=$(sed -n 's/^one-liner: *//p' "$_PITCH" | head -1)
 fi
+# Brownfield signals (shared detector in the lib; 0 when the lib is not loaded)
+_BF_SIGNALS=0; _BF_HINTS=""
+if command -v yt_brownfield_signals >/dev/null 2>&1; then
+  yt_brownfield_signals "$_PROJECT_DIR"
+  _BF_SIGNALS="$YT_BROWNFIELD_SIGNALS"; _BF_HINTS="$YT_BROWNFIELD_HINTS"
+fi
 echo "BRANCH: $_BRANCH"
 echo "PROJECT_SLUG: $_PROJECT_SLUG"
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
@@ -113,6 +128,8 @@ echo "IS_GIT: $_IS_GIT"
 echo "PITCH: ${_PITCH:-none}"
 echo "PITCH_NAME: ${_PITCH_NAME:-<placeholder>}"
 echo "PITCH_ONELINER: ${_PITCH_ONELINER:-<placeholder>}"
+echo "BROWNFIELD_SIGNALS: $_BF_SIGNALS"
+if [ -n "$_BF_HINTS" ]; then echo "CANDIDATES:"; printf '%s\n' "$_BF_HINTS" | sed 's/^/  - /'; fi
 ```
 
 ## Procedure
@@ -125,7 +142,21 @@ If `HAS_YTSTACK` is `yes`, do NOT re-initialize. Report and exit:
 
 Do not invoke any other skill. Return control.
 
-### Step 3: Ask scope question
+### Step 3: Route brownfield
+
+Only if `BROWNFIELD_SIGNALS` is 2 or more AND `PITCH` is `none`. Otherwise skip to Step 4.
+
+Do NOT write placeholder artifacts. Report and stop:
+
+> "`{PROJECT_SLUG}` looks like an existing codebase ({BROWNFIELD_SIGNALS} brownfield signals: {CANDIDATES, one per line}). Scaffolding placeholders here would duplicate docs you already have, and running `office-hours` on a shipped project is theater.
+>
+> Run `ytstack:adopt-brownfield` instead: it maps those files onto PROJECT.md / DECISIONS.md / KNOWLEDGE.md / RUNTIME.md by reference, asks you per file how to handle it, writes a codebase map, and scaffolds only what is missing.
+>
+> If this really is a fresh idea that happens to live in a documented repo, run `ytstack:office-hours` first; with a pitch present this skill proceeds normally."
+
+Do not invoke `ytstack:adopt-brownfield` yourself. Return control; the user decides.
+
+### Step 4: Ask scope question
 
 If `YTSTACK_NON_INTERACTIVE` is `true`, auto-pick option A (project-level) and log:
 
@@ -156,7 +187,7 @@ Otherwise, use AskUserQuestion with this exact body:
 
 Remember the answer as `_SCOPE_CHOICE` (value: `project`, `user`, or `both`). `{SCOPE_CHOICE}` in the templates below is this value.
 
-### Step 4: Create artifact directory
+### Step 5: Create artifact directory
 
 Based on `_SCOPE_CHOICE`:
 
@@ -167,7 +198,7 @@ For `both`, write all files to both locations for v0.1. Later skills can split.
 
 If a pitch artifact exists (`PITCH != none` from preamble), also move it into the ytstack dir: `mv ./OFFICE-HOURS.md "$_YT_DIR/OFFICE-HOURS-$_PITCH_SLUG.md"` (slug is a 2-4 word kebab-case summary from the pitch headline; if none available, use `initial`). The pitch is now a ytstack artifact that downstream skills (plan-milestone, plan-ceo-review milestone-mode) can read.
 
-### Step 5: Write 6 artifact files
+### Step 6: Write 6 artifact files
 
 Use the Write tool. Substitutions:
 
@@ -176,7 +207,7 @@ Use the Write tool. Substitutions:
 - `{PROJECT_SLUG}` = `$_PROJECT_SLUG`.
 - `{ISO_TIMESTAMP}` = current UTC timestamp in `YYYY-MM-DDTHH:MM:SSZ` format.
 
-Location: the directory chosen in Step 4. For `both`, write each file to both locations with identical content.
+Location: the directory chosen in Step 5. For `both`, write each file to both locations with identical content.
 
 #### PROJECT.md
 
@@ -283,6 +314,7 @@ last_updated: {ISO_TIMESTAMP}
 current_milestone: none
 active_slice: none
 active_task: none
+tracker: none
 ---
 
 # State
@@ -291,7 +323,7 @@ active_task: none
 
 ## Next action
 
-Run `ytstack:plan-milestone` to define the first milestone.
+Run `ytstack:plan-milestone` to define the first milestone. If day-to-day issues live in Linear, GitHub Projects, Paperclip or Jira, set `tracker:` above (`linear | github-projects | paperclip | jira`); plan-milestone and reassess-roadmap then leave that work alone.
 
 ## Open decisions
 
@@ -328,7 +360,7 @@ Options: default | terse | brutal
 (Project-specific preferences that don't fit elsewhere.)
 ```
 
-### Step 6: Write the `.gitignore` block
+### Step 7: Write the `.gitignore` block
 
 Skip when `_SCOPE_CHOICE` is `user` (nothing lives in the tree). Otherwise, with the lib loaded by the preamble:
 
@@ -339,7 +371,7 @@ echo "GITIGNORE: $YT_GITIGNORE"   # written | unchanged | skipped
 
 This ignores only `.ytstack/.local/` -- the in-tree fallback for volatile session state (auto handoffs, journal) when no plugin data dir is writable. `.ytstack/HANDOFF.md` and every other artifact stay committable. Completion and scope are already recorded in `PROJECT.md` frontmatter (`init_completed`, `scope`); no `~/.ytstack` sentinels are written.
 
-### Step 7: Report what was created
+### Step 8: Report what was created
 
 Write this prose summary (substitute the real paths based on `_SCOPE_CHOICE`, and branch on whether a pitch was consumed):
 
@@ -370,9 +402,9 @@ Write this prose summary (substitute the real paths based on `_SCOPE_CHOICE`, an
 >
 > If you're in a git repo (`IS_GIT: yes`): these files are unstaged. `git status` will show them. Commit when ready.
 
-### Step 8: Return control
+### Step 9: Return control
 
-STOP here. Do NOT invoke `ytstack:plan-milestone` or `ytstack:office-hours` automatically. The user decides the next step.
+STOP here. Do NOT invoke `ytstack:plan-milestone`, `ytstack:office-hours` or `ytstack:adopt-brownfield` automatically. The user decides the next step.
 
 ## Terminal State
 
@@ -380,9 +412,11 @@ The terminal state is one of:
 
 - Returning control to the user after writing the 6 artifacts and reporting file paths
 - Exiting immediately after reporting "already initialized" (when HAS_YTSTACK=yes)
+- Exiting immediately after pointing at `ytstack:adopt-brownfield` (when BROWNFIELD_SIGNALS >= 2 and no pitch)
 
-Do NOT invoke `ytstack:plan-milestone`, `ytstack:office-hours`, `ytstack:spawn-milestone-team`, or any other ytstack skill from here. The ONLY valid next actions are:
+Do NOT invoke `ytstack:plan-milestone`, `ytstack:office-hours`, `ytstack:adopt-brownfield`, `ytstack:spawn-milestone-team`, or any other ytstack skill from here. The ONLY valid next actions are:
 
+- User runs `ytstack:adopt-brownfield` if the brownfield route fired
 - User reviews and edits PROJECT.md manually
 - User runs `ytstack:office-hours` if no pitch was consumed (PROJECT.md has placeholder one-liner)
 - User runs `ytstack:plan-milestone` when ready for the first milestone

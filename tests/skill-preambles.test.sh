@@ -90,8 +90,17 @@ for s in $SKILLS; do
   has "$s: worktree -> HAS_YTSTACK yes" "$OUT" "HAS_YTSTACK: yes"
   case "$OUT" in *"$MAIN/.ytstack"*) bad "$s: worktree -> resolves its own .ytstack, not main's";; *) ok "$s: worktree -> resolves its own .ytstack, not main's";; esac
   case "$s" in
-    summarize-task|init-project)
+    summarize-task)
       has "$s: worktree -> IS_GIT yes (#24)" "$OUT" "IS_GIT: yes" ;;
+    init-project)
+      has "$s: worktree -> IS_GIT yes (#24)" "$OUT" "IS_GIT: yes"
+      has "$s: worktree -> signals echoed (0 in the bare fixture)" "$OUT" "BROWNFIELD_SIGNALS: 0"
+      run_pre "$P" "$BF"
+      [ "$EC" -eq 0 ] && ok "$s: runs in brownfield fixture (exit 0)" || bad "$s: runs in brownfield fixture (exit 0)" "exit $EC"
+      N=$(bf_signals "$OUT")
+      [ -n "$N" ] && [ "$N" -ge 2 ] 2>/dev/null && ok "$s: brownfield -> BROWNFIELD_SIGNALS >= 2 ($N), routes to adopt-brownfield" || bad "$s: brownfield -> BROWNFIELD_SIGNALS >= 2" "got '$N'"
+      has "$s: brownfield -> PITCH none (route condition)" "$OUT" "PITCH: none"
+      has "$s: brownfield -> candidates listed" "$OUT" "CANDIDATES:" ;;
     office-hours|plan-ceo-review|plan-eng-review)
       # gstack wrappers: precheck flags, empty HOME (no gstack) vs fake install
       has "$s: no gstack -> GSTACK_AVAILABLE no" "$OUT" "GSTACK_AVAILABLE: no"
