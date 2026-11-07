@@ -1,10 +1,10 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-07T15:40:00Z
-current_milestone: M017
-active_slice: S02
-active_task: T05
+last_updated: 2026-11-07T15:55:00Z
+current_milestone: M018
+active_slice: none
+active_task: none
 ---
 
 # State
@@ -81,7 +81,7 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Status:** **M017 / S02 -- S01 DONE** (superpowers at v7.0.2 `22f0b46`, Namespace notes + inline-leak checker rule). S02-T01 (`yt_gstack_ctx` in the lib) executing; then wrappers on Skill invocation, `git rm -r vendor/gstack`, live validation in a temp HOME, docs/SECURITY/CHANGELOG + 0.3.0.
+**Status:** **M017 DONE -- released as 0.3.0 (tag local).** superpowers at v7.0.2 with Namespace notes; gstack removed from the tree and consumed as an installed, pinned (v1.96.0.0) dependency via `yt_gstack_ctx` + Skill-tool invocation, live-validated; SECURITY.md; #25 evidence posted. 11 suites / 533 cases green from a clean clone. **M010 (brownfield import) is being built by a worktree agent (`m010-brownfield`) and gets merged on report.** **Next here: M018** ceremony scaling + STATE lint + reconcile + YAGNI guard (`ytstack:plan-milestone`), then M019. **Operator actions:** `git push origin main --tags`, `gh issue close 24 25 27`, `/plugin update`, gstack install one-liner (QUICKSTART), catalog sync.
 
 **Previous:** **M016 DONE -- released as 0.2.0 (tag local).** 15/15 tasks: all eight hooks + 15 skill preambles on `hooks/lib/git-ctx.sh`, volatile state out of tree, HANDOFF.md user-owned, task-ref-gated stubs, configurable commit discovery, gitignore block, sentinels retired, `ytstack-check` resolver contract, 10 suites / 488 cases green (macOS bash 3.2 + Linux bash 5.3.9, clean clone), `claude plugin validate` clean, evidence on #24/#27. **Operator actions:** `git push origin main --tags`, `gh issue close 24 27`, `/plugin update`, catalog sync in `yesterday-public-plugins`. **Next:** M017 vendor strategy (`ytstack:plan-milestone`; DECISIONS 2026-11-07), then M010 brownfield (#18), M018 ceremony + YAGNI guard, M019 skill quality/evals/new skills. Operator instruction 2026-11-07: run the whole milestone through without per-task check-ins; push and issue-closing stay operator actions. Milestone shape: S01 hooks on `git-ctx.sh` + out-of-tree state (6), S02 skill preambles + commit discovery + gitignore + `ytstack-check` rules (5), S03 tests + docs + release 0.2.0 (4). Plans in `M016-S0{1,2,3}-PLAN.md`. Next: `ytstack:plan-task` for M016-S01-T01 (`hooks/lib/git-ctx.sh`), sequential execution recommended -- S02/S03 depend on the lib from S01, so `spawn-milestone-team` only pays off from S02 onwards. Then M017 (vendor strategy: superpowers -> v7.0.2, gstack de-vendored; closes #25), then M010 (brownfield, #18), M018, M019.
 

@@ -3,9 +3,9 @@ milestone: M017
 slice: S02
 project: ytstack
 created: 2026-11-07T14:00:00Z
-status: planned
+status: done
 task_count: 5
-completed_tasks: 4
+completed_tasks: 5
 ---
 
 # M017-S02 -- Slice Plan
@@ -18,7 +18,7 @@ completed_tasks: 4
 - [x] T02 -- Rewrite the three wrappers: preamble adds the gstack precheck echoes; body = HARD-GATE on `GSTACK_AVAILABLE=no` (message with the pinned install command, stop), else "Invoke the Skill tool with `<name>` (installed gstack), then post-process" with the existing ytstack artifact rules; remove the `cat vendor/gstack/...` blocks; descriptions mention "installed gstack" instead of "vendored"; `tests/skill-preambles.test.sh` asserts `GSTACK_AVAILABLE: no` under an empty HOME and `yes` under a fake install.
 - [x] T03 -- Remove `vendor/gstack/` (`git rm -r`), update `bin/ytstack-check`: cross-ref/sibling checks skip absent vendors, new check that each gstack wrapper names an install path and the pinned tag; update `AGENTS.md`, `NOTICE`, `README.md` (install prerequisites, repo layout), `QUICKSTART.md`, `docs/concept.md`, `docs/methodology.md`, `.ytstack/VENDOR-INVENTORY.md` (vendored vs installed), `.gitignore` (drop gstack-specific lines if any); grep proves no `vendor/gstack` reference remains outside `docs/research/` and `.ytstack/` history files.
 - [x] T04 -- Live validation in a temp HOME: `git clone --branch <latest stable tag> https://github.com/garrytan/gstack` into `$TMP/home/.claude/skills/gstack`, run `./setup --no-browser` with bun 1.4.4, record VERSION, layout and the `gstack-skill-start` behaviour in KNOWLEDGE; run the three wrapper preambles with `HOME=$TMP/home` and assert `GSTACK_AVAILABLE: yes`, `GSTACK_VERSION` set, all three `SKILL_OK: yes`; note the Skill-name collision answer (CONTEXT open question).
-- [ ] T05 -- Release 0.3.0: `SECURITY.md` (no CI image built here; #25 resolution; how to report), CHANGELOG 0.3.0, `plugin.json` + `marketplace.json` 0.3.0, DECISIONS/KNOWLEDGE/VENDOR hold note, evidence comment on #25 ("closing on release"), clean-clone verification (`run-all`, `ytstack-check`, `plugin validate`), local tag `v0.3.0`.
+- [x] T05 -- Release 0.3.0: `SECURITY.md` (no CI image built here; #25 resolution; how to report), CHANGELOG 0.3.0, `plugin.json` + `marketplace.json` 0.3.0, DECISIONS/KNOWLEDGE/VENDOR hold note, evidence comment on #25 ("closing on release"), clean-clone verification (`run-all`, `ytstack-check`, `plugin validate`), local tag `v0.3.0`.
 
 ## Done when
 

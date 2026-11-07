@@ -32,6 +32,10 @@ M -- 2 slices, 7 tasks (S01 superpowers pull, S02 gstack de-vendor + docs + rele
 - 2026-11-07: pin tag = latest gstack stable at execution time (v1.96.0.0 on 2026-11-05 per research; re-check `gh release list` in S02-T01). The pin is a documented recommendation checked by the precheck (`VERSION` >= pin), not enforced.
 - 2026-11-07: Bun is an accepted dependency for the three planning wrappers only; every other ytstack skill and hook stays bash-only.
 
+## Closing note (2026-11-07)
+
+All exit criteria met: superpowers at v7.0.2 with Namespace notes + checker rule; `vendor/gstack` removed; `yt_gstack_ctx` + wrappers on Skill-tool invocation; live validation against a real v1.96.0.0 clone (21/21; `./setup` left to the operator); docs/NOTICE/SECURITY/CHANGELOG; 0.3.0 in both manifests; evidence on #25; clean-clone verification green; `v0.3.0` tagged locally. 7 tasks, 2 slices.
+
 ## Open questions
 
 - (resolved 2026-11-07, S02-T04) gstack's installed SKILL.md files carry bare `name:` values (`office-hours`, `plan-ceo-review`, `plan-eng-review`), so the Skill-tool target is the bare name while ytstack's wrappers stay namespaced (`ytstack:office-hours`); Claude Code user skills under `~/.claude/skills/gstack/<name>/` are discovered by frontmatter name. An interactive confirmation that both show up side by side is still an operator observation (`/skills` after installing gstack); recorded as such in KNOWLEDGE.
