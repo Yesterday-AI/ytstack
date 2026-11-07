@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  suites:
+    name: shell suites + ytstack-check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tool versions
+        run: |
+          bash --version | head -1
+          git --version
+          jq --version
+          python3 --version
+      - name: Shell test suites
+        run: bash tests/run-all.sh
+      - name: ytstack-check
+        run: python3 bin/ytstack-check .
