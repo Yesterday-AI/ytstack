@@ -83,6 +83,28 @@ has "ss-plain: names the cwd repo"        "$CTX" "$PLAIN"
 lacks "ss-plain: not CLAUDE_PROJECT_DIR"  "$CTX" "$ELSEWHERE"
 eq  "ss-plain: no state dirs created"     "$BEFORE" "$(find "$PD" -type d | wc -l | tr -d ' ')"
 
+# ---- 2b. session-start, existing codebase without .ytstack (M010, #18) -----
+BROWN="$TMP/brown"; mkdir -p "$BROWN/docs/adr"
+( cd "$BROWN" || exit 2; git init -q && git config user.email t@t.t && git config user.name t
+  i=0; while [ $i -lt 40 ]; do echo "line $i" >> README.md; i=$((i+1)); done
+  printf '# Guide\n' > docs/guide.md; printf '# Setup\n' > docs/setup.md; printf '# Ops\n' > docs/ops.md
+  printf '# ADR\n' > docs/adr/0001.md; printf '# Changelog\n' > CHANGELOG.md
+  git add -A; git commit -qm seed ) >/dev/null 2>&1 || { echo FATAL brownfield fixture; exit 2; }
+run session-start "{\"session_id\":\"s2b\",\"cwd\":$(jstr "$BROWN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has "ss-brown: still greenfield scope"        "$CTX" "scope: greenfield"
+has "ss-brown: says existing codebase"        "$CTX" "existing codebase (4 brownfield signals"
+has "ss-brown: names the sources"             "$CTX" "README.md (40 lines), docs/*.md (3 files), CHANGELOG.md, docs/adr/ (1 files)"
+has "ss-brown: routes to adopt-brownfield"    "$CTX" "invoke \`ytstack:adopt-brownfield\` FIRST"
+lacks "ss-brown: no office-hours-first step"  "$CTX" "invoke \`ytstack:office-hours\` FIRST"
+[ "${#CTX}" -lt 9500 ] && ok "ss-brown: injection ${#CTX} chars < 9500 cap guard" || bad "ss-brown: injection under cap" "${#CTX} chars"
+eq  "ss-brown: hook exit 0"                   0 "$EC"
+[ -z "$(git -C "$BROWN" status --porcelain)" ] && ok "ss-brown: fixture untouched (read-only)" || bad "ss-brown: fixture untouched"
+run session-start "{\"session_id\":\"s2c\",\"cwd\":$(jstr "$PLAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has "ss-plain: office-hours first stays for empty repos" "$CTX" "invoke \`ytstack:office-hours\` FIRST"
+has "ss-plain: mentions adopt-brownfield as the alternative" "$CTX" "ytstack:adopt-brownfield"
+
 # ---- 3. session-start, linked worktree -------------------------------------
 run session-start "{\"session_id\":\"s3\",\"cwd\":$(jstr "$WT")}"
 CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)

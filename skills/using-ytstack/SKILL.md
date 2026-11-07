@@ -37,7 +37,7 @@ User instructions always take precedence:
 
 Skills you might need (consult each skill's description, not this list, for the actual when-to-use):
 
-- Project lifecycle: `init-project`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`
+- Project lifecycle: `init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`
 - Session continuity: `handoff-session`, `resume-session`
 - Planning reviews: `office-hours`, `plan-ceo-review`, `plan-eng-review`
 - Execution discipline: `test-driven-development`, `systematic-debugging`, `verification-before-completion`
@@ -51,7 +51,7 @@ The selection mechanism is **semantic, not phrase-based**. New user phrasings (d
 2. **Structural skills next** (plan-milestone, slice-milestone, plan-task). They determine what to build.
 3. **Execution skills last** (TDD, verification). They determine how to build.
 
-"Let's build X" (greenfield, no pitch yet) -> `office-hours` first. "Fix this bug" -> `systematic-debugging` first.
+"Let's build X" (greenfield, no pitch yet) -> `office-hours` first. "Fix this bug" -> `systematic-debugging` first. Existing codebase (README, docs, commits) with no `.ytstack/` -> `adopt-brownfield` first, never the pitch.
 
 ## Red flags -- stop and invoke
 
