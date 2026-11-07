@@ -81,6 +81,8 @@ Patterns, rules, and lessons learned while building ytstack. This file is read b
 - **`git log --format=%G?` prints `N` for SSH-signed commits when no `gpg.ssh.allowedSignersFile` is configured.** (2026-11-07) The commits are signed (`git cat-file commit HEAD | grep -c 'SSH SIGNATURE'` = 1); `N` only means "cannot verify here".
 - **`alpine/git` has `git` as entrypoint; `--entrypoint sh` is needed to run scripts.** (M016-S03-T01) `tests/run-all.sh --linux` mounts the repo read-only, so suites must write only to `mktemp` dirs.
 - **The RTK Bash hook rewrites `git commit` to `rtk git commit`.** (M016-S01-T01) A matcher that requires `git` right after a command separator never fires in RTK sessions; `post-tool-use-bash` accepts wrapper tokens (`rtk`, `sudo`, `command`, `env X=1`).
+- **The SessionStart greenfield block shares the 10,000-char budget with `using-ytstack`.** (M010) Directive wrapper + `skills/using-ytstack/SKILL.md` (5.4k) + state block = 6.6k today; the brownfield variant adds the source list. `tests/hooks-readonly.test.sh` asserts < 9500 for it. Growing `using-ytstack` by more than ~2.5k pushes the hook into its Next-action shedding path; measure with `tests/hooks-readonly.test.sh`, not by eye.
+- **Lib-only helpers must be guarded in skill preambles.** (M010) The resolver's fallback branch (no `CLAUDE_SKILL_DIR` substitution) has no `yt_*` functions; calling `yt_brownfield_signals` there kills the preamble. Pattern: `if command -v yt_brownfield_signals >/dev/null 2>&1; then ...; fi` and echo `unknown` (or `0`) otherwise; the preamble suite runs the fallback variant to catch this.
 
 ## Terminology
 

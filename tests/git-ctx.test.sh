@@ -281,6 +281,49 @@ write_state "$NOW" M003 S01 T02
 printf -- '---\nmilestone: M003\nstatus: done\n---\n' > "$SL/.ytstack/M003-ROADMAP.md"
 case "$(lint "$SL/.ytstack")" in *"status: done"*) ok "lint: done milestone still current with open slice";; *) bad "lint: done but current" "$(lint "$SL/.ytstack")";; esac
 
+# ---- 14. brownfield signals (M010, issue #18) --------------------------------
+echo "# brownfield signals"
+bf()  { ( . "$LIB"; yt_brownfield_signals "$1" >/dev/null; printf '%s' "$YT_BROWNFIELD_SIGNALS" ); }
+bfh() { ( . "$LIB"; yt_brownfield_signals "$1" >/dev/null; printf '%s' "$YT_BROWNFIELD_HINTS" ); }
+hint_has() { case "$(bfh "$2")" in *"$3"*) ok "$1";; *) bad "$1" "no hint '$3' in: $(bfh "$2" | tr '\n' '|')";; esac; }
+FRESH=$(new_repo fresh)
+eq "brownfield: fresh repo -> 0"              0  "$(bf "$FRESH")"
+eq "brownfield: fresh repo -> no hints"       "" "$(bfh "$FRESH")"
+EMPTYD="$TMP/emptydir"; mkdir -p "$EMPTYD"
+eq "brownfield: empty non-git dir -> 0"       0  "$(bf "$EMPTYD")"
+eq "brownfield: missing dir -> 0"             0  "$(bf "$TMP/does-not-exist")"
+BF=$(new_repo brown)
+( cd "$BF" || exit 2
+  i=0; while [ $i -lt 30 ]; do echo "line $i" >> README.md; i=$((i+1)); done
+  mkdir -p docs; printf '# Guide\n' > docs/guide.md; printf '# Setup\n' > docs/setup.md ) >/dev/null 2>&1
+eq "brownfield: README of exactly 30 lines + 2 docs -> 0 (boundaries)" 0 "$(bf "$BF")"
+( cd "$BF" || exit 2
+  i=30; while [ $i -lt 40 ]; do echo "line $i" >> README.md; i=$((i+1)); done
+  mkdir -p docs/adr; printf '# Ops\n' > docs/ops.md
+  printf '# ADR 1\n' > docs/adr/0001-x.md; printf '# Changelog\n' > CHANGELOG.md ) >/dev/null 2>&1
+eq "brownfield: README 40 + docs x3 + CHANGELOG + docs/adr -> 4" 4 "$(bf "$BF")"
+hint_has "brownfield: hint README -> PROJECT.md"        "$BF" "README.md (40 lines) -> PROJECT.md"
+hint_has "brownfield: hint docs -> KNOWLEDGE.md"        "$BF" "docs/*.md (3 files) -> KNOWLEDGE.md"
+hint_has "brownfield: hint CHANGELOG -> PROJECT.md"     "$BF" "CHANGELOG.md -> PROJECT.md"
+hint_has "brownfield: hint adr -> DECISIONS.md"         "$BF" "docs/adr/ (1 files) -> DECISIONS.md"
+PJ=$(new_repo pkgonly); printf '{"name":"x"}\n' > "$PJ/package.json"
+eq "brownfield: package.json with 1 commit -> 0"      0 "$(bf "$PJ")"
+( cd "$BF" || exit 2; printf '{"name":"x","scripts":{"dev":"vite"}}\n' > package.json
+  i=0; while [ $i -lt 60 ]; do echo "$i" > c.txt; git add -A; git commit -qm "c$i"; i=$((i+1)); done ) >/dev/null 2>&1
+eq "brownfield: + package.json + 61 commits -> 5"    5 "$(bf "$BF")"
+hint_has "brownfield: hint manifest -> RUNTIME.md"      "$BF" "package.json + 61 commits -> RUNTIME.md"
+printf '# agents\n' > "$BF/AGENTS.md"
+eq "brownfield: + AGENTS.md -> 6"                     6 "$(bf "$BF")"
+hint_has "brownfield: hint AGENTS.md -> entry point"    "$BF" "AGENTS.md -> entry-point pointer"
+printf 'DATABASE_URL=\n' > "$BF/.env.example"; mkdir -p "$BF/docs/plans"
+eq "brownfield: runtime/backlog sources are hints, not signals" 6 "$(bf "$BF")"
+hint_has "brownfield: hint .env.example -> RUNTIME.md"  "$BF" ".env.example -> RUNTIME.md"
+hint_has "brownfield: hint docs/plans -> backlog"       "$BF" "docs/plans/ -> ROADMAP backlog"
+mkdir -p "$BF/.ytstack"
+eq "brownfield: existing .ytstack does not change the count" 6 "$(bf "$BF")"
+hint_has "brownfield: hint .ytstack present"            "$BF" ".ytstack/ present"
+eq "brownfield: one hint line per source (6 signals + 3 extras)" 9 "$(bfh "$BF" | grep -c .)"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

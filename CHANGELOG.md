@@ -60,6 +60,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [#25]: https://github.com/Yesterday-AI/ytstack/issues/25
 
+## [Unreleased]
+
+### Added
+
+- **`adopt-brownfield` skill** ([#18]). First-class entry for an existing
+  codebase without `.ytstack/`: detects what the repo already documents
+  (README, `docs/`, CHANGELOG, ADRs, manifests + commit history, entry-point
+  docs), shows a mapping table, asks per artifact how to handle it
+  (reference / extract / move / leave; nothing is moved without that
+  answer), dispatches four read-only subagents into
+  `.ytstack/codebase/{stack,architecture,conventions,concerns}.md`, and
+  scaffolds only the gaps: PROJECT.md with `origin: brownfield-import`, a
+  **Validated** section and an **Adoption** table; DECISIONS.md seeded from
+  ADRs by reference; KNOWLEDGE.md as a link index over `docs/`; RUNTIME.md
+  derived from package scripts / `.env.example` / compose / workflows;
+  STATE.md with `tracker:`. Never runs office-hours.
+- **`yt_brownfield_signals`** in `hooks/lib/git-ctx.sh`: the shared detector
+  (six signals, one source -> artifact hint each) behind init-project,
+  adopt-brownfield and the SessionStart hook; 21 lib tests.
+- **`tracker:` field in STATE.md** (`none | linear | github-projects |
+  paperclip | jira`). `plan-milestone` and `reassess-roadmap` read it and
+  say in one sentence that BAU work tracked there needs no milestone.
+
+### Changed
+
+- **`init-project`** counts brownfield signals in its preamble; with >= 2
+  and no pitch it stops and points at `adopt-brownfield` instead of writing
+  placeholder artifacts. New Anti-Pattern clause ("too mature for greenfield
+  ceremony").
+- **`session-start` hook** flags an existing codebase without `.ytstack/`
+  (>= 2 signals: names the sources, routes build-intent to
+  `adopt-brownfield`, not office-hours); the injection stays at ~6.6k of the
+  10,000-char cap and `tests/hooks-readonly.test.sh` guards it.
+- **`using-ytstack`** lists `adopt-brownfield` and the routing rule.
+
 ## [0.2.0] - 2026-11-07
 
 ### Fixed
@@ -204,6 +239,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.5]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.1.5
 [0.1.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.1.0
 [#16]: https://github.com/Yesterday-AI/ytstack/issues/16
+[#18]: https://github.com/Yesterday-AI/ytstack/issues/18
 [#19]: https://github.com/Yesterday-AI/ytstack/issues/19
 [#20]: https://github.com/Yesterday-AI/ytstack/issues/20
 [#21]: https://github.com/Yesterday-AI/ytstack/issues/21

@@ -64,9 +64,21 @@ You have ytstack. Below is the full content of your 'ytstack:using-ytstack' skil
 $USING_YTSTACK_CONTENT
 </EXTREMELY_IMPORTANT>"
 
-# Greenfield: no .ytstack/ exists for this checkout.
+# Greenfield: no .ytstack/ exists for this checkout. An existing, documented
+# codebase (README, docs/, CHANGELOG, ADRs, commit history; M010 / issue #18)
+# is told apart by the shared detector so build-intent routes to
+# adopt-brownfield instead of the office-hours pitch.
 if [ -z "$YT_DIR" ]; then
-  GREENFIELD_STATE="[ytstack active -- scope: greenfield]
+  yt_brownfield_signals "$YT_TOPLEVEL"
+  if [ "${YT_BROWNFIELD_SIGNALS:-0}" -ge 2 ]; then
+    BF_SOURCES=$(printf '%s\n' "$YT_BROWNFIELD_HINTS" | sed 's/ ->.*//' | paste -sd, - | sed 's/,/, /g')
+    GREENFIELD_STATE="[ytstack active -- scope: greenfield (existing codebase, no .ytstack/)]
+
+No \`.ytstack/\` directory in $YT_TOPLEVEL, but this looks like an existing codebase ($YT_BROWNFIELD_SIGNALS brownfield signals: $BF_SOURCES).
+
+For build-intent, work requests or \"set up ytstack here\": invoke \`ytstack:adopt-brownfield\` FIRST, not office-hours. It links the existing docs into \`.ytstack/\`, maps the codebase, and scaffolds only the gaps; the shipped track record is the validation. Do NOT invoke init-project (it would route here anyway) and do NOT run the office-hours pitch on an existing product. Reserve \`ytstack:office-hours\` for genuinely new scope the user describes as a new idea."
+  else
+    GREENFIELD_STATE="[ytstack active -- scope: greenfield]
 
 No \`.ytstack/\` directory in $YT_TOPLEVEL (or any parent). This is greenfield.
 
@@ -74,7 +86,9 @@ Greenfield flow per the using-ytstack directive above:
 1. If the user expresses build-intent (\"baue mir X\", \"build me X\", \"new project\", \"I have an idea\"), invoke \`ytstack:office-hours\` FIRST to validate the pitch. Do NOT invoke plan-milestone or init-project directly.
 2. After office-hours produces OFFICE-HOURS.md, invoke \`ytstack:plan-ceo-review\` (concept mode) to stress-test premise + scope.
 3. Optionally \`ytstack:plan-eng-review\` (concept mode) for feasibility.
-4. Then \`ytstack:init-project\` to scaffold \`.ytstack/\` (populates PROJECT.md from the pitch, no cold PM questions)."
+4. Then \`ytstack:init-project\` to scaffold \`.ytstack/\` (populates PROJECT.md from the pitch, no cold PM questions).
+Existing codebase with its own README/docs but no \`.ytstack/\`? Use \`ytstack:adopt-brownfield\` instead of the pitch."
+  fi
 
   emit_json "$DIRECTIVE
 

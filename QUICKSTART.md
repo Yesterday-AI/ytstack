@@ -145,6 +145,30 @@ At the end of each slice, say: "Does the roadmap still fit reality?" -> `ytstack
 
 When all slices are done, say: "Close M001." -> agent updates `.ytstack/ROADMAP.md` to flip the milestone to `done`. Then say "plan the next milestone" when you're ready.
 
+## Adopting ytstack in an existing project
+
+The worked example above starts from an empty directory. Most real adoptions do not: the repo already has a README, a `docs/` folder, a CHANGELOG, maybe `docs/adr/`, and a year of commits. Running the office-hours pitch on that is theater, and `init-project` would write placeholders that duplicate what you have.
+
+Open a session in the repo. The SessionStart hook counts brownfield signals (README over 30 lines, more than two `docs/*.md`, CHANGELOG, ADRs, a manifest with over 50 commits, an existing AGENTS.md/CLAUDE.md) and, at two or more, tells the agent to route build-intent to `ytstack:adopt-brownfield`. Say:
+
+> "Set up ytstack for this project."
+
+Agent fires `ytstack:adopt-brownfield`:
+
+1. **Detect + analyze.** You see a mapping table: which existing file would feed `PROJECT.md` (README, CHANGELOG), `DECISIONS.md` (`docs/adr/`), `KNOWLEDGE.md` (`docs/*.md`), `RUNTIME.md` (package scripts, `.env.example`, compose, workflows), the backlog (`docs/plans/`, `ROADMAP.md`); conflicts (two decision sources) and gaps (there is never a STATE.md equivalent) are called out.
+2. **Decide per artifact.** One question per slot: **reference** (pointer + one-line index, your file untouched; the default for decisions, docs and backlog), **extract** (distill the memory parts, keep the long form public; the default for PROJECT.md and RUNTIME.md), **move** (`git mv` into `.ytstack/` with a pointer left behind), or **leave**. Nothing is moved or deleted without your answer.
+3. **Codebase map.** Four read-only subagents write `.ytstack/codebase/stack.md`, `architecture.md`, `conventions.md`, `concerns.md` (60 lines each, real paths). `plan-milestone` and `plan-task` read these instead of re-discovering the stack.
+4. **Scaffold only the gaps.** `PROJECT.md` gets a **Validated** section ("already shipped, no pitch needed") and an **Adoption** table recording your choices; `KNOWLEDGE.md` is a link index over `docs/` with one-line summaries, not copies; `DECISIONS.md` lists your ADRs by reference; `RUNTIME.md` is derived from the manifests; `STATE.md` carries `tracker: none`.
+5. **Pointers.** A `## ytstack project memory` section lands in your `AGENTS.md`/`CLAUDE.md`; `.gitignore` gets the `.ytstack/.local/` line.
+
+Then:
+
+> "Plan the next milestone."
+
+`plan-milestone` scopes the delta, not the existing product. If day-to-day issues live in Linear, GitHub Projects, Paperclip or Jira, set `tracker: linear` (or `github-projects | paperclip | jira`) in `.ytstack/STATE.md`; `plan-milestone` and `reassess-roadmap` then say so and leave BAU work to that tracker instead of asking for a milestone.
+
+If you type `/ytstack:init-project` on such a repo by mistake, it stops after the preamble and points you at `adopt-brownfield` (unless an `OFFICE-HOURS.md` pitch for new scope is present, in which case it proceeds).
+
 ## Reading the state
 
 Open a new Claude Code session on the project. Before your first message, the `SessionStart` hook has already injected the `STATE.md` snapshot (current milestone / slice / task, recent summaries, next action). You can just say:

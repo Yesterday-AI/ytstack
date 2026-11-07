@@ -438,6 +438,87 @@ yt_state_lint() {
   return 0
 }
 
+# ---- brownfield detection (M010, issue #18) --------------------------------
+# yt_brownfield_signals <toplevel>: count the signs that <toplevel> is an
+# existing, documented codebase rather than an empty greenfield dir, and name
+# which existing file would feed which .ytstack artifact. Read-only.
+# Sets YT_BROWNFIELD_SIGNALS (0..6) and YT_BROWNFIELD_HINTS (one line per
+# source, "<source> -> <artifact>: <how>", newline-separated; empty when
+# nothing was found). Shared by init-project, adopt-brownfield, session-start.
+# Counted (one point each):
+#   README.md (or README) with more than 30 lines         -> PROJECT.md
+#   more than 2 docs/*.md                                 -> KNOWLEDGE.md
+#   CHANGELOG.md                                          -> PROJECT.md (Validated)
+#   docs/adr/ | docs/decisions/ | docs/design-decisions.md -> DECISIONS.md
+#   package.json | pyproject.toml | go.mod AND > 50 commits -> RUNTIME.md
+#   AGENTS.md | CLAUDE.md                                 -> entry-point pointer
+# Listed but not counted: .env.example, compose files, .github/workflows/
+# (RUNTIME.md), docs/plans/ | ROADMAP.md | BACKLOG.md (backlog), an existing
+# .ytstack/ (nothing to adopt). A fresh repo with one seed commit scores 0.
+yt_bf_hint() { YT_BROWNFIELD_HINTS="${YT_BROWNFIELD_HINTS:+$YT_BROWNFIELD_HINTS
+}$1"; }
+
+yt_brownfield_signals() {
+  local top="$1" n=0 f="" lines=0 count=0 commits=0 manifest="" adr=""
+  YT_BROWNFIELD_SIGNALS=0; YT_BROWNFIELD_HINTS=""
+  [ -d "$top" ] || return 0
+
+  for f in README.md README; do [ -f "$top/$f" ] && break; f=""; done
+  if [ -n "$f" ]; then
+    lines=$(wc -l < "$top/$f" | tr -d ' ')
+    if [ "${lines:-0}" -gt 30 ]; then
+      n=$((n+1)); yt_bf_hint "$f ($lines lines) -> PROJECT.md: one-liner from the first paragraph, Validated section from what it documents as shipped"
+    fi
+  fi
+
+  count=$(ls "$top"/docs/*.md 2>/dev/null | wc -l | tr -d ' ')
+  if [ "${count:-0}" -gt 2 ]; then
+    n=$((n+1)); yt_bf_hint "docs/*.md ($count files) -> KNOWLEDGE.md: link index with one-line H1 summaries, never copies"
+  fi
+
+  if [ -f "$top/CHANGELOG.md" ]; then
+    n=$((n+1)); yt_bf_hint "CHANGELOG.md -> PROJECT.md: shipped history is the validated premise; no office-hours"
+  fi
+
+  for f in docs/adr docs/decisions; do [ -d "$top/$f" ] && { adr="$f"; break; }; done
+  if [ -n "$adr" ]; then
+    count=$(ls "$top/$adr" 2>/dev/null | wc -l | tr -d ' ')
+    n=$((n+1)); yt_bf_hint "$adr/ ($count files) -> DECISIONS.md: seed one entry per record, by reference"
+  elif [ -f "$top/docs/design-decisions.md" ]; then
+    n=$((n+1)); yt_bf_hint "docs/design-decisions.md -> DECISIONS.md: seed by reference, keep the long form where it is"
+  fi
+
+  for f in package.json pyproject.toml go.mod; do [ -f "$top/$f" ] && { manifest="$f"; break; }; done
+  if [ -n "$manifest" ]; then
+    commits=$(git -C "$top" rev-list --count HEAD 2>/dev/null | tr -d ' ')
+    if [ "${commits:-0}" -gt 50 ]; then
+      n=$((n+1)); yt_bf_hint "$manifest + $commits commits -> RUNTIME.md: scripts and dependencies are established fact"
+    fi
+  fi
+
+  for f in AGENTS.md CLAUDE.md; do [ -f "$top/$f" ] && break; f=""; done
+  if [ -n "$f" ]; then
+    n=$((n+1)); yt_bf_hint "$f -> entry-point pointer: add a ytstack section, do not duplicate its content"
+  fi
+
+  # Hints only (sources for RUNTIME.md and the backlog; adoption state).
+  [ -f "$top/.env.example" ] && yt_bf_hint ".env.example -> RUNTIME.md: environment variables"
+  for f in compose.yml compose.yaml docker-compose.yml docker-compose.yaml; do
+    if [ -f "$top/$f" ]; then yt_bf_hint "$f -> RUNTIME.md: services and ports"; break; fi
+  done
+  [ -d "$top/.github/workflows" ] && yt_bf_hint ".github/workflows/ -> RUNTIME.md: deploy target"
+  for f in docs/plans ROADMAP.md BACKLOG.md; do
+    if [ -e "$top/$f" ]; then
+      [ -d "$top/$f" ] && f="$f/"
+      yt_bf_hint "$f -> ROADMAP backlog: open items become backlog, not a milestone"; break
+    fi
+  done
+  [ -d "$top/.ytstack" ] && yt_bf_hint ".ytstack/ present -> nothing to adopt; use resume-session"
+
+  YT_BROWNFIELD_SIGNALS=$n
+  return 0
+}
+
 # yt_resolve_yt_dir -> the .ytstack dir for the resolved toplevel: project
 # scope (<toplevel>/.ytstack) first, then user scope keyed by YT_REPO_KEY.
 # Sets YT_DIR and YT_SCOPE (project|user|none). No basename slugs.

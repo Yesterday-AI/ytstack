@@ -103,6 +103,8 @@ Source: [`docs/ytstack-greenfield-flow.excalidraw`](docs/ytstack-greenfield-flow
 
 </details>
 
+**Existing codebase, no `.ytstack/` yet? That is not greenfield.** A repo with its own README, `docs/`, CHANGELOG, ADRs and months of commits skips the pitch: say "set up ytstack here" / "adopt ytstack" and the agent fires `ytstack:adopt-brownfield`. The SessionStart hook already flags such a repo (>= 2 brownfield signals) and `init-project` routes there by itself when it finds a mature repo without a pitch. adopt-brownfield maps the existing files onto PROJECT.md / DECISIONS.md / KNOWLEDGE.md / RUNTIME.md **by reference** (your docs stay the source of truth), asks per file how to handle it (reference / extract / move / leave), writes a codebase map (`.ytstack/codebase/{stack,architecture,conventions,concerns}.md`) from four read-only subagents, and scaffolds only the gaps (STATE.md with a `tracker:` field for Linear / GitHub Projects / Paperclip / Jira). The shipped track record is the validation; `office-hours` is reserved for genuinely new scope.
+
 ### 2. Brownfield -- existing `.ytstack/`, continuing or starting new work
 
 SessionStart hook injects `STATE.md` + the `using-ytstack` directive before your first message. Natural-language routing:
@@ -240,6 +242,8 @@ Without `--permission-mode acceptEdits`, Write operations stall on permission di
 | "break this into slices" | `ytstack:slice-milestone` | `M001-S##-PLAN.md` per slice |
 | (per task in the slice) | `plan-task` -> TDD -> verify -> `summarize-task` | `T##-PLAN.md` -> code + tests -> `T##-SUMMARY.md` |
 
+**Existing codebase** (README, `docs/`, commits, but no `.ytstack/` yet). Say "adopt ytstack here" / "set up ytstack for this project" -> `ytstack:adopt-brownfield` links your docs into `.ytstack/`, maps the codebase, and scaffolds only what is missing. No pitch. Then "plan the next milestone" -> `plan-milestone` scopes the delta.
+
 **Brownfield** (ytstack already initialized). Say what you want in plain language:
 
 - "where were we" -> `resume-session` produces a 3-paragraph briefing
@@ -280,13 +284,13 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 
 ## Status
 
-**v0.3.0 -- shipping, actively dogfooded.** M016 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); M017 pulled superpowers to v7.0.2 and turned gstack into an installed, tag-pinned dependency (#25). ytstack tracks its own development in `.ytstack/`. Next up: brownfield import (M010), ceremony scaling (M018), skill quality + evals (M019) -- see `.ytstack/ROADMAP.md`.
+**v0.3.0 -- shipping, actively dogfooded.** M016 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); M017 pulled superpowers to v7.0.2 and turned gstack into an installed, tag-pinned dependency (#25). Brownfield import (`adopt-brownfield`, M010, #18) and ceremony scaling (M018) are in and ship with 0.4.0. ytstack tracks its own development in `.ytstack/`. Next up: skill quality + evals (M019) -- see `.ytstack/ROADMAP.md`.
 
 Ships:
 
-- 21 skills (project-OS lifecycle + gstack planning wrappers + superpowers execution wrappers + Agent Teams dispatch + `using-ytstack` directive + 5 engineering-OS additions migrated from agentic-foundation: `atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`)
+- 22 skills (project-OS lifecycle incl. `adopt-brownfield` + gstack planning wrappers + superpowers execution wrappers + Agent Teams dispatch + `using-ytstack` directive + 5 engineering-OS additions migrated from agentic-foundation: `atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`)
 - 8 hooks (SessionStart / PreCompact / SessionEnd / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers.
-- Ten shell test suites (`tests/run-all.sh`, 488 cases, macOS bash 3.2 + Linux bash 5) and `bin/ytstack-check` (UX contracts + resolver contract).
+- Ten shell test suites (`tests/run-all.sh`, 596 cases, macOS bash 3.2 + Linux bash 5) and `bin/ytstack-check` (UX contracts + resolver contract).
 - Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
 

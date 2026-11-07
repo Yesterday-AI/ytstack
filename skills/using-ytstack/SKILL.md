@@ -39,7 +39,7 @@ User instructions always take precedence:
 
 Skills you might need (consult each skill's description, not this list, for the actual when-to-use):
 
-- Project lifecycle: `init-project`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`
+- Project lifecycle: `init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`
 - Session continuity: `handoff-session`, `resume-session`
 - Planning reviews: `office-hours`, `plan-ceo-review`, `plan-eng-review`
 - Execution discipline: `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `quick-task` (one-sentence changes when PREFERENCES `quick_lane` is on)
@@ -53,7 +53,7 @@ The selection mechanism is **semantic, not phrase-based**. New user phrasings (d
 2. **Structural skills next** (plan-milestone, slice-milestone, plan-task). They determine what to build.
 3. **Execution skills last** (TDD, verification). They determine how to build.
 
-"Let's build X" (greenfield, no pitch yet) -> `office-hours` first. "Fix this bug" -> `systematic-debugging` first. A change the user states in one sentence with a known cause ("rename X", "bump Y", "fix the off-by-one in Z") in a `.ytstack` project with `quick_lane: on` (PREFERENCES default) -> `quick-task`, not `plan-task`.
+"Let's build X" (greenfield, no pitch yet) -> `office-hours` first. "Fix this bug" -> `systematic-debugging` first. Existing codebase (README, docs, commits) with no `.ytstack/` -> `adopt-brownfield` first, never the pitch. A change the user states in one sentence with a known cause ("rename X", "bump Y", "fix the off-by-one in Z") in a `.ytstack` project with `quick_lane: on` (PREFERENCES default) -> `quick-task`, not `plan-task`.
 
 ## Red flags -- stop and invoke
 
