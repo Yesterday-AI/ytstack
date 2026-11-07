@@ -681,3 +681,20 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - Regression tests in `tests/` for main checkout, linked worktree (`.git` as file), session in main with commands in a worktree, two concurrent sessions; acceptance per #26: main is byte-identical before and after each hook.
 
 **Supersedes:** none (extends 2026-05-31 "post-tool-use-bash is stub-once").
+
+## 2026-11-07: Brownfield adoption is a reference-first distillation, never a pitch
+
+**Context:** Issue #18 and the consumer audit (`docs/research/2026-11-07-notes/local-consumer-repos-audit.md`): 7 of 17 local consumers started on existing code; each hand-rolled the same workaround (skip office-hours, link `docs/` instead of copying, record "validated by track record"). `init-project` treated them as unvalidated greenfield and wrote placeholders. The M010 scope note left three design questions open.
+
+**Options considered:**
+- A) A `--brownfield` flag on `init-project` (one skill, two modes).
+- B) A separate `adopt-brownfield` skill; `init-project` and the SessionStart hook route to it on a shared signal count.
+- C) A one-shot migration-plan artifact (`ADOPTION-PLAN.md`) the user edits before anything is written.
+
+**Chose:** B, with the per-artifact decisions asked inline (one AskUserQuestion per slot) and recorded in PROJECT.md's Adoption table; no separate plan artifact.
+
+**Reason:** init-project is pitch-driven infra and stays small; a second procedure with subagent dispatch and per-file approvals does not belong in it. The signal count lives once in `hooks/lib/git-ctx.sh` (`yt_brownfield_signals`) so hook and both skills agree. Inline questions plus a table in PROJECT.md beat a plan file: the choices end up where every later session reads them. Open questions resolved: historical ADR archives stay where they are and are listed by reference (default A); `office-hours` is skipped entirely for existing products and reserved for new scope (a pitch found alongside is moved into `.ytstack/` as the first milestone's input, as init-project does); brownfield memory is project-scoped without asking (the docs it links live in the repo; user scope remains available through init-project). `tracker:` in STATE.md records an external issue tracker so plan-milestone / reassess-roadmap stop asking for milestones for BAU work (friction item 7).
+
+**How to apply:** `skills/adopt-brownfield/SKILL.md`; `init-project` Step 3 routes at `BROWNFIELD_SIGNALS >= 2` and `PITCH = none`; `hooks/session-start` greenfield branch; tests in `tests/git-ctx.test.sh`, `tests/skill-preambles.test.sh`, `tests/hooks-readonly.test.sh`.
+
+**Supersedes:** none (extends 2026-04-24 "Greenfield-flow reorder": office-hours stays the greenfield entry; existing codebases get their own door).

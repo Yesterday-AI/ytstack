@@ -133,14 +133,22 @@ Applies to: `test-driven-development`, `systematic-debugging`, `verification-bef
 
 ### 3.4 Native components (ytstack authors these; no upstream equivalent used)
 
-Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implement in-plugin. Ten skills, each with a distinct purpose documented below.
+Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implement in-plugin. Eleven skills, each with a distinct purpose documented below.
 
 #### `init-project` (lifecycle: infra)
 
 **Purpose:** Scaffold `.ytstack/` with the 6 core artifacts. Pure infra, no PM content.
-**Produces:** `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `RUNTIME.md`, `STATE.md`, `PREFERENCES.md`. PROJECT.md `name:` + `one-liner:` populated from `OFFICE-HOURS.md` pitch frontmatter if present; otherwise placeholders explicitly pointing at office-hours.
+**Produces:** `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `RUNTIME.md`, `STATE.md` (with `tracker:`), `PREFERENCES.md`. PROJECT.md `name:` + `one-liner:` populated from `OFFICE-HOURS.md` pitch frontmatter if present; otherwise placeholders explicitly pointing at office-hours.
 **Triggers on:** "scaffold the project", "set up tracking", "init ytstack" -- AFTER the pitch is validated. Asks only one question (scope: project-level vs user-level vs both).
 **Differs from office-hours:** init-project is infra, office-hours is content. Greenfield flow runs office-hours -> [plan-ceo-review] -> init-project, never init-project first (see §5.1).
+**Differs from adopt-brownfield:** when the preamble counts >= 2 brownfield signals (`yt_brownfield_signals` in `hooks/lib/git-ctx.sh`) and no pitch exists, init-project stops and points at adopt-brownfield instead of writing placeholders (M010, issue #18).
+
+#### `adopt-brownfield` (lifecycle: infra for existing codebases)
+
+**Purpose:** First-class entry for a repo that already has a README, `docs/`, CHANGELOG, ADRs and commit history but no `.ytstack/`. Detect -> analyze (mapping table, conflicts, gaps) -> per-artifact decision (reference / extract / move / leave, one AskUserQuestion each) -> codebase map (four read-only subagents) -> scaffold only the gaps -> entry-point pointer. Never runs office-hours: the shipped track record is the validation.
+**Produces:** `.ytstack/PROJECT.md` (`origin: brownfield-import`, a **Validated** section, an **Adoption** table recording the per-file choices), `DECISIONS.md` seeded from ADRs by reference, `KNOWLEDGE.md` as a link index over `docs/` (one-line H1 summaries, no copies), `RUNTIME.md` derived from manifests / `.env.example` / compose / workflows, `STATE.md` with `tracker:`, `PREFERENCES.md`, `.ytstack/codebase/{stack,architecture,conventions,concerns}.md`, optional `backlog/README.md`, a `## ytstack project memory` section in AGENTS.md/CLAUDE.md.
+**Triggers on:** "adopt ytstack", "set up ytstack here" in a documented repo; the SessionStart hook flags such repos (>= 2 signals) and routes build-intent here; `init-project` routes here itself.
+**Differs from init-project:** init-project scaffolds from a pitch; adopt-brownfield scaffolds from the repo and links rather than copies. Differs from office-hours: no premise validation, the product already shipped. Peers: GSD `/gsd-onboard` + `/gsd-map-codebase`, BMAD `bmad-project-context`, OpenSpec `/opsx:onboard` (see `docs/research/2026-11-07-notes/agentic-sdlc-methodology.md` KQ5).
 
 #### `plan-milestone` (lifecycle: milestone-level planning)
 
@@ -213,6 +221,7 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - Per-slice: `M###-S##-PLAN.md`
 - Per-task: `M###-S##-T##-PLAN.md`, `M###-S##-T##-SUMMARY.md`
 - Per-pitch (greenfield input): `OFFICE-HOURS.md` (pre-init) -> `OFFICE-HOURS-<slug>.md` (post-init, moved into `.ytstack/`)
+- Brownfield import (adopt-brownfield): `codebase/{stack,architecture,conventions,concerns}.md`, optional `backlog/README.md`; `STATE.md` frontmatter `tracker:` (`none | linear | github-projects | paperclip | jira`) read by plan-milestone / reassess-roadmap
 
 **Hooks** (under `hooks/`, registered in `hooks/hooks.json`; all source `hooks/lib/git-ctx.sh` and resolve the checkout from the payload `cwd`, never `CLAUDE_PROJECT_DIR` -- DECISIONS 2026-11-07):
 - `session-start` -- injects `using-ytstack` directive (always) + STATE snapshot with manual/automatic handoff pointers (brownfield) or greenfield next-step block (greenfield); fires on `startup|resume|clear|compact|fork`; guards the 10,000-char cap
@@ -348,6 +357,7 @@ Key properties of this flow:
 - `plan-ceo-review` and `plan-eng-review` auto-detect mode: "concept" (pitch exists, no milestone) or "milestone" (milestone exists). Same skill, two review subjects.
 - `init-project` asks only one question (scope: project-level vs user-level vs both). No name / one-liner prompts; those come from the pitch, or placeholders pointing to office-hours if run without a pitch.
 - `office-hours`' `description:` field explicitly positions it as "the first step when a new project, feature, or initiative has not yet been validated", which the agent matches semantically against greenfield build-intent in any phrasing (German, English, paraphrase). `init-project` and `plan-milestone` descriptions explicitly name office-hours as their predecessor, so the agent does not route build-intent directly to either of them.
+- An existing codebase without `.ytstack/` is NOT greenfield (M010, issue #18): the SessionStart hook counts brownfield signals via `yt_brownfield_signals` and at >= 2 routes build-intent to `adopt-brownfield` instead of the pitch; `init-project` stops and points there when it meets the same condition without a pitch. See §3.4 `adopt-brownfield`.
 
 ### 5.2 Brownfield -- existing `.ytstack/`, continuing or starting new work
 
