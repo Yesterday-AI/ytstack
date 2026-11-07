@@ -1,0 +1,175 @@
+# shellcheck shell=bash
+# ytstack shared context library -- source it, never execute it.
+#
+#   . "${CLAUDE_PLUGIN_ROOT}/hooks/lib/git-ctx.sh"
+#   yt_read_stdin                 # hook payload -> YT_CWD, YT_SESSION_ID, ...
+#   yt_git_ctx "${YT_CWD:-$PWD}"  # git context of the dir the agent works in
+#   YT_DIR=$(yt_resolve_yt_dir)   # .ytstack dir (project or user scope)
+#   STATE=$(yt_state_dir)         # out-of-tree per-session state dir
+#
+# Contract (DECISIONS 2026-11-07 "Hooks never write relative to
+# CLAUDE_PROJECT_DIR"): Claude Code pins CLAUDE_PROJECT_DIR to the
+# session-start directory and it does NOT follow the agent into a linked
+# worktree; only the hook payload's `cwd` does. Every hook and skill preamble
+# therefore resolves its target through this library and never writes
+# relative to CLAUDE_PROJECT_DIR or a basename slug.
+#
+# Portability: macOS /bin/bash 3.2 and Linux bash 5. No arrays, no `local -n`,
+# no `readlink -f`, no `flock`. Every function sets YT_* globals and returns 0,
+# so callers do not need `set -e` guards. Keys are the first 16 hex chars of
+# sha256 (readable paths; collision risk is irrelevant at this scale).
+
+# yt_sha16 <string> -> 16 hex chars
+yt_sha16() {
+  if command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$1" | shasum -a 256 | cut -c1-16
+  elif command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$1" | sha256sum | cut -c1-16
+  else
+    printf '%s' "$1" | cksum | cut -d' ' -f1
+  fi
+}
+
+# yt_canon <path> -> canonical absolute dir path (symlinks resolved), or the
+# input unchanged when it is not a directory.
+yt_canon() {
+  if [ -d "$1" ]; then
+    (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"
+  else
+    printf '%s' "$1"
+  fi
+}
+
+# yt_read_stdin: capture the hook payload once (idempotent) and parse the
+# fields hooks need. Uses jq, falls back to python3 (or YT_FORCE_NO_JQ=1).
+# YT_CWD is kept only when it names an existing directory.
+yt_read_stdin() {
+  if [ -z "${YT_STDIN+x}" ]; then
+    if [ -t 0 ]; then YT_STDIN=""; else YT_STDIN=$(cat 2>/dev/null); fi
+  fi
+  YT_CWD=""; YT_SESSION_ID=""; YT_HOOK_EVENT=""; YT_TOOL_CMD=""; YT_TOOL_EXIT=""
+  [ -n "$YT_STDIN" ] || return 0
+  local out=""
+  if [ -z "${YT_FORCE_NO_JQ:-}" ] && command -v jq >/dev/null 2>&1; then
+    out=$(printf '%s' "$YT_STDIN" | jq -r '
+      "YT_CWD="        + ((.cwd // "") | tostring | @sh) + " " +
+      "YT_SESSION_ID=" + ((.session_id // "") | tostring | @sh) + " " +
+      "YT_HOOK_EVENT=" + ((.hook_event_name // "") | tostring | @sh) + " " +
+      "YT_TOOL_CMD="   + (((.tool_input | objects | .command) // "") | tostring | @sh) + " " +
+      "YT_TOOL_EXIT="  + (((.tool_response | objects | .exit_code) // .exit_code // "") | tostring | @sh)
+    ' 2>/dev/null) || out=""
+  elif command -v python3 >/dev/null 2>&1; then
+    out=$(printf '%s' "$YT_STDIN" | python3 -I -c '
+import json, shlex, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = {}
+if not isinstance(d, dict):
+    d = {}
+def s(v):
+    return "" if v is None else str(v)
+ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
+tr = d.get("tool_response") if isinstance(d.get("tool_response"), dict) else {}
+ex = tr.get("exit_code")
+if ex is None:
+    ex = d.get("exit_code")
+print("YT_CWD=%s YT_SESSION_ID=%s YT_HOOK_EVENT=%s YT_TOOL_CMD=%s YT_TOOL_EXIT=%s" % tuple(
+    shlex.quote(s(x)) for x in (d.get("cwd"), d.get("session_id"), d.get("hook_event_name"), ti.get("command"), ex)))
+' 2>/dev/null) || out=""
+  fi
+  if [ -n "$out" ]; then eval "$out"; fi
+  if [ -n "$YT_CWD" ] && [ ! -d "$YT_CWD" ]; then YT_CWD=""; fi
+  return 0
+}
+
+# yt_git_ctx [dir]: resolve the Git context of <dir> (default: YT_CWD, then
+# $PWD). Sets YT_IS_GIT, YT_TOPLEVEL, YT_GIT_DIR, YT_COMMON_DIR,
+# YT_IS_LINKED, YT_MAIN_TOPLEVEL, YT_REPO_KEY, YT_WT_KEY.
+yt_git_ctx() {
+  local dir="${1:-${YT_CWD:-$PWD}}"
+  YT_IS_GIT=no; YT_IS_LINKED=no
+  YT_TOPLEVEL=""; YT_GIT_DIR=""; YT_COMMON_DIR=""; YT_MAIN_TOPLEVEL=""
+  YT_REPO_KEY=""; YT_WT_KEY=""
+  [ -d "$dir" ] || dir="$PWD"
+  dir=$(yt_canon "$dir")
+
+  if [ "$(git -C "$dir" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then
+    YT_IS_GIT=yes
+    YT_TOPLEVEL=$(yt_canon "$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)")
+
+    # --path-format=absolute needs git >= 2.31; fall back to the older flags.
+    YT_GIT_DIR=$(git -C "$dir" rev-parse --path-format=absolute --git-dir 2>/dev/null) \
+      || YT_GIT_DIR=$(git -C "$dir" rev-parse --absolute-git-dir 2>/dev/null)
+    YT_GIT_DIR=$(yt_canon "$YT_GIT_DIR")
+
+    YT_COMMON_DIR=$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
+      || YT_COMMON_DIR=$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null)
+    case "$YT_COMMON_DIR" in
+      /*) ;;                                 # already absolute
+      "") YT_COMMON_DIR="$YT_GIT_DIR" ;;     # very old git: assume not linked
+      *)  YT_COMMON_DIR="$dir/$YT_COMMON_DIR" ;;  # relative to <dir>
+    esac
+    YT_COMMON_DIR=$(yt_canon "$YT_COMMON_DIR")
+
+    if [ "$YT_GIT_DIR" != "$YT_COMMON_DIR" ]; then YT_IS_LINKED=yes; fi
+    case "$YT_COMMON_DIR" in
+      */.git) YT_MAIN_TOPLEVEL="${YT_COMMON_DIR%/.git}" ;;
+    esac
+    YT_REPO_KEY=$(yt_sha16 "$YT_COMMON_DIR")
+  else
+    YT_TOPLEVEL="$dir"
+    YT_REPO_KEY=$(yt_sha16 "$YT_TOPLEVEL")
+  fi
+  YT_WT_KEY=$(yt_sha16 "$YT_TOPLEVEL")
+  return 0
+}
+
+# yt_state_base -> root of the out-of-tree state tree.
+# Order: CLAUDE_PLUGIN_DATA (Claude Code), PLUGIN_DATA (Codex adapter),
+# $XDG_STATE_HOME/ytstack, ~/.local/state/ytstack.
+yt_state_base() {
+  printf '%s' "${CLAUDE_PLUGIN_DATA:-${PLUGIN_DATA:-${XDG_STATE_HOME:-$HOME/.local/state}/ytstack}}"
+}
+
+# yt_state_wt_dir -> per-repo, per-worktree state dir (created). Falls back
+# to <toplevel>/.ytstack/.local when the base is not writable and a .ytstack
+# dir exists; otherwise to a tmp dir -- never into a tree without .ytstack.
+yt_state_wt_dir() {
+  YT_STATE_FALLBACK=no
+  YT_STATE_WT_DIR="$(yt_state_base)/repos/${YT_REPO_KEY:-unknown}/worktrees/${YT_WT_KEY:-unknown}"
+  if ! mkdir -p "$YT_STATE_WT_DIR" 2>/dev/null; then
+    YT_STATE_FALLBACK=yes
+    local top="${YT_TOPLEVEL:-$PWD}"
+    if [ -d "$top/.ytstack" ]; then
+      YT_STATE_WT_DIR="$top/.ytstack/.local"
+    else
+      YT_STATE_WT_DIR="${TMPDIR:-/tmp}/ytstack-$(id -u 2>/dev/null || echo u)/repos/${YT_REPO_KEY:-unknown}/worktrees/${YT_WT_KEY:-unknown}"
+    fi
+    mkdir -p "$YT_STATE_WT_DIR" 2>/dev/null || true
+  fi
+  printf '%s' "$YT_STATE_WT_DIR"
+}
+
+# yt_state_dir -> per-session state dir (created). Session-keyed files are
+# single-writer, which is the concurrency model (no flock on macOS).
+yt_state_dir() {
+  yt_state_wt_dir >/dev/null
+  YT_STATE_DIR="$YT_STATE_WT_DIR/sessions/${YT_SESSION_ID:-nosession}"
+  mkdir -p "$YT_STATE_DIR" 2>/dev/null || true
+  printf '%s' "$YT_STATE_DIR"
+}
+
+# yt_resolve_yt_dir -> the .ytstack dir for the resolved toplevel: project
+# scope (<toplevel>/.ytstack) first, then user scope keyed by YT_REPO_KEY.
+# Sets YT_DIR and YT_SCOPE (project|user|none). No basename slugs.
+yt_resolve_yt_dir() {
+  local top="${YT_TOPLEVEL:-$PWD}"
+  YT_DIR=""; YT_SCOPE=none
+  if [ -d "$top/.ytstack" ]; then
+    YT_DIR="$top/.ytstack"; YT_SCOPE=project
+  elif [ -n "${YT_REPO_KEY:-}" ] && [ -d "$HOME/.ytstack/projects/$YT_REPO_KEY" ]; then
+    YT_DIR="$HOME/.ytstack/projects/$YT_REPO_KEY"; YT_SCOPE=user
+  fi
+  printf '%s' "$YT_DIR"
+}
