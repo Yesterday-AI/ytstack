@@ -1,82 +1,88 @@
 #!/usr/bin/env bash
 # ytstack PostToolUse hook for Bash
 #
-# Fires after every successful Bash tool call. If the command was a `git
-# commit`, append a one-line entry to the active task's T##-SUMMARY.md
-# (or create a draft summary if none exists yet) so the commit is linked
-# to the ytstack task automatically.
+# Fires after every Bash tool call. If the call was a real, successful
+# `git commit` whose HEAD subject carries the active task's commit ref, drop a
+# draft T##-SUMMARY.md stub ONCE into the committing checkout's .ytstack so an
+# interrupted task still leaves a closure artifact.
+#
+# Rules (M015 stub-once + M016 worktree-safe, DECISIONS 2026-05-31 and
+# 2026-11-07):
+#   - Checkout = payload `cwd` (fallback: this process's $PWD). NEVER
+#     CLAUDE_PROJECT_DIR: it is pinned to the session-start dir and does not
+#     follow the agent into a worktree, which is how stubs ended up in a shared
+#     main checkout (#26/#27).
+#   - Stub only when HEAD's subject matches `commit_ref_pattern` (PREFERENCES.md,
+#     default `^M###-S##-T##:` rendered for the active task). A commit without
+#     the ref is not this task's commit, whatever STATE.md says.
+#   - Stub once; never re-write. summarize-task owns the durable commit list.
+#   - Matcher accepts wrapper tokens (`rtk`, `sudo`, `command`, `env X=1`)
+#     before `git commit`, still rejects echoes and `git log | grep commit`.
+#
+# Known limitation: a command that `cd`s elsewhere before committing is
+# attributed to the payload cwd. Acceptable; summarize-task is the truth.
+# Fail-open: exit 0 always.
 
 set -uo pipefail
+trap '' PIPE
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-cd "$PROJECT_DIR" 2>/dev/null || exit 0
+. "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
 
-YT_DIR=""
-if [ -d "$PROJECT_DIR/.ytstack" ]; then
-  YT_DIR="$PROJECT_DIR/.ytstack"
-else
-  SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PROJECT_DIR")")
-  USER_YT="$HOME/.ytstack/projects/$SLUG"
-  [ -d "$USER_YT" ] && YT_DIR="$USER_YT"
-fi
+yt_read_stdin
 
-[ -z "$YT_DIR" ] && exit 0
+# Only successful calls (exit code absent or 0).
+case "${YT_TOOL_EXIT:-0}" in 0|"") ;; *) exit 0 ;; esac
 
-STATE_FILE="$YT_DIR/STATE.md"
-[ ! -f "$STATE_FILE" ] && exit 0
-
-# Parse stdin for the Bash command and outcome
-INPUT=$(cat)
-CMD=""
-EXIT_CODE=""
-if command -v jq >/dev/null 2>&1; then
-  CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
-  EXIT_CODE=$(echo "$INPUT" | jq -r '.tool_response.exit_code // .exit_code // empty' 2>/dev/null)
-fi
-
-# Only act on a REAL `git commit` invocation that succeeded.
-# A glob like *git*commit* (the pre-M015 matcher) fired on any string
-# containing "git" then "commit" -- echoes, `git log | grep commit`, doc
-# strings -- producing spurious appends (issue #22). Require `git commit` as an
-# actual command, i.e. preceded by a command separator (start-of-string, ; & |
-# ( or a chained &&/||), not merely whitespace. That accepts `git commit ...`,
-# `git add x && git commit ...`, `cd d; git commit ...`, `$(git commit ...)`,
-# while rejecting `echo "... git commit ..."` and `git log | grep commit`.
-# Trade-off: an exotic form like `sudo git commit` is not auto-stubbed (no harm
-# -- summarize-task still writes the real summary at task close).
-[ "${EXIT_CODE:-0}" -ne 0 ] && exit 0
-_GIT_COMMIT_RE='(^|[;&|()])[[:space:]]*git[[:space:]]+commit([[:space:]]|$)'
-if ! [[ "$CMD" =~ $_GIT_COMMIT_RE ]]; then
+# Real `git commit` after a command separator, optionally behind wrapper tokens.
+_WRAP='((rtk|sudo|command|env([[:space:]]+[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*)*)[[:space:]]+)*'
+_GIT_COMMIT_RE="(^|[;&|()])[[:space:]]*${_WRAP}git[[:space:]]+commit([[:space:]]|\$)"
+if ! [[ "$YT_TOOL_CMD" =~ $_GIT_COMMIT_RE ]]; then
   exit 0
 fi
 
-# Get active task from STATE.md
-CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$STATE_FILE" | head -1)
-ACTIVE_SLICE=$(sed -n 's/^active_slice: *//p' "$STATE_FILE" | head -1)
-ACTIVE_TASK=$(sed -n 's/^active_task: *//p' "$STATE_FILE" | head -1)
+yt_git_ctx "${YT_CWD:-$PWD}"
+[ "$YT_IS_GIT" = yes ] || exit 0
+YT_DIR=$(yt_resolve_yt_dir)
+[ -z "$YT_DIR" ] && exit 0
 
-# No active task → nothing to link
-[ "$ACTIVE_TASK" = "none" ] || [ -z "$ACTIVE_TASK" ] && exit 0
+STATE_FILE="$YT_DIR/STATE.md"
+[ -f "$STATE_FILE" ] || exit 0
+get_field() { sed -n "s/^$1: *//p" "$STATE_FILE" 2>/dev/null | head -1; }
+CURRENT_MILESTONE=$(get_field current_milestone)
+ACTIVE_SLICE=$(get_field active_slice)
+ACTIVE_TASK=$(get_field active_task)
+case "$ACTIVE_TASK" in ""|none) exit 0 ;; esac
+case "$ACTIVE_SLICE" in ""|none) exit 0 ;; esac
 
-SUMMARY_FILE="$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK-SUMMARY.md"
+TASK_REF="$CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK"
 
-# Stub-once (issue #22). The durable, accurate per-commit list is owned by
-# `ytstack:summarize-task` (it greps `git log` for the task ref at task close
-# and writes a committed `## Commits` section). The hook's only job is to drop
-# a draft stub ONCE on the first commit of a task, so an interrupted task still
-# leaves a closure artifact. It NEVER re-writes the file: that is what caused
-# the duplicate lines, the never-settling working tree, and the worktree /
-# spawn-milestone-team dispatch gap (an uncommitted, churning draft is invisible
-# to a worktree branched from main). Once this stub is committed, the tree
-# settles and stays clean for the rest of the task.
-[ -f "$SUMMARY_FILE" ] && exit 0
+# Commit-ref pattern: PREFERENCES.md `commit_ref_pattern: <ERE>` (quotes
+# optional), default `^M###-S##-T##:`. Tokens M###/S##/T##/{task} are rendered.
+PATTERN=""
+if [ -f "$YT_DIR/PREFERENCES.md" ]; then
+  PATTERN=$(sed -n 's/^commit_ref_pattern: *//p' "$YT_DIR/PREFERENCES.md" | head -1)
+  PATTERN="${PATTERN#\"}"; PATTERN="${PATTERN%\"}"
+  PATTERN="${PATTERN#\'}"; PATTERN="${PATTERN%\'}"
+fi
+[ -n "$PATTERN" ] || PATTERN='^M###-S##-T##:'
+PATTERN="${PATTERN//\{task\}/$TASK_REF}"
+PATTERN="${PATTERN//M###/$CURRENT_MILESTONE}"
+PATTERN="${PATTERN//S##/$ACTIVE_SLICE}"
+PATTERN="${PATTERN//T##/$ACTIVE_TASK}"
 
-COMMIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
-COMMIT_MSG=$(git log -1 --pretty=format:%s 2>/dev/null || echo "")
+SUBJECT=$(git -C "$YT_TOPLEVEL" log -1 --pretty=%s 2>/dev/null || echo "")
+if ! [[ "$SUBJECT" =~ $PATTERN ]]; then
+  exit 0
+fi
+
+SUMMARY_FILE="$YT_DIR/$TASK_REF-SUMMARY.md"
+[ -f "$SUMMARY_FILE" ] && exit 0   # stub-once
+
+COMMIT_SHA=$(git -C "$YT_TOPLEVEL" rev-parse --short HEAD 2>/dev/null || echo unknown)
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 PROJECT_NAME=$(sed -n 's/^name: *//p' "$YT_DIR/PROJECT.md" 2>/dev/null | head -1)
 
-cat > "$SUMMARY_FILE" <<EOF
+cat > "$SUMMARY_FILE" 2>/dev/null <<EOF
 ---
 milestone: $CURRENT_MILESTONE
 slice: $ACTIVE_SLICE
@@ -85,13 +91,14 @@ project: ${PROJECT_NAME:-unknown}
 closed: draft
 verification: pending
 source: post-tool-use-bash-draft
+worktree: $YT_TOPLEVEL
 ---
 
-# $CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK -- Summary (draft)
+# $TASK_REF -- Summary (draft)
 
-Auto-draft created by the \`post-tool-use-bash\` hook on the first commit of this task. Run \`/ytstack:summarize-task\` to fill in Outcome / Deviations / Follow-ups / Verification and the full commit list. This stub is written once and never re-touched by the hook.
+Auto-draft created by the \`post-tool-use-bash\` hook on the first commit of this task that carried its commit ref. Run \`/ytstack:summarize-task\` to fill in Outcome / Deviations / Follow-ups / Verification and the full commit list. This stub is written once and never re-touched by the hook.
 
-First commit of this task: \`$COMMIT_SHA\` -- $COMMIT_MSG ($TS)
+First commit of this task: \`$COMMIT_SHA\` -- $SUBJECT ($TS)
 
 ## Outcome
 
