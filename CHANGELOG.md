@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [0.4.2] - 2026-11-07
+
+### Fixed
+
+- `yt_find_artifacts` on Linux: GNU `stat -f %m FILE` prints filesystem
+  info to stdout before failing, so "Recent tasks" and the layout-tolerant
+  lookups carried garbage lines and the git-ctx suite failed on
+  ubuntu-latest. The lib now tries GNU `stat -c %Y` first, BSD `stat -f %m`
+  second. `tests/run-all.sh --linux` is green again.
+- `.github/workflows/ci.yml`: `ytstack-check` exit 2 (warnings only) no
+  longer fails the job, matching `plugin-check.yml`.
+
 ## [0.4.1] - 2026-11-07
 
 The 0.4.0 tag was pushed before the Codex support that had landed on
@@ -366,6 +378,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.4.2]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.3.0

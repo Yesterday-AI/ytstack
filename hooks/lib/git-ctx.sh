@@ -543,7 +543,13 @@ yt_find_artifacts() {
   for d in "$ytd" "$ytd"/milestones "$ytd"/milestones/* "$ytd"/decisions "$ytd"/backlog "$ytd"/backlog/* "$ytd"/quick; do
     [ -d "$d" ] || continue
     ls -t "$d"/$pat 2>/dev/null
-  done | awk 'NF && !seen[$0]++' | while IFS= read -r f; do printf '%s\t%s\n' "$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)" "$f"; done | sort -rn | cut -f2-
+  done | awk 'NF && !seen[$0]++' | while IFS= read -r f; do
+    # GNU stat first (-c %Y); BSD/macOS (-f %m) second. The order matters:
+    # GNU `stat -f %m FILE` prints filesystem info for "%m" to stdout before
+    # failing, which polluted the list on Linux (CI 2026-11-07).
+    _mt=$(stat -c %Y "$f" 2>/dev/null) || _mt=$(stat -f %m "$f" 2>/dev/null) || _mt=0
+    printf '%s\t%s\n' "$_mt" "$f"
+  done | sort -rn | cut -f2-
   return 0
 }
 

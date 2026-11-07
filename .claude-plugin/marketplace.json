@@ -9,7 +9,7 @@
     {
       "name": "ytstack",
       "description": "Claude Code plugin. Project-OS artifact discipline + curated superpowers and gstack skill wrappers + Agent Teams orchestration.",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "source": "./",
       "author": {
         "name": "Yesterday",

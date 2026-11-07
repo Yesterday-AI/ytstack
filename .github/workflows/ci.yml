@@ -29,4 +29,11 @@ jobs:
       - name: Shell test suites
         run: bash tests/run-all.sh
       - name: ytstack-check
-        run: python3 bin/ytstack-check .
+        shell: bash
+        # exit 2 = warnings without failures (documented vendor-sibling notes)
+        run: |
+          result=0
+          python3 bin/ytstack-check . || result=$?
+          if [ "$result" -ne 0 ] && [ "$result" -ne 2 ]; then
+            exit "$result"
+          fi
