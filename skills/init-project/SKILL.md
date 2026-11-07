@@ -68,26 +68,30 @@ Run this first. Output gets read by the procedure below.
 
 ```bash
 _BRANCH=$(git branch --show-current 2>/dev/null || echo unknown)
-_PROJECT_SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || basename "$(pwd)")
-_HAS_PROJECT_YT=$([ -d .ytstack ] && echo yes || echo no)
-_HAS_USER_YT=$([ -d "$HOME/.ytstack/projects/$_PROJECT_SLUG" ] && echo yes || echo no)
-if [ "$_HAS_PROJECT_YT" = "yes" ]; then
-  _HAS_YTSTACK=yes
-  _YTSTACK_SCOPE=project
-elif [ "$_HAS_USER_YT" = "yes" ]; then
-  _HAS_YTSTACK=yes
-  _YTSTACK_SCOPE=user
+# ytstack resolver (M016): checkout = where this shell runs, via the shared lib.
+_LIB="${CLAUDE_SKILL_DIR}/../../hooks/lib/git-ctx.sh"
+if [ -f "$_LIB" ]; then
+  . "$_LIB"; yt_git_ctx "$PWD"; yt_resolve_yt_dir >/dev/null
+  _PROJECT_DIR="$YT_TOPLEVEL"; _YT_DIR="$YT_DIR"; _YT_SCOPE="$YT_SCOPE"; _IS_GIT="$YT_IS_GIT"; _PROJECT_KEY="$YT_REPO_KEY"
 else
-  _HAS_YTSTACK=no
-  _YTSTACK_SCOPE=none
+  # Host did not substitute CLAUDE_SKILL_DIR (e.g. Codex adapter): project scope only.
+  _IS_GIT=$([ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" = true ] && echo yes || echo no)
+  _PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
+  _YT_DIR=""; _YT_SCOPE=none; _PROJECT_KEY=""
+  [ -d "$_PROJECT_DIR/.ytstack" ] && { _YT_DIR="$_PROJECT_DIR/.ytstack"; _YT_SCOPE=project; }
 fi
+cd "$_PROJECT_DIR" 2>/dev/null || true
+_PROJECT_SLUG=$(basename "$_PROJECT_DIR")
+_HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
+_YTSTACK_SCOPE="$_YT_SCOPE"
+# User-scope dir is keyed by the repo key (hash of the git common dir), never by basename (collisions: my-context-mcp vs meinkontext).
+_USER_YT_DIR="$HOME/.ytstack/projects/${_PROJECT_KEY:-$_PROJECT_SLUG}"
 _NON_INTERACTIVE=false
 if [ -n "$YTSTACK_NON_INTERACTIVE" ] || [ -n "$OPENCLAW_SESSION" ] || [ -n "$CLAUDE_AGENT_TEAM_MEMBER" ]; then
   _NON_INTERACTIVE=true
 fi
 _EXPLAIN_LEVEL="default"
 [ -f "$HOME/.ytstack/config" ] && _EXPLAIN_LEVEL=$(grep -E '^explain_level=' "$HOME/.ytstack/config" 2>/dev/null | cut -d= -f2 || echo default)
-_IS_GIT=$([ -d .git ] && echo yes || echo no)
 # Pitch-artifact discovery (produced by ytstack:office-hours)
 _PITCH=""
 if [ -f "./OFFICE-HOURS.md" ]; then
@@ -135,14 +139,14 @@ Otherwise, use AskUserQuestion with this exact body:
 >
 > **Project-level** (`./.ytstack/` in your repo): committed to git, shared with team, survives machine migration. Everyone working on this project sees the same memory.
 >
-> **User-level** (`~/.ytstack/projects/{PROJECT_SLUG}/`): private, follows you across machines if you sync `~/.ytstack/`, not shared.
+> **User-level** (`~/.ytstack/projects/<repo-key>/`, keyed by a hash of the repo's git dir): private, follows you across machines if you sync `~/.ytstack/`, not shared.
 >
 > RECOMMENDATION: Choose A. Project-level is the only safe default. You never lose state to a laptop failure, and teammates see the same history. User-level is only right for secret side projects or when you can't commit to the repo.
 >
 > A) Project-level (./.ytstack/) -- committed to git, team-shared
 >    Completeness: 10/10, effort: 0 setup / 0 ongoing, tier: core
 >
-> B) User-level (~/.ytstack/projects/{SLUG}/) -- private, machine-local
+> B) User-level (~/.ytstack/projects/<repo-key>/) -- private, machine-local
 >    Completeness: 7/10, effort: 0 setup / 0 ongoing (risk of loss on hardware failure), tier: core
 >
 > C) Both (project for team facts, user for private notes) -- hybrid
@@ -157,7 +161,7 @@ Remember the answer as `_SCOPE_CHOICE` (value: `project`, `user`, or `both`).
 Based on `_SCOPE_CHOICE`:
 
 - If `project` or `both`: `mkdir -p .ytstack`
-- If `user` or `both`: `mkdir -p "$HOME/.ytstack/projects/$_PROJECT_SLUG"`
+- If `user` or `both`: `mkdir -p "$_USER_YT_DIR"` (keyed by the repo key from the preamble, so two repos with the same folder name never collide)
 
 For `both`, write all files to both locations for v0.1. Later skills can split.
 

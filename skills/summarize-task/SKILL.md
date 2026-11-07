@@ -44,17 +44,20 @@ You MUST create a TodoWrite task for each of these items:
 ## Preamble
 
 ```bash
-_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-cd "$_PROJECT_DIR" 2>/dev/null || true
-_PROJECT_SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || basename "$(pwd)")
-
-if [ -d "$_PROJECT_DIR/.ytstack" ]; then
-  _YT_DIR="$_PROJECT_DIR/.ytstack"
-elif [ -d "$HOME/.ytstack/projects/$_PROJECT_SLUG" ]; then
-  _YT_DIR="$HOME/.ytstack/projects/$_PROJECT_SLUG"
+# ytstack resolver (M016): checkout = where this shell runs, via the shared lib.
+_LIB="${CLAUDE_SKILL_DIR}/../../hooks/lib/git-ctx.sh"
+if [ -f "$_LIB" ]; then
+  . "$_LIB"; yt_git_ctx "$PWD"; yt_resolve_yt_dir >/dev/null
+  _PROJECT_DIR="$YT_TOPLEVEL"; _YT_DIR="$YT_DIR"; _YT_SCOPE="$YT_SCOPE"; _IS_GIT="$YT_IS_GIT"; _PROJECT_KEY="$YT_REPO_KEY"
 else
-  _YT_DIR=""
+  # Host did not substitute CLAUDE_SKILL_DIR (e.g. Codex adapter): project scope only.
+  _IS_GIT=$([ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" = true ] && echo yes || echo no)
+  _PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
+  _YT_DIR=""; _YT_SCOPE=none; _PROJECT_KEY=""
+  [ -d "$_PROJECT_DIR/.ytstack" ] && { _YT_DIR="$_PROJECT_DIR/.ytstack"; _YT_SCOPE=project; }
 fi
+cd "$_PROJECT_DIR" 2>/dev/null || true
+_PROJECT_SLUG=$(basename "$_PROJECT_DIR")
 
 _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 
@@ -74,7 +77,6 @@ fi
 
 _PLAN_FILE="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$_ACTIVE_TASK-PLAN.md"
 _SLICE_PLAN="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md"
-_IS_GIT=$([ -d .git ] && echo yes || echo no)
 
 # Gather this task's commits for a durable, committed `## Commits` section.
 # ytstack's commit convention prefixes task commits with `M###-S##-T##:`
