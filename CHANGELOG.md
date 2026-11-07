@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- Docs only: CONTRIBUTING release checklist (fetch + merge before the
+  release commit, push `main` before the tag, pushed tags are immutable),
+  QUICKSTART note on gstack's `./setup` side effects, KNOWLEDGE gotchas,
+  ROADMAP M020 candidates, REVIEW-NOTES item on Codex's
+  `additionalContextLimit`.
 
 ## [0.4.2] - 2026-11-07
 

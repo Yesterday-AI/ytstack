@@ -137,6 +137,15 @@ the validator's warnings-only exit code (2) and rejects failures. See
 - Version bumps follow semver: patch for bugfixes, minor for new skills, major for breaking changes to skill names / artifact paths.
 - Each minor release tags the commit and updates `.claude-plugin/plugin.json`'s version field.
 
+### Release checklist
+
+1. `git fetch origin` and merge `origin/main` (never rebase) **before** the release commit; a long local run can hide upstream commits (0.4.0 missed the October Codex support and became 0.4.1 the same evening).
+2. All three manifests agree: `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `.codex-plugin/plugin.json` (`tests/codex_plugin_test.py` checks the Codex one); README version badge; CHANGELOG section with compare link.
+3. Clean clone: `bash tests/run-all.sh`, `bash tests/run-all.sh --linux` (Docker; the lib has GNU/BSD branches), `bin/ytstack-check`, `claude plugin validate .`, `python3 -m unittest discover -s tests -p 'codex_plugin_test.py'`.
+4. Push `main` first, then the tag (`git push origin main && git push origin vX.Y.Z`). `git push origin main --tags` pushes the tags even when `main` is rejected.
+5. A pushed tag is immutable (no force-push): anything that has to follow it is the next patch release.
+6. Watch `gh run list` for `ci`, `Plugin checks`, `Secret Scanning` on the pushed SHA; update the installed plugin (`claude plugin marketplace update yesterday-public-plugins && claude plugin update ytstack`).
+
 ## Reporting issues
 
 Open an issue at [Yesterday-AI/ytstack/issues](https://github.com/Yesterday-AI/ytstack/issues):

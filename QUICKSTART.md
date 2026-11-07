@@ -17,7 +17,7 @@ Code command names; in Codex select the corresponding skill from ytstack with
   git clone --branch v1.96.0.0 https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd ~/.claude/skills/gstack && ./setup --no-browser)
   ```
 
-  Without it those skills stop with this install command; everything else in ytstack works without gstack or bun.
+  Without it those skills stop with this install command; everything else in ytstack works without gstack or bun. gstack's `./setup` also registers its own `Stop` hook in `~/.claude/settings.json` (remove with `~/.claude/skills/gstack/bin/gstack-settings-hook remove-source --source gstack-timeline-stop`) and may skip Chromium; neither affects ytstack.
 
 ### Local dev (recommended for first try)
 
