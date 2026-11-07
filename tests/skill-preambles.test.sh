@@ -92,6 +92,15 @@ for s in $SKILLS; do
       has "$s: fake install -> pin ok" "$OUT" "GSTACK_PIN_OK: yes"
       rm -rf "$TMP/home/.claude"
       grep -q 'vendor/gstack' "$ROOT/skills/$s/SKILL.md" && bad "$s: no vendor/gstack reference left" || ok "$s: no vendor/gstack reference left" ;;
+    plan-task|slice-milestone|summarize-task)
+      # ceremony dials (M018): defaults, then a PREFERENCES.md with slice/step
+      has "$s: default GRANULARITY task" "$OUT" "GRANULARITY: task"
+      has "$s: default AUTONOMY loop"    "$OUT" "AUTONOMY: loop"
+      printf '## Ceremony\n\ngranularity: slice\nautonomy: step\n' > "$WT/.ytstack/PREFERENCES.md"
+      run_pre "$P" "$WT"
+      has "$s: PREFERENCES granularity slice" "$OUT" "GRANULARITY: slice"
+      has "$s: PREFERENCES autonomy step"     "$OUT" "AUTONOMY: step"
+      rm -f "$WT/.ytstack/PREFERENCES.md" ;;
     resume-session)
       has "$s: worktree -> no auto handoff there" "$OUT" "LATEST_AUTO_HANDOFF: none"
       run_pre "$P" "$MAIN"

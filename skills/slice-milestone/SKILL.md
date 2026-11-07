@@ -83,6 +83,12 @@ _PROJECT_SLUG=$(basename "$_PROJECT_DIR")
 
 _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 
+# Ceremony dials (M018): granularity / autonomy from PREFERENCES.md
+if command -v yt_prefs >/dev/null 2>&1; then yt_prefs "$_YT_DIR" >/dev/null; else YT_PREF_GRANULARITY=task; YT_PREF_AUTONOMY=loop; YT_PREF_WARNINGS=""; fi
+echo "GRANULARITY: $YT_PREF_GRANULARITY"
+echo "AUTONOMY: $YT_PREF_AUTONOMY"
+echo "PREF_WARNINGS: ${YT_PREF_WARNINGS:-none}"
+
 _CURRENT_MILESTONE=none
 if [ -f "$_YT_DIR/STATE.md" ]; then
   _CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$_YT_DIR/STATE.md" | head -1)
@@ -235,3 +241,5 @@ Do NOT invoke `ytstack:plan-task` or `ytstack:spawn-milestone-team` automaticall
 
 - User reviews generated slice-plan files
 - User runs one of the suggested next-step skills when ready
+
+**Autonomy (M018):** slicing is a milestone-level boundary, so `AUTONOMY: loop` does NOT auto-chain here; the user (or `reassess-roadmap`) starts the first slice. **Granularity (M018):** with `GRANULARITY: milestone` write exactly one `M###-S01-PLAN.md` named "whole milestone" whose task list is the milestone's exit criteria collapsed into one entry, and say so in the report.

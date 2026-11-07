@@ -67,6 +67,12 @@ _PROJECT_SLUG=$(basename "$_PROJECT_DIR")
 
 _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 
+# Ceremony dials (M018): granularity / autonomy from PREFERENCES.md
+if command -v yt_prefs >/dev/null 2>&1; then yt_prefs "$_YT_DIR" >/dev/null; else YT_PREF_GRANULARITY=task; YT_PREF_AUTONOMY=loop; YT_PREF_WARNINGS=""; fi
+echo "GRANULARITY: $YT_PREF_GRANULARITY"
+echo "AUTONOMY: $YT_PREF_AUTONOMY"
+echo "PREF_WARNINGS: ${YT_PREF_WARNINGS:-none}"
+
 _NON_INTERACTIVE=false
 if [ -n "$YTSTACK_NON_INTERACTIVE" ] || [ -n "$OPENCLAW_SESSION" ] || [ -n "$CLAUDE_AGENT_TEAM_MEMBER" ]; then
   _NON_INTERACTIVE=true
@@ -256,3 +262,7 @@ Valid terminal states:
 - Abort if user picks C in Step 7 (task too big, split needed)
 
 Do NOT invoke `ytstack:summarize-task` automatically -- the user / subagent must execute the task first. Do NOT start writing code from within this skill -- that's the execution phase, a separate concern.
+
+**Autonomy (M018):** with `AUTONOMY: loop` (PREFERENCES default) continue now with the execution of the planned task (`ytstack:test-driven-development`, then `ytstack:verification-before-completion`, then `ytstack:summarize-task`) without asking; stop at the slice boundary (`ytstack:reassess-roadmap`) and at any HARD-GATE. With `AUTONOMY: step` return control after this report. This is the one sanctioned exception to "never auto-chain", scoped to steps inside a slice.
+
+**Granularity (M018):** with `GRANULARITY: slice` the unit planned here is the whole slice: append `## Files`, `## What this does`, `## Verification` to `M###-S##-PLAN.md` instead of writing a `T##-PLAN.md`, set `active_task: all`, and skip Step 7. With `GRANULARITY: milestone` do the same at `M###-ROADMAP.md` level with `active_slice: all`, `active_task: all`.

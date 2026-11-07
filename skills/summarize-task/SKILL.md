@@ -61,6 +61,12 @@ _PROJECT_SLUG=$(basename "$_PROJECT_DIR")
 
 _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 
+# Ceremony dials (M018): granularity / autonomy from PREFERENCES.md
+if command -v yt_prefs >/dev/null 2>&1; then yt_prefs "$_YT_DIR" >/dev/null; else YT_PREF_GRANULARITY=task; YT_PREF_AUTONOMY=loop; YT_PREF_WARNINGS=""; fi
+echo "GRANULARITY: $YT_PREF_GRANULARITY"
+echo "AUTONOMY: $YT_PREF_AUTONOMY"
+echo "PREF_WARNINGS: ${YT_PREF_WARNINGS:-none}"
+
 _NON_INTERACTIVE=false
 if [ -n "$YTSTACK_NON_INTERACTIVE" ] || [ -n "$OPENCLAW_SESSION" ] || [ -n "$CLAUDE_AGENT_TEAM_MEMBER" ]; then
   _NON_INTERACTIVE=true
@@ -303,4 +309,6 @@ Valid terminal states:
 - Abort on HARD-GATE failure (no active task / missing plan file)
 - Abort on verification failure (C in Step 7) -- task stays open
 
-Do NOT invoke `plan-task`, `reassess-roadmap`, or `plan-milestone` automatically.
+Do NOT invoke `plan-task`, `reassess-roadmap`, or `plan-milestone` automatically -- except under `AUTONOMY: loop` (PREFERENCES default, M018): when the slice still has unplanned or open tasks, continue with `ytstack:plan-task` for the next one without asking; when this summary closed the slice's last task, stop and recommend `ytstack:reassess-roadmap` (slice boundary). With `AUTONOMY: step` return control after the report.
+
+**Granularity (M018):** with `GRANULARITY: slice` the summary file is `M###-S##-SUMMARY.md` and the task ref for commit discovery is `M###-S##` (`yt_commit_ref_pattern "$_YT_DIR" M### S## ""` with the default pattern reduced to `^M###-S##:`); with `GRANULARITY: milestone` it is `M###-SUMMARY.md` / `^M###:`. Flip the slice (or milestone) status to `done` instead of a task checkbox.

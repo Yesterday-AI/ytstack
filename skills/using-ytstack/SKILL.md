@@ -89,7 +89,7 @@ digraph using_ytstack {
 
 ## After invoking a skill
 
-Follow its Checklist exactly. Create TodoWrite entries per item. Don't improvise steps. The skill's Terminal State section tells you what to do next -- respect it; don't auto-invoke the suggested follow-up skill unless the user explicitly asks for it.
+Follow its Checklist exactly. Create TodoWrite entries per item. Don't improvise steps. The skill's Terminal State section tells you what to do next -- respect it; don't auto-invoke the suggested follow-up skill unless the user explicitly asks for it, or the project's `PREFERENCES.md` says `autonomy: loop` (the default), in which case the execution skills inside a slice (plan-task -> test-driven-development -> verification-before-completion -> summarize-task) chain without asking and stop at the slice boundary.
 
 ## Reporting ytstack issues
 
