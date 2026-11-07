@@ -392,6 +392,99 @@ def check_vendor_sibling_refs(root):
     return fails, warns
 
 
+# ---------- check: resolver contract (M016, DECISIONS 2026-11-07) ----------
+
+# Code lines only: a line whose first non-blank char is `#` is a comment.
+_COMMENT_RE = re.compile(r"^\s*#")
+
+# (regex, scope, hint) -- scope: "all" | "hooks"
+_BANNED = [
+    (re.compile(r"\[ -d \.git \]"), "all",
+     "Git detection must use `git rev-parse --is-inside-work-tree` (linked worktrees have a .git FILE); use hooks/lib/git-ctx.sh"),
+    (re.compile(r'basename "\$\(git rev-parse --show-toplevel'), "all",
+     "basename slugs collide across repos; use YT_REPO_KEY from git-ctx.sh (basename only for display of a resolved path)"),
+    (re.compile(r"CLAUDE_PROJECT_DIR"), "hooks",
+     "CLAUDE_PROJECT_DIR is pinned to the session-start dir and does not follow worktrees; resolve from the payload cwd via git-ctx.sh"),
+    (re.compile(r"~/\.ytstack/\.|\$HOME/\.ytstack/\."), "all",
+     "sentinel files under ~/.ytstack/. are retired; record state in PROJECT.md frontmatter"),
+]
+
+_FENCE_OPEN_RE = re.compile(r"^```(bash|sh|!)\s*$")
+
+
+def _code_lines(text):
+    """Yield (lineno, line) for non-comment lines."""
+    for i, line in enumerate(text.split("\n"), start=1):
+        if _COMMENT_RE.match(line):
+            continue
+        yield i, line
+
+
+def _first_shell_preamble(text):
+    """Return the body of the first ```bash / ```! fenced block, or None."""
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if _FENCE_OPEN_RE.match(line):
+            body = []
+            for l in lines[i + 1:]:
+                if l.strip() == "```":
+                    break
+                body.append(l)
+            return "\n".join(body)
+    return None
+
+
+def check_resolver_contract(root):
+    fails = []
+    warns = []
+
+    targets = []  # (path, scope)
+    for p in sorted((root / "skills").glob("*/SKILL.md")):
+        targets.append((p, "skills"))
+    hooks_dir = root / "hooks"
+    if hooks_dir.is_dir():
+        for p in sorted(hooks_dir.iterdir()):
+            if p.is_file() and p.suffix != ".json":
+                targets.append((p, "hooks"))
+
+    for path, scope in targets:
+        rel = path.relative_to(root)
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for lineno, line in _code_lines(text):
+            for rx, rx_scope, hint in _BANNED:
+                if rx_scope == "hooks" and scope != "hooks":
+                    continue
+                if rx.search(line):
+                    fails.append(f"{rel}:{lineno}: banned pattern `{rx.pattern}` -- {hint}")
+        if scope == "skills" and ("\n## Preamble" in text or "\n```!" in text):
+            # Only skills with an executable preamble (lifecycle skills and
+            # render-time wrappers); kind:reference skills with curl examples
+            # in ```bash blocks are not resolvers.
+            pre = _first_shell_preamble(text)
+            if pre is not None and "hooks/lib/git-ctx.sh" not in pre:
+                fails.append(f"{rel}: shell preamble does not use the shared resolver (source hooks/lib/git-ctx.sh via ${{CLAUDE_SKILL_DIR}}/../../hooks/lib/git-ctx.sh)")
+        if scope == "hooks" and "lib/git-ctx.sh" not in text:
+            fails.append(f"{rel}: hook does not source hooks/lib/git-ctx.sh")
+
+    # Version agreement between plugin.json and marketplace.json
+    try:
+        import json
+        pj = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        mp = root / ".claude-plugin" / "marketplace.json"
+        if mp.is_file():
+            mj = json.loads(mp.read_text(encoding="utf-8"))
+            entries = mj.get("plugins") or []
+            for e in entries:
+                if e.get("name") == pj.get("name") and e.get("version") not in (None, pj.get("version")):
+                    warns.append(
+                        f".claude-plugin/marketplace.json: entry version {e.get('version')!r} != plugin.json version {pj.get('version')!r} (plugin.json wins at install; align both)"
+                    )
+    except Exception as exc:  # noqa: BLE001 -- report, never crash the checker
+        warns.append(f"version agreement check skipped: {exc}")
+
+    return fails, warns
+
+
 # ---------- main ----------
 
 def main():
@@ -427,6 +520,11 @@ def main():
 
     # Vendor sibling-skill dangling refs
     f, w = check_vendor_sibling_refs(root)
+    all_fails.extend(f)
+    all_warns.extend(w)
+
+    # Resolver contract (M016): banned patterns, shared lib, version agreement
+    f, w = check_resolver_contract(root)
     all_fails.extend(f)
     all_warns.extend(w)
 

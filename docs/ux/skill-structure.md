@@ -149,23 +149,45 @@ Keep it under ~15 nodes. If it's more complex, decompose into sub-skills.
 
 Every skill starts with a Bash preamble that detects project state. Output follows the Preamble Flag Contract (see [askuserquestion-format.md](askuserquestion-format.md#preamble-flag-contract)).
 
-Required exports (minimum):
+### Resolver contract (M016, DECISIONS 2026-11-07)
+
+Every shell preamble (```bash or ```!) starts with the shared resolver and never re-implements it. The checkout is **where the shell runs**, resolved by `hooks/lib/git-ctx.sh`; `CLAUDE_PROJECT_DIR` is pinned to the session-start directory and does not follow the agent into a linked worktree, so it is never a starting point. `bin/ytstack-check` fails on these patterns in `skills/**/SKILL.md` and `hooks/*` (comment lines excluded):
+
+| Banned | Why | Use instead |
+| --- | --- | --- |
+| `[ -d .git ]` | a linked worktree's `.git` is a FILE -> `IS_GIT: no` (issue #24) | `git rev-parse --is-inside-work-tree` via the lib (`YT_IS_GIT`) |
+| `basename "$(git rev-parse --show-toplevel ...)"` as a key | folder names collide (`my-context-mcp` vs `meinkontext`) | `YT_REPO_KEY` (hash of the git common dir); basename only for display of a resolved path |
+| `CLAUDE_PROJECT_DIR` in hooks | does not follow worktrees -> writes land in the wrong checkout (issues #26/#27) | payload `cwd` via `yt_read_stdin` + `yt_git_ctx` |
+| `~/.ytstack/.<name>-prompted` sentinels | invisible, unversioned, slug-keyed | record the answer in the artifact (`PROJECT.md` frontmatter, CONTEXT.md) |
+
+Required block (verbatim; `${CLAUDE_SKILL_DIR}` is substituted by Claude Code when the skill loads; the fallback branch covers hosts that do not substitute it):
+
+```bash
+# ytstack resolver (M016): checkout = where this shell runs, via the shared lib.
+_LIB="${CLAUDE_SKILL_DIR}/../../hooks/lib/git-ctx.sh"
+if [ -f "$_LIB" ]; then
+  . "$_LIB"; yt_git_ctx "$PWD"; yt_resolve_yt_dir >/dev/null
+  _PROJECT_DIR="$YT_TOPLEVEL"; _YT_DIR="$YT_DIR"; _YT_SCOPE="$YT_SCOPE"; _IS_GIT="$YT_IS_GIT"; _PROJECT_KEY="$YT_REPO_KEY"
+else
+  # Host did not substitute CLAUDE_SKILL_DIR (e.g. Codex adapter): project scope only.
+  _IS_GIT=$([ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" = true ] && echo yes || echo no)
+  _PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
+  _YT_DIR=""; _YT_SCOPE=none; _PROJECT_KEY=""
+  [ -d "$_PROJECT_DIR/.ytstack" ] && { _YT_DIR="$_PROJECT_DIR/.ytstack"; _YT_SCOPE=project; }
+fi
+cd "$_PROJECT_DIR" 2>/dev/null || true
+_PROJECT_SLUG=$(basename "$_PROJECT_DIR")   # display only
+_HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
+```
+
+Required exports after the block (minimum):
 
 ```bash
 echo "BRANCH: $(git branch --show-current 2>/dev/null || echo unknown)"
-echo "PROJECT_SLUG: $(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo unknown)"
-
-# ytstack scope detection
-if [ -d .ytstack ]; then
-  echo "HAS_YTSTACK: yes"
-  echo "YTSTACK_SCOPE: project"
-elif [ -d ~/.ytstack/projects/"$PROJECT_SLUG" ]; then
-  echo "HAS_YTSTACK: yes"
-  echo "YTSTACK_SCOPE: user"
-else
-  echo "HAS_YTSTACK: no"
-  echo "YTSTACK_SCOPE: none"
-fi
+echo "PROJECT_SLUG: $_PROJECT_SLUG"
+echo "HAS_YTSTACK: $_HAS_YTSTACK"
+echo "YTSTACK_SCOPE: $_YT_SCOPE"
+echo "YT_DIR: $_YT_DIR"
 
 # Non-interactive detection
 if [ -n "$YTSTACK_NON_INTERACTIVE" ] || [ -n "$OPENCLAW_SESSION" ] || [ -n "$CLAUDE_AGENT_TEAM_MEMBER" ]; then
@@ -174,19 +196,14 @@ else
   echo "YTSTACK_NON_INTERACTIVE: false"
 fi
 
-# Explain level
-echo "EXPLAIN_LEVEL: $(ytstack-config get explain_level 2>/dev/null || echo default)"
-
-# Sentinels
-_SENTINELS=$(ls ~/.ytstack/.*-prompted 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ',')
-echo "SENTINELS: ${_SENTINELS:-none}"
-
 # Active work
-if [ -f .ytstack/STATE.md ]; then
-  echo "CURRENT_MILESTONE: $(grep -oE 'current_milestone: M[0-9]+' .ytstack/STATE.md | head -1 | awk '{print $2}' || echo none)"
-  echo "ACTIVE_SLICE: $(grep -oE 'active_slice: S[0-9]+' .ytstack/STATE.md | head -1 | awk '{print $2}' || echo none)"
+if [ -f "$_YT_DIR/STATE.md" ]; then
+  echo "CURRENT_MILESTONE: $(sed -n 's/^current_milestone: *//p' "$_YT_DIR/STATE.md" | head -1)"
+  echo "ACTIVE_SLICE: $(sed -n 's/^active_slice: *//p' "$_YT_DIR/STATE.md" | head -1)"
 fi
 ```
+
+Library functions available after sourcing: `yt_read_stdin`, `yt_git_ctx`, `yt_resolve_yt_dir`, `yt_state_dir` / `yt_state_wt_dir` / `yt_state_base` (out-of-tree session state), `yt_commit_ref_pattern`, `yt_task_commits`, `yt_ensure_gitignore`, `yt_jq`, `yt_python`. Functions that set globals must be called directly (`yt_resolve_yt_dir >/dev/null`), not inside `$(...)`.
 
 ## The Procedure (main body)
 
@@ -223,16 +240,15 @@ after this one are: <allowlist>.
 
 Explicit allowlisting prevents the agent from wandering into "helpful" adjacent actions. If an agent feels tempted to invoke something not on the allowlist, the correct action is to STOP and ask the user.
 
-## Sentinel File Conventions
+## Ask-once answers (sentinel files retired, M016)
 
-Sentinel files for ask-once questions live under:
+Sentinel files under `~/.ytstack/.<name>-prompted` are retired (invisible, unversioned, keyed by folder name; `bin/ytstack-check` fails on the path). An ask-once answer is recorded in the artifact it concerns, AFTER the user answers:
 
-- User-scope: `~/.ytstack/.<question-name>-prompted`
-- Project-scope: `~/.ytstack/projects/<slug>/.<question-name>-prompted`
+- Storage scope of a project -> `PROJECT.md` frontmatter `scope:` (plus `init_completed:`)
+- Milestone size -> `M###-CONTEXT.md` / `M###-ROADMAP.md` frontmatter `size:`
+- Anything per-user and cross-project -> `~/.ytstack/config` (`key=value`)
 
-Touch the sentinel AFTER the user answers (regardless of which option they chose). Never touch it before the answer is committed.
-
-Marker name format: `<skill-name>-<question-identifier>` (e.g. `init-project-storage-scope`, `telemetry-opt-in`).
+The "to re-ask later" hint names the field to edit, never a file to delete.
 
 ## Spawned-Session Behavior
 
