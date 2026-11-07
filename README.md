@@ -280,7 +280,7 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 
 ## Status
 
-**v0.2.0 -- shipping, actively dogfooded.** M016 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); ytstack tracks its own development in `.ytstack/`. Next up: vendor update (superpowers v7, gstack as installed dependency), brownfield import, ceremony scaling, skill quality + evals (`.ytstack/ROADMAP.md` M017-M019, M010).
+**v0.3.0 -- shipping, actively dogfooded.** M016 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); M017 pulled superpowers to v7.0.2 and turned gstack into an installed, tag-pinned dependency (#25). ytstack tracks its own development in `.ytstack/`. Next up: brownfield import (M010), ceremony scaling (M018), skill quality + evals (M019) -- see `.ytstack/ROADMAP.md`.
 
 Ships:
 
@@ -301,7 +301,7 @@ ytstack/
 ├── hooks/                       8 hook scripts + hooks.json + lib/git-ctx.sh (shared resolver)
 ├── skills/                      21 skill packages
 ├── tests/                       10 shell test suites + run-all.sh (--linux via Docker)
-├── vendor/                      read-only subtrees (superpowers, gstack)
+├── vendor/                      read-only subtree: superpowers v7.0.2 (gstack is an installed dependency, not vendored)
 ├── docs/
 │   ├── ux/                      mandatory skill-authoring contracts
 │   ├── references.md            research sources
