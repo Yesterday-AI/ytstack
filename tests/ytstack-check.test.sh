@@ -267,6 +267,43 @@ eq "real tree: zero description budget fails"      0 "$(printf '%s' "$OUT" | gre
 eq "real tree: zero procedure-summary warnings"    0 "$(printf '%s' "$OUT" | grep -c 'procedure summary')"
 eq "real tree: zero invocability warnings"         0 "$(printf '%s' "$OUT" | grep -c 'user-invocable')"
 
+# ---- 7. agent subagent-contract fields (M019-S04) ----------------------------
+echo "# agents"
+FIX_AGENT="$ROOT/agents/zz-fixture-agent.md"
+cat > "$FIX_AGENT" <<'EOF'
+---
+name: zz-fixture-agent
+description: |
+  Fixture agent.
+  <example>one</example>
+  <example>two</example>
+model: inherit
+isolation: sandbox
+memory: global
+hooks: []
+tools:
+  - Read
+skills:
+  - ytstack:resume-session
+---
+
+# zz-fixture-agent
+
+Does the fixture thing. Does NOT do anything else.
+
+## Subagent context
+
+SUBAGENT-STOP applies.
+EOF
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "agent: isolation other than worktree -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "zz-fixture-agent.*isolation 'sandbox'")"
+eq "agent: memory outside user|project|local -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "zz-fixture-agent.*memory 'global'")"
+eq "agent: hooks ignored for plugin subagents -> WARN" 1 "$(printf '%s' "$OUT" | grep -c "zz-fixture-agent.*'hooks' is ignored")"
+rm -f "$FIX_AGENT"
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "real agents: implementer runs in a worktree (no warning)" 0 "$(printf '%s' "$OUT" | grep -c 'implementer should run with isolation')"
+eq "real agents: zero isolation/memory fails" 0 "$(printf '%s' "$OUT" | grep -c "agents/.*\(isolation\|memory\) '")"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

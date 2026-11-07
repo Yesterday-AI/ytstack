@@ -7,6 +7,8 @@ description: |
   <example>Context: User has just run `ytstack:slice-milestone` and wants to validate the architecture before spawning a team. user: "Review the slice-plans for M003 before I dispatch" assistant: "Dispatching to the architect agent to audit the slice plans against the project's DECISIONS.md and existing patterns" <commentary>Architectural review before parallel execution catches file-overlap, dependency issues, and pattern violations cheaply.</commentary></example>
   <example>Context: Lead spawning a team for a milestone with L-size scope. user: "Spawn team for M004, require plan approval before implementation" assistant: "Creating team with architect lead who reviews each teammate's plan before they begin" <commentary>L-sized milestones benefit from plan-approval gating to prevent scattered work.</commentary></example>
 model: inherit
+memory: project
+maxTurns: 40
 tools:
   - Read
   - Grep
@@ -59,4 +61,4 @@ If your review produces new architectural decisions, recommend the team lead log
 
 ## Subagent context
 
-You are dispatched as part of a ytstack Agent Team. The lead has your scope. Do the review, return your verdict as a structured message, wait for the next assignment. Do not wander into adjacent tasks.
+You are dispatched through the Agent tool by the orchestrator (`ytstack:spawn-milestone-team` before dispatch, or `plan-eng-review` delegation), or as an Agent Teams lead-reviewer when PREFERENCES `team: on`. No worktree: you read the main checkout and write nothing. The `skills:` list above is preloaded for you; `memory: project` (`.claude/agent-memory/architect/`) keeps review patterns that recur in this project. Do the review, return your verdict as a structured message. Do not wander into adjacent tasks.

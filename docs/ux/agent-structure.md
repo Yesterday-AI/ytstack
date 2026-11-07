@@ -12,6 +12,9 @@ name: <agent-name>
 description: |
   <multi-line description with <example> blocks showing when to dispatch>
 model: inherit            # or a specific model
+isolation: worktree       # OPTIONAL (M019-S04): own git worktree, Bash confined to it; implementer + verifier set it
+memory: project           # OPTIONAL: .claude/agent-memory/<name>/ persists across runs (user | project | local)
+maxTurns: 150             # OPTIONAL: turn cap; output marked partial and resumable when hit
 tools:
   - <Tool1>
   - <Tool2>
@@ -20,6 +23,8 @@ skills:
   - ...
 ---
 ```
+
+`hooks`, `mcpServers` and `permissionMode` are ignored for plugin subagents (platform rule); `bin/ytstack-check` warns when they appear. `isolation: worktree` branches from the repository's default branch, not from the orchestrator's HEAD: the brief's first instruction re-bases the worker (`git checkout -B ytstack/M###-S## <orchestrator-branch>`), and the worktree is removed automatically when the agent changed nothing (verifiers never do).
 
 ### name
 
@@ -47,9 +52,9 @@ If the role doesn't need a tool, don't list it. Tighter surfaces reduce accident
 
 ### skills
 
-**Required for every ytstack agent, even though the current Claude Code docs note that `skills` is ignored in the teammate context.** Two reasons:
+**Required for every ytstack agent.** For subagents dispatched through the Agent tool (the default execution model since M019-S04) `skills` is a **preload**: the full content of each listed skill is injected at startup (first 32 names; skills with `disable-model-invocation: true` cannot be preloaded), and the agent can still invoke unlisted skills through the Skill tool. For Agent Teams teammates (`team: on`) the field is ignored. Two reasons to keep it exact:
 
-1. **Standalone subagent spawns (via Agent tool) DO honor `skills`.** Without it, the agent cannot invoke ytstack skills when spawned outside a team.
+1. **Preload cost and intent.** Every listed skill lands in the subagent's context whether it is used or not; list what the role invokes, nothing more.
 2. **Intent documentation.** Anyone reading the agent file sees immediately which ytstack skills this role is designed to invoke. Future behavior changes in Claude Code may begin enforcing `skills` for teammates too -- we want to be ready.
 
 List every ytstack skill the agent is expected to invoke, fully-qualified (`ytstack:<name>`). Cross-check against the skill's Terminal State -- if a skill forbids downstream auto-invocation, don't include it in an agent that would chain to it automatically.
