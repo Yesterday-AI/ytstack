@@ -1,6 +1,6 @@
 ---
 name: minimal-code
-description: "Minimal-code guard: before writing or changing code, climb a six-rung ladder (needed at all? already in the codebase? stdlib? existing dependency? one line? minimum that passes the test) and stop at the first rung that holds; never cut validation, auth, boundary error handling, accessibility or the one small test. Injected at session start when PREFERENCES minimal_code is on; load it before implementing anything."
+description: "Minimal-code guard the SessionStart hook points at when PREFERENCES minimal_code is on. Load before writing or changing any code: it decides how little code is enough and what must never be cut. Not user-invoked and not a procedure skill."
 metadata:
   tier: core
   version: 0.1.0

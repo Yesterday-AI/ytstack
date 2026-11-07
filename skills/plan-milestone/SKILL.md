@@ -1,6 +1,6 @@
 ---
 name: plan-milestone
-description: "Plan the next milestone: goal, exit criteria, rough size. Creates M###-CONTEXT.md and M###-ROADMAP.md. Run after init-project has scaffolded `.ytstack/`, before slice-milestone. Draws the goal from a validated pitch when available (OFFICE-HOURS.md or prior milestones); if no pitch exists yet in greenfield, prefer office-hours first so the milestone is grounded in real demand. Updates STATE.md with the new current_milestone."
+description: "Defines the next milestone (goal, exit criteria, size) and writes M###-CONTEXT.md and M###-ROADMAP.md. Use after init-project or adopt-brownfield, after a milestone closed, or when the user says plan the next milestone, new milestone, define the milestone. Not for slicing (slice-milestone) and not for unvalidated greenfield ideas (office-hours first)."
 metadata:
   tier: core
   version: 0.1.0

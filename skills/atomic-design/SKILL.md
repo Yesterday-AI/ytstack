@@ -1,14 +1,11 @@
 ---
 name: atomic-design
-description: >
-  Atomic Design methodology for structuring React/Next.js component libraries.
-  Defines five levels (atoms, molecules, organisms, templates, pages) with hard
-  import rules, classification tests, and anti-patterns. Use when creating,
-  reviewing, or restructuring frontend components.
+description: "Atomic Design reference for React and Next.js component libraries: the five levels (atoms, molecules, organisms, templates, pages), import rules, classification tests and anti-patterns. Use when creating, reviewing or restructuring frontend components, or when the user asks where a component belongs. Not for backend code or UI questions that are not about component structure."
 metadata:
   tier: core
   version: 0.1.0
   kind: reference
+user-invocable: true
 allowed-tools:
   - Read
   - Glob

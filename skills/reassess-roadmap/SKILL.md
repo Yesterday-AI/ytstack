@@ -1,6 +1,6 @@
 ---
 name: reassess-roadmap
-description: "After a slice completes, review whether the milestone roadmap still fits reality. Reads recent summaries, surfaces deviations, prompts for roadmap changes (add/split/reorder/remove slices). Run at slice boundaries, not mid-slice."
+description: "Checks at a slice boundary whether the milestone roadmap still fits reality: deviations from the summaries, stale milestones to mark dropped or shipped-informally, slices to add, split, reorder or remove. Use after summarize-task closed the last task of a slice, or when the user says reassess, review the roadmap, does the plan still hold. Not mid-slice and not for task detail (plan-task)."
 metadata:
   tier: task
   version: 0.1.0

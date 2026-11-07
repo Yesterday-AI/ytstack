@@ -1,6 +1,6 @@
 ---
 name: summarize-task
-description: "After executing a task, write its outcome summary. Reads M###-S##-T##-PLAN.md, prompts for what happened, writes M###-S##-T##-SUMMARY.md, flips checkbox in slice-plan, updates STATE.md. Optionally stages git. Run once per task completion."
+description: "Closes the active task: writes M###-S##-T##-SUMMARY.md with commits, outcome, deviations, follow-ups and the verification result, flips the slice-plan checkbox and advances STATE. Use when a task's verification passed, or when the user says task done, close the task, summarize. Not before verification passed and not for quick-lane changes (quick-task writes its own summary)."
 metadata:
   tier: core
   version: 0.1.0

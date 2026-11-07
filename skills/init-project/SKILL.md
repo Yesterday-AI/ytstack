@@ -1,6 +1,6 @@
 ---
 name: init-project
-description: "Scaffold a ytstack project's `.ytstack/` directory with the 6 core artifacts (PROJECT.md, DECISIONS.md, KNOWLEDGE.md, RUNTIME.md, STATE.md, PREFERENCES.md). Use AFTER a pitch has been validated via office-hours (and optionally plan-ceo-review / plan-eng-review in concept-mode) -- init-project reads OFFICE-HOURS.md frontmatter to populate PROJECT.md name + one-liner. Do NOT use as the greenfield entry-point for unvalidated ideas; run office-hours first. For an existing codebase with its own README/docs/CHANGELOG/ADRs (>= 2 brownfield signals) and no pitch, this skill stops and points at adopt-brownfield instead of writing placeholders."
+description: "Scaffolds .ytstack/ (PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES) for a new project from a validated pitch. Use after office-hours wrote OFFICE-HOURS.md, or when the user says init ytstack, set up ytstack, start a ytstack project in a fresh repo. Not for unvalidated ideas (office-hours first) and not for mature codebases with docs and commits but no .ytstack/ (adopt-brownfield; init-project routes there by itself)."
 metadata:
   tier: core
   version: 0.1.0

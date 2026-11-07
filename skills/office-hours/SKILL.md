@@ -3,7 +3,7 @@ name: office-hours
 metadata:
   tier: core
   version: 0.1.0
-description: "Use as the first step when a new project, feature, or initiative has not yet been validated, or whenever the premise needs a forcing-question test. Six forcing questions expose demand reality, status quo, desperate specificity, narrowest wedge, observation, and future-fit. Produces OFFICE-HOURS.md pitch artifact with name + one-liner frontmatter that downstream skills (plan-ceo-review concept-mode, init-project, plan-milestone) consume. Thin ytstack wrapper around the installed gstack office-hours skill (pinned v1.96.0.0, needs bun >= 1.4.2)."
+description: "Validates a new project, feature or initiative before anything is scaffolded, through the installed gstack office-hours skill, and writes OFFICE-HOURS.md. Use as the first step for a greenfield idea, when the user says office hours, validate this idea, pitch this, or whenever a premise needs a forcing-question test. Not for existing codebases (adopt-brownfield) and not once a pitch exists (plan-ceo-review, init-project)."
 allowed-tools:
   - Bash
   - Read

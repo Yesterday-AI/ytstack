@@ -1,6 +1,6 @@
 ---
 name: resume-session
-description: "Reconstruct working context at the start of a new session. Reads STATE.md + HANDOFF.md (if present) + latest 3 T##-SUMMARY.md files and synthesizes a 'where we are' briefing. Run at session start before doing anything else."
+description: "Rebuilds working context at the start of a session from STATE.md, handoffs and the latest summaries into a where-we-are briefing. Use when a session starts in a project with .ytstack/, or when the user says resume, where were we, pick up where I left off. Not for writing a handoff (handoff-session) and not for repos without .ytstack/ (init-project or adopt-brownfield)."
 metadata:
   tier: core
   version: 0.1.0

@@ -1,6 +1,6 @@
 ---
 name: handoff-session
-description: "User-triggered session handoff. Writes a detailed HANDOFF.md with current state, open items, pending decisions, and recommended resume prompt. Use before switching machines, before long breaks, or when you need to clear context intentionally. Parallel to the automatic pre-compact hook."
+description: "Writes a hand-authored HANDOFF.md so the next session, machine or teammate continues without re-explanation. Use when the user says handoff, pause work, save context for later, or before switching machines, a long break or a deliberate context clear. Not for routine session ends (the SessionEnd hook writes an automatic handoff) and not for closing a task (summarize-task)."
 metadata:
   tier: task
   version: 0.1.0

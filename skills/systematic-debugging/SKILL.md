@@ -3,7 +3,7 @@ name: systematic-debugging
 metadata:
   tier: core
   version: 0.1.0
-description: "Root-cause debugging in four phases: investigate, analyze, hypothesize, implement. Iron Law -- no fixes without root cause. Thin ytstack wrapper around the vendored superpowers systematic-debugging procedure, routing findings into KNOWLEDGE.md / DECISIONS.md. Use when hitting a bug, test failure, or unexpected behavior."
+description: "Root-cause debugging through the vendored superpowers systematic-debugging procedure, with findings routed into KNOWLEDGE.md and DECISIONS.md. Use when hitting a bug, a failing test, flaky behaviour or any unexpected output, before proposing a fix. Not for a one-line fix with an obvious, already-known cause (quick-task)."
 allowed-tools:
   - Bash
   - Read

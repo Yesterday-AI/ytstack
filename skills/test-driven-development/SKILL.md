@@ -3,7 +3,7 @@ name: test-driven-development
 metadata:
   tier: core
   version: 0.1.0
-description: "RED-GREEN-REFACTOR: write a failing test, watch it fail, write minimal code, watch it pass, commit. Thin ytstack wrapper around the vendored superpowers test-driven-development procedure, injecting the current task's plan as context. Use during task execution."
+description: "Test-first implementation of the current task through the vendored superpowers test-driven-development procedure, with the task plan's files and verification command injected. Use during task execution for any feature, bugfix or refactor, before writing implementation code. Not without a task plan (plan-task or quick-task first)."
 allowed-tools:
   - Bash
   - Read

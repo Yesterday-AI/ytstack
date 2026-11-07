@@ -1,6 +1,6 @@
 ---
 name: plan-task
-description: "Flesh out a single task within the current slice. Reads M###-S##-PLAN.md, picks the next unplanned task, writes M###-S##-T##-PLAN.md with exact file paths + verification steps. Enforces fits-one-context-window rule. Run after slice-milestone, before executing the task."
+description: "Turns the next task of the current slice into M###-S##-T##-PLAN.md with exact files and a verification command, and sets STATE active_task. Use after slice-milestone, before executing a task, or when the user says plan the task, next task, detail the task. Not for one-sentence changes (quick-task) and not for closing a task (summarize-task)."
 metadata:
   tier: core
   version: 0.1.0

@@ -1,10 +1,11 @@
 ---
 name: software-craftsmanship
-description: Clean code, robust architecture, no test slop. Foundational skill for high-quality software engineering, code structure, and reviews.
+description: "Reference for clean code, robust architecture and test discipline: structure, naming, boundaries, review criteria, no test slop. Use when writing or reviewing non-trivial code, when the user asks for a code review or a refactoring plan, or when a codebase shows accumulating debt. Not a procedure; its rules apply in context."
 metadata:
   tier: core
   version: 0.1.0
   kind: reference
+user-invocable: true
 allowed-tools:
   - Read
   - Glob

@@ -1,6 +1,6 @@
 ---
 name: spawn-milestone-team
-description: "Dispatch the current milestone's slices to a Claude Code Agent Team. Each teammate works on a slice in parallel with its own 200k context (replaces GSD's fresh-subprocess-per-task pattern). Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 and v2.1.32+. Run after slice-milestone + plan-eng-review."
+description: "Dispatches the current milestone's slices to parallel agents, one slice per teammate with its own context. Use after slice-milestone and plan-eng-review when the slices are independent, or when the user says spawn the team, run the slices in parallel, dispatch the milestone. Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1. Not for a single slice or sequential work (plan-task)."
 metadata:
   tier: task
   version: 0.1.0

@@ -1,6 +1,6 @@
 ---
 name: reconcile
-description: "Use when .ytstack/ has leftovers: draft summary stubs, unfilled auto-drafts, milestones planned but never sliced, untracked .ytstack files, a stray .ytstack/.local without gitignore. Lists each class with counts and asks per class whether to close, archive (into .ytstack/archive/<date>/) or keep. Never deletes. The only sanctioned cleanup of .ytstack artifacts."
+description: "Consent-based cleanup of .ytstack/ leftovers: draft summary stubs, unfilled auto-drafts, milestones planned but never sliced, untracked .ytstack files, a .ytstack/.local without gitignore. Use when the SessionStart STATE lint reports warnings, or when the user says reconcile, clean up .ytstack, tidy the artifacts. Never deletes; the only sanctioned way to move .ytstack artifacts."
 metadata:
   tier: core
   version: 0.1.0

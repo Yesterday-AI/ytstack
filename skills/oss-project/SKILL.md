@@ -1,16 +1,11 @@
 ---
 name: oss-project
-description: >
-  Scaffold, polish, and publish open-source projects with AI-first documentation,
-  governance, and CI. Use when: Starting a new OSS package, polishing/publishing
-  an existing repo, setting up AGENTS.md / CONTEXT.md / DECISIONS.md / ROADMAP.md,
-  onboarding AI agents to a codebase, or creating standard community files
-  (README, LICENSE, CONTRIBUTING, CHANGELOG, CI pipelines, issue templates).
-  Outputs repo description and tags at the end.
+description: "Reference for scaffolding, polishing and publishing open-source projects with AI-first documentation, governance and CI. Use when starting an OSS package, polishing or publishing an existing repo, setting up AGENTS.md / CONTEXT.md / DECISIONS.md / ROADMAP.md, onboarding AI agents to a codebase, or creating community files (README, LICENSE, CONTRIBUTING, CHANGELOG, issue templates, CI). Not for day-to-day work inside a closed internal repo."
 metadata:
   tier: core
   version: 0.1.0
   kind: reference
+user-invocable: true
 allowed-tools:
   - Bash
   - Read

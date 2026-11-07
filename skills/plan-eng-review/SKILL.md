@@ -3,7 +3,7 @@ name: plan-eng-review
 metadata:
   tier: core
   version: 0.1.0
-description: "Review execution approach for feasibility, architecture, data flow, edge cases, test coverage, performance, and security risks. Auto-detects mode: concept-mode reviews a pitch (OFFICE-HOURS.md) for technical feasibility before any scaffolding; milestone-mode reviews slice-plans (M###-S##-PLAN.md) before plan-task. Use concept-mode optionally after plan-ceo-review to sanity-check the pitched approach; use milestone-mode after slice-milestone to lock architecture before implementation. Thin ytstack wrapper around the installed gstack plan-eng-review skill (pinned v1.96.0.0, needs bun >= 1.4.2)."
+description: "Reviews the execution approach of a pitch or a sliced milestone for feasibility, architecture, data flow, edge cases, test coverage, performance and security, through the installed gstack plan-eng-review skill. Use after plan-ceo-review on a pitch, or after slice-milestone and before plan-task on M###-S##-PLAN.md; also when the user says eng review, architecture review, lock the approach. Not for scope and ambition questions (plan-ceo-review)."
 allowed-tools:
   - Bash
   - Read
