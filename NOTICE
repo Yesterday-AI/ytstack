@@ -25,16 +25,19 @@ modified without extensive eval evidence. ytstack respects this constraint.
 
 ## gstack
 
-Vendored via git subtree at vendor/gstack/. Source repository:
+Required install, NOT redistributed (since ytstack 0.3.0; it was a git
+subtree at vendor/gstack/ from 0.1.x to 0.2.0). Source repository:
 <https://github.com/garrytan/gstack>
 
-License: MIT. See vendor/gstack/LICENSE.
-
-We vendor gstack read-only and wrap three planning skills:
-skills/plan-ceo-review/, skills/office-hours/, skills/plan-eng-review/.
+License: MIT (upstream). ytstack does not ship any gstack file. Three ytstack
+skills (skills/office-hours/, skills/plan-ceo-review/, skills/plan-eng-review/)
+detect a gstack installation under ~/.claude/skills/gstack (tested against
+v1.96.0.0, requires bun >= 1.4.2) and invoke its skills through the Skill tool.
 
 Attribution: gstack originates from Garry Tan's work, shaped around YC-style
-product and engineering review patterns.
+product and engineering review patterns. ytstack also adopted several of its
+UX conventions (AskUserQuestion format, cascading binary questions,
+outcome framing) in its own prose; see docs/methodology.md.
 
 ---
 

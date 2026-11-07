@@ -528,6 +528,36 @@ def check_inline_leaks(root):
     return fails, warns
 
 
+# ---------- check: gstack wrappers (installed dependency contract, M017) ----------
+
+_GSTACK_WRAPPERS = ("office-hours", "plan-ceo-review", "plan-eng-review")
+
+
+def check_gstack_wrappers(root):
+    """gstack is an installed, tag-pinned dependency (DECISIONS 2026-11-07).
+    Each wrapper must run the precheck, carry the install command, invoke the
+    installed skill through the Skill tool, and never inline vendor/gstack."""
+    fails = []
+    warns = []
+    for name in _GSTACK_WRAPPERS:
+        path = root / "skills" / name / "SKILL.md"
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        rel = path.relative_to(root)
+        if "vendor/gstack" in "\n".join(l for l in text.split("\n") if not _COMMENT_RE.match(l)):
+            fails.append(f"{rel}: gstack wrapper references vendor/gstack (gstack is an installed dependency, never inlined)")
+        if "yt_gstack_ctx" not in text:
+            fails.append(f"{rel}: gstack wrapper lacks the yt_gstack_ctx precheck")
+        if "GSTACK_INSTALL_CMD" not in text:
+            fails.append(f"{rel}: gstack wrapper lacks GSTACK_INSTALL_CMD (the stop message must carry the pinned install command)")
+        if f"Invoke the Skill tool with `{name}`" not in text:
+            fails.append(f"{rel}: gstack wrapper must say \"Invoke the Skill tool with `{name}`\"")
+        if "## HARD-GATE" not in text:
+            fails.append(f"{rel}: gstack wrapper lacks a HARD-GATE section")
+    return fails, warns
+
+
 # ---------- main ----------
 
 def main():
@@ -573,6 +603,11 @@ def main():
 
     # Inlined vendor text leaks (M017): namespace refs + relative links need a Namespace note
     f, w = check_inline_leaks(root)
+    all_fails.extend(f)
+    all_warns.extend(w)
+
+    # gstack wrappers (M017): installed-dependency contract
+    f, w = check_gstack_wrappers(root)
     all_fails.extend(f)
     all_warns.extend(w)
 

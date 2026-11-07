@@ -31,11 +31,12 @@ From `README.md` §opening + PROJECT.md one-liner:
 
 Verbatim facts from `README.md` §"Why it exists":
 
-### 2.1 gstack (Garry Tan) -- vendored at `vendor/gstack/`
+### 2.1 gstack (Garry Tan) -- installed dependency (since 0.3.0, DECISIONS 2026-11-07)
 
 - **Strength:** strategy and decision rigor -- CEO / eng-manager / office-hours reviews that force real thinking before code.
-- **Also ships:** execution skills (`investigate` for systematic debugging, `qa`, `review`, `ship`) and session-level context save/restore.
+- **Also ships:** 62 skills upstream as of v1.96.0.0 (`ship`, `review`, `qa`, `spec`, `captain`, ...), Bun-based helpers, an optional `gbrain` knowledge layer.
 - **Lacks:** explicit TDD enforcement, structured milestone / slice / task artifact hierarchy.
+- **How ytstack consumes it:** not vendored. gstack's v1.9x skills are skeletons that load `sections/*.md` and run `bin/gstack-skill-start` from `~/.claude/skills/gstack`, and the maintainer deprecated vendored installs; a `cat`-inlined copy no longer renders the procedure. ytstack's three wrappers therefore check the install (`yt_gstack_ctx`: pin v1.96.0.0, bun >= 1.4.2), invoke the installed skill through the Skill tool, and post-process into ytstack artifacts.
 - **Upstream:** https://github.com/garrytan/gstack
 
 ### 2.2 superpowers (Jesse Vincent / obra) -- vendored at `vendor/superpowers/`
@@ -118,11 +119,13 @@ Per DECISIONS 2026-04-24 "Wrapper mechanism = shell-exec inject + cross-ref chec
 1. Declares minimal frontmatter (`name`, `description`, `allowed-tools`).
 2. Runs a shell preamble (```` ```! ```` fenced block) that resolves ytstack context: `_YT_DIR`, `_CURRENT_MILESTONE`, active-task paths, extracted verification commands.
 3. States "ytstack invocation notes" -- what to treat as the review subject / work unit, HARD-GATE conditions when ytstack state is missing, and post-procedure outcomes (DECISIONS.md append, ROADMAP edit, KNOWLEDGE.md lesson).
-4. Ends with ```` ```! \ncat "${CLAUDE_PLUGIN_ROOT:?}/vendor/<src>/SKILL.md"\n``` ```` which inlines the vendored procedure verbatim at render time.
+4. Ends with ```` ```! \ncat "${CLAUDE_SKILL_DIR}/../../vendor/superpowers/skills/<src>/SKILL.md"\n``` ```` which inlines the vendored procedure verbatim at render time, followed by a `## Namespace note` that maps `superpowers:<skill>` to `ytstack:<skill>` and anchors relative links (`bin/ytstack-check` fails on unhandled leaks).
 
-**Vendor is the single source of truth.** `./sync-upstream.sh` updates flow through without manual adaptation; no fork divergence possible by construction.
+**Vendor is the single source of truth.** Subtree pulls to a release tag flow through without manual adaptation; no fork divergence possible by construction.
 
-Applies to: `plan-ceo-review`, `plan-eng-review`, `office-hours` (vendor/gstack) + `test-driven-development`, `systematic-debugging`, `verification-before-completion` (vendor/superpowers/skills).
+Applies to: `test-driven-development`, `systematic-debugging`, `verification-before-completion` (vendor/superpowers/skills).
+
+**gstack wrappers use a second shape (since 0.3.0):** `plan-ceo-review`, `plan-eng-review`, `office-hours` run the same preamble plus `yt_gstack_ctx`, a `## HARD-GATE: gstack installed?` section, and a `## Procedure` that invokes the installed gstack skill through the Skill tool before applying ytstack post-processing. Nothing is inlined, because gstack's v1.9x skeletons load `sections/*.md` and run Bun helpers from their install dir (see §2.1).
 
 **Supersedes:** the earlier 2026-04-23 "Known risk -- superpowers interactive prompts may block Claude Code input" rule that required every superpowers wrapper to pass `YTSTACK_NON_INTERACTIVE=1`. That rule was a defensive workaround for a different wrapper shape (prose indirection telling the agent to "read vendor file and follow it"). Shell-exec-inject sidesteps the interactive-prompt risk because the vendor content is inlined as the same turn's prompt, not re-invoked as a separate Claude Code interaction.
 

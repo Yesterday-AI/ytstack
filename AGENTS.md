@@ -26,7 +26,7 @@ If you can't verify all five above, stop and tell the human what you can't verif
 
 **Is:**
 - A Claude Code plugin (skills + hooks + commands)
-- A curated clamp around selected superpowers and gstack skills, vendored via git subtree, NEVER modified
+- A curated clamp around selected superpowers skills (vendored via git subtree, NEVER modified) and gstack skills (an installed, tag-pinned dependency invoked through the Skill tool, never inlined)
 - An artifact-first system: `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, milestone/slice/task hierarchy
 - SessionStart-hook-driven context injection (following superpowers' using-superpowers pattern)
 - MIT licensed, shareable, team-usable
@@ -41,13 +41,17 @@ If you can't verify all five above, stop and tell the human what you can't verif
 
 ### Never modify vendored content
 
-`vendor/superpowers/` and `vendor/gstack/` are subtree mirrors of upstream. Modifying them:
+`vendor/superpowers/` is a subtree mirror of upstream (pinned to a release tag, currently v7.0.2; pull with `git subtree pull --prefix vendor/superpowers https://github.com/obra/superpowers.git <tag> --squash`). Modifying it:
 
-- Silently drops on next `./sync-upstream.sh`
+- Silently drops on the next subtree pull
 - Breaks the upstream-eval behavior we rely on
 - Loses the superpowers "carefully-tuned content" their maintainers explicitly warn against editing
 
-If you need different behavior, wrap the vendored skill in a ytstack-namespaced wrapper at `skills/<name>/SKILL.md` that invokes the vendored skill with additional pre/post logic. Never edit `vendor/**`.
+If you need different behavior, wrap the vendored skill in a ytstack-namespaced wrapper at `skills/<name>/SKILL.md` that inlines the vendored skill with additional pre/post logic and a `## Namespace note` (`bin/ytstack-check` enforces it). Never edit `vendor/**`.
+
+### gstack is an installed dependency, never vendored or inlined
+
+Since 0.3.0 (DECISIONS 2026-11-07 "Vendor strategy") gstack is not in this repo. The three planning wrappers (`office-hours`, `plan-ceo-review`, `plan-eng-review`) detect `~/.claude/skills/gstack` via `yt_gstack_ctx` (pin `YT_GSTACK_PIN` in `hooks/lib/git-ctx.sh`, bun >= 1.4.2), stop with the install command when it is missing, and invoke the installed skill through the Skill tool. Do not re-add a `vendor/gstack` subtree, do not `cat` gstack files, do not copy gstack prose into ytstack. To move the pin: bump `YT_GSTACK_PIN`, re-run the live validation (`tests/` + a temp-HOME install), update README/QUICKSTART/NOTICE.
 
 ### Never copy third-party methodology content verbatim
 

@@ -137,6 +137,20 @@ OUT=$("$CHECK" "$ROOT" 2>&1)
 eq "leaks: note with token + 'resolve under' clears both" 0 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'zz-fixture-wrapper' | grep -c 'inlined vendor text')"
 rm -rf "$FIX_WRAP" "$FAKE_VENDOR"
 
+# ---- 3c. gstack wrapper install contract ------------------------------------
+echo "# gstack wrappers"
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "gstack wrappers: real tree passes the contract" 0 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep -c 'gstack wrapper')"
+cp "$ROOT/skills/office-hours/SKILL.md" "$TMP/oh.bak"
+printf '\n```!\ncat "${CLAUDE_SKILL_DIR}/../../vendor/gstack/office-hours/SKILL.md"\n```\n' >> "$ROOT/skills/office-hours/SKILL.md"
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "gstack wrappers: vendor/gstack reference flagged" 1 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'office-hours' | grep -c 'never inlined')"
+cp "$TMP/oh.bak" "$ROOT/skills/office-hours/SKILL.md"
+sed 's/yt_gstack_ctx/yt_nothing/g' "$TMP/oh.bak" > "$ROOT/skills/office-hours/SKILL.md"
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "gstack wrappers: missing precheck flagged" 1 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'office-hours' | grep -c 'yt_gstack_ctx')"
+cp "$TMP/oh.bak" "$ROOT/skills/office-hours/SKILL.md"
+
 # ---- 4. version agreement ---------------------------------------------------
 echo "# versions"
 PV=$(jq -r '.version' "$ROOT/.claude-plugin/plugin.json"); MV=$(jq -r '.plugins[0].version' "$ROOT/.claude-plugin/marketplace.json")

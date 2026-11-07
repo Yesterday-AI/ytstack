@@ -4,6 +4,17 @@ From zero to a tracked, shipped task -- the way you actually use ytstack: by tal
 
 ## Install
 
+### Prerequisites
+
+- Claude Code >= 2.1.214 (the plugin's hooks use `fork`-session matching and `CLAUDE_PLUGIN_DATA`).
+- For the three planning skills (`office-hours`, `plan-ceo-review`, `plan-eng-review`): **gstack installed** at `~/.claude/skills/gstack` with **bun >= 1.4.2**. ytstack is tested against gstack v1.96.0.0:
+
+  ```bash
+  git clone --branch v1.96.0.0 https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd ~/.claude/skills/gstack && ./setup --no-browser)
+  ```
+
+  Without it those three skills stop with this install command; everything else in ytstack works without gstack or bun.
+
 ### Local dev (recommended for first try)
 
 ```bash

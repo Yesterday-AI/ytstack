@@ -63,7 +63,9 @@ The external source distinguishes multiple agent types with specific roles. We d
 - Evidence-before-assertions verification gate
 - SessionStart-hook injection pattern (we adapted the mechanism for our own `using-ytstack` bootstrap)
 
-### gstack
+### gstack (MIT, installed dependency since 0.3.0 -- not vendored)
+
+The three planning wrappers invoke the gstack skills installed under `~/.claude/skills/gstack` (pinned v1.96.0.0); the procedure text lives upstream. What ytstack adopted as conventions of its own:
 
 - AskUserQuestion 4-part format (Re-ground + Simplify + RECOMMENDATION + Options)
 - Sentinel-file-for-ask-once pattern

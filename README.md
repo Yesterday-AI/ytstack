@@ -84,7 +84,7 @@ Install all three and you get friction: interactive prompts blocking each other,
 
 **Parallel execution without a custom runtime.** `ytstack:spawn-milestone-team` dispatches a Claude Code Agent Team where each teammate works on a slice in its own fresh 200k context. Replicates GSD's fresh-subprocess-per-task model using Claude Code's native experimental feature. No separate CLI, no SQLite, no TUI to babysit.
 
-**One vendored stack, one namespace.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/` holds read-only subtrees of superpowers and gstack, pulled via `git subtree`. Upstream updates land cleanly; we never modify their content.
+**One namespace, upstreams consumed the way they want to be.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/superpowers/` is a read-only `git subtree` mirror pinned to an upstream tag (v7.0.2); we never modify it, we inline it. gstack is **not** vendored any more: it ships its skills as a Bun-powered install under `~/.claude/skills/gstack`, so ytstack's three planning wrappers check for that install (pinned v1.96.0.0) and invoke it through the Skill tool.
 
 ## Workflows
 
@@ -177,6 +177,11 @@ Source: [`docs/ytstack-debugging-flow.excalidraw`](docs/ytstack-debugging-flow.e
 | Skill conflicts when combined with others | medium | medium | n/a | none |
 
 ## Install
+
+### Prerequisites
+
+- Claude Code >= 2.1.214.
+- For `office-hours`, `plan-ceo-review` and `plan-eng-review`: gstack installed at `~/.claude/skills/gstack` (tested against v1.96.0.0) with bun >= 1.4.2 -- `git clone --branch v1.96.0.0 https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd ~/.claude/skills/gstack && ./setup --no-browser)`. Those three skills stop with this command when gstack is missing; the other 18 skills and all hooks need neither gstack nor bun.
 
 ### Local dev (recommended for first try)
 
