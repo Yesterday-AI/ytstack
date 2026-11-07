@@ -12,7 +12,7 @@
   <p>
     <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
     <a href="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml/badge.svg"></a>
-    <img alt="version" src="https://img.shields.io/badge/version-0.4.0-FC4E14">
+    <img alt="version" src="https://img.shields.io/badge/version-0.4.1-FC4E14">
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
     <img alt="Codex" src="https://img.shields.io/badge/Codex-plugin-0A0A0A">
     <img alt="skills" src="https://img.shields.io/badge/skills-31-FC4E14">
