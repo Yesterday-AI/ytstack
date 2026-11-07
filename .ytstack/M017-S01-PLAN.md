@@ -5,7 +5,7 @@ project: ytstack
 created: 2026-11-07T14:00:00Z
 status: planned
 task_count: 2
-completed_tasks: 0
+completed_tasks: 1
 ---
 
 # M017-S01 -- Slice Plan
@@ -14,7 +14,7 @@ completed_tasks: 0
 
 ## Tasks
 
-- [ ] T01 -- Pull the subtree: verify `gh api repos/obra/superpowers/git/ref/tags/v7.0.2` resolves to `22f0b46`; `git subtree pull --prefix vendor/superpowers https://github.com/obra/superpowers.git v7.0.2 --squash`; confirm the three wrapped `skills/*/SKILL.md` exist and show the expected diff shape (TDD suite-wide rule added, persuasion prose removed); `tests/run-all.sh` + `bin/ytstack-check` green; record upstream SHA + tag in DECISIONS/KNOWLEDGE (vendor hold note updated).
+- [x] T01 -- Pull the subtree: verify `gh api repos/obra/superpowers/git/ref/tags/v7.0.2` resolves to `22f0b46`; `git subtree pull --prefix vendor/superpowers https://github.com/obra/superpowers.git v7.0.2 --squash`; confirm the three wrapped `skills/*/SKILL.md` exist and show the expected diff shape (TDD suite-wide rule added, persuasion prose removed); `tests/run-all.sh` + `bin/ytstack-check` green; record upstream SHA + tag in DECISIONS/KNOWLEDGE (vendor hold note updated).
 - [ ] T02 -- Leak handling: `bin/ytstack-check` gets a FAIL rule scanning each wrapper's inlined vendor SKILL.md for `superpowers:<skill>` namespace references and relative `.md` links (`](writing-good-tests.md)` style) that do not resolve inside the wrapper; the three superpowers wrappers gain a short "Namespace note" postamble telling the agent that `superpowers:verification-before-completion` means `ytstack:verification-before-completion` and that relative links resolve under `vendor/superpowers/skills/<skill>/`; test in `tests/ytstack-check.test.sh` with a fixture wrapper.
 
 ## Done when
