@@ -34,7 +34,8 @@ M -- 2 slices, 7 tasks (S01 superpowers pull, S02 gstack de-vendor + docs + rele
 
 ## Open questions
 
-- Does Claude Code expose gstack's user-level skills under their bare names (`office-hours`) when ytstack's namespaced `ytstack:office-hours` also exists? Verify in S02-T04 live validation (list skills with gstack installed in the temp HOME via `claude --help`/`/skills` is not scriptable; fall back to the documented skill-discovery rules and record the answer).
+- (resolved 2026-11-07, S02-T04) gstack's installed SKILL.md files carry bare `name:` values (`office-hours`, `plan-ceo-review`, `plan-eng-review`), so the Skill-tool target is the bare name while ytstack's wrappers stay namespaced (`ytstack:office-hours`); Claude Code user skills under `~/.claude/skills/gstack/<name>/` are discovered by frontmatter name. An interactive confirmation that both show up side by side is still an operator observation (`/skills` after installing gstack); recorded as such in KNOWLEDGE.
+- (resolved) `./setup` of a freshly downloaded gstack is an operator step; ytstack validates layout + flags with `tests/gstack-live.test.sh` (`GSTACK_HOME=... ` opt-in).
 - Marketplace catalog (`yesterday-public-plugins`) must mention the new prerequisite; separate repo, operator authorization.
 
 ## Research basis
