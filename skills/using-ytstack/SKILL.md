@@ -40,7 +40,7 @@ Skills you might need (consult each skill's description, not this list, for the 
 - Project lifecycle: `init-project`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`
 - Session continuity: `handoff-session`, `resume-session`
 - Planning reviews: `office-hours`, `plan-ceo-review`, `plan-eng-review`
-- Execution discipline: `test-driven-development`, `systematic-debugging`, `verification-before-completion`
+- Execution discipline: `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `quick-task` (one-sentence changes when PREFERENCES `quick_lane` is on)
 - Orchestration: `spawn-milestone-team`
 
 The selection mechanism is **semantic, not phrase-based**. New user phrasings (different language, paraphrase, domain-specific vocabulary) should still trigger the right skill as long as the intent is covered by a description.
@@ -51,7 +51,7 @@ The selection mechanism is **semantic, not phrase-based**. New user phrasings (d
 2. **Structural skills next** (plan-milestone, slice-milestone, plan-task). They determine what to build.
 3. **Execution skills last** (TDD, verification). They determine how to build.
 
-"Let's build X" (greenfield, no pitch yet) -> `office-hours` first. "Fix this bug" -> `systematic-debugging` first.
+"Let's build X" (greenfield, no pitch yet) -> `office-hours` first. "Fix this bug" -> `systematic-debugging` first. A change the user states in one sentence with a known cause ("rename X", "bump Y", "fix the off-by-one in Z") in a `.ytstack` project with `quick_lane: on` (PREFERENCES default) -> `quick-task`, not `plan-task`.
 
 ## Red flags -- stop and invoke
 

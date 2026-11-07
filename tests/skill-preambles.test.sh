@@ -36,7 +36,7 @@ MAIN="$TMP/main"; mkdir -p "$MAIN/.ytstack"
   echo seed > f.txt; git add -A; git commit -qm "M999-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL fixture; exit 2; }
 WT="$TMP/wt"; git -C "$MAIN" worktree add -q -b wt-branch "$WT" >/dev/null 2>&1 || { echo FATAL worktree; exit 2; }
 
-SKILLS="handoff-session init-project plan-milestone plan-task reassess-roadmap resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review systematic-debugging test-driven-development verification-before-completion"
+SKILLS="handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review systematic-debugging test-driven-development verification-before-completion"
 
 # extract <skill> -> path of a runnable script with ${CLAUDE_SKILL_DIR} substituted
 extract() {
@@ -92,6 +92,13 @@ for s in $SKILLS; do
       has "$s: fake install -> pin ok" "$OUT" "GSTACK_PIN_OK: yes"
       rm -rf "$TMP/home/.claude"
       grep -q 'vendor/gstack' "$ROOT/skills/$s/SKILL.md" && bad "$s: no vendor/gstack reference left" || ok "$s: no vendor/gstack reference left" ;;
+    quick-task)
+      has "$s: QUICK_LANE on by default" "$OUT" "QUICK_LANE: on"
+      has "$s: NEXT_Q starts at Q001"    "$OUT" "NEXT_Q: Q001"
+      mkdir -p "$WT/.ytstack/quick"; printf -- '---\nkind: quick\n---\n' > "$WT/.ytstack/quick/Q001-PLAN.md"
+      run_pre "$P" "$WT"
+      has "$s: NEXT_Q advances past existing Q001" "$OUT" "NEXT_Q: Q002"
+      rm -rf "$WT/.ytstack/quick" ;;
     plan-task|slice-milestone|summarize-task)
       # ceremony dials (M018): defaults, then a PREFERENCES.md with slice/step
       has "$s: default GRANULARITY task" "$OUT" "GRANULARITY: task"
