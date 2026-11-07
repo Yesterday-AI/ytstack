@@ -36,7 +36,7 @@ echo "# install layout ($GSTACK_HOME)"
 VER=$(head -1 "$GSTACK_HOME/VERSION" | tr -d '[:space:]')
 PIN=$( . "$LIB"; printf '%s' "$YT_GSTACK_PIN" )
 if ( . "$LIB"; yt_vergte "$VER" "$PIN" ); then ok "VERSION $VER >= pin $PIN"; else bad "VERSION $VER >= pin $PIN"; fi
-for s in office-hours plan-ceo-review plan-eng-review; do
+for s in office-hours plan-ceo-review plan-eng-review retro ship document-release; do
   [ -f "$GSTACK_HOME/$s/SKILL.md" ] && ok "$s/SKILL.md present" || bad "$s/SKILL.md present"
   eq "$s: frontmatter name is the bare skill name" "$s" "$(sed -n 's/^name: *//p' "$GSTACK_HOME/$s/SKILL.md" | head -1 | tr -d '"')"
   [ -d "$GSTACK_HOME/$s/sections" ] && ok "$s/sections/ present (skeleton layout)" || ok "$s: no sections/ dir (monolithic SKILL.md)"
@@ -55,7 +55,7 @@ extract() {
   printf '%s' "$out"
 }
 FIX="$TMP/fixture"; mkdir -p "$FIX/.ytstack"; ( cd "$FIX" && git init -q && git config user.email t@t.t && git config user.name t && printf 'current_milestone: none\n' > .ytstack/STATE.md && echo x > f && git add -A && git commit -qm seed ) >/dev/null 2>&1
-for s in office-hours plan-ceo-review plan-eng-review; do
+for s in office-hours plan-ceo-review plan-eng-review retro ship document-release; do
   P=$(extract "$s")
   OUT=$( cd "$FIX" && GSTACK_HOME="$GSTACK_HOME" bash "$P" 2>/dev/null )
   has "$s: GSTACK_AVAILABLE yes"   "$OUT" "GSTACK_AVAILABLE: yes"

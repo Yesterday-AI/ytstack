@@ -627,7 +627,7 @@ def check_inline_leaks(root):
 
 # ---------- check: gstack wrappers (installed dependency contract, M017) ----------
 
-_GSTACK_WRAPPERS = ("office-hours", "plan-ceo-review", "plan-eng-review")
+_GSTACK_WRAPPERS = ("office-hours", "plan-ceo-review", "plan-eng-review", "retro", "ship", "document-release")
 
 
 def check_gstack_wrappers(root):

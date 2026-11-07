@@ -36,7 +36,7 @@ MAIN="$TMP/main"; mkdir -p "$MAIN/.ytstack"
   echo seed > f.txt; git add -A; git commit -qm "M999-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL fixture; exit 2; }
 WT="$TMP/wt"; git -C "$MAIN" worktree add -q -b wt-branch "$WT" >/dev/null 2>&1 || { echo FATAL worktree; exit 2; }
 
-SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review systematic-debugging test-driven-development verification-before-completion"
+SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill"
 
 # Brownfield fixture (M010, issue #18): existing docs, no .ytstack -> >= 2 signals
 BF="$TMP/brown"; mkdir -p "$BF/docs/adr"
@@ -101,12 +101,12 @@ for s in $SKILLS; do
       [ -n "$N" ] && [ "$N" -ge 2 ] 2>/dev/null && ok "$s: brownfield -> BROWNFIELD_SIGNALS >= 2 ($N), routes to adopt-brownfield" || bad "$s: brownfield -> BROWNFIELD_SIGNALS >= 2" "got '$N'"
       has "$s: brownfield -> PITCH none (route condition)" "$OUT" "PITCH: none"
       has "$s: brownfield -> candidates listed" "$OUT" "CANDIDATES:" ;;
-    office-hours|plan-ceo-review|plan-eng-review)
+    office-hours|plan-ceo-review|plan-eng-review|retro|ship|document-release)
       # gstack wrappers: precheck flags, empty HOME (no gstack) vs fake install
       has "$s: no gstack -> GSTACK_AVAILABLE no" "$OUT" "GSTACK_AVAILABLE: no"
       has "$s: no gstack -> install cmd names the pin" "$OUT" "--branch v1.96.0.0"
-      GSI="$TMP/home/.claude/skills/gstack"; mkdir -p "$GSI/office-hours" "$GSI/plan-ceo-review" "$GSI/plan-eng-review"
-      printf '1.96.0.0\n' > "$GSI/VERSION"; for g in office-hours plan-ceo-review plan-eng-review; do printf -- '---\nname: %s\n---\n' "$g" > "$GSI/$g/SKILL.md"; done
+      GSI="$TMP/home/.claude/skills/gstack"; mkdir -p "$GSI"
+      printf '1.96.0.0\n' > "$GSI/VERSION"; for g in office-hours plan-ceo-review plan-eng-review retro ship document-release; do mkdir -p "$GSI/$g"; printf -- '---\nname: %s\n---\n' "$g" > "$GSI/$g/SKILL.md"; done
       run_pre "$P" "$WT"
       has "$s: fake install -> GSTACK_AVAILABLE yes" "$OUT" "GSTACK_AVAILABLE: yes"
       has "$s: fake install -> skill ok" "$OUT" "GSTACK_SKILL_OK: yes"
@@ -158,6 +158,19 @@ for s in $SKILLS; do
       run_pre "$P" "$WT"
       has "$s: worktree -> TRACKER read from STATE.md" "$OUT" "TRACKER: linear"
       cp "$TMP/state.bak" "$WT/.ytstack/STATE.md" ;;
+    code-review)
+      has "$s: worktree -> task plan found" "$OUT" "TASK_PLAN_EXISTS: yes"
+      has "$s: worktree -> COMMITS_SOURCE echoed" "$OUT" "COMMITS_SOURCE: "
+      ( cd "$WT" && echo cr > cr.txt && git add cr.txt && git commit -qm "M999-S01-T01: reviewed change" ) >/dev/null 2>&1
+      run_pre "$P" "$WT"
+      has "$s: task-ref commit -> COMMITS_SOURCE task-ref" "$OUT" "COMMITS_SOURCE: task-ref"
+      case "$OUT" in *"BASE_SHA: none"*) bad "$s: task-ref commit -> BASE_SHA resolved";; *) ok "$s: task-ref commit -> BASE_SHA resolved";; esac ;;
+    finish-branch)
+      has "$s: worktree -> IS_LINKED_WORKTREE yes" "$OUT" "IS_LINKED_WORKTREE: yes"
+      case "$OUT" in *"OPEN_TASKS:"*T01*) ok "$s: worktree -> open tasks listed (T01 has no summary)";; *) bad "$s: worktree -> open tasks listed (T01 has no summary)" "$(printf '%s' "$OUT" | grep OPEN_TASKS)";; esac ;;
+    grill)
+      has "$s: worktree -> milestone context target" "$OUT" "DESIGN_TARGET: $WT/.ytstack/M999-CONTEXT.md"
+      has "$s: worktree -> no pitch" "$OUT" "PITCH: none" ;;
     resume-session)
       has "$s: worktree -> STATE lint clean (0)" "$OUT" "STATE_LINT: 0"
       has "$s: worktree -> no auto handoff there" "$OUT" "LATEST_AUTO_HANDOFF: none"
