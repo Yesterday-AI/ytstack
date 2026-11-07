@@ -38,7 +38,17 @@ M -- see `M016-ROADMAP.md` for slice breakdown. Borderline to L; `slice-mileston
 - 2026-11-07 (T03): keys are md5-based 16-hex (fast C binary) rather than sha256; same shape and uniqueness for this purpose; perl `shasum` cost ~110 ms per call against the 1.5 s SessionEnd budget.
 - 2026-11-07: journal keeps existing only if `resume-session` consumes it ("last N sessions touched M/S/T"); otherwise it is dropped. Audit evidence: 80-100 % `task: none`, no reader.
 
-## Open questions
+## Closing note (2026-11-07)
+
+All exit criteria met as amended (PowerShell variants deferred to M019; no `onFailure: block`; md5 keys). 15 tasks, 3 slices, 10 test suites / 488 cases green on macOS bash 3.2 and Linux bash 5.3.9 from a clean clone; `claude plugin validate .` passes; evidence posted on #24 and #27; `v0.2.0` tagged locally. Operator actions: `git push origin main --tags`, close #24/#27, `/plugin update`, catalog sync in `yesterday-public-plugins`.
+
+## Open questions (resolved)
+
+- PreCompact payload carries `cwd` on current Claude Code (verified in the hooks reference); fallback is the hook's `$PWD`.
+- Codex: `cwd` = session cwd, `PLUGIN_DATA` honoured by `yt_state_base`; `${CLAUDE_SKILL_DIR}` may be unsubstituted there -> preamble fallback branch.
+- Worktree key = md5-16 of the canonical toplevel (readable, collision-free at this scale).
+
+## Open questions (original)
 
 - Does `pre-compact` receive `cwd` in its stdin payload on all supported Claude Code versions (>= v2.1.159)? Verify against the hooks reference before relying on it; fallback = `session_id` lookup of the last known `cwd` written by `post-tool-use-bash`.
 - Codex adapter: Codex hooks carry a Claude-shaped stdin with `cwd` = session cwd and no `CwdChanged`; confirm the state-dir fallback `PLUGIN_DATA` is set there.
