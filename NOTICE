@@ -14,7 +14,9 @@ License: MIT. See vendor/superpowers/LICENSE.
 
 We vendor superpowers read-only and wrap selected skills with ytstack-namespaced
 skills at skills/test-driven-development/, skills/systematic-debugging/,
-skills/verification-before-completion/. We do not modify vendored content.
+skills/verification-before-completion/, skills/code-review/ (requesting-code-review
++ receiving-code-review), skills/finish-branch/ (finishing-a-development-branch)
+and skills/grill/ (brainstorming). We do not modify vendored content.
 
 Attribution: Jesse Vincent and the Prime Radiant team are the original authors
 of the superpowers methodology and skills. Their maintainer rules (see

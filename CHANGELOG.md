@@ -64,6 +64,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Six lifecycle skills** (M019-S03, absorbs M011): `code-review`
+  (superpowers requesting + receiving-code-review on the task's commit
+  range), `finish-branch` (superpowers finishing-a-development-branch,
+  gated on every task of the slice having a real summary, never touches
+  `.ytstack`), `grill` (superpowers brainstorming before plan-milestone;
+  design notes into `M###-CONTEXT.md` or `GRILL-<slug>.md`), and the
+  gstack-backed `retro` (`M###-RETRO.md` from the task summaries), `ship`
+  (gstack release flow, no merge without instruction) and
+  `document-release` (CHANGELOG + release notes from the summaries since the
+  last tag). `using-ytstack` routes to them; `session-start` prints the
+  lifecycle hint after a closed slice (reassess -> finish-branch / ship) or
+  milestone (retro -> document-release -> plan-milestone).
+- **Eval suite** (`evals/`, M019-S02) for `claude plugin eval`: 13 cases
+  (one per lifecycle skill) with `fixture.sh` scaffolds, a `skill-fired`
+  grader and a free outcome grader each; `evals/README.md` has the run
+  command; `evals/results/` gitignored.
+- **CI workflow** (`.github/workflows/ci.yml`): shell suites +
+  `ytstack-check` on ubuntu and macOS; README badge.
+- **Advisory `Stop` hook** (`hooks/stop`): one-line `systemMessage` when
+  the agent stops with an unsummarized active task; never blocks.
+
+### Changed
+
+- **Skill frontmatter** (M019-S01): ytstack's own keys `tier`, `version`,
+  `kind`, `triggers` live under `metadata:` (Agent Skills spec; unknown
+  top-level keys hard-error on packaging/upload). `bin/ytstack-check`
+  parses the nested map, reads `metadata.*` first and warns on the legacy
+  form.
+- **Descriptions** (M019-S01): all 31 skills carry trigger-only
+  descriptions (third person, what + when + when-not, longest 449 chars);
+  `bin/ytstack-check` fails descriptions over 1,024 chars, warns on
+  procedure-summary phrases and on `kind: directive|reference` without an
+  explicit `user-invocable` flag. Reference skills are `user-invocable:
+  true`.
+
+### Removed
+
+- **`web-design` plugin dependency** (DECISIONS 2026-11-07 "No hard plugin
+  dependencies"): an unsatisfied dependency disables ytstack at load time,
+  which made `claude plugin eval` and clean-machine `--plugin-dir` fail;
+  nothing in ytstack calls web-design. It stays a recommended companion in
+  the README. The self-marketplace drops `allowCrossMarketplaceDependenciesOn`.
+
 - **Ceremony dials in `PREFERENCES.md`** (M018, DECISIONS 2026-11-07
   "Ceremony scales with the change"): `granularity: task|slice|milestone`,
   `autonomy: loop|step` (loop = chain plan-task -> TDD -> verify ->

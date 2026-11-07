@@ -102,6 +102,23 @@ lacks "ss-main: clean STATE -> no lint block"   "$CTX" "STATE lint ("
 if [ "${#CTX}" -lt 9500 ]; then ok "ss-main: injection still under the guard (${#CTX})"; else bad "ss-main: injection under guard" "${#CTX}"; fi
 rm -f "$MAIN/.ytstack/PREFERENCES.md"
 
+# ---- 1e. session-start: lifecycle hints after a closed slice / milestone (M019-S03)
+cp "$MAIN/.ytstack/M999-S01-PLAN.md" "$TMP/slice.good"
+printf -- '---\nmilestone: M999\nslice: S01\nstatus: done\n---\n# plan\n\n- [x] T01 -- done\n' > "$MAIN/.ytstack/M999-S01-PLAN.md"
+run session-start "{\"session_id\":\"s1g\",\"cwd\":$(jstr "$MAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has "ss-main: slice done -> reassess + finish-branch/ship hint" "$CTX" "Slice S01 is done: ytstack:reassess-roadmap"
+cp "$TMP/slice.good" "$MAIN/.ytstack/M999-S01-PLAN.md"
+printf -- '---\nmilestone: M999\nstatus: done\n---\n# roadmap\n' > "$MAIN/.ytstack/M999-ROADMAP.md"
+run session-start "{\"session_id\":\"s1h\",\"cwd\":$(jstr "$MAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has "ss-main: milestone done, no retro -> retro hint" "$CTX" "Milestone M999 is done and has no retro: ytstack:retro"
+printf -- '---\nmilestone: M999\n---\n# retro\n' > "$MAIN/.ytstack/M999-RETRO.md"
+run session-start "{\"session_id\":\"s1i\",\"cwd\":$(jstr "$MAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+lacks "ss-main: milestone done with retro -> no retro hint" "$CTX" "has no retro"
+rm -f "$MAIN/.ytstack/M999-RETRO.md"; printf -- '---\nmilestone: M999\n---\n# roadmap\n' > "$MAIN/.ytstack/M999-ROADMAP.md"
+
 # ---- 1d. session-start: nested milestones/ layout read-side (M018-S03) -----
 mkdir -p "$MAIN/.ytstack/milestones/M777"
 printf -- '---\nclosed: 2026-11-07T00:00:00Z\n---\n' > "$MAIN/.ytstack/milestones/M777/M777-S01-T01-SUMMARY.md"

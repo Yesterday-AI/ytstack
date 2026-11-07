@@ -119,6 +119,18 @@ LAST_UPDATED=$(get_field last_updated)
 # "Next action" body (up to the next ## header), trimmed
 NEXT_ACTION=$(awk '/^## Next action/{flag=1; next} /^## /{flag=0} flag' "$STATE_FILE" | sed '/^$/d' | head -5 | cut -c1-600)
 
+# Lifecycle hints (M019-S03): a closed slice or milestone has a documented next step.
+LIFECYCLE_LINES=""
+if [ "${CURRENT_MILESTONE:-none}" != none ]; then
+  _rm="$YT_DIR/$CURRENT_MILESTONE-ROADMAP.md"
+  if [ -f "$_rm" ] && [ "$(sed -n 's/^status: *//p' "$_rm" | head -1)" = done ] && [ ! -f "$YT_DIR/$CURRENT_MILESTONE-RETRO.md" ]; then
+    LIFECYCLE_LINES="Milestone $CURRENT_MILESTONE is done and has no retro: ytstack:retro (needs gstack), then ytstack:document-release for the version, then ytstack:plan-milestone."
+  elif [ "${ACTIVE_SLICE:-none}" != none ] && [ -f "$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-PLAN.md" ] \
+       && [ "$(sed -n 's/^status: *//p' "$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-PLAN.md" | head -1)" = done ]; then
+    LIFECYCLE_LINES="Slice $ACTIVE_SLICE is done: ytstack:reassess-roadmap first; then ytstack:finish-branch (merge / PR / keep) or ytstack:ship (gstack release flow) for the branch."
+  fi
+fi
+
 # Recent summary file names (last 3 by mtime)
 # (M018-S03: flat layout plus milestones/, quick/ etc. via the lib)
 RECENT_SUMMARIES=$(yt_find_artifacts "$YT_DIR" '*-SUMMARY.md' | head -3 | while read -r f; do
@@ -188,6 +200,11 @@ Milestones in progress: $IN_PROGRESS (more than one -- check the STATE pointer; 
     ctx="$ctx
 
 $HANDOFF_LINES"
+  fi
+  if [ -n "$LIFECYCLE_LINES" ]; then
+    ctx="$ctx
+
+$LIFECYCLE_LINES"
   fi
   if [ -n "$LINT_LINES" ]; then
     ctx="$ctx

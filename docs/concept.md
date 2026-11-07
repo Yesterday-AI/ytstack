@@ -103,6 +103,29 @@ Per README comparison table and DECISIONS. Six skills, each with a distinct purp
 **Triggers on:** before commit, before PR, before summarize-task, before any "done" claim ("verify", "is it really done", "check before I commit").
 **Differs from running the command manually:** enforces that the command was actually executed this session and its output observed. The vendored superpowers skill has specific anti-rationalization rules against "it should work"-style hand-waving.
 
+#### `code-review` (superpowers `requesting-code-review` + `receiving-code-review`, M019)
+
+**Purpose:** fresh-context reviewer subagent on the active task's commit range (`BASE_SHA..HEAD_SHA` from the task-ref discovery), then rigorous handling of the findings.
+**Produces:** fixes as task-ref commits; Minor findings into the task summary's Follow-ups; patterns into `KNOWLEDGE.md`.
+**Triggers on:** "review my changes", "code review", before summarize-task / merge / PR.
+**Differs from plan-eng-review:** reviews code that exists, not a plan.
+
+#### `finish-branch` (superpowers `finishing-a-development-branch`, M019)
+
+**Purpose:** integration decision for a finished branch or worktree (merge locally / push + PR / keep) after the slice is closed on paper (every task summarized, no draft stubs).
+**Triggers on:** "finish the branch", "merge this", "open the PR", "wrap up the worktree".
+**Differs from ship:** no gstack, no automated review; the vendored menu and the user's choice. Never deletes `.ytstack` files (leftovers go to `reconcile`).
+
+#### `grill` (superpowers `brainstorming`, M019)
+
+**Purpose:** relentless questioning of an idea before it becomes a milestone; design notes land in `M###-CONTEXT.md` "Decisions locked in discuss phase" (milestone current) or `GRILL-<slug>.md`.
+**Triggers on:** "grill me", "poke holes in this", "design before we plan"; between office-hours and plan-milestone.
+**Differs from office-hours:** office-hours validates demand (six forcing questions, gstack); grill shapes the solution. `superpowers:writing-plans` maps to `plan-milestone` + `slice-milestone`.
+
+#### `retro`, `ship`, `document-release` (gstack, installed dependency, M019)
+
+Same contract as the three planning wrappers (precheck via `yt_gstack_ctx`, HARD-GATE with the install command, Skill-tool invocation of the installed skill). `retro` runs after a milestone closes over its task summaries and writes `M###-RETRO.md` (+ KNOWLEDGE / DECISIONS entries); `ship` runs gstack's release flow (tests, review, commit, push, PR) gated on every task of the slice having a real summary, never merging without instruction; `document-release` writes the CHANGELOG section and release notes for a version from the summaries added since the last tag. `hooks/session-start` prints the lifecycle hint (reassess -> finish-branch / ship; retro -> document-release -> plan-milestone) when it sees a closed slice or milestone.
+
 ### 3.2 Explicitly skipped (verbatim from README §"ytstack is the curation")
 
 | Skill | Upstream | Why skipped (README verbatim) |

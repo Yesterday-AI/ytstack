@@ -200,6 +200,20 @@ Agent fires `ytstack:resume-session` -- reads `STATE.md` + `HANDOFF.md` + latest
 - `.ytstack/KNOWLEDGE.md` -- patterns and gotchas learned
 - `.ytstack/REVIEW-NOTES.md` -- deferred items flagged for end-of-cycle review
 
+## After the task, after the slice, after the milestone
+
+> "Review my changes."
+
+`ytstack:code-review` dispatches a fresh-context reviewer on the task's commits (task-ref prefix `M###-S##-T##:`) and handles the findings with the superpowers rigor rules; then `summarize-task` closes the task.
+
+> "Slice is done -- finish the branch." / "Ship it."
+
+`ytstack:finish-branch` (merge locally / PR / keep; no dependencies) or `ytstack:ship` (gstack's release flow with tests, review and PR). Both refuse while a task of the slice has no real summary.
+
+> "Retro." / "Write the changelog."
+
+After the milestone closed: `ytstack:retro` (gstack) writes `M###-RETRO.md` from the task summaries; `ytstack:document-release` (gstack) writes the CHANGELOG section for the version. Before the next milestone, "poke holes in this idea" runs `ytstack:grill` (superpowers brainstorming) and parks the design in the milestone context. The SessionStart hook prints these as hints when a slice or milestone is closed.
+
 ## Handoff / resume
 
 Before stepping away for a break:

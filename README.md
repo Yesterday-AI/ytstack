@@ -11,10 +11,11 @@
 
   <p>
     <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
-    <img alt="version" src="https://img.shields.io/badge/version-0.1.5-FC4E14">
+    <a href="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml/badge.svg"></a>
+    <img alt="version" src="https://img.shields.io/badge/version-0.3.0-FC4E14">
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
-    <img alt="skills" src="https://img.shields.io/badge/skills-21-FC4E14">
-    <img alt="hooks" src="https://img.shields.io/badge/hooks-8-FC4E14">
+    <img alt="skills" src="https://img.shields.io/badge/skills-31-FC4E14">
+    <img alt="hooks" src="https://img.shields.io/badge/hooks-9-FC4E14">
   </p>
 
   <table>
@@ -115,14 +116,22 @@ SessionStart hook injects `STATE.md` + the `using-ytstack` directive before your
   -> "let's plan what's next"  -> ytstack:plan-milestone    (if no active milestone)
                                   ytstack:plan-task        (if milestone is active)
   -> "this task is done"       -> ytstack:summarize-task    (close + flip checkbox)
+  -> "review my changes"       -> ytstack:code-review       (reviewer subagent on the task's commits)
   -> "let's do a handoff"      -> ytstack:handoff-session   (rich HANDOFF.md)
+  -> "poke holes in this idea" -> ytstack:grill             (question it before plan-milestone)
+  -> "finish the branch"       -> ytstack:finish-branch     (merge / PR / keep, after the slice is closed)
+  -> "ship it"                 -> ytstack:ship              (gstack release flow: tests, review, PR)
+  -> "retro"                   -> ytstack:retro             (after the milestone closed; gstack)
+  -> "write the changelog"     -> ytstack:document-release  (release notes from the summaries; gstack)
 ```
 
 Continuing an open task:
 
 ```
-plan-task -> test-driven-development -> verification-before-completion -> summarize-task
+plan-task -> test-driven-development -> verification-before-completion -> code-review -> summarize-task
 ```
+
+After the last task of a slice: `reassess-roadmap`, then `finish-branch` or `ship`. After the last slice of a milestone: `retro`, `document-release`, `plan-milestone`. The SessionStart hook prints these as hints when it sees a closed slice or milestone.
 
 At each slice boundary: `ytstack:reassess-roadmap` to check the plan still fits reality.
 
@@ -303,9 +312,9 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 
 Ships:
 
-- 22 skills (project-OS lifecycle incl. `adopt-brownfield` + gstack planning wrappers + superpowers execution wrappers + Agent Teams dispatch + `using-ytstack` directive + 5 engineering-OS additions migrated from agentic-foundation: `atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`)
-- 8 hooks (SessionStart / PreCompact / SessionEnd / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers.
-- Ten shell test suites (`tests/run-all.sh`, 596 cases, macOS bash 3.2 + Linux bash 5) and `bin/ytstack-check` (UX contracts + resolver contract).
+- 31 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), gstack wrappers over the installed dependency (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
+- 9 hooks (SessionStart / PreCompact / SessionEnd / Stop / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers + STATE lint + lifecycle hints.
+- Twelve shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks) and an eval suite for `claude plugin eval` (`evals/`, 13 cases).
 - Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
 
@@ -377,6 +386,16 @@ Key rules:
 - Follow the AskUserQuestion 4-part format for any user-facing question
 
 See [`docs/references.md`](./docs/references.md) for the full list of sources consulted while designing ytstack.
+
+### Testing
+
+Three layers, cheapest first:
+
+- `bin/ytstack-check` -- static contracts (frontmatter, `metadata:`, description budget and trigger-only phrasing, resolver rules, vendor leaks). Free, runs in CI.
+- `bash tests/run-all.sh` -- the shell suites in `tests/` (hooks, lib, preambles, checker) on macOS bash 3.2 and Linux (`--linux` via Docker). Free, runs in CI on ubuntu and macOS (`.github/workflows/ci.yml`).
+- `claude plugin eval . --trust-plugin --scaffold --allow-tools Write Edit Bash --ablation none --no-publish --max-cost-usd 10` -- behavioural evals in [`evals/`](./evals/README.md): one case per lifecycle skill, each a user-phrased prompt plus a `skill-fired` grader and an outcome grader on the produced artifact. Real model calls on your account (about $0.30 per case); not in CI. The last recorded run is in `.ytstack/KNOWLEDGE.md`.
+
+`/skill-doctor` in a session and `claude plugin details ytstack` show what the skill listing costs and which skills never fire.
 
 ## License
 
