@@ -65,10 +65,13 @@ if [ -n "$YTSTACK_NON_INTERACTIVE" ] || [ -n "$OPENCLAW_SESSION" ] || [ -n "$CLA
   _NON_INTERACTIVE=true
 fi
 
-_CURRENT_MILESTONE=none; _ACTIVE_SLICE=none
+_CURRENT_MILESTONE=none; _ACTIVE_SLICE=none; _TRACKER=none
 if [ -f "$_YT_DIR/STATE.md" ]; then
   _CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$_YT_DIR/STATE.md" | head -1)
   _ACTIVE_SLICE=$(sed -n 's/^active_slice: *//p' "$_YT_DIR/STATE.md" | head -1)
+  # External issue tracker (none | linear | github-projects | paperclip | jira)
+  _TRACKER=$(sed -n 's/^tracker: *//p' "$_YT_DIR/STATE.md" | head -1)
+  _TRACKER=${_TRACKER:-none}
 fi
 
 # Determine if the current slice is complete
@@ -84,6 +87,7 @@ echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "ACTIVE_SLICE: $_ACTIVE_SLICE"
 echo "SLICE_COMPLETE: $_SLICE_COMPLETE"
+echo "TRACKER: $_TRACKER"
 ```
 
 ## Procedure
@@ -161,7 +165,7 @@ Also flip `- [ ] {OLD_SLICE}` → `- [x] {OLD_SLICE}` in `{CURRENT_MILESTONE}-RO
 
 **Step 9. Backlog sweep** (only if this was the last slice of the milestone -- no remaining `- [ ] S##` in ROADMAP).
 
-Read `{CURRENT_MILESTONE}-CONTEXT.md`. Extract any backlog items listed under a "Backlog" or "Deferred" heading (pattern: lines starting with `- ` under such a heading). If none found, skip this step and report "no backlog items found."
+Read `{CURRENT_MILESTONE}-CONTEXT.md`. Extract any backlog items listed under a "Backlog" or "Deferred" heading (pattern: lines starting with `- ` under such a heading). If none found, skip this step and report "no backlog items found." If `TRACKER` is not `none`, say once before the first item: *"Issue-level work for this project is tracked in {TRACKER}; items that are BAU belong there, not in a new slice or milestone."* (no extra question; the per-item A/B/C below is unchanged).
 
 For each backlog item, use AskUserQuestion (multi-choice):
 

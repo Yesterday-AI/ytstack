@@ -98,6 +98,12 @@ _PROJECT_NAME=""
 if [ -f "$_YT_DIR/PROJECT.md" ]; then
   _PROJECT_NAME=$(sed -n 's/^name: *//p' "$_YT_DIR/PROJECT.md" | head -1)
 fi
+# External issue tracker (STATE.md `tracker:`; none | linear | github-projects | paperclip | jira)
+_TRACKER=none
+if [ -f "$_YT_DIR/STATE.md" ]; then
+  _TRACKER=$(sed -n 's/^tracker: *//p' "$_YT_DIR/STATE.md" | head -1)
+  _TRACKER=${_TRACKER:-none}
+fi
 
 _NON_INTERACTIVE=false
 if [ -n "$YTSTACK_NON_INTERACTIVE" ] || [ -n "$OPENCLAW_SESSION" ] || [ -n "$CLAUDE_AGENT_TEAM_MEMBER" ]; then
@@ -111,6 +117,7 @@ echo "YT_DIR: $_YT_DIR"
 echo "YT_SCOPE: $_YT_SCOPE"
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "NEXT_MILESTONE: $_NEXT_MILESTONE"
+echo "TRACKER: $_TRACKER"
 echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 ```
 
@@ -131,6 +138,8 @@ If `YTSTACK_NON_INTERACTIVE` is `true`, parse goal from prompt context. Otherwis
 > Planning milestone **{NEXT_MILESTONE}** for project **{PROJECT_NAME}** on branch `{BRANCH}`.
 >
 > What's the goal of this milestone? One sentence describing the outcome it delivers. Not the tasks -- the *result*.
+>
+> {Only if `TRACKER` is not `none`:} Day-to-day issues and bugfixes are tracked in {TRACKER} and do not need a milestone; name a discrete initiative here, not the BAU queue.
 >
 > Good examples:
 > - "Users can sign up with email and get a verification link."

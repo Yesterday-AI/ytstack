@@ -126,6 +126,12 @@ for s in $SKILLS; do
       has "$s: brownfield -> candidate adr -> DECISIONS.md" "$OUT" "docs/adr/ (1 files) -> DECISIONS.md"
       has "$s: brownfield -> README one-liner picked" "$OUT" "README_ONELINER: Acme turns invoices into forecasts."
       has "$s: brownfield -> no entry doc" "$OUT" "ENTRY_DOC: none" ;;
+    plan-milestone|reassess-roadmap)
+      has "$s: worktree -> TRACKER none when STATE.md has no field" "$OUT" "TRACKER: none"
+      cp "$WT/.ytstack/STATE.md" "$TMP/state.bak"; printf 'tracker: linear\n' >> "$WT/.ytstack/STATE.md"
+      run_pre "$P" "$WT"
+      has "$s: worktree -> TRACKER read from STATE.md" "$OUT" "TRACKER: linear"
+      cp "$TMP/state.bak" "$WT/.ytstack/STATE.md" ;;
     resume-session)
       has "$s: worktree -> no auto handoff there" "$OUT" "LATEST_AUTO_HANDOFF: none"
       run_pre "$P" "$MAIN"
