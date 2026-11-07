@@ -5,7 +5,7 @@ project: ytstack
 created: 2026-11-07T14:00:00Z
 status: planned
 task_count: 5
-completed_tasks: 0
+completed_tasks: 1
 ---
 
 # M017-S02 -- Slice Plan
@@ -14,7 +14,7 @@ completed_tasks: 0
 
 ## Tasks
 
-- [ ] T01 -- `yt_gstack_ctx` in `hooks/lib/git-ctx.sh`: `YT_GSTACK_DIR` (`${GSTACK_HOME:-$HOME/.claude/skills/gstack}`), `YT_GSTACK_AVAILABLE`, `YT_GSTACK_VERSION` (`VERSION` file), `yt_gstack_skill_ok <name>` (SKILL.md present), `YT_BUN_VERSION` + `YT_BUN_OK` (>= 1.4.2), `YT_GSTACK_PIN` constant + `YT_GSTACK_PIN_OK`; unit tests with a fake install under a temp HOME and with an empty HOME.
+- [x] T01 -- `yt_gstack_ctx` in `hooks/lib/git-ctx.sh`: `YT_GSTACK_DIR` (`${GSTACK_HOME:-$HOME/.claude/skills/gstack}`), `YT_GSTACK_AVAILABLE`, `YT_GSTACK_VERSION` (`VERSION` file), `yt_gstack_skill_ok <name>` (SKILL.md present), `YT_BUN_VERSION` + `YT_BUN_OK` (>= 1.4.2), `YT_GSTACK_PIN` constant + `YT_GSTACK_PIN_OK`; unit tests with a fake install under a temp HOME and with an empty HOME.
 - [ ] T02 -- Rewrite the three wrappers: preamble adds the gstack precheck echoes; body = HARD-GATE on `GSTACK_AVAILABLE=no` (message with the pinned install command, stop), else "Invoke the Skill tool with `<name>` (installed gstack), then post-process" with the existing ytstack artifact rules; remove the `cat vendor/gstack/...` blocks; descriptions mention "installed gstack" instead of "vendored"; `tests/skill-preambles.test.sh` asserts `GSTACK_AVAILABLE: no` under an empty HOME and `yes` under a fake install.
 - [ ] T03 -- Remove `vendor/gstack/` (`git rm -r`), update `bin/ytstack-check`: cross-ref/sibling checks skip absent vendors, new check that each gstack wrapper names an install path and the pinned tag; update `AGENTS.md`, `NOTICE`, `README.md` (install prerequisites, repo layout), `QUICKSTART.md`, `docs/concept.md`, `docs/methodology.md`, `.ytstack/VENDOR-INVENTORY.md` (vendored vs installed), `.gitignore` (drop gstack-specific lines if any); grep proves no `vendor/gstack` reference remains outside `docs/research/` and `.ytstack/` history files.
 - [ ] T04 -- Live validation in a temp HOME: `git clone --branch <latest stable tag> https://github.com/garrytan/gstack` into `$TMP/home/.claude/skills/gstack`, run `./setup --no-browser` with bun 1.4.4, record VERSION, layout and the `gstack-skill-start` behaviour in KNOWLEDGE; run the three wrapper preambles with `HOME=$TMP/home` and assert `GSTACK_AVAILABLE: yes`, `GSTACK_VERSION` set, all three `SKILL_OK: yes`; note the Skill-name collision answer (CONTEXT open question).
