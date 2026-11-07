@@ -323,6 +323,54 @@ yt_gstack_ctx() {
   return 0
 }
 
+# ---- preferences (M018, DECISIONS 2026-11-07 "Ceremony scales with the change") ----
+# yt_pref <yt_dir> <key> [default] -> value of `key: value` (or legacy `key=value`)
+# from <yt_dir>/PREFERENCES.md, frontmatter or body; surrounding quotes and a
+# trailing ` # comment` are stripped. Prints <default> when absent.
+yt_pref() {
+  local ytd="$1" key="$2" def="${3:-}" line val=""
+  if [ -n "$ytd" ] && [ -f "$ytd/PREFERENCES.md" ]; then
+    line=$(grep -E "^[[:space:]]*${key}[[:space:]]*[:=]" "$ytd/PREFERENCES.md" 2>/dev/null | head -1)
+    if [ -n "$line" ]; then
+      val="${line#*[:=]}"
+      val="${val%%#*}"                       # drop trailing comment
+      val=$(printf '%s' "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+      val="${val#\"}"; val="${val%\"}"
+      val="${val#\'}"; val="${val%\'}"
+    fi
+  fi
+  if [ -n "$val" ]; then printf '%s' "$val"; else printf '%s' "$def"; fi
+}
+
+# yt_prefs <yt_dir>: the ceremony dials with loud defaults.
+#   YT_PREF_GRANULARITY   task | slice | milestone   (default task)
+#   YT_PREF_AUTONOMY      loop | step                (default loop)
+#   YT_PREF_QUICK_LANE    on | off                   (default on)
+#   YT_PREF_MINIMAL_CODE  on | off                   (default on)
+#   YT_PREF_COMMIT_REF_PATTERN  passthrough (empty when unset)
+#   YT_PREF_WARNINGS      one line per invalid value (reset to default)
+yt_prefs() {
+  local ytd="$1"
+  YT_PREF_WARNINGS=""
+  YT_PREF_GRANULARITY=$(yt_pref "$ytd" granularity task)
+  case "$YT_PREF_GRANULARITY" in task|slice|milestone) ;; *)
+    YT_PREF_WARNINGS="${YT_PREF_WARNINGS}granularity: '$YT_PREF_GRANULARITY' is not task|slice|milestone (using task)"; YT_PREF_GRANULARITY=task ;; esac
+  YT_PREF_AUTONOMY=$(yt_pref "$ytd" autonomy loop)
+  case "$YT_PREF_AUTONOMY" in loop|step) ;; *)
+    YT_PREF_WARNINGS="${YT_PREF_WARNINGS:+$YT_PREF_WARNINGS
+}autonomy: '$YT_PREF_AUTONOMY' is not loop|step (using loop)"; YT_PREF_AUTONOMY=loop ;; esac
+  YT_PREF_QUICK_LANE=$(yt_pref "$ytd" quick_lane on)
+  case "$YT_PREF_QUICK_LANE" in on|off) ;; *)
+    YT_PREF_WARNINGS="${YT_PREF_WARNINGS:+$YT_PREF_WARNINGS
+}quick_lane: '$YT_PREF_QUICK_LANE' is not on|off (using on)"; YT_PREF_QUICK_LANE=on ;; esac
+  YT_PREF_MINIMAL_CODE=$(yt_pref "$ytd" minimal_code on)
+  case "$YT_PREF_MINIMAL_CODE" in on|off) ;; *)
+    YT_PREF_WARNINGS="${YT_PREF_WARNINGS:+$YT_PREF_WARNINGS
+}minimal_code: '$YT_PREF_MINIMAL_CODE' is not on|off (using on)"; YT_PREF_MINIMAL_CODE=on ;; esac
+  YT_PREF_COMMIT_REF_PATTERN=$(yt_pref "$ytd" commit_ref_pattern "")
+  return 0
+}
+
 # yt_resolve_yt_dir -> the .ytstack dir for the resolved toplevel: project
 # scope (<toplevel>/.ytstack) first, then user scope keyed by YT_REPO_KEY.
 # Sets YT_DIR and YT_SCOPE (project|user|none). No basename slugs.

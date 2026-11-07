@@ -230,6 +230,24 @@ else
 fi
 eq "bun: absent PATH -> no" no "$( . "$LIB"; PATH=/nonexistent HOME="$GH" yt_gstack_ctx >/dev/null; printf '%s' "$YT_BUN_OK" )"
 
+# ---- 12. preferences ----------------------------------------------------------
+echo "# preferences"
+PY="$TMP/prefs"; mkdir -p "$PY"
+pref() { ( . "$LIB"; yt_pref "$@" ); }
+prefs() { ( . "$LIB"; yt_prefs "$1" >/dev/null; printf '%s|%s|%s|%s|%s' "$YT_PREF_GRANULARITY" "$YT_PREF_AUTONOMY" "$YT_PREF_QUICK_LANE" "$YT_PREF_MINIMAL_CODE" "${YT_PREF_WARNINGS:-}" ); }
+eq "pref: absent file -> default"            task "$(pref "$PY" granularity task)"
+eq "pref: absent file, no default -> empty"  ""   "$(pref "$PY" granularity)"
+eq "prefs: defaults without file"            "task|loop|on|on|" "$(prefs "$PY")"
+printf -- '---\nautonomy: step\n---\n\n# Preferences\n\n## Ceremony\n\ngranularity: "slice"   # smallest unit\nquick_lane: off\ncommit_ref_pattern: '"'"'^feat\\({task}\\)'"'"'\n' > "$PY/PREFERENCES.md"
+eq "pref: body value, quotes + trailing comment stripped" slice "$(pref "$PY" granularity task)"
+eq "pref: frontmatter value"                 step "$(pref "$PY" autonomy loop)"
+eq "pref: single quotes stripped"            '^feat\({task}\)' "$(pref "$PY" commit_ref_pattern)"
+eq "prefs: mixed file"                       "slice|step|off|on|" "$(prefs "$PY")"
+printf 'granularity: huge\nminimal_code: off\n' > "$PY/PREFERENCES.md"
+eq "prefs: invalid granularity -> default + warning" "task|loop|on|off|granularity: 'huge' is not task|slice|milestone (using task)" "$(prefs "$PY")"
+printf 'explain_level=brutal\n' > "$PY/PREFERENCES.md"
+eq "pref: key=value legacy form accepted"    brutal "$(pref "$PY" explain_level default)"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

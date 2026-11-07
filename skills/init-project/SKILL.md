@@ -315,6 +315,13 @@ explain_level: default
 
 Options: default | terse | brutal
 
+## Ceremony
+
+granularity: task        # task | slice | milestone -- smallest unit that gets a PLAN/SUMMARY pair
+autonomy: loop           # loop = chain plan-task -> TDD -> verify -> summarize inside a slice without asking; step = ask before each step
+quick_lane: on           # one-sentence changes go through ytstack:quick-task (Q### artifacts), no pitch, no review
+minimal_code: on         # inject the minimal-code guard (YAGNI ladder, never-cut list) at session start
+
 ## Model preferences
 
 (Fill in preferred model for each skill type if non-default.)
