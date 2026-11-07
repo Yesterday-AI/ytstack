@@ -13,19 +13,25 @@
 # Run: /bin/bash tests/ytstack-check.test.sh   (exit 0 = all pass)
 
 set -uo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
-CHECK="$ROOT/bin/ytstack-check"
+SRC="$(cd "$(dirname "$0")/.." && pwd -P)"
 
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); echo "  ok   - $1"; }
 bad() { FAIL=$((FAIL+1)); echo "  FAIL - $1${2:+ ($2)}"; }
 eq()  { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected '$2' got '$3'"; fi; }
 
+# Work on a copy of the plugin tree (the real checkout may be read-only, e.g.
+# in the Linux container, and must never receive fixture files).
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/ytcheck.XXXXXX"); TMP=$(cd "$TMP" && pwd -P)
+trap 'rm -rf "$TMP"' EXIT
+ROOT="$TMP/plugin"; mkdir -p "$ROOT"
+for d in bin skills hooks agents docs .claude-plugin; do [ -e "$SRC/$d" ] && cp -R "$SRC/$d" "$ROOT/"; done
+[ -d "$SRC/vendor" ] && ln -s "$SRC/vendor" "$ROOT/vendor"   # wrapper cross-ref checks read vendor/ (read-only is fine)
+CHECK="$ROOT/bin/ytstack-check"
+[ -x "$CHECK" ] || chmod +x "$CHECK"
+
 FIX_SKILL="$ROOT/skills/zz-fixture-banned"
 FIX_HOOK="$ROOT/hooks/zz-fixture-hook"
-cleanup() { rm -rf "$FIX_SKILL"; rm -f "$FIX_HOOK"; }
-trap cleanup EXIT
-cleanup
 
 # ---- 1. clean tree: no fails, section present ------------------------------
 echo "# clean tree"
