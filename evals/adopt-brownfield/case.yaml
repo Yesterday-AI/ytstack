@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: adopt-brownfield
+tags: [lifecycle, infra]
+context:
+  scaffold_script: fixture.sh

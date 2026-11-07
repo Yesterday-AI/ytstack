@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: summarize-task
+tags: [lifecycle, closure]
+context:
+  scaffold_script: fixture.sh

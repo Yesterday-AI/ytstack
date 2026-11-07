@@ -48,6 +48,9 @@ vendor/**/__pycache__/
 .claude/scheduled_tasks.lock
 .claude/worktrees/
 
+# claude plugin eval output (one directory per run)
+evals/results/
+
 # Tmp
 ~*.md
 ~*/
