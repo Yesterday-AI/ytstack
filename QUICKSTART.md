@@ -135,7 +135,7 @@ For each task in the active slice, the agent walks the loop. You type minimal pr
 
 You don't orchestrate the transitions -- the agent does, based on each skill's Terminal State pointer plus your confirmation. You confirm / correct; you don't drive.
 
-**Parallel variant:** when a milestone has multiple slices ready, say something like "dispatch a team to work the slices in parallel" -> agent fires `ytstack:spawn-milestone-team`. Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and Claude Code v2.1.32+. Each teammate works a slice in its own fresh 200k context.
+**Parallel variant:** when a milestone has multiple independent slices ready, say "run the slices in parallel" -> agent fires `ytstack:spawn-milestone-team`. Your session becomes the orchestrator: one implementer subagent per slice in its own git worktree (branch `ytstack/M###-S##`, fresh context, ytstack skills preloaded), a verifier subagent per finished branch, then the merge (the orchestrator keeps `STATE.md`). It refuses a dirty tree and overlapping slices. `team: on` in `PREFERENCES.md` (plus `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) uses Claude Code Agent Teams instead.
 
 ### 9. "Reassess between slices"
 

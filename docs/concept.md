@@ -224,10 +224,10 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 
 #### `spawn-milestone-team` (orchestration: parallel execution)
 
-**Purpose:** Parallel slice execution via Claude Code's native Agent Teams. Each teammate works on one slice in its own fresh 200k context. Replaces GSD's TypeScript-runtime subprocess model with native CC primitives.
-**Produces:** an active Agent Team; artifact-level output is the committed slice-plans per teammate.
-**Triggers on:** "spawn team", "dispatch milestone", "parallel slice execution". Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` + Claude Code v2.1.32+.
-**Differs from the sequential plan-task -> TDD -> verify -> summarize loop:** orchestrates parallel work on multiple slices; the per-slice loop remains unchanged inside each teammate.
+**Purpose:** Parallel slice execution with platform primitives (M019-S04). Default: the main session is a thin orchestrator that never edits source; per open slice it dispatches `Agent(subagent_type: "ytstack:implementer", isolation: "worktree")` with the slice plan and the branch `ytstack/M###-S##` in the brief, then `Agent(subagent_type: "ytstack:verifier", isolation: "worktree")` on the slice branch, then merges accepted branches into the working branch (`STATE.md` resolved from the orchestrator's side, pointer re-set by the orchestrator). Opt-in: PREFERENCES `team: on` + `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` emits the Agent Teams instruction instead (teammates coordinate through the task list and mailbox; no resume, no `skills` preload).
+**Produces:** slice branches with task-ref commits and summaries, verifier verdicts, merge commits; or an active Agent Team.
+**Triggers on:** "spawn team", "dispatch milestone", "run the slices in parallel". Refuses a dirty tree, a linked worktree as orchestrator, and overlapping slices without consent.
+**Differs from the sequential plan-task -> TDD -> verify -> summarize loop:** orchestrates parallel work on multiple slices; the per-slice loop remains unchanged inside each worker. Agents: `agents/implementer.md` (`isolation: worktree`, `memory: project`, skills preloaded), `agents/verifier.md` (same, read-only), `agents/architect.md` (plan review, no worktree).
 
 #### `using-ytstack` (directive, not user-invokable)
 

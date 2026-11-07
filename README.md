@@ -6,7 +6,7 @@
   <p><em>An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng.</em></p>
 
   <p>
-    A Claude Code plugin that turns multi-session, multi-week projects into something your agent can actually hold onto. Project memory on disk, curated skill set, parallel execution via native Agent Teams. One install, one namespace, no stack to maintain.
+    A Claude Code plugin that turns multi-session, multi-week projects into something your agent can actually hold onto. Project memory on disk, curated skill set, parallel execution via worktree-isolated subagents. One install, one namespace, no stack to maintain.
   </p>
 
   <p>
@@ -83,7 +83,7 @@ Install all three and you get friction: interactive prompts blocking each other,
 
 **Plan like a PM, execute like a senior eng.** Cherry-picked skills from gstack (CEO-review, office-hours, eng-review) lock the plan before code lands. Cherry-picked skills from superpowers (TDD, systematic-debugging, verification-before-completion) lock the code before it ships.
 
-**Parallel execution without a custom runtime.** `ytstack:spawn-milestone-team` dispatches a Claude Code Agent Team where each teammate works on a slice in its own fresh 200k context. Replicates GSD's fresh-subprocess-per-task model using Claude Code's native experimental feature. No separate CLI, no SQLite, no TUI to babysit.
+**Parallel execution without a custom runtime.** `ytstack:spawn-milestone-team` turns the main session into a thin orchestrator: one `ytstack:implementer` subagent per slice in its own git worktree (`isolation: worktree`, skills preloaded, fresh context), one `ytstack:verifier` per finished slice branch, then a merge the orchestrator owns. Claude Code Agent Teams remain an opt-in (`team: on`) for milestones where teammates must talk to each other. No separate CLI, no SQLite, no TUI to babysit.
 
 **One namespace, upstreams consumed the way they want to be.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/superpowers/` is a read-only `git subtree` mirror pinned to an upstream tag (v7.0.2); we never modify it, we inline it. gstack is **not** vendored any more: it ships its skills as a Bun-powered install under `~/.claude/skills/gstack`, so ytstack's three planning wrappers check for that install (pinned v1.96.0.0) and invoke it through the Skill tool.
 
@@ -135,7 +135,7 @@ After the last task of a slice: `reassess-roadmap`, then `finish-branch` or `shi
 
 At each slice boundary: `ytstack:reassess-roadmap` to check the plan still fits reality.
 
-**Parallel variant:** `ytstack:spawn-milestone-team` dispatches Claude Code Agent Teams (one teammate per slice, each in a fresh 200k context). Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` + Claude Code v2.1.32+.
+**Parallel variant:** `ytstack:spawn-milestone-team` dispatches one worktree-isolated implementer subagent per slice (branch `ytstack/M###-S##`), verifies each slice branch with a fresh verifier subagent and merges what passed. PREFERENCES `team: on` (plus `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) switches to Claude Code Agent Teams instead.
 
 <details>
 <summary><strong>Brownfield flow diagram</strong> (click to expand)</summary>
@@ -181,7 +181,7 @@ Source: [`docs/ytstack-debugging-flow.excalidraw`](docs/ytstack-debugging-flow.e
 | Verification-before-completion gate | partial (via `ship`) | ✅ | ✅ | ✅ (via wrapper) |
 | Structured milestone / slice / task artifacts | -- | -- | ✅ | ✅ (native) |
 | Cross-session project memory | light (`context-save`) | -- | ✅ | ✅ (native) |
-| Agent Teams for parallel fresh-context work | -- | -- | via subprocess | ✅ (native) |
+| Parallel fresh-context work (worktree subagents; Agent Teams opt-in) | -- | -- | via subprocess | ✅ (native) |
 | SessionStart-hook state injection | -- | ✅ (for its own skills) | -- | ✅ (for project state) |
 | No separate runtime to install | ✅ | ✅ | ❌ | ✅ |
 | One namespace, one install | plugin-level | plugin-level | n/a | ✅ |
@@ -233,7 +233,7 @@ See [`.ytstack/DECISIONS.md`](./.ytstack/DECISIONS.md) for the marketplace histo
 claude --plugin-dir /path/to/ytstack --permission-mode acceptEdits -p "<prompt>"
 ```
 
-Without `--permission-mode acceptEdits`, Write operations stall on permission dialogs. Agent Teams require `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. See `.ytstack/KNOWLEDGE.md` for the full gotcha list.
+Without `--permission-mode acceptEdits`, Write operations stall on permission dialogs. The Agent Teams opt-in (`team: on`) additionally requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. See `.ytstack/KNOWLEDGE.md` for the full gotcha list.
 
 ## Quickstart
 

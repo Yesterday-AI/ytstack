@@ -87,6 +87,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Execution model** (M019-S04, DECISIONS 2026-11-07 M019 context):
+  `spawn-milestone-team` 0.2.0 is an orchestrator that never edits source:
+  one `ytstack:implementer` subagent per slice with `isolation: worktree`
+  on branch `ytstack/M###-S##`, one `ytstack:verifier` subagent per
+  finished branch, merge owned by the orchestrator (`STATE.md` from its
+  side). Agent Teams are an opt-in via PREFERENCES `team: on` (new key,
+  default `off`; `init-project` writes it). `agents/implementer.md` and
+  `agents/verifier.md` carry `isolation: worktree`, `memory: project`,
+  `maxTurns`; `architect` gets `memory: project`; `skills:` documented as
+  a preload. `bin/ytstack-check` validates `isolation` / `memory` and warns
+  on fields plugin subagents ignore.
 - **Skill frontmatter** (M019-S01): ytstack's own keys `tier`, `version`,
   `kind`, `triggers` live under `metadata:` (Agent Skills spec; unknown
   top-level keys hard-error on packaging/upload). `bin/ytstack-check`
