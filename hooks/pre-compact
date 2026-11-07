@@ -1,63 +1,82 @@
 #!/usr/bin/env bash
 # ytstack PreCompact hook
 #
-# Fires before Claude Code compacts the conversation. Writes a handoff snapshot
-# to .ytstack/HANDOFF.md so the post-compaction session can re-orient quickly
-# from on-disk state.
+# Fires before Claude Code compacts the conversation. Two jobs:
 #
-# Side-effects only. Does not emit stdout context.
+#   1. Write an automatic handoff breadcrumb OUT OF TREE, per session and per
+#      worktree, and refresh the worktree's `latest-handoff` symlink.
+#   2. Print compaction instructions on stdout (exit 0 => Claude Code uses the
+#      text as guidance for the summary, capped at 10,000 chars).
+#
+# What it never does (DECISIONS 2026-11-07 "Hooks never write relative to
+# CLAUDE_PROJECT_DIR"): write into `.ytstack/HANDOFF.md` (user-owned, written
+# only by the handoff-session skill), create files in a checkout, or resolve
+# its target from CLAUDE_PROJECT_DIR (pinned to the session-start dir; it does
+# not follow the agent into a worktree -- only the payload `cwd` does).
+#
+# Fail-open: any problem goes to stderr, exit is always 0.
 
 set -uo pipefail
+trap '' PIPE
 
-# Note: session_id arrives on stdin JSON (not via env). This hook does not use
-# session_id, so stdin is intentionally not consumed here.
+. "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-cd "$PROJECT_DIR" 2>/dev/null || exit 0
+yt_read_stdin
+yt_git_ctx "${YT_CWD:-$PWD}"
+YT_DIR=$(yt_resolve_yt_dir)
 
-YT_DIR=""
-if [ -d "$PROJECT_DIR/.ytstack" ]; then
-  YT_DIR="$PROJECT_DIR/.ytstack"
-else
-  SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PROJECT_DIR")")
-  USER_YT="$HOME/.ytstack/projects/$SLUG"
-  [ -d "$USER_YT" ] && YT_DIR="$USER_YT"
-fi
-
+# No .ytstack anywhere for this checkout: nothing to hand off, say nothing.
 [ -z "$YT_DIR" ] && exit 0
 
 STATE_FILE="$YT_DIR/STATE.md"
-HANDOFF_FILE="$YT_DIR/HANDOFF.md"
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-# Pull current position from STATE.md frontmatter (if present)
 get_field() { sed -n "s/^$1: *//p" "$STATE_FILE" 2>/dev/null | head -1; }
 PROJECT=$(get_field project)
 CURRENT_MILESTONE=$(get_field current_milestone)
 ACTIVE_SLICE=$(get_field active_slice)
 ACTIVE_TASK=$(get_field active_task)
+NEXT_ACTION=$(awk '/^## Next action/{flag=1; next} /^## /{flag=0} flag' "$STATE_FILE" 2>/dev/null | sed '/^$/d' | head -5 | cut -c1-400)
 
-cat > "$HANDOFF_FILE" <<EOF
+TRIGGER=""
+if [ -n "${YT_STDIN:-}" ] && command -v jq >/dev/null 2>&1; then
+  TRIGGER=$(printf '%s' "$YT_STDIN" | jq -r '.trigger // empty' 2>/dev/null)
+fi
+
+WT_DIR=$(yt_state_wt_dir)
+SESS_DIR=$(yt_state_dir)
+AUTO="$SESS_DIR/HANDOFF.auto.md"
+
+cat > "$AUTO" 2>/dev/null <<EOF
 ---
 kind: handoff
 event: pre-compact
+trigger: ${TRIGGER:-unknown}
 timestamp: $TS
+session_id: ${YT_SESSION_ID:-nosession}
 project: ${PROJECT:-unknown}
 current_milestone: ${CURRENT_MILESTONE:-none}
 active_slice: ${ACTIVE_SLICE:-none}
 active_task: ${ACTIVE_TASK:-none}
+worktree: $YT_TOPLEVEL
+main_toplevel: ${YT_MAIN_TOPLEVEL:-$YT_TOPLEVEL}
+linked_worktree: $YT_IS_LINKED
+ytstack_dir: $YT_DIR
 ---
 
-# Pre-Compaction Handoff
+# Pre-Compaction Handoff (automatic)
 
-Claude Code was about to compact the conversation at $TS. This file is a
-breadcrumb so the next session (or post-compact continuation) can re-orient
-from on-disk state without relying on compressed conversation memory.
+Claude Code compacted the conversation at $TS in \`$YT_TOPLEVEL\`. This
+breadcrumb lets the continuation re-orient from on-disk state.
 
 ## Where we are
 
 Project: ${PROJECT:-unknown}
 Position: ${CURRENT_MILESTONE:-none}${ACTIVE_SLICE:+ / $ACTIVE_SLICE}${ACTIVE_TASK:+ / $ACTIVE_TASK}
+
+## Next action (from STATE.md)
+
+${NEXT_ACTION:-(none recorded)}
 
 ## What to read next
 
@@ -65,11 +84,34 @@ Position: ${CURRENT_MILESTONE:-none}${ACTIVE_SLICE:+ / $ACTIVE_SLICE}${ACTIVE_TA
 2. \`$YT_DIR/ROADMAP.md\` -- milestone plan, task checkboxes
 3. \`$YT_DIR/REVIEW-NOTES.md\` -- deferred items flagged during this cycle
 4. The latest \`$YT_DIR/*-SUMMARY.md\` if any exist
+5. \`$YT_DIR/HANDOFF.md\` -- the user-written handoff, if present (this hook never touches it)
 
 ## Note
 
-This handoff is overwritten on each pre-compact event. If you need historical
-handoffs, check \`$YT_DIR/journal/\` (written by session-end hook, future).
+Written by the ytstack pre-compact hook into out-of-tree state
+(\`$SESS_DIR\`). Previous sessions' breadcrumbs live in sibling
+\`sessions/<session_id>/\` dirs; \`$WT_DIR/latest-handoff\` points at the newest.
 EOF
+
+if [ -f "$AUTO" ]; then
+  # Atomic symlink refresh: create beside, then rename over.
+  TMP_LINK="$WT_DIR/.latest-handoff.$$"
+  if ln -sfn "$AUTO" "$TMP_LINK" 2>/dev/null; then
+    mv -f "$TMP_LINK" "$WT_DIR/latest-handoff" 2>/dev/null || rm -f "$TMP_LINK" 2>/dev/null
+  fi
+else
+  echo "[ytstack pre-compact] could not write $AUTO" >&2
+fi
+
+# Compaction instructions (stdout, exit 0). Keep well under the 10,000-char cap.
+INSTR="ytstack compaction guidance. Preserve verbatim in the summary:
+- Project ${PROJECT:-unknown}, position ${CURRENT_MILESTONE:-none}${ACTIVE_SLICE:+ / $ACTIVE_SLICE}${ACTIVE_TASK:+ / $ACTIVE_TASK}, working tree $YT_TOPLEVEL${YT_IS_LINKED:+ (linked worktree: $YT_IS_LINKED)}.
+- The next action as recorded in $STATE_FILE:
+${NEXT_ACTION:-(none recorded)}
+- Every decision made and every question the user still has to answer in this session.
+- The user's standing instructions for this session (what to do, what not to do, how to report).
+- Paths to re-read after compaction: $STATE_FILE and the automatic handoff ${AUTO}.
+Do not summarize the content of .ytstack files; they are on disk and will be re-read."
+printf '%s\n' "$INSTR" | head -c 9000
 
 exit 0
