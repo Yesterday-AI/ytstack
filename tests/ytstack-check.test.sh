@@ -224,6 +224,49 @@ OUT=$("$CHECK" "$ROOT" 2>&1)
 eq "real tree: zero legacy top-level warnings" 0 "$(printf '%s' "$OUT" | grep -c 'move under metadata')"
 eq "real tree: zero missing metadata warnings"  0 "$(printf '%s' "$OUT" | grep -c 'missing metadata')"
 
+# ---- 6. description budget + trigger-only + invocability (M019-S01-T03) ------
+echo "# descriptions"
+FIX_DESC="$ROOT/skills/zz-fixture-desc"; mkdir -p "$FIX_DESC"
+LONG=$(printf 'x%.0s' $(seq 1 1100))
+cat > "$FIX_DESC/SKILL.md" <<EOF
+---
+name: zz-fixture-desc
+description: "$LONG"
+metadata:
+  tier: core
+  version: 0.0.1
+  kind: reference
+allowed-tools: Read
+---
+
+# zz-fixture-desc
+EOF
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "description > 1,024 chars -> FAIL"                 1 "$(printf '%s' "$OUT" | grep -c '\[fail\].*zz-fixture-desc.*description.*1,024')"
+eq "kind: reference without user-invocable -> WARN"    1 "$(printf '%s' "$OUT" | grep -c 'zz-fixture-desc.*user-invocable')"
+cat > "$FIX_DESC/SKILL.md" <<'EOF'
+---
+name: zz-fixture-desc
+description: "RED-GREEN-REFACTOR: Step 1 write a test. Thin ytstack wrapper around the vendored thing. Uses four modes and six forcing questions."
+metadata:
+  tier: core
+  version: 0.0.1
+  kind: directive
+user-invocable: false
+allowed-tools: Read
+---
+
+# zz-fixture-desc
+EOF
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "procedure-summary phrases in description -> one WARN" 1 "$(printf '%s' "$OUT" | grep -c 'zz-fixture-desc.*procedure summary')"
+eq "directive with user-invocable -> no invocability WARN" 0 "$(printf '%s' "$OUT" | grep -c 'zz-fixture-desc.*user-invocable')"
+rm -rf "$FIX_DESC"
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "real tree: zero description budget fails"      0 "$(printf '%s' "$OUT" | grep -c 'description.*1,024')"
+eq "real tree: zero procedure-summary warnings"    0 "$(printf '%s' "$OUT" | grep -c 'procedure summary')"
+eq "real tree: zero invocability warnings"         0 "$(printf '%s' "$OUT" | grep -c 'user-invocable')"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

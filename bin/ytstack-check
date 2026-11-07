@@ -152,6 +152,19 @@ def legacy_meta_keys(fm):
     return [k for k in YT_META_KEYS if k in fm]
 
 
+# Phrases that mean the description summarises the body instead of saying
+# when to trigger (superpowers writing-skills: "never summarise the workflow
+# in the description"; mattpocock: cut identity the body already carries).
+DESC_PROCEDURE_PHRASES = (
+    r"RED-GREEN",
+    r"\bStep \d",
+    r"\b(?:four|six|five|three) (?:modes|forcing questions|phases)\b",
+    r"Thin ytstack wrapper around",
+    r"(?:^|\s)\d\)\s",          # 1) 2) numbered list
+    r"\b\d\.\s+[A-Z][a-z]+.*\b\d\.\s+[A-Z]",  # "1. Foo ... 2. Bar"
+)
+
+
 # ---------- check: skill ----------
 
 def check_skill(path, root):
@@ -171,6 +184,22 @@ def check_skill(path, root):
         )
     if not fm.get("description"):
         fails.append(f"{path}: missing description")
+
+    # Description contract (M019-S01-T03): trigger statement, not a procedure
+    # summary; spec max 1,024 chars (listing truncates description +
+    # when_to_use at 1,536). Third person, what + when + when-not.
+    desc = fm.get("description") or ""
+    if isinstance(desc, str):
+        if len(desc) > 1024:
+            fails.append(
+                f"{path}: description is {len(desc)} chars, spec max 1,024"
+            )
+        hits = [p for p in DESC_PROCEDURE_PHRASES if re.search(p, desc)]
+        if hits:
+            warns.append(
+                f"{path}: description reads like a procedure summary "
+                f"({', '.join(hits)}); keep it to what + when + when-not"
+            )
 
     # metadata: contract (M019-S01-T01)
     meta = skill_meta(fm)
@@ -193,6 +222,11 @@ def check_skill(path, root):
     kind = meta.get("kind")
     is_directive = kind == "directive"
     is_reference = kind == "reference"
+    if (is_directive or is_reference) and "user-invocable" not in fm:
+        warns.append(
+            f"{path}: kind: {kind} without an explicit user-invocable flag "
+            f"(directives: false, references: true)"
+        )
 
     # Thin-wrapper skills inline a vendor SKILL.md via the shell-exec
     # injection pattern (```!  cat .../vendor/.../SKILL.md  ```). The
