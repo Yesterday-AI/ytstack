@@ -371,6 +371,15 @@ yt_prefs() {
   return 0
 }
 
+# yt_epoch <YYYY-MM-DDTHH:MM:SSZ> -> seconds since epoch ("" when unparsable).
+# macOS: date -j -f; GNU: date -d.
+yt_epoch() {
+  local iso="$1" e=""
+  case "$iso" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) ;; *) printf ''; return 0 ;; esac
+  e=$(TZ=UTC date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$iso" +%s 2>/dev/null) || e=$(date -u -d "$iso" +%s 2>/dev/null) || e=""
+  printf '%s' "$e"
+}
+
 # ---- STATE pointer lint (M018) ----------------------------------------------
 # yt_state_lint <yt_dir>: sets YT_STATE_WARNINGS (one line per finding, "" when
 # clean) and YT_STATE_WARN_COUNT. Read-only. Findings:
@@ -415,16 +424,14 @@ yt_state_lint() {
   if [ "$m" = none ] && { [ "$s" != none ] || [ "$t" != none ]; }; then
     _yt_warn "active_slice/active_task set while current_milestone is none"
   fi
-  # W5: last_updated older than newest commit touching the ytstack dir
-  local newest_commit
-  newest_commit=$(git -C "$ytd" log -1 --format=%cI -- . 2>/dev/null | head -1)
-  if [ -n "$newest_commit" ] && [ -n "$lu" ]; then
-    # compare as sortable strings after normalising the commit date to UTC Z form
-    local nc_utc
-    nc_utc=$(printf '%s' "$newest_commit" | sed -E 's/\+00:00$/Z/')
-    case "$nc_utc" in *Z) ;; *) nc_utc=$(TZ=UTC date -u -j -f '%Y-%m-%dT%H:%M:%S%z' "$(printf '%s' "$newest_commit" | sed -E 's/:([0-9][0-9])$/\1/')" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "$newest_commit" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "$nc_utc") ;; esac
-    if [ "$lu" \< "$nc_utc" ]; then
-      _yt_warn "last_updated $lu is older than the newest commit touching .ytstack ($nc_utc)"
+  # W5: last_updated older than the newest commit touching the ytstack dir
+  # (epoch compare with 120 s slack: a skill bumps last_updated, then commits).
+  local newest_commit nc_epoch lu_epoch
+  newest_commit=$(git -C "$ytd" log -1 --format=%ct -- . 2>/dev/null | head -1)
+  lu_epoch=$(yt_epoch "$lu")
+  if [ -n "$newest_commit" ] && [ -n "$lu_epoch" ]; then
+    if [ $((newest_commit - lu_epoch)) -gt 120 ]; then
+      _yt_warn "last_updated $lu is older than the newest commit touching .ytstack ($(git -C "$ytd" log -1 --format=%cI -- . 2>/dev/null))"
     fi
   fi
   # W6: current milestone done but a slice still active

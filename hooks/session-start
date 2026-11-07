@@ -131,6 +131,20 @@ fi
 IN_PROGRESS=$(grep -l '^status: in-progress' "$YT_DIR"/M[0-9][0-9][0-9]-ROADMAP.md 2>/dev/null | while read -r f; do basename "$f" -ROADMAP.md; done | paste -sd, - | sed 's/,/, /g')
 IN_PROGRESS_N=$(printf '%s' "$IN_PROGRESS" | tr ',' '\n' | grep -c . 2>/dev/null || echo 0)
 
+# STATE pointer lint + ceremony dials (M018): read-only, both from the lib.
+yt_state_lint "$YT_DIR" >/dev/null
+LINT_LINES=""
+if [ "${YT_STATE_WARN_COUNT:-0}" -gt 0 ]; then
+  LINT_LINES="STATE lint ($YT_STATE_WARN_COUNT):
+$(printf '%s\n' "$YT_STATE_WARNINGS" | head -5 | sed 's/^/- /')
+Fix STATE.md (or run ytstack:reconcile) before planning; plan-task and summarize-task refuse a malformed pointer."
+fi
+yt_prefs "$YT_DIR" >/dev/null
+MINIMAL_CODE_LINES=""
+if [ "${YT_PREF_MINIMAL_CODE:-on}" = on ]; then
+  MINIMAL_CODE_LINES="Minimal-code guard is on (PREFERENCES minimal_code). Before writing code, load ytstack:minimal-code via the Skill tool: climb the ladder (needed at all? exists in the codebase? stdlib? existing dependency? one line? otherwise the minimum that passes the test), never cut validation / auth / boundary error handling / accessibility / the one small test, mark deliberate shortcuts with a \`shortcut:\` comment."
+fi
+
 # Handoffs: the user-written one in the tree, the automatic one out of tree.
 HANDOFF_LINES=""
 if [ -f "$YT_DIR/HANDOFF.md" ]; then
@@ -176,6 +190,16 @@ Milestones in progress: $IN_PROGRESS (more than one -- check the STATE pointer; 
     ctx="$ctx
 
 $HANDOFF_LINES"
+  fi
+  if [ -n "$LINT_LINES" ]; then
+    ctx="$ctx
+
+$LINT_LINES"
+  fi
+  if [ -n "$MINIMAL_CODE_LINES" ]; then
+    ctx="$ctx
+
+$MINIMAL_CODE_LINES"
   fi
   ctx="$ctx
 

@@ -127,6 +127,8 @@ echo "TASK_COMMITS_END"
 
 ### Step 2: HARD-GATE
 
+**STATE lint (M018):** run `yt_state_lint "$_YT_DIR"` first. Malformed-field or "set while current_milestone is none" warnings stop this skill ("fix STATE.md first, or run `ytstack:reconcile`"); the remaining warning kinds are reported in the Step 3 message and do not block.
+
 If any of `HAS_YTSTACK / CURRENT_MILESTONE / ACTIVE_SLICE / ACTIVE_TASK` is `no / none`:
 > "No active task to summarize. Check STATE.md and run the preceding skill (`plan-task` / `slice-milestone` / `plan-milestone` / `init-project`) as needed."
 STOP.

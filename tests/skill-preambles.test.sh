@@ -28,7 +28,7 @@ ELSEWHERE="$TMP/elsewhere"; mkdir -p "$ELSEWHERE"
 MAIN="$TMP/main"; mkdir -p "$MAIN/.ytstack"
 ( cd "$MAIN" || exit 2
   git init -q && git config user.email t@t.t && git config user.name t
-  printf 'project: fixture\ncurrent_milestone: M999\nactive_slice: S01\nactive_task: T01\n\n# State\n\n## Next action\n\nx\n' > .ytstack/STATE.md
+  printf 'project: fixture\nlast_updated: %s\ncurrent_milestone: M999\nactive_slice: S01\nactive_task: T01\n\n# State\n\n## Next action\n\nx\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .ytstack/STATE.md
   printf 'name: fixture\n' > .ytstack/PROJECT.md
   printf -- '---\nmilestone: M999\n---\n- [ ] S01 -- (to be planned)\n' > .ytstack/M999-ROADMAP.md
   printf -- '---\nmilestone: M999\nslice: S01\n---\n- [ ] T01 -- x\n' > .ytstack/M999-S01-PLAN.md
@@ -159,6 +159,7 @@ for s in $SKILLS; do
       has "$s: worktree -> TRACKER read from STATE.md" "$OUT" "TRACKER: linear"
       cp "$TMP/state.bak" "$WT/.ytstack/STATE.md" ;;
     resume-session)
+      has "$s: worktree -> STATE lint clean (0)" "$OUT" "STATE_LINT: 0"
       has "$s: worktree -> no auto handoff there" "$OUT" "LATEST_AUTO_HANDOFF: none"
       run_pre "$P" "$MAIN"
       has "$s: main -> latest auto handoff from out-of-tree state" "$OUT" "LATEST_AUTO_HANDOFF: $PD/repos/"

@@ -120,6 +120,8 @@ echo "NEXT_TASK: ${_NEXT_TASK:-none}"
 
 ### Step 2: HARD-GATE
 
+**STATE lint (M018):** before anything else run `yt_state_lint "$_YT_DIR"` (lib loaded by the preamble) in a Bash call and read `YT_STATE_WARNINGS`. A warning that names a malformed field (`is not M###`, `is not S##`, `is not T##`, `is not ISO-8601`) or "set while current_milestone is none" stops this skill: print the warning and "fix STATE.md first (or run `ytstack:reconcile`)". Other warnings (pointer behind, task already summarized, stale timestamp, done-but-current) are reported in the Step 3 message and do not block.
+
 If `HAS_YTSTACK=no`: abort with "run init-project first".
 If `CURRENT_MILESTONE=none`: abort with "run plan-milestone first".
 If `ACTIVE_SLICE=none` or slice-plan missing: abort with "run slice-milestone first".

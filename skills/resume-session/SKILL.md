@@ -76,6 +76,13 @@ echo "STATE_FILE: $_STATE_FILE"
 echo "HAS_HANDOFF: $_HAS_HANDOFF"
 echo "MANUAL_HANDOFF_EVENT: ${_MANUAL_HANDOFF_EVENT:-none}"
 echo "MANUAL_HANDOFF_TS: ${_MANUAL_HANDOFF_TS:-none}"
+# STATE pointer lint (M018)
+_STATE_LINT=0; _STATE_LINT_LINES=""
+if command -v yt_state_lint >/dev/null 2>&1 && [ -n "$_YT_DIR" ]; then
+  yt_state_lint "$_YT_DIR" >/dev/null; _STATE_LINT="$YT_STATE_WARN_COUNT"; _STATE_LINT_LINES="$YT_STATE_WARNINGS"
+fi
+echo "STATE_LINT: $_STATE_LINT"
+[ -n "$_STATE_LINT_LINES" ] && printf '%s\n' "$_STATE_LINT_LINES" | sed 's/^/STATE_LINT_LINE: /'
 echo "LATEST_AUTO_HANDOFF: $_LATEST_AUTO_HANDOFF"
 echo "AUTO_HANDOFF_TS: ${_AUTO_HANDOFF_TS:-none}"
 echo "RECENT_SUMMARIES_COUNT: $(echo "$_RECENT_SUMMARIES" | grep -c .)"
@@ -97,7 +104,7 @@ Open the briefing with one line that names the sources: `Handoffs: automatic {AU
 
 Produce a three-paragraph briefing:
 
-**Paragraph 1 -- Where we are:** project name, milestone/slice/task position, branch, last-updated timestamp. Include scope (project vs user) if relevant.
+**Paragraph 1 -- Where we are:** project name, milestone/slice/task position, branch, last-updated timestamp. Include scope (project vs user) if relevant. When `STATE_LINT` is not 0, name the `STATE_LINT_LINE`s here and say that `plan-task` / `summarize-task` will refuse a malformed pointer until STATE.md is fixed (or `ytstack:reconcile` has run).
 
 **Paragraph 2 -- Most recent work:** Summarize the 3 latest task summaries in one or two sentences each. Focus on *outcomes*, not process. If no summaries, note "no tasks closed yet in this project."
 

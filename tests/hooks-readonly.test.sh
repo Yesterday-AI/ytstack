@@ -32,7 +32,7 @@ new_repo() {
   ( cd "$t" || exit 2
     git init -q && git config user.email t@t.t && git config user.name t
     mkdir .ytstack
-    printf 'project: fixture\ncurrent_milestone: M999\nactive_slice: S01\nactive_task: T01\n\n# State\n\n## Next action\n\nDo the thing.\n' > .ytstack/STATE.md
+    printf 'project: fixture\nlast_updated: %s\ncurrent_milestone: M999\nactive_slice: S01\nactive_task: T01\n\n# State\n\n## Next action\n\nDo the thing.\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .ytstack/STATE.md
     printf 'name: fixture\n' > .ytstack/PROJECT.md
     printf -- '---\nkind: handoff\nevent: user-triggered\n---\n# manual\n' > .ytstack/HANDOFF.md
     printf -- '---\nmilestone: M999\nslice: S01\n---\n# plan\n\n- [ ] T01 -- do it (src/planned.ts)\n- [ ] T02 -- do more\n' > .ytstack/M999-S01-PLAN.md
@@ -84,6 +84,23 @@ rm -f "$MAIN/.ytstack/M998-ROADMAP.md"; printf -- '---\nmilestone: M999\n---\n# 
 run session-start "{\"session_id\":\"s1c\",\"cwd\":$(jstr "$MAIN")}"
 CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
 lacks "ss-main: no in-progress line with <2 milestones" "$CTX" "Milestones in progress:"
+
+# ---- 1c. session-start: STATE lint + minimal-code pointer (M018) ----------
+has "ss-main: minimal-code pointer injected by default" "$CTX" "Minimal-code guard is on"
+cp "$MAIN/.ytstack/STATE.md" "$TMP/state.good"
+printf 'project: fixture\ncurrent_milestone: M3\nactive_slice: S01\nactive_task: T01\n' > "$MAIN/.ytstack/STATE.md"
+run session-start "{\"session_id\":\"s1d\",\"cwd\":$(jstr "$MAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has "ss-main: malformed pointer -> STATE lint block" "$CTX" "STATE lint ("
+has "ss-main: lint names the bad field"            "$CTX" "current_milestone 'M3' is not M###"
+cp "$TMP/state.good" "$MAIN/.ytstack/STATE.md"
+printf 'minimal_code: off\n' > "$MAIN/.ytstack/PREFERENCES.md"
+run session-start "{\"session_id\":\"s1e\",\"cwd\":$(jstr "$MAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+lacks "ss-main: minimal_code off -> no pointer" "$CTX" "Minimal-code guard is on"
+lacks "ss-main: clean STATE -> no lint block"   "$CTX" "STATE lint ("
+if [ "${#CTX}" -lt 9500 ]; then ok "ss-main: injection still under the guard (${#CTX})"; else bad "ss-main: injection under guard" "${#CTX}"; fi
+rm -f "$MAIN/.ytstack/PREFERENCES.md"
 
 # ---- 2. session-start, greenfield (no .ytstack) ---------------------------
 BEFORE=$(find "$PD" -type d | wc -l | tr -d ' ')
