@@ -1,10 +1,10 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-07T11:58:00Z
+last_updated: 2026-11-07T12:05:00Z
 current_milestone: M016
-active_slice: S01
-active_task: T06
+active_slice: S02
+active_task: T01
 ---
 
 # State
@@ -81,7 +81,7 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Status:** M016 / S01 -- 5/6 tasks done (T01 `git-ctx.sh` 46/46, T02 `pre-compact` 39/39, T03 `session-end` 32/32, T04 `post-tool-use-bash` 19/19, T05 read-only hooks 37/37). T06 (`hooks.json` schema update) planned, executing. Operator instruction 2026-11-07: run the whole milestone through without per-task check-ins; push and issue-closing stay operator actions. Milestone shape: S01 hooks on `git-ctx.sh` + out-of-tree state (6), S02 skill preambles + commit discovery + gitignore + `ytstack-check` rules (5), S03 tests + docs + release 0.2.0 (4). Plans in `M016-S0{1,2,3}-PLAN.md`. Next: `ytstack:plan-task` for M016-S01-T01 (`hooks/lib/git-ctx.sh`), sequential execution recommended -- S02/S03 depend on the lib from S01, so `spawn-milestone-team` only pays off from S02 onwards. Then M017 (vendor strategy: superpowers -> v7.0.2, gstack de-vendored; closes #25), then M010 (brownfield, #18), M018, M019.
+**Status:** M016 / S02 -- S01 DONE (6/6; all eight hooks on `git-ctx.sh`, out-of-tree state, 218 tests in six suites). Reassessment at the slice boundary: S02/S03 unchanged except S03-T03 also bumps `marketplace.json` (stale 0.1.5). S02-T01 (15 skill preambles on the lib + `git rev-parse`) planned, executing. Operator instruction 2026-11-07: run the whole milestone through without per-task check-ins; push and issue-closing stay operator actions. Milestone shape: S01 hooks on `git-ctx.sh` + out-of-tree state (6), S02 skill preambles + commit discovery + gitignore + `ytstack-check` rules (5), S03 tests + docs + release 0.2.0 (4). Plans in `M016-S0{1,2,3}-PLAN.md`. Next: `ytstack:plan-task` for M016-S01-T01 (`hooks/lib/git-ctx.sh`), sequential execution recommended -- S02/S03 depend on the lib from S01, so `spawn-milestone-team` only pays off from S02 onwards. Then M017 (vendor strategy: superpowers -> v7.0.2, gstack de-vendored; closes #25), then M010 (brownfield, #18), M018, M019.
 
 **Status (2026-11-07, triage + research):** Deep research + audit of 17 local consumer repos written to `docs/research/2026-11-07-modernisierung-best-practices.md` (+ 5 note files under `docs/research/2026-11-07-notes/`). GitHub triage done: labels `P0/P1/P2/security/worktrees/hooks` created; #27 P0 (root cause: `CLAUDE_PROJECT_DIR` does not follow worktrees), #24 P1, #18 P1 (-> M010), #25 P2 (-> M017), #26 closed as duplicate of #27 (2026-11-07). Vendor hold on gstack `aeea57f` remains until M017.
 
