@@ -12,7 +12,7 @@
   <p>
     <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
     <a href="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml/badge.svg"></a>
-    <img alt="version" src="https://img.shields.io/badge/version-0.3.0-FC4E14">
+    <img alt="version" src="https://img.shields.io/badge/version-0.4.0-FC4E14">
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
     <img alt="skills" src="https://img.shields.io/badge/skills-31-FC4E14">
     <img alt="hooks" src="https://img.shields.io/badge/hooks-9-FC4E14">
@@ -308,7 +308,7 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 
 ## Status
 
-**v0.3.0 -- shipping, actively dogfooded.** M016 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); M017 pulled superpowers to v7.0.2 and turned gstack into an installed, tag-pinned dependency (#25). Brownfield import (`adopt-brownfield`, M010, #18) and ceremony scaling (M018) are in and ship with 0.4.0. ytstack tracks its own development in `.ytstack/`. Next up: skill quality + evals (M019) -- see `.ytstack/ROADMAP.md`.
+**v0.4.0 -- shipping, actively dogfooded.** 0.2.0 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); 0.3.0 pulled superpowers to v7.0.2 and turned gstack into an installed, tag-pinned dependency (#25); 0.4.0 adds brownfield import (`adopt-brownfield`, #18), ceremony scaling (quick lane, reconcile, minimal-code guard, STATE lint), the 2026 skill bar (`metadata:` frontmatter, trigger-only descriptions measured by `evals/`, CI), six lifecycle skills (`code-review`, `finish-branch`, `grill`, `retro`, `ship`, `document-release`) and the worktree-subagent execution model. ytstack tracks its own development in `.ytstack/`; see `.ytstack/ROADMAP.md` for what is next.
 
 Ships:
 
