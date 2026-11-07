@@ -639,3 +639,45 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - Regression test: `tests/post-tool-use-bash.test.sh` (10 cases) is the contract guard.
 
 **Supersedes:** none.
+
+## 2026-11-07: Vendor strategy -- superpowers stays a subtree tracked at upstream tags; gstack is de-vendored into an installed, tag-pinned dependency
+
+**Context:** Drift audit against upstream (details in `docs/research/2026-11-07-notes/vendor-upstream-drift.md`). superpowers `6fd4507 -> 22f0b46` (v5.1.0 -> v7.0.2): the three wrapped SKILL.md files kept their paths and two-field frontmatter; only persuasion prose was removed and TDD gained a suite-wide rule. gstack `aeea57f -> fd0e339` (831 commits): the wrapped SKILL.md files are now skeletons, the phase bodies live in `<skill>/sections/*.md`, the shared preamble is hoisted into `sections/preamble.md` and the inline bash was replaced by the Bun binary `~/.claude/skills/gstack/bin/gstack-skill-start`; all references are hard-coded to `~/.claude/skills/gstack/`. The maintainer has deprecated vendored installs (gstack #954, won't-fix). A subtree pull therefore no longer delivers the forcing questions through our `cat`-inlining wrapper. Issue #25 (Node CVE-2026-111497 in the vendored `Dockerfile.ci`) can only be resolved by moving the gstack subtree, because `vendor/**` is never edited.
+
+**Options considered:**
+- A) Stay frozen at `aeea57f` indefinitely. Keeps Bun out, but ships a 7-month-old procedure and a vulnerable (if unbuilt) Dockerfile forever.
+- B) De-vendor gstack: remove `vendor/gstack/`, declare the upstream install (`./setup`, pinned to a release tag, Bun >= 1.4.2) as a documented prerequisite checked by `init-project` and the wrapper preambles; the three wrappers invoke the installed skills and keep writing ytstack artifacts.
+- C) Rebuild the wrappers to inline `sections/*.md` and emulate `gstack-skill-start`. Tracks an upstream internal layout that releases twice a week.
+
+**Chose:** B for gstack; keep superpowers as a subtree and pull it to `22f0b46` (tag v7.0.2), adding a `bin/ytstack-check` rule that flags upstream namespace leaks (`superpowers:`) and relative links in inlined text.
+
+**Reason:** OSS-first: adopt the upstream's supported install model instead of maintaining a parallel rendering of its internals. B removes the vulnerable vendored file from the repo (closes #25), drops ~1,000 files of subtree weight, and keeps ytstack's own surface (wrapper preambles, artifacts) unchanged. The Bun dependency is accepted because gstack requires it upstream anyway; ytstack without gstack installed must degrade with a clear message, not a silent empty `cat`.
+
+**How to apply:**
+- Milestone M017 executes this (see ROADMAP). Until then the frozen subtree stays and `.ytstack/STATE.md` carries the hold as a fact.
+- `docs/concept.md`, README, QUICKSTART and `NOTICE` are updated in the same milestone; `VENDOR-INVENTORY.md` is split into "vendored" (superpowers) and "required install" (gstack).
+- The accepted-preamble-drift decision (2026-04-25) is narrowed to superpowers only.
+
+**Supersedes:** "Vendored-preamble drift accepted for wrapped skills" (2026-04-25) for the gstack half.
+
+## 2026-11-07: Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree
+
+**Context:** Issues #26/#27 (shared main checkout polluted by `HANDOFF.md`, `journal/sessions.jsonl`, draft SUMMARY stubs) and #24 (`[ -d .git ]` false in linked worktrees). Claude Code pins `CLAUDE_PROJECT_DIR` to the session-start directory; it does not follow the agent into a worktree (worktrees docs; anthropics/claude-code#84723 closed "not planned" 2026-10-05). The hook stdin JSON carries `cwd` (follows the worktree and `cd`) and `session_id`; `CLAUDE_PLUGIN_DATA` is the documented durable plugin state dir. Read-only audit of 17 local consumer repos: 12 have polluted trees right now, 27 commits exist only to commit an auto breadcrumb, the journal is 80-100 % `task: none` and has no reader, and one mis-pointed STATE caused a production commit to be stubbed under an unrelated task.
+
+**Options considered:**
+- A) Keep writing into the tree, but add a `PREFERENCES.md` opt-out flag. Leaves every default install dirty.
+- B) Resolve the target from stdin `cwd` + `git rev-parse` and keep writing tracked files in the *correct* worktree. Fixes the wrong-checkout bug, keeps the dirty-tree and overwritten-handoff bugs.
+- C) Resolve from `cwd`; move everything volatile (auto handoff, journal, locks) to `${CLAUDE_PLUGIN_DATA:-${PLUGIN_DATA:-${XDG_STATE_HOME:-$HOME/.local/state}/ytstack}}/repos/<sha256 of common git dir>/worktrees/<key>/sessions/<session_id>/`; `.ytstack/` keeps only deliberate, skill-written artifacts; the summary stub is created only in the committing worktree and only when the commit subject carries the task ref.
+
+**Chose:** C.
+
+**Reason:** A hook can never settle a tracked file it writes outside the user's commit (same structural argument as the 2026-05-31 stub-once decision, now applied to all hooks). Per-session single-writer files remove the concurrency problem without `flock` (absent on macOS). A hand-written `HANDOFF.md` is user-owned and must survive any number of compactions. Repo key = hash of the common git dir groups all worktrees of a repo and ends basename collisions (`my-context-mcp` vs `meinkontext`).
+
+**How to apply:**
+- Shared `hooks/lib/git-ctx.sh` (bash 3.2, no arrays) sourced by every hook and every skill preamble; `[ -d .git ]` and `basename "$(git rev-parse --show-toplevel)"` are banned patterns (`bin/ytstack-check` rule).
+- `pre-compact` never overwrites `.ytstack/HANDOFF.md`; it writes the auto handoff out-of-tree and emits compaction instructions on stdout.
+- `init-project` writes the `.ytstack/.local/` gitignore block (fallback location when no plugin data dir exists).
+- `resume-session` and `session-start` read both locations.
+- Regression tests in `tests/` for main checkout, linked worktree (`.git` as file), session in main with commands in a worktree, two concurrent sessions; acceptance per #26: main is byte-identical before and after each hook.
+
+**Supersedes:** none (extends 2026-05-31 "post-tool-use-bash is stub-once").

@@ -3,7 +3,7 @@ project: ytstack
 last_updated: 2026-04-25T16:00:00Z
 total_milestones: 11
 completed_milestones: 9
-current_milestone: review (M010 + M011 planned, not started)
+current_milestone: M016 (next; M010/M011/M014/M017-M019 planned)
 ---
 
 # ytstack Roadmap
@@ -33,6 +33,10 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M013 | spawn-milestone-team worktree mode (default-on worktree-per-teammate for parallel slices + merge step + shared-tree opt-out; per DECISIONS 2026-05-31 "ytstack encourages git worktree isolation") | planned | TBD | 0 |
 | M014 | Vendor symlink dereferencing for RemotePluginSync compatibility (number reserved 2026-05-31 to resolve the M012 collision; uncommitted draft + README "Desktop + SSH" workaround in the `claude/thirsty-bhabha-a03490` worktree -- salvage/re-plan separately) | planned | TBD | 0 |
 | M015 | post-tool-use-bash hook fix (issue #22): stub-once hook + commit-to-task linking moved to summarize-task; kills the duplicate "Commits so far" churn + never-settling tree that broke worktree/swarm dispatch. Regression test `tests/post-tool-use-bash.test.sh`. (v0.1.6) | **done** | 1 | 1 |
+| M016 | Worktree-safe hooks + out-of-tree state (issues #24/#26/#27; report points 1-3) -- `hooks/lib/git-ctx.sh`, volatile state under `CLAUDE_PLUGIN_DATA`, HANDOFF never overwritten, hooks.json to platform state, `git rev-parse` in all preambles, configurable commit-ref discovery. Release **0.2.0**. | **next** | TBD | 0 |
+| M017 | Vendor strategy (issue #25; report point 6; DECISIONS 2026-11-07) -- pull superpowers to v7.0.2 + leak check in `ytstack-check`; de-vendor gstack into a tag-pinned installed dependency with preamble precheck; docs/NOTICE/VENDOR-INVENTORY updated. | planned | TBD | 0 |
+| M018 | Ceremony scaling + STATE pointer validation (report point 5) -- `granularity`, `dropped`/`shipped-informally`, quick lane, Ralph-loop as documented default, pointer lint in `session-start`, `reconcile` pass, scalable `.ytstack/` layouts, per-worktree `active_task`. | planned | TBD | 0 |
+| M019 | Evals, budgets, execution model (report point 7; absorbs M013) -- `claude plugin eval` suite, skill-description budget, `metadata` frontmatter, orchestrator + `Agent(isolation: worktree)` slices with `worktree.baseRef: head`, verifier Stop-hook, version bump discipline. | planned | TBD | 0 |
 
 **Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 + M011 task counts pending milestone planning.
 
@@ -233,6 +237,52 @@ Plus: README + QUICKSTART updated with the post-summarize loop diagram.
 - Concept §3.6 "Future candidates (deferred)" listed `requesting-code-review` / `receiving-code-review` as v0.2 candidates; M011 pulls them forward.
 
 **Plan via:** `ytstack:plan-milestone` -- not yet invoked.
+
+---
+
+## M016 -- Worktree-safe hooks + out-of-tree state (next, release 0.2.0)
+
+**Goal:** Stop every hook from writing into a checkout the user did not choose, and stop writing volatile session state into tracked files at all. Closes #24, #26, #27. Design locked in DECISIONS 2026-11-07 "Hooks never write relative to CLAUDE_PROJECT_DIR".
+
+**Exit criteria:**
+- `hooks/lib/git-ctx.sh` exists (bash 3.2, no arrays): reads `cwd` + `session_id` from stdin JSON, resolves toplevel / git-dir / common-dir with `--path-format=absolute` (fallback `--absolute-git-dir`), canonicalises paths, sets `YT_IS_LINKED`, derives the repo key as sha256 of the common dir. All hooks and all skill preambles source it; no `CLAUDE_PROJECT_DIR` write target and no `basename` slug remains (`bin/ytstack-check` rule).
+- Auto handoff, journal and locks live under `${CLAUDE_PLUGIN_DATA:-${PLUGIN_DATA:-${XDG_STATE_HOME:-$HOME/.local/state}/ytstack}}/repos/<key>/worktrees/<key>/sessions/<session_id>/` with a `latest-handoff` symlink; `resume-session` + `session-start` read both locations.
+- `pre-compact` never overwrites `.ytstack/HANDOFF.md`; it emits compaction instructions (< 10,000 chars) on stdout.
+- `post-tool-use-bash` stubs only in the committing worktree and only when the commit subject matches the task ref (`commit_ref_pattern` from `PREFERENCES.md`, default `^M###-S##-T##:`).
+- `session-end` fits the 1.5 s plugin budget (one append, no git calls) or the journal is dropped.
+- `hooks/hooks.json`: `SessionStart` matcher includes `fork`; `"shell": "bash"` + powershell variant; `onFailure: "block"` only on `pre-tool-use-edit`.
+- `summarize-task` + `init-project` use `git rev-parse --is-inside-work-tree`; commit discovery falls back to `git log <base>..HEAD` for squash-merge repos; `~/.ytstack/.init-project-<slug>-*` sentinels replaced by `PROJECT.md` frontmatter.
+- `init-project` writes a `.gitignore` block for `.ytstack/.local/` (fallback state dir). `HANDOFF.md` stays user-owned and committable and is NOT gitignored.
+- `tests/` cover main checkout, linked worktree (`.git` file), session in main with commands in a worktree, two concurrent sessions; acceptance: main byte-identical before/after each hook (criteria from #26).
+- `plugin.json` 0.1.6 -> 0.2.0, CHANGELOG entry, `/plugin update` note.
+
+**Plan via:** `ytstack:plan-milestone`.
+
+---
+
+## M017 -- Vendor strategy (planned)
+
+**Goal:** Execute DECISIONS 2026-11-07 "Vendor strategy": superpowers subtree to `22f0b46` (v7.0.2) with namespace/relative-link leak check; gstack de-vendored into a tag-pinned installed dependency. Closes #25 (vulnerable vendored `Dockerfile.ci` leaves the repo).
+
+**Exit criteria:** `vendor/gstack/` removed; wrapper preambles for office-hours / plan-ceo-review / plan-eng-review check `~/.claude/skills/gstack/` (+ Bun >= 1.4.2) and degrade with a clear message; `init-project` precheck; README, QUICKSTART, `docs/concept.md`, `NOTICE`, `VENDOR-INVENTORY.md` updated; `SECURITY.md` note that vendored CI files are never built here; `bin/ytstack-check` flags `superpowers:` namespace leaks in inlined text.
+
+**Plan via:** `ytstack:plan-milestone`.
+
+---
+
+## M018 -- Ceremony scaling + STATE pointer validation (planned)
+
+**Goal:** Make the M/S/T loop fit real usage (audit: 7/17 brownfield, 3 repos on Ralph-loop autonomy, ceremony skipped under delivery pressure with no state for it, STATE pointer drift M034 vs M040). Report point 5; details in `docs/research/2026-11-07-modernisierung-best-practices.md`.
+
+**Plan via:** `ytstack:plan-milestone`.
+
+---
+
+## M019 -- Evals, budgets, execution model (planned; absorbs M013)
+
+**Goal:** `claude plugin eval` suite per wrapper skill; skill descriptions within the 1,536-char / 1 % listing budget; `tier`/`version` under `metadata`; `spawn-milestone-team` rebuilt as orchestrator + `Agent(isolation: "worktree")` per slice (`worktree.baseRef: "head"`), verifier Stop-hook; release discipline (`plugin.json` bump + `claude plugin tag`). Report point 7.
+
+**Plan via:** `ytstack:plan-milestone`.
 
 ---
 
