@@ -62,7 +62,7 @@ Most skills are **procedure skills**: they run a numbered checklist and end in a
 
 Two non-procedural classes are exempt from the structural-section requirements (they still get em-dash hygiene):
 
-- `kind: directive` -- meta-primers that prime the agent rather than run a procedure (e.g. `using-ytstack`). The procedure lives in the skills the directive points at.
+- `kind: directive` -- meta-primers that prime the agent rather than run a procedure (e.g. `using-ytstack`, `minimal-code`). The procedure lives in the skills the directive points at. Injection contract: a directive is either injected whole by the SessionStart hook (`using-ytstack`, always) or pointed at with a few lines gated by a PREFERENCES key (`minimal-code` via `minimal_code: on`); the total SessionStart injection must stay under 9,500 chars (`tests/hooks-readonly.test.sh` measures it). Directives are not user-invocable and stay under 60 lines unless they are the primer itself.
 - `kind: reference` -- methodology or lookup references with no numbered procedure to run (e.g. `atomic-design`, `software-craftsmanship`, the `*-api` lookup skills, `oss-project`). They carry principles, rules, and patterns the agent applies in context.
 
 `bin/ytstack-check` skips `## Checklist` / `## Terminal State` / `## Preamble` / `## Procedure` for both classes. Do not reach for `kind: reference` to dodge writing a checklist on a skill that really is a procedure -- if it has discrete steps with a terminal state, it is a procedure skill.

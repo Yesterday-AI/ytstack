@@ -251,10 +251,25 @@ Without `--permission-mode acceptEdits`, Write operations stall on permission di
 - "this task is done" -> `summarize-task` closes the task, flips the checkbox, updates `STATE.md`
 - "something's broken, find it" -> `systematic-debugging` runs its 4-phase root-cause procedure (no symptom patches)
 - "let's do a handoff" -> `handoff-session` writes `HANDOFF.md` for the next session
+- "bump the SDK" / "rename the flag" (one sentence, known cause) -> `quick-task` ships it through the quick lane (`.ytstack/quick/Q###-*`), no milestone bookkeeping
+- "clean up .ytstack" -> `reconcile` lists leftovers and asks per class; archives, never deletes
 
 Type `/ytstack:<skill-name>` only when you want to override the auto-pick, skip a step, or explicitly re-run one (e.g. `/ytstack:plan-ceo-review` to re-challenge a milestone you already sliced). The using-ytstack directive loaded at session start enforces this model via the Skill tool.
 
 See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example written in the same natural-language style.
+
+## Dialing ceremony up or down
+
+ytstack's milestone / slice / task loop is the default, not a mandate. Four keys in `.ytstack/PREFERENCES.md` (written by `init-project`, read by every lifecycle skill) size the ceremony to the project (DECISIONS 2026-11-07 "Ceremony scales with the change"):
+
+| Key | Values (default first) | Effect |
+| --- | --- | --- |
+| `granularity` | `task`, `slice`, `milestone` | smallest unit that gets a PLAN/SUMMARY pair; `slice` collapses `T##` files into `M###-S##-*.md`, `milestone` into `M###-*.md` |
+| `autonomy` | `loop`, `step` | `loop` chains plan-task -> TDD -> verify -> summarize inside a slice without asking (stops at slice boundaries and HARD-GATEs); `step` returns control after each skill |
+| `quick_lane` | `on`, `off` | one-sentence changes ("rename X", "bump Y", "fix the off-by-one in Z") go through `ytstack:quick-task`: a `Q###-PLAN/SUMMARY` pair under `.ytstack/quick/`, TDD + verification, no pitch, no review, no pointer change |
+| `minimal_code` | `on`, `off` | the SessionStart hook injects the `ytstack:minimal-code` guard (six-rung YAGNI ladder, never-cut list, `shortcut:` markers) |
+
+Milestone states are data, not prose: `planned`, `in-progress`, `done`, `dropped`, `shipped-informally` (`reassess-roadmap` asks about stale milestones every 14 days). Leftovers (draft stubs, unfilled auto-drafts, planned-never-sliced milestones, untracked `.ytstack` files) are handled only by `ytstack:reconcile`, which asks per class and archives into `.ytstack/archive/<date>/` -- `.ytstack/` artifacts are user-owned and no agent deletes them on its own. The SessionStart hook also lints the STATE pointer (malformed fields, pointer behind the newest milestone, task already summarized, stale `last_updated`) and `plan-task` / `summarize-task` refuse a malformed pointer. Reading tolerates the layouts consumers already use (`milestones/M###/`, `decisions/`, `backlog/{,shipped,rejected}/`, `quick/`); writing stays flat.
 
 ## Where ytstack writes
 

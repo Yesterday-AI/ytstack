@@ -64,6 +64,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Ceremony dials in `PREFERENCES.md`** (M018, DECISIONS 2026-11-07
+  "Ceremony scales with the change"): `granularity: task|slice|milestone`,
+  `autonomy: loop|step` (loop = chain plan-task -> TDD -> verify ->
+  summarize inside a slice without asking), `quick_lane: on|off`,
+  `minimal_code: on|off`; read by `yt_prefs`, honoured by plan-task /
+  slice-milestone / summarize-task; `init-project` writes the block.
+- **`quick-task` skill**: the quick lane for one-sentence changes --
+  `Q###-PLAN/SUMMARY` under `.ytstack/quick/`, TDD + verification, no pitch,
+  no review, no milestone pointer change; `using-ytstack` routes there.
+- **`reconcile` skill**: consent-based cleanup of `.ytstack` leftovers (draft
+  stubs, unfilled auto-drafts, planned-never-sliced milestones, untracked
+  files, `.local` without gitignore); archives into `.ytstack/archive/<date>/`,
+  never deletes. `using-ytstack` now states that `.ytstack` artifacts are
+  user-owned.
+- **`minimal-code` directive** (six-rung YAGNI ladder, never-cut list,
+  `shortcut:` markers; concept credit to ponytail in NOTICE) injected by the
+  SessionStart hook when `minimal_code: on`; referenced by the TDD wrapper.
+- **STATE pointer lint** (`yt_state_lint`): malformed fields, pointer behind
+  the newest milestone, task already summarized, slice while milestone none,
+  stale `last_updated`, done-but-current; injected by `session-start`,
+  echoed by `resume-session`, enforced (malformed only) by `plan-task` /
+  `summarize-task`.
+- **Artifact states** `planned | in-progress | done | dropped |
+  shipped-informally` (docs/ux/skill-structure.md): `reassess-roadmap` asks
+  about stale milestones (14 days, no summaries) and writes the state;
+  `plan-task` / `summarize-task` flip in-progress / done; `session-start`
+  flags more than one milestone in progress.
+- **Read-side layout tolerance** (`yt_find_artifacts`): `milestones/M###/`,
+  `decisions/`, `backlog/{,shipped,rejected}/`, `quick/` are searched by
+  `session-start`, `resume-session`, `summarize-task`, `reassess-roadmap`;
+  writing stays flat.
+- **Advisory `Stop` hook** (M019): a `systemMessage` reminder when the agent
+  stops with an unsummarized active task; never blocks.
+- **CI workflow** (`.github/workflows/ci.yml`, M019): shell suites +
+  `ytstack-check` on ubuntu and macOS.
 - **`adopt-brownfield` skill** ([#18]). First-class entry for an existing
   codebase without `.ytstack/`: detects what the repo already documents
   (README, `docs/`, CHANGELOG, ADRs, manifests + commit history, entry-point

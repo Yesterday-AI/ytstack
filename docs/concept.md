@@ -231,6 +231,24 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - `pre-tool-use-edit` (advisory, exit 0), `post-tool-use-bash` (draft summary stub, once, only in the committing checkout and only for commits carrying the task ref) -- quality / safety gates
 - Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (10 suites incl. the #26 acceptance and concurrency suites)
 
+#### `quick-task` (execution: quick lane, M018)
+
+**Purpose:** one-sentence changes with a known cause and ~3 files: `Q###-PLAN.md` + `Q###-SUMMARY.md` under `.ytstack/quick/`, TDD + verification required, no pitch, no review, no milestone pointer change.
+**Triggers on:** "rename X", "bump Y", "fix the off-by-one in Z" in a project with `quick_lane: on` (default).
+**Differs from plan-task:** no milestone/slice context, no fit-one-context-window question; a fit check routes anything bigger back to `plan-task` or `systematic-debugging`.
+
+#### `reconcile` (maintenance: consent-based cleanup, M018)
+
+**Purpose:** lists `.ytstack` leftovers (draft stubs, unfilled auto-drafts, planned-never-sliced milestones, untracked files, `.local` without gitignore), asks per class (close / archive to `.ytstack/archive/<date>/` / keep), never deletes, writes `RECONCILE-<date>.md`.
+**Triggers on:** "reconcile", "clean up .ytstack", a `STATE lint` warning at session start.
+**Differs from everything else:** the only skill allowed to move `.ytstack` artifacts; agents never delete or revert them on their own (using-ytstack rule).
+
+#### `minimal-code` (directive, injected when `minimal_code: on`, M018)
+
+**Purpose:** six-rung ladder (needed at all? exists in the codebase? stdlib? dependency? one line? minimum that passes) plus the never-cut list and `shortcut:` markers; concept adapted from ponytail (NOTICE), prose ytstack's own. Under 60 lines; the SessionStart hook injects a six-line pointer, the TDD wrapper references it for the GREEN step.
+
+**Ceremony dials and states (M018):** `PREFERENCES.md` `granularity` / `autonomy` / `quick_lane` / `minimal_code` (read via `yt_prefs`), milestone states `planned | in-progress | done | dropped | shipped-informally` (`docs/ux/skill-structure.md` "Artifact states"), STATE pointer lint (`yt_state_lint`, injected by `session-start`, enforced by `plan-task` / `summarize-task`), read-side layout tolerance (`yt_find_artifacts`).
+
 ### 3.5 Distribution (two marketplaces split by visibility, per-plugin own repos)
 
 Per DECISIONS 2026-04-25 (afternoon) "Marketplace architecture -- split into ystacks (public) + ystacks-internal (private), per-plugin own repos" -- supersedes the morning's "ystacks monorepo + catalog hybrid" decision (its catalog-only-with-some-subdirs model leaked private plugin names through a public catalog and made cross-marketplace deps fragile).

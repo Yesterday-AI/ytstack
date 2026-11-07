@@ -169,6 +169,23 @@ Then:
 
 If you type `/ytstack:init-project` on such a repo by mistake, it stops after the preamble and points you at `adopt-brownfield` (unless an `OFFICE-HOURS.md` pitch for new scope is present, in which case it proceeds).
 
+## Dialing ceremony up or down
+
+`.ytstack/PREFERENCES.md` has a `## Ceremony` block (written by `init-project` / `adopt-brownfield`):
+
+```markdown
+granularity: task        # task | slice | milestone
+autonomy: loop           # loop | step
+quick_lane: on           # on | off
+minimal_code: on         # on | off
+```
+
+- With the defaults the agent chains plan-task -> TDD -> verification -> summarize-task inside a slice without asking ("Ralph loop"), stops at the slice boundary for `reassess-roadmap`, routes one-sentence changes ("bump the SDK", "rename the flag") to `ytstack:quick-task` (`.ytstack/quick/Q###-*`), and loads the minimal-code guard before writing code.
+- `granularity: slice` for projects that find task-level plans too fine: one PLAN/SUMMARY pair per slice. `milestone` for one pair per milestone.
+- `autonomy: step` when you want to approve every step.
+- Milestones you will not do: say "reassess the roadmap" and pick `dropped` or `shipped-informally` instead of leaving them `planned` forever.
+- Leftovers (draft stubs, stray files): say "reconcile .ytstack" -> `ytstack:reconcile` asks per class and archives; nothing is deleted.
+
 ## Reading the state
 
 Open a new Claude Code session on the project. Before your first message, the `SessionStart` hook has already injected the `STATE.md` snapshot (current milestone / slice / task, recent summaries, next action). You can just say:
