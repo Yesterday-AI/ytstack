@@ -1,9 +1,9 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-07T20:40:00Z
-current_milestone: M019
-active_slice: S05
+last_updated: 2026-11-07T21:10:00Z
+current_milestone: none
+active_slice: none
 active_task: none
 ---
 
@@ -81,7 +81,9 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Status:** **M018 DONE (ceremony dials, quick-task, reconcile, minimal-code, STATE lint, states, layouts) and M010 DONE (adopt-brownfield, merged from the worktree agent); both unreleased under CHANGELOG [Unreleased], ship with 0.4.0.** M019 in progress: S02-T02 (CI workflow) and S04-T02 (Stop hook) already landed; next S01 (skill metadata + trigger-only descriptions), then S02 evals, S03 lifecycle skills, S04 execution model, S05 release 0.4.0.
+**Status:** **M019 DONE -- released as 0.4.0 (tag local).** 0.4.0 bundles M010 (adopt-brownfield), M018 (ceremony dials, quick-task, reconcile, minimal-code, STATE lint, states, layouts) and M019 (`metadata:` frontmatter + trigger-only descriptions, `evals/` for `claude plugin eval` + CI, six lifecycle skills `code-review` / `finish-branch` / `grill` / `retro` / `ship` / `document-release`, worktree-subagent execution model with Agent Teams opt-in, Stop hook, no plugin dependencies). Clean clone at the release commit: 12 suites green, checker 0 fails, validate clean; evals 10/11 + re-run of the changed cases. **No milestone is open**: the modernisation programme from the 2026-11-07 research is complete; `ytstack:plan-milestone` for M020 when there is a next goal (candidates: live dogfooding of `spawn-milestone-team` 0.2.0 on a real milestone; PowerShell hook variants if a Windows consumer appears; per-worktree pointer if the orchestrator model needs it). **Operator actions:** `git push origin main --tags` (v0.2.0, v0.3.0, v0.4.0 are local), `gh issue close 24 25 27` (evidence posted), `/plugin update` to 0.4.0, gstack install one-liner (QUICKSTART) for the six gstack-backed skills, catalog sync in `Yesterday-AI/skills` (version 0.4.0, README skill table), skills.sh listing refresh.
+
+**Previous:** M018 DONE and M010 DONE (both now in 0.4.0).
 
 **Previous:** **M017 DONE -- released as 0.3.0 (tag local).** superpowers at v7.0.2 with Namespace notes; gstack removed from the tree and consumed as an installed, pinned (v1.96.0.0) dependency via `yt_gstack_ctx` + Skill-tool invocation, live-validated; SECURITY.md; #25 evidence posted. 11 suites / 533 cases green from a clean clone. **M010 (brownfield import) is being built by a worktree agent (`m010-brownfield`) and gets merged on report.** **Next here: M018** ceremony scaling + STATE lint + reconcile + YAGNI guard (`ytstack:plan-milestone`), then M019. **Operator actions:** `git push origin main --tags`, `gh issue close 24 25 27`, `/plugin update`, gstack install one-liner (QUICKSTART), catalog sync.
 

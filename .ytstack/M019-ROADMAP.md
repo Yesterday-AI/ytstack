@@ -3,9 +3,9 @@ milestone: M019
 project: ytstack
 size: L
 created: 2026-11-07T18:10:00Z
-status: in-progress
+status: done
 total_slices: 5
-completed_slices: 4
+completed_slices: 5
 ---
 
 # M019 Roadmap
@@ -20,7 +20,7 @@ completed_slices: 4
 - [x] S02 -- Evals + CI: `evals/` suite for `claude plugin eval`, GitHub Actions workflow for the shell suites + checker, README badge (3 tasks; done 2026-11-07; first run 10/11, skill-fired 11/11, $3.55)
 - [x] S03 -- New lifecycle skills: `code-review`, `finish-branch`, `grill` (superpowers inline), `retro`, `ship`, `document-release` (installed gstack); using-ytstack routing; M011 absorbed (5 tasks; done 2026-11-07)
 - [x] S04 -- Execution model: `spawn-milestone-team` as orchestrator + worktree subagents, agents/*.md to the subagent contract, advisory `Stop` hook (4 tasks; done 2026-11-07)
-- [ ] S05 -- Release 0.4.0: CHANGELOG from Unreleased (M010/M018/M019), manifests, README, clean-clone verification, tag, operator notes (3 tasks)
+- [x] S05 -- Release 0.4.0: CHANGELOG from Unreleased (M010/M018/M019), manifests, README, clean-clone verification, tag, operator notes (3 tasks; done 2026-11-07)
 
 ## Run order
 

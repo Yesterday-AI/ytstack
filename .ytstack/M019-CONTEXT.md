@@ -31,10 +31,14 @@ L -- 5 slices, ~18 tasks. Review after slicing whether S03 (new skills) should b
 - 2026-11-07: new superpowers-based skills use the inline + Namespace-note wrapper shape; new gstack-based skills use the installed-dependency shape (M017). No third shape.
 - 2026-11-07: descriptions follow superpowers' rule "never summarise the workflow in the description" and Anthropic's third-person what+when guidance; ytstack's own `tier`/`version` keys move under `metadata` so claude.ai upload no longer errors.
 
+## Closing note (2026-11-07)
+
+Done: 5 slices / 18 tasks. Every exit criterion met; one deliberate deviation recorded in S01-T02 (`disable-model-invocation` not set on the lookup skills so the model can trigger them). Found and fixed on the way: the `web-design` plugin dependency disabled ytstack in every isolated load (DECISIONS "No hard plugin dependencies"). Evals: first full run 10/11 at threshold 1.0, skill-fired 11/11, $3.55; the changed cases re-run before the tag (see S05-T03). Clean clone at `90340b0`: 12 suites green, checker 0 fails, validate clean. Released as 0.4.0.
+
 ## Open questions
 
-- Does `claude plugin eval` run headless with `--permission-mode acceptEdits` for skills that write `.ytstack/` files? Verify in S02-T01; fall back to graders on dry-run outputs if not.
-- `Stop` hook payload fields (`stop_hook_active`, transcript path) -- confirm in S04-T02 against the hooks reference before relying on them.
+- (answered S02-T01) `claude plugin eval` runs headless on its own: Write / Edit / Bash come from `--allow-tools`, `AskUserQuestion` is not granted, the appended system prompt tells the agent to take each RECOMMENDATION; no `--permission-mode` flag is involved.
+- (answered S04-T02) `Stop` payload carries `stop_hook_active`, `last_assistant_message`, `transcript_path`; the hook uses the first and `cwd`.
 
 ## Research basis
 
