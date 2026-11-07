@@ -37,7 +37,7 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 3. **Ask scope question** -- project-level vs user-level storage (core tier)
 4. **Create artifact directory** -- `.ytstack/` or `~/.ytstack/projects/<slug>/` based on scope
 5. **Write all 6 artifact files** -- PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES. PROJECT.md pre-populated from pitch artifact if present; otherwise placeholders.
-6. **Touch completion sentinel** -- `~/.ytstack/.init-project-<slug>-completed`
+6. **Write `.gitignore` block** -- `.ytstack/.local/` (fallback session-state dir) via `yt_ensure_gitignore`; completion + scope are recorded in `PROJECT.md` frontmatter, no sentinels
 7. **Report what was created** -- file list + pitch-status + next-step suggestion
 8. **Return control** -- do NOT auto-invoke any other skill
 
@@ -50,15 +50,15 @@ digraph init_project {
     "Report already initialized" [shape=doublecircle];
     "Ask scope" [shape=box];
     "Write artifacts (pitch-populated or placeholder)" [shape=box];
-    "Touch sentinel" [shape=box];
+    "Write .gitignore block" [shape=box];
     "Report + return" [shape=doublecircle];
 
     "Run preamble (detects pitch)" -> "HAS_YTSTACK?";
     "HAS_YTSTACK?" -> "Report already initialized" [label="yes"];
     "HAS_YTSTACK?" -> "Ask scope" [label="no"];
     "Ask scope" -> "Write artifacts (pitch-populated or placeholder)";
-    "Write artifacts (pitch-populated or placeholder)" -> "Touch sentinel";
-    "Touch sentinel" -> "Report + return";
+    "Write artifacts (pitch-populated or placeholder)" -> "Write .gitignore block";
+    "Write .gitignore block" -> "Report + return";
 }
 ```
 
@@ -152,9 +152,9 @@ Otherwise, use AskUserQuestion with this exact body:
 > C) Both (project for team facts, user for private notes) -- hybrid
 >    Completeness: 9/10, effort: low setup / slight ongoing discipline, tier: core
 >
-> (to re-ask later: delete `~/.ytstack/.init-project-{SLUG}-scope-prompted`)
+> (to change later: edit `scope:` in `PROJECT.md` and move the directory by hand)
 
-Remember the answer as `_SCOPE_CHOICE` (value: `project`, `user`, or `both`).
+Remember the answer as `_SCOPE_CHOICE` (value: `project`, `user`, or `both`). `{SCOPE_CHOICE}` in the templates below is this value.
 
 ### Step 4: Create artifact directory
 
@@ -186,6 +186,8 @@ name: {PROJECT_NAME}
 slug: {PROJECT_SLUG}
 created: {ISO_TIMESTAMP}
 updated: {ISO_TIMESTAMP}
+init_completed: {ISO_TIMESTAMP}
+scope: {SCOPE_CHOICE}
 ---
 
 # {PROJECT_NAME}
@@ -326,13 +328,16 @@ Options: default | terse | brutal
 (Project-specific preferences that don't fit elsewhere.)
 ```
 
-### Step 6: Touch completion sentinel
+### Step 6: Write the `.gitignore` block
+
+Skip when `_SCOPE_CHOICE` is `user` (nothing lives in the tree). Otherwise, with the lib loaded by the preamble:
 
 ```bash
-mkdir -p "$HOME/.ytstack"
-touch "$HOME/.ytstack/.init-project-${_PROJECT_SLUG}-completed"
-touch "$HOME/.ytstack/.init-project-${_PROJECT_SLUG}-scope-prompted"
+yt_ensure_gitignore "$_PROJECT_DIR"
+echo "GITIGNORE: $YT_GITIGNORE"   # written | unchanged | skipped
 ```
+
+This ignores only `.ytstack/.local/` -- the in-tree fallback for volatile session state (auto handoffs, journal) when no plugin data dir is writable. `.ytstack/HANDOFF.md` and every other artifact stay committable. Completion and scope are already recorded in `PROJECT.md` frontmatter (`init_completed`, `scope`); no `~/.ytstack` sentinels are written.
 
 ### Step 7: Report what was created
 

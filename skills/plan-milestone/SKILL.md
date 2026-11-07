@@ -165,7 +165,7 @@ If `YTSTACK_NON_INTERACTIVE` is `true`, auto-pick M (medium) and log. Otherwise 
 > B) M -- medium. 2-3 slices, 5-10 tasks total. (Completeness: 10/10, recommended for most milestones)
 > C) L -- large. 4-5 slices, 11-20 tasks total. (Completeness: 10/10, risk: consider splitting into two milestones)
 >
-> (to re-ask later: delete `~/.ytstack/.milestone-size-{NEXT_MILESTONE}-prompted`)
+> (to change later: edit `size:` in `{NEXT_MILESTONE}-CONTEXT.md` and `{NEXT_MILESTONE}-ROADMAP.md`)
 
 Remember as `_SIZE` (value: `S`, `M`, or `L`).
 

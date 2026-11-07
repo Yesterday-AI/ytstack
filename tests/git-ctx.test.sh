@@ -178,6 +178,22 @@ CWT="$TMP/commits-wt"; git -C "$CR" worktree add -q -b wt-x "$CWT" >/dev/null 2>
 ( cd "$CWT" || exit 2; echo 6 > f; git add f; git commit -qm "M042-S03-T08: in worktree" ) >/dev/null 2>&1
 eq "commits: worktree discovery uses the worktree HEAD" "task-ref|1" "$(disc "$CWT" '^M042-S03-T08:')"
 
+# ---- 10. gitignore block ----------------------------------------------------
+echo "# gitignore block"
+GI=$(new_repo gi)
+gi() { ( . "$LIB"; yt_ensure_gitignore "$1" >/dev/null; printf '%s' "$YT_GITIGNORE" ); }
+eq "gitignore: fresh repo -> written"        written   "$(gi "$GI")"
+eq "gitignore: block line present"           1         "$(grep -c '^\.ytstack/\.local/$' "$GI/.gitignore")"
+eq "gitignore: second call -> unchanged"     unchanged "$(gi "$GI")"
+eq "gitignore: still exactly one block line" 1         "$(grep -c '^\.ytstack/\.local/$' "$GI/.gitignore")"
+GI2=$(new_repo gi2); printf 'node_modules/\n*.log' > "$GI2/.gitignore"   # no trailing newline
+eq "gitignore: existing file without trailing newline -> written" written "$(gi "$GI2")"
+eq "gitignore: original last line intact"    1         "$(grep -c '^\*\.log$' "$GI2/.gitignore")"
+eq "gitignore: block on its own line"        1         "$(grep -c '^\.ytstack/\.local/$' "$GI2/.gitignore")"
+eq "gitignore: node_modules kept"            1         "$(grep -c '^node_modules/$' "$GI2/.gitignore")"
+if grep -q 'HANDOFF' "$GI/.gitignore"; then bad "gitignore: HANDOFF.md must not be ignored"; else ok "gitignore: HANDOFF.md not ignored"; fi
+if git -C "$GI" check-ignore -q .ytstack/.local/x; then ok "gitignore: git ignores .ytstack/.local/"; else bad "gitignore: git ignores .ytstack/.local/"; fi
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

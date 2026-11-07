@@ -248,6 +248,27 @@ yt_task_commits() {
   return 0
 }
 
+# yt_ensure_gitignore <toplevel> -> make sure <toplevel>/.gitignore ignores
+# `.ytstack/.local/` (the in-tree fallback for volatile session state).
+# Idempotent; appends a marked block, never touches other lines, never ignores
+# the user-owned `.ytstack/HANDOFF.md`. Sets YT_GITIGNORE=written|unchanged|skipped.
+yt_ensure_gitignore() {
+  local top="$1" gi
+  YT_GITIGNORE=skipped
+  [ -d "$top" ] || return 0
+  gi="$top/.gitignore"
+  if [ -f "$gi" ] && grep -q '^\.ytstack/\.local/$' "$gi" 2>/dev/null; then
+    YT_GITIGNORE=unchanged; return 0
+  fi
+  {
+    # own line even when the existing file lacks a trailing newline
+    if [ -s "$gi" ] && [ "$(tail -c 1 "$gi" 2>/dev/null | od -An -c | tr -d ' ')" != '\n' ]; then printf '\n'; fi
+    [ -s "$gi" ] && printf '\n'
+    printf '# ytstack local state (fallback session dir; see hooks/lib/git-ctx.sh)\n.ytstack/.local/\n'
+  } >> "$gi" 2>/dev/null && YT_GITIGNORE=written
+  return 0
+}
+
 # yt_resolve_yt_dir -> the .ytstack dir for the resolved toplevel: project
 # scope (<toplevel>/.ytstack) first, then user scope keyed by YT_REPO_KEY.
 # Sets YT_DIR and YT_SCOPE (project|user|none). No basename slugs.
