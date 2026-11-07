@@ -21,8 +21,8 @@ eq()  { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected '$2' got '$3'"
 
 jq -e . "$J" >/dev/null 2>&1 && ok "hooks.json is valid JSON" || { bad "hooks.json is valid JSON"; echo "$PASS passed, $FAIL failed"; exit 1; }
 
-eq "ships exactly the eight events" \
-  "PostToolUse PreCompact PreToolUse SessionEnd SessionStart TaskCompleted TaskCreated TeammateIdle" \
+eq "ships exactly the nine events" \
+  "PostToolUse PreCompact PreToolUse SessionEnd SessionStart Stop TaskCompleted TaskCreated TeammateIdle" \
   "$(jq -r '.hooks | keys | sort | join(" ")' "$J")"
 
 M=$(jq -r '.hooks.SessionStart[0].matcher' "$J")

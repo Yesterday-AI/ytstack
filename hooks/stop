@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# ytstack Stop hook (advisory, M019)
+#
+# Fires when the main agent is about to stop. If STATE.md still points at an
+# active task whose SUMMARY is missing or a draft stub, surface a one-line
+# reminder to the user via `systemMessage`. Never blocks (exit 0, no
+# `decision: block`): the user may well be stopping on purpose.
+#
+# Resolution: payload `cwd` via hooks/lib/git-ctx.sh (never CLAUDE_PROJECT_DIR).
+# Respects `stop_hook_active` (set when a previous Stop hook already continued
+# the turn) to avoid any loop.
+
+set -uo pipefail
+trap '' PIPE
+
+. "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
+
+yt_read_stdin
+# stop_hook_active: do nothing when we are inside a hook-continued turn
+if [ -n "${YT_STDIN:-}" ]; then
+  JQ=$(yt_jq)
+  if [ -n "$JQ" ] && [ "$(printf '%s' "$YT_STDIN" | "$JQ" -r '.stop_hook_active // false' 2>/dev/null)" = true ]; then
+    exit 0
+  fi
+fi
+
+yt_git_ctx "${YT_CWD:-$PWD}"
+YT_DIR=$(yt_resolve_yt_dir)
+[ -z "$YT_DIR" ] && exit 0
+STATE_FILE="$YT_DIR/STATE.md"
+[ -f "$STATE_FILE" ] || exit 0
+
+get_field() { sed -n "s/^$1: *//p" "$STATE_FILE" 2>/dev/null | head -1; }
+M=$(get_field current_milestone); S=$(get_field active_slice); T=$(get_field active_task)
+case "$T" in ""|none|all) exit 0 ;; esac
+case "$S" in ""|none|all) exit 0 ;; esac
+case "$M" in ""|none) exit 0 ;; esac
+
+SUMMARY="$YT_DIR/$M-$S-$T-SUMMARY.md"
+MSG=""
+if [ ! -f "$SUMMARY" ]; then
+  MSG="ytstack: $M-$S-$T is still the active task and has no summary. If the work is done, run /ytstack:summarize-task; if you are pausing, /ytstack:handoff-session keeps the thread."
+elif [ "$(sed -n 's/^closed: *//p' "$SUMMARY" | head -1)" = draft ]; then
+  MSG="ytstack: $M-$S-$T has only a draft summary stub. Run /ytstack:summarize-task to close it, or /ytstack:handoff-session if you are pausing."
+fi
+[ -z "$MSG" ] && exit 0
+
+JQ=$(yt_jq)
+if [ -n "$JQ" ]; then
+  printf '%s' "$MSG" | "$JQ" -Rs '{systemMessage: .}'
+else
+  printf '{"systemMessage":"%s"}\n' "$(printf '%s' "$MSG" | sed 's/"/\\"/g')"
+fi
+exit 0
