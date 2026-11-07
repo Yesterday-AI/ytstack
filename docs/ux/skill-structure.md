@@ -42,6 +42,20 @@ allowed-tools:                  # explicit allowlist
 ---
 ```
 
+## Artifact states (M018)
+
+Milestone (`M###-ROADMAP.md`), slice (`M###-S##-PLAN.md`) and task (`M###-S##-T##-PLAN.md`) frontmatter carries `status:` with exactly these values:
+
+| Value | Written by | Meaning |
+| --- | --- | --- |
+| `planned` | plan-milestone / slice-milestone / plan-task | artifact exists, nothing executed |
+| `in-progress` | plan-task (first task of the milestone) | work started |
+| `done` | summarize-task (last task / last slice) | all exit criteria met |
+| `dropped` | reassess-roadmap (with consent) | plans stay on disk, deliberately not executed |
+| `shipped-informally` | reassess-roadmap (with consent) | the work happened outside the ytstack loop; one-line note in CONTEXT |
+
+The global `ROADMAP.md` Status column mirrors the frontmatter. Prose such as "Do NOT execute the M003 plans" is not a state; write `dropped`.
+
 ## Skill classes (`kind`)
 
 Most skills are **procedure skills**: they run a numbered checklist and end in a terminal state. They MUST have `## Checklist` and `## Terminal State`. Omit `kind` for these (the default).

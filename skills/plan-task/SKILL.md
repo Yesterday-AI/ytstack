@@ -241,6 +241,8 @@ Bump `last_updated` regardless.
 
 Update Status line: `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} / {NEXT_TASK} planned -- ready to execute.`
 
+**Milestone state (M018):** if `{CURRENT_MILESTONE}-ROADMAP.md` still says `status: planned`, flip it to `status: in-progress` (Edit) and mirror the global `ROADMAP.md` row -- the first planned task is where work starts. States are the enum in `docs/ux/skill-structure.md` ("Artifact states").
+
 ### Step 10: Report + return
 
 Report:

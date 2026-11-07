@@ -40,6 +40,7 @@ Run it anyway. It takes 2 minutes and either confirms the plan (good -- more con
 7. **Append decision to `M###-CONTEXT.md`** if the change is non-trivial
 8. **Update STATE.md** -- flip completed slice, set next `active_slice` (guarded)
 9. **Backlog sweep** (only if this was the last slice of the milestone) -- per-item prompt from `M###-CONTEXT.md` scope
+10. **Stale milestones** (M018) -- for each `STALE_MILESTONES` entry ask `dropped` / `shipped-informally` / `keep` and write the state
 
 ## Preamble
 
@@ -79,11 +80,24 @@ if [ -f "$_SLICE_PLAN" ]; then
   [ "$_REMAINING" -eq 0 ] && _SLICE_COMPLETE=yes
 fi
 
+# Stale milestones (M018): planned/in-progress roadmaps with no summaries and no file newer than 14 days
+_STALE_MILESTONES=""
+for _rm in "$_YT_DIR"/M[0-9][0-9][0-9]-ROADMAP.md; do
+  [ -f "$_rm" ] || continue
+  _m=$(basename "$_rm" -ROADMAP.md)
+  _st=$(sed -n 's/^status: *//p' "$_rm" | head -1)
+  case "$_st" in planned|in-progress) ;; *) continue ;; esac
+  [ -n "$(ls "$_YT_DIR"/$_m-*SUMMARY.md 2>/dev/null)" ] && continue
+  [ -n "$(find "$_YT_DIR" -maxdepth 1 -name "$_m-*.md" -mtime -14 2>/dev/null)" ] && continue
+  _STALE_MILESTONES="${_STALE_MILESTONES:+$_STALE_MILESTONES }$_m"
+done
+
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "ACTIVE_SLICE: $_ACTIVE_SLICE"
 echo "SLICE_COMPLETE: $_SLICE_COMPLETE"
+echo "STALE_MILESTONES: ${_STALE_MILESTONES:-none}"
 ```
 
 ## Procedure
@@ -196,6 +210,20 @@ For C: remove the item from `{CURRENT_MILESTONE}-CONTEXT.md` and append to `DECI
 > Next: slice **{NEW_ACTIVE_SLICE}**. Run `/ytstack:plan-task` to flesh out the first task, or use subagent dispatch if available.
 >
 > If this was the last slice of the milestone: flip milestone status to `done` in `.ytstack/ROADMAP.md` (global) and consider `/ytstack:plan-milestone` for the next milestone.
+
+**Step 10 -- Stale milestones (M018 artifact states).** For each milestone in `STALE_MILESTONES` (status `planned` or `in-progress`, no summaries, nothing touched for 14 days), use AskUserQuestion:
+
+> Milestone **{M###}** has plans on disk but no execution and no activity for two weeks. What is its real state?
+>
+> Leaving it `planned` keeps it on every dashboard as if it were next. Writing the real state makes `ROADMAP.md` honest and lets `session-start` stop flagging it.
+>
+> RECOMMENDATION: B if the work happened outside the ytstack loop (direct commits, another tracker); A if nobody intends to do it; C only if it really is next.
+>
+> A) `dropped` -- plans stay on disk, status written, global row updated. (Completeness: 10/10, tier: core)
+> B) `shipped-informally` -- status written + one-line note in `{M###}-CONTEXT.md` about where the work lives. (Completeness: 10/10, tier: core)
+> C) keep -- leave `planned`; ask again in 14 days. (Completeness: 6/10, tier: core)
+
+Write the chosen state into `{M###}-ROADMAP.md` frontmatter (`status:`) and the matching row in the global `ROADMAP.md` (Edit). Never delete plan files here (`ytstack:reconcile` owns archiving).
 
 ## Terminal State
 

@@ -74,6 +74,17 @@ lacks "ss-main: no CLAUDE_PROJECT_DIR path leaked" "$CTX" "$ELSEWHERE"
 eq  "ss-main: git status clean" "" "$(git -C "$MAIN" status --porcelain)"
 if [ "${#CTX}" -lt 10000 ]; then ok "ss-main: context under 10,000 chars (${#CTX})"; else bad "ss-main: context under 10,000 chars" "${#CTX}"; fi
 
+# ---- 1b. session-start, two milestones in progress (M018 states) ----------
+printf -- '---\nmilestone: M998\nstatus: in-progress\n---\n' > "$MAIN/.ytstack/M998-ROADMAP.md"
+printf -- '---\nmilestone: M999\nstatus: in-progress\n---\n' > "$MAIN/.ytstack/M999-ROADMAP.md"
+run session-start "{\"session_id\":\"s1b\",\"cwd\":$(jstr "$MAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has "ss-main: two in-progress milestones listed" "$CTX" "Milestones in progress: M998, M999"
+rm -f "$MAIN/.ytstack/M998-ROADMAP.md"; printf -- '---\nmilestone: M999\n---\n# roadmap\n' > "$MAIN/.ytstack/M999-ROADMAP.md"   # restore the tracked fixture file
+run session-start "{\"session_id\":\"s1c\",\"cwd\":$(jstr "$MAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+lacks "ss-main: no in-progress line with <2 milestones" "$CTX" "Milestones in progress:"
+
 # ---- 2. session-start, greenfield (no .ytstack) ---------------------------
 BEFORE=$(find "$PD" -type d | wc -l | tr -d ' ')
 run session-start "{\"session_id\":\"s2\",\"cwd\":$(jstr "$PLAIN")}"

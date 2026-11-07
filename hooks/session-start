@@ -113,6 +113,10 @@ if compgen -G "$YT_DIR"/*-SUMMARY.md > /dev/null 2>&1; then
   done | paste -sd, - | sed 's/,/, /g')
 fi
 
+# Milestones in progress (M018 states): more than one is a pointer-drift smell.
+IN_PROGRESS=$(grep -l '^status: in-progress' "$YT_DIR"/M[0-9][0-9][0-9]-ROADMAP.md 2>/dev/null | while read -r f; do basename "$f" -ROADMAP.md; done | paste -sd, - | sed 's/,/, /g')
+IN_PROGRESS_N=$(printf '%s' "$IN_PROGRESS" | tr ',' '\n' | grep -c . 2>/dev/null || echo 0)
+
 # Handoffs: the user-written one in the tree, the automatic one out of tree.
 HANDOFF_LINES=""
 if [ -f "$YT_DIR/HANDOFF.md" ]; then
@@ -148,6 +152,11 @@ $next"
     ctx="$ctx
 
 Recent tasks: $RECENT_SUMMARIES"
+  fi
+  if [ "${IN_PROGRESS_N:-0}" -gt 1 ]; then
+    ctx="$ctx
+
+Milestones in progress: $IN_PROGRESS (more than one -- check the STATE pointer; run ytstack:reassess-roadmap to close or drop the stale one)"
   fi
   if [ -n "$HANDOFF_LINES" ]; then
     ctx="$ctx

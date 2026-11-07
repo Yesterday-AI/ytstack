@@ -267,7 +267,7 @@ Regardless of teammate mode:
 - `last_updated: ...` → bump to current
 - Status line → `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} -- {N}/{TOTAL} tasks done in slice. Next task: pick from slice-plan or run `/ytstack:plan-task`.`
 
-If the slice is now fully complete (all tasks `[x]`): update status to recommend `/ytstack:reassess-roadmap`.
+If the slice is now fully complete (all tasks `[x]`): update status to recommend `/ytstack:reassess-roadmap`, flip the slice's `status:` to `done` in `{SLICE_PLAN}` frontmatter, and when every slice in `{CURRENT_MILESTONE}-ROADMAP.md` is checked flip the milestone's `status:` to `done` there and mirror the global `ROADMAP.md` row (M018 artifact states).
 
 ### Step 11: Offer git stage
 
