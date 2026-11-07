@@ -3,7 +3,7 @@ project: ytstack
 last_updated: 2026-04-25T16:00:00Z
 total_milestones: 11
 completed_milestones: 9
-current_milestone: M016 (next; M010/M011/M014/M017-M019 planned)
+current_milestone: M016 (next; M011/M014/M017-M019 planned; M010 done 2026-11-07)
 ---
 
 # ytstack Roadmap
@@ -27,7 +27,7 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M007 | Quality Gates (PreToolUse hooks) | **done** | 3 | 3 |
 | M008 | Publishing & Marketplace | **done (2 user-action)** | 4 | 2 |
 | M009 | Docs & Community | **done** | 4 | 4 |
-| M010 | Workflow Reorder + Brownfield-Without-.ytstack | planned | TBD | 0 |
+| M010 | Workflow Reorder + Brownfield-Without-.ytstack (issue #18) -- `adopt-brownfield` skill, shared `yt_brownfield_signals`, init-project routing, SessionStart hint, `tracker:` in STATE.md. Unreleased (CHANGELOG [Unreleased]). | **done** | 6 | 6 |
 | M011 | Post-Summarize Lifecycle (5-skill cherry-pick: ship + closure + PR-review + document-release) | planned | TBD | 0 |
 | M012 | Swarm Fix-Pack (issues #16/#19/#20/#21: verification crash, advisory-hook exit, slice/task SSOT, session_id, backlog-sweep) | **done** (released v0.1.5) | 11 | 11 |
 | M013 | spawn-milestone-team worktree mode (default-on worktree-per-teammate for parallel slices + merge step + shared-tree opt-out; per DECISIONS 2026-05-31 "ytstack encourages git worktree isolation"). Unblocked by M016 (hooks are worktree-safe); absorbed into M019's execution-model work. | absorbed into M019 | 0 | 0 |
@@ -38,7 +38,7 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M018 | Ceremony scaling + STATE pointer validation (report point 5) -- `granularity`, `dropped`/`shipped-informally`, quick lane, Ralph-loop as documented default, pointer lint in `session-start`, `reconcile` pass, scalable `.ytstack/` layouts, per-worktree `active_task`, minimal-code guard (ponytail-style YAGNI ladder as an always-on skill; see `docs/research/2026-11-07-notes/developer-skills-landscape.md`). | planned | TBD | 0 |
 | M019 | Skill quality, evals, execution model (report point 7 + developer-skills research; absorbs M013) -- trigger-only descriptions within the 1,536-char budget (mattpocock/Anthropic criteria, superpowers' "never summarise the workflow"), `tier`/`version` -> `metadata`, `disable-model-invocation`/`user-invocable` instead of `tier`, `claude plugin eval` suite + CI gate, new skills `code-review` (standards + spec reviewers), `pr`, `retro`, `grilling`, `writing-for-agents` wrapper; orchestrator + `Agent(isolation: worktree)` slices with `worktree.baseRef: head`, verifier Stop-hook; listing on skills.sh; version bump discipline. | planned | TBD | 0 |
 
-**Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 + M011 task counts pending milestone planning.
+**Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 done (6/6, 2026-11-07); M011 task count pending milestone planning.
 
 ---
 
@@ -162,7 +162,9 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 
 ---
 
-## M010 -- Workflow Reorder + Brownfield-Without-.ytstack (planned)
+## M010 -- Workflow Reorder + Brownfield-Without-.ytstack ✓ done
+
+**Shipped 2026-11-07** (6 tasks, one slice; detail in `M010-CONTEXT.md`, `M010-ROADMAP.md`, `M010-S01-PLAN.md`, `M010-S01-T0#-SUMMARY.md`). Part 1 (greenfield reorder) was already in place via the `using-ytstack` directive + session-start greenfield block. Part 2 shipped as `skills/adopt-brownfield/SKILL.md` + `yt_brownfield_signals` in `hooks/lib/git-ctx.sh`; `init-project` and `hooks/session-start` route to it at >= 2 signals. The open design questions below were resolved in DECISIONS 2026-11-07 "Brownfield adoption is a reference-first distillation, never a pitch": inline per-artifact questions recorded in PROJECT.md's Adoption table (no `ADOPTION-PLAN.md`); ADR archives stay in place and are listed by reference; office-hours is skipped for existing products. Original scope note kept below for history.
 
 **Goal:** Two-part scope. Part 1 finishes the greenfield-flow reorder originally planned 2026-04-24. Part 2 adds explicit handling for users running ytstack inside an existing repo that has no `.ytstack/` directory yet (third workflow case alongside greenfield and brownfield-with-.ytstack).
 
