@@ -68,3 +68,7 @@ After the vendored procedure completes:
 ```!
 cat "${CLAUDE_SKILL_DIR}/../../vendor/superpowers/skills/verification-before-completion/SKILL.md"
 ```
+
+## Namespace note (ytstack)
+
+The text above is upstream superpowers content (v7.0.2) rendered inside ytstack. Read `superpowers:<skill>` as `ytstack:<skill>` and invoke the ytstack-namespaced skill via the Skill tool. Relative links resolve under `vendor/superpowers/skills/verification-before-completion/` in the ytstack plugin directory (`${CLAUDE_SKILL_DIR}/../../vendor/superpowers/skills/verification-before-completion/`); read them from there when you need them.

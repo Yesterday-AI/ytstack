@@ -57,3 +57,7 @@ After the vendored procedure completes:
 ```!
 cat "${CLAUDE_SKILL_DIR}/../../vendor/superpowers/skills/systematic-debugging/SKILL.md"
 ```
+
+## Namespace note (ytstack)
+
+The text above is upstream superpowers content (v7.0.2) rendered inside ytstack. Read `superpowers:<skill>` as `ytstack:<skill>` (`superpowers:verification-before-completion` is `ytstack:verification-before-completion`, `superpowers:test-driven-development` is `ytstack:test-driven-development`) and invoke the ytstack-namespaced skill via the Skill tool. Relative links resolve under `vendor/superpowers/skills/systematic-debugging/` in the ytstack plugin directory (`${CLAUDE_SKILL_DIR}/../../vendor/superpowers/skills/systematic-debugging/`); read them from there when you need them.

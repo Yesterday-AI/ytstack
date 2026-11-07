@@ -26,7 +26,11 @@ TMP=$(mktemp -d "${TMPDIR:-/tmp}/ytcheck.XXXXXX"); TMP=$(cd "$TMP" && pwd -P)
 trap 'rm -rf "$TMP"' EXIT
 ROOT="$TMP/plugin"; mkdir -p "$ROOT"
 for d in bin skills hooks agents docs .claude-plugin; do [ -e "$SRC/$d" ] && cp -R "$SRC/$d" "$ROOT/"; done
-[ -d "$SRC/vendor" ] && ln -s "$SRC/vendor" "$ROOT/vendor"   # wrapper cross-ref checks read vendor/ (read-only is fine)
+# vendor/: real dirs for the catalog roots so fixtures can be added, each real
+# skill dir symlinked (read-only is fine for the cross-ref / sibling checks).
+mkdir -p "$ROOT/vendor/superpowers/skills"
+for d in "$SRC"/vendor/superpowers/skills/*/; do [ -d "$d" ] && ln -s "$d" "$ROOT/vendor/superpowers/skills/$(basename "$d")"; done
+[ -d "$SRC/vendor/gstack" ] && ln -s "$SRC/vendor/gstack" "$ROOT/vendor/gstack"
 CHECK="$ROOT/bin/ytstack-check"
 [ -x "$CHECK" ] || chmod +x "$CHECK"
 
@@ -95,6 +99,43 @@ OUT=$("$CHECK" "$ROOT" 2>&1); EC=$?
 eq "hook code line: exit 1"      1 "$EC"
 eq "hook code line: one fail naming CLAUDE_PROJECT_DIR" 1 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'zz-fixture-hook' | grep -c 'CLAUDE_PROJECT_DIR')"
 rm -f "$FIX_HOOK"
+
+# ---- 3b. inlined vendor text leaks (namespace + relative links) -------------
+echo "# inline leaks"
+FAKE_VENDOR="$ROOT/vendor/superpowers/skills/zz-fake"; mkdir -p "$FAKE_VENDOR"
+printf -- '---\nname: zz-fake\ndescription: fake\n---\n# fake\n\nRun `superpowers:zz-other` next. See [notes](notes.md) and https://example.com/x.md.\n' > "$FAKE_VENDOR/SKILL.md"
+FIX_WRAP="$ROOT/skills/zz-fixture-wrapper"; mkdir -p "$FIX_WRAP"
+cat > "$FIX_WRAP/SKILL.md" <<'EOF'
+---
+name: zz-fixture-wrapper
+description: "Fixture wrapper for ytstack-check tests. Not a real skill."
+tier: core
+version: 0.0.1
+allowed-tools: Read
+---
+
+# zz-fixture-wrapper
+
+## Vendored procedure (inlined verbatim)
+
+```!
+cat "${CLAUDE_SKILL_DIR}/../../vendor/superpowers/skills/zz-fake/SKILL.md"
+```
+EOF
+OUT=$("$CHECK" "$ROOT" 2>&1)
+F=$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'zz-fixture-wrapper')
+eq "leaks: namespace leak without note flagged" 1 "$(printf '%s' "$F" | grep -c 'superpowers:zz-other')"
+eq "leaks: relative link leak without note flagged" 1 "$(printf '%s' "$F" | grep -c 'notes.md')"
+eq "leaks: absolute URL not flagged" 0 "$(printf '%s' "$F" | grep -c 'example.com')"
+cat >> "$FIX_WRAP/SKILL.md" <<'EOF'
+
+## Namespace note (ytstack)
+
+Read `superpowers:zz-other` as `ytstack:zz-other`. Relative links such as `notes.md` resolve under `vendor/superpowers/skills/zz-fake/`.
+EOF
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "leaks: note with token + 'resolve under' clears both" 0 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'zz-fixture-wrapper' | grep -c 'inlined vendor text')"
+rm -rf "$FIX_WRAP" "$FAKE_VENDOR"
 
 # ---- 4. version agreement ---------------------------------------------------
 echo "# versions"

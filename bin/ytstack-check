@@ -485,6 +485,49 @@ def check_resolver_contract(root):
     return fails, warns
 
 
+# ---------- check: inlined vendor text leaks (M017) ----------
+
+_NS_LEAK_RE = re.compile(r"\bsuperpowers:([a-z0-9-]+)")
+_REL_LINK_RE = re.compile(r"\]\(([A-Za-z0-9_./-]+\.md)(?:#[^)]*)?\)")
+_INLINE_REF_RE = re.compile(r"vendor/[\w/-]+?/SKILL\.md")
+
+
+def check_inline_leaks(root):
+    """Wrappers that cat-inline a vendor SKILL.md render upstream text inside
+    ytstack. Upstream may reference its own namespace (`superpowers:foo`) or
+    relative files (`[x](notes.md)`) that do not resolve in a ytstack session.
+    Require a `## Namespace note` in the wrapper that names each leaked token
+    and says where relative links resolve."""
+    fails = []
+    warns = []
+    for wrapper in sorted((root / "skills").glob("*/SKILL.md")):
+        text = wrapper.read_text(encoding="utf-8", errors="replace")
+        rel_wrapper = wrapper.relative_to(root)
+        has_note = "## Namespace note" in text
+        for vendor_rel in sorted(set(_INLINE_REF_RE.findall(text))):
+            vendor_path = root / vendor_rel
+            if not vendor_path.is_file():
+                continue  # flagged by check_cross_refs
+            vtext = vendor_path.read_text(encoding="utf-8", errors="replace")
+            for tok in sorted(set(m.group(0) for m in _NS_LEAK_RE.finditer(vtext))):
+                if not (has_note and tok in text):
+                    fails.append(
+                        f"{rel_wrapper}: inlined vendor text ({vendor_rel}) references `{tok}` "
+                        f"but the wrapper has no '## Namespace note' translating it to ytstack:"
+                    )
+            rel_links = sorted(set(
+                m.group(1) for m in _REL_LINK_RE.finditer(vtext)
+                if not m.group(1).startswith(("http://", "https://", "/"))
+            ))
+            for link in rel_links:
+                if not (has_note and "resolve under" in text):
+                    fails.append(
+                        f"{rel_wrapper}: inlined vendor text ({vendor_rel}) links relatively to `{link}` "
+                        f"but the wrapper has no '## Namespace note' saying where relative links resolve"
+                    )
+    return fails, warns
+
+
 # ---------- main ----------
 
 def main():
@@ -525,6 +568,11 @@ def main():
 
     # Resolver contract (M016): banned patterns, shared lib, version agreement
     f, w = check_resolver_contract(root)
+    all_fails.extend(f)
+    all_warns.extend(w)
+
+    # Inlined vendor text leaks (M017): namespace refs + relative links need a Namespace note
+    f, w = check_inline_leaks(root)
     all_fails.extend(f)
     all_warns.extend(w)
 

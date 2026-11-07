@@ -58,3 +58,7 @@ After the vendored procedure completes (test passes + refactor done):
 ```!
 cat "${CLAUDE_SKILL_DIR}/../../vendor/superpowers/skills/test-driven-development/SKILL.md"
 ```
+
+## Namespace note (ytstack)
+
+The text above is upstream superpowers content (v7.0.2) rendered inside ytstack. Read `superpowers:<skill>` as `ytstack:<skill>` (for example `superpowers:verification-before-completion` is `ytstack:verification-before-completion`) and invoke the ytstack-namespaced skill via the Skill tool. Relative links such as `writing-good-tests.md` resolve under `vendor/superpowers/skills/test-driven-development/` in the ytstack plugin directory (`${CLAUDE_SKILL_DIR}/../../vendor/superpowers/skills/test-driven-development/`); read them from there when you need them.
