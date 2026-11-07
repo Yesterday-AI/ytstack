@@ -41,6 +41,16 @@ outcome framing) in its own prose; see docs/methodology.md.
 
 ---
 
+## ponytail (concept credit)
+
+The "minimal-code ladder" idea in skills/minimal-code/SKILL.md (ask whether
+code is needed at all, whether it exists, whether the standard library or an
+existing dependency covers it, whether one line suffices, and only then write
+the minimum; never cut validation, security, accessibility or the one small
+test) is adapted from the ponytail project
+(<https://github.com/DietrichGebert/ponytail>, MIT). No ponytail text, code or
+assets are included; the prose is ytstack's own.
+
 ## External AI-first methodology
 
 Conceptual influence (not vendored, not attributed by name per ytstack
