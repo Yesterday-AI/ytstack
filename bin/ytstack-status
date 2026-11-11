@@ -13,8 +13,9 @@
 # Colour is on by default; NO_COLOR or --no-color turns it off.
 #
 # Plan progress is repository-wide: on any branch other than the default one
-# (a linked worktree carries a stale copy) STATE.md is read from the newer of
-# origin/<default> and <default>, and so is the slice plan of the fallback
+# (a linked worktree carries a stale copy) STATE.md is read from
+# origin/<default>, or from the local <default> when that contains it
+# (unpushed commits), and so is the slice plan of the fallback
 # (the checkout's copy only when the slice plan does not exist there yet).
 # The task pointer is always the local one.
 # Local refs only: no network, no gh. See docs/statusline.md.
@@ -57,8 +58,16 @@ if [ "$YT_IS_GIT" = yes ] && [ "$YT_SCOPE" = project ]; then
     done
   fi
   if [ -n "$DEF" ] && [ "$(git -C "$YT_TOPLEVEL" symbolic-ref --quiet --short HEAD 2>/dev/null)" != "$DEF" ]; then
-    REF=$(git -C "$YT_TOPLEVEL" for-each-ref --sort=-committerdate --count=1 --format='%(refname)' \
-      "refs/heads/$DEF" "refs/remotes/origin/$DEF" 2>/dev/null)
+    # origin/<default> unless the local <default> contains it (unpushed
+    # commits). Ancestry, not committer dates: dates tie and can run backwards.
+    LREF="refs/heads/$DEF"; OREF="refs/remotes/origin/$DEF"
+    if git -C "$YT_TOPLEVEL" show-ref --verify --quiet "$OREF"; then
+      REF="$OREF"
+      if git -C "$YT_TOPLEVEL" show-ref --verify --quiet "$LREF" \
+        && git -C "$YT_TOPLEVEL" merge-base --is-ancestor "$OREF" "$LREF" 2>/dev/null; then REF="$LREF"; fi
+    elif git -C "$YT_TOPLEVEL" show-ref --verify --quiet "$LREF"; then
+      REF="$LREF"
+    fi
     [ -z "$REF" ] || PLAN_STATE=$(git -C "$YT_TOPLEVEL" show "$REF:.ytstack/STATE.md" 2>/dev/null)
   fi
 fi

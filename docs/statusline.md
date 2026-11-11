@@ -49,7 +49,7 @@ Keeping it current:
 
 Plan progress belongs to the repository, the task pointer to the checkout.
 
-- **Plan progress** is read from the default branch whenever the checkout is on another branch. A linked worktree or a feature branch carries a stale copy of `STATE.md`, so the script reads the file with `git show` from the newer of `origin/<default>` and the local `<default>`. The default branch is taken from `origin/HEAD`, else `main`, else `master`. On the default branch itself, and outside Git, the working tree file is used.
+- **Plan progress** is read from the default branch whenever the checkout is on another branch. A linked worktree or a feature branch carries a stale copy of `STATE.md`, so the script reads the file with `git show` from `origin/<default>`, or from the local `<default>` when it contains `origin/<default>` (unpushed commits). The two are compared by ancestry, not by commit date. The default branch is taken from `origin/HEAD`, else `main`, else `master`. On the default branch itself, and outside Git, the working tree file is used.
 - **The task pointer** (`M###/S##/T##`) always comes from the `STATE.md` of the directory you are in.
 - **The slice task count** of a project without a block follows the same rule as the block: off the default branch the slice plan named by the pointer is read from the default branch. Only when that slice plan does not exist there yet (a slice planned on the branch) is the copy in your directory counted. A slice that runs in a worktree therefore shows the merged count until its work lands.
 
@@ -61,11 +61,13 @@ Your status line script receives a JSON object on stdin. Pass it on and append t
 
 ```bash
 input=$(cat)
-yt=$(ls -d ~/.claude/plugins/cache/*/ytstack/*/bin/ytstack-status 2>/dev/null | sort -V | tail -1)
-seg=$([ -n "$yt" ] && printf '%s' "$input" | "$yt")
+yt=$(ls -d ~/.claude/plugins/cache/*/ytstack/*/bin/ytstack-status 2>/dev/null | sort -V | tail -1) || true
+seg=$([ -n "$yt" ] && printf '%s' "$input" | "$yt") || true
 ```
 
 Then print `$seg` where you want it, for example `printf '%s%s' "$line" "${seg:+ | $seg}"`.
+
+The script exits 1 when it has nothing to print, and the glob fails while the plugin is not installed. The `|| true` on both lines keeps a status line script that runs under `set -e` or `set -o pipefail` alive in those cases; `$seg` is then empty.
 
 The second line is the stable way to find the script. Plugin files live under a versioned directory that changes with every update, and Claude Code does not put a plugin's `bin/` on the `PATH` of the status line command. The glob picks the highest installed version, so the segment follows `/plugin update` without an edit. If you work from a local checkout, set `yt` to `<checkout>/bin/ytstack-status` instead.
 
