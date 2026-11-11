@@ -3,7 +3,7 @@ name: quick-task
 description: "Quick lane for a change the user can describe in one sentence (fix, tweak, rename, bump, small refactor) in a project with .ytstack/ and PREFERENCES quick_lane on: Q###-PLAN and Q###-SUMMARY under .ytstack/quick/, a verification command, no pitch, no review, no milestone bookkeeping. Not for new features, migrations, unknown root causes or more than about three files (plan-task, systematic-debugging)."
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.1.1
 allowed-tools:
   - Bash
   - Read
@@ -161,7 +161,7 @@ verification: passed
 Command: `{command}` -- passed. {one line of real output}
 ```
 
-Then flip the PLAN's `status: in-progress` to `status: done` (Edit) and bump `last_updated` in `STATE.md` (no pointer change: the quick lane does not touch `current_milestone` / `active_slice` / `active_task`).
+Then flip the PLAN's `status: in-progress` to `status: done` (Edit) and bump `last_updated` in `STATE.md` (no pointer change: the quick lane does not touch `current_milestone` / `active_slice` / `active_task`). If the frontmatter has a `progress:` block and this change completes an item the block counts, add 1 to `done` in the same edit (never above `total`) and run `yt_state_lint "$_YT_DIR"`; a quick task outside the counted plan leaves the block alone.
 
 ### Step 7: Report + return
 

@@ -3,7 +3,7 @@ name: summarize-task
 description: "Closes the active task: writes M###-S##-T##-SUMMARY.md with commits, outcome, deviations, follow-ups and the verification result, flips the slice-plan checkbox and advances STATE. Use when a task's verification passed, or when the user says task done, close the task, summarize. Not before verification passed and not for quick-lane changes (quick-task writes its own summary)."
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.1.1
   triggers:
     - summarize task
     - task done
@@ -38,7 +38,7 @@ You MUST create a TodoWrite task for each of these items:
 7. **Ask verification result** -- did the verification command pass?
 8. **Write `M###-S##-T##-SUMMARY.md`**
 9. **Flip slice-plan checkbox** `[ ]` → `[x]`
-10. **Update STATE.md** -- clear `active_task`, bump counts, update status line
+10. **Update STATE.md** -- clear `active_task`, bump counts (including a `progress:` block when present), update status line
 11. **Offer git stage** -- ask if user wants git-add of touched files
 12. **Report + return** -- suggest next task or slice-close
 
@@ -274,6 +274,8 @@ If `YTSTACK_NON_INTERACTIVE` is `true` (running as swarm teammate): skip frontma
 Regardless of teammate mode:
 - `last_updated: ...` → bump to current
 - Status line → `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} -- {N}/{TOTAL} tasks done in slice. Next task: pick from slice-plan or run `/ytstack:plan-task`.`
+
+**Progress block (M021):** if the `STATE.md` frontmatter has a `progress:` block, update it in the same edit. Add 1 to `done` when the closed task is an item the block counts. Tasks are the default unit; a project that counts something else says so in a comment line inside the block, and `done` / `total` then follow that ledger. If the closed task was added after `total` was set, raise `total` as well. Never write `done` above `total`. Then run `yt_state_lint "$_YT_DIR"`: a warning that starts with `progress:` means the edit is wrong; fix it before Step 11. As a swarm teammate skip the block with the other frontmatter writes and note the pending increment under Follow-ups in the summary. No block: do nothing and do not add one. `bin/ytstack-status` shows these numbers in the status line (`docs/statusline.md`).
 
 If the slice is now fully complete (all tasks `[x]`): update status to recommend `/ytstack:reassess-roadmap`, flip the slice's `status:` to `done` in `{SLICE_PLAN}` frontmatter, and when every slice in `{CURRENT_MILESTONE}-ROADMAP.md` is checked flip the milestone's `status:` to `done` there and mirror the global `ROADMAP.md` row (M018 artifact states).
 
