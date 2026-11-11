@@ -1,15 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-11T10:40:00Z
+last_updated: 2026-11-11T11:15:00Z
 current_milestone: M021
-active_slice: S01
+active_slice: S02
 active_task: T01
 ---
 
 # State
 
-**Status:** M021 / S01 / T01 planned -- ready to execute.
+**Status:** M021 / S01 done (2/2). Roadmap reassessed at the slice boundary: S02 stands as planned. M021 / S02 / T01 planned -- ready to execute.
 
 **Previous status (2026-10-13, PR #23 correction):** Removed the generated Codex skill/hook copies and build tooling. Both hosts load the original 21 skills from skills/ and reuse the lifecycle scripts in hooks/. Codex-specific runtime instructions live only in codex/adapter.md, supplied at SessionStart or read explicitly without trusted hooks. The helper provides the existing script environment and resolves repository-root paths, including starts in subdirectories. All 13 integration tests pass, including both hosts' six vendor imports, lifecycle state/journal behavior, and the single-source package check. Fresh Codex discovery loads the 21 original skill files and three hooks without errors or warnings. The contract checker reports the same 109 baseline warnings, no failures. The interactive desktop walkthrough remains a manual follow-up. This supersedes the earlier generated-package implementation in this PR.
 
@@ -85,7 +85,7 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-Execute M021-S01-T01 (test first), then `ytstack:summarize-task`.
+Execute M021-S02-T01, then `ytstack:summarize-task`.
 
 **Previous status:** **M019 DONE -- delivered as 0.4.2 (0.4.0 -> 0.4.1 Codex-support merge of PR #23 -> 0.4.2 Linux `stat` fix), pushed, CI green on `f2a439c`, issues #18/#24/#25/#27 closed, installed plugin on 0.4.2, gstack v1.96.0.0 installed and live-validated (`tests/gstack-live.test.sh` 39/39).** The public catalog (`Yesterday-AI/skills`) pins no version, so it tracks `plugin.json`. No milestone open; M020 candidates are listed in ROADMAP. 0.4.0 bundles M010 (adopt-brownfield), M018 (ceremony dials, quick-task, reconcile, minimal-code, STATE lint, states, layouts) and M019 (`metadata:` frontmatter + trigger-only descriptions, `evals/` for `claude plugin eval` + CI, six lifecycle skills `code-review` / `finish-branch` / `grill` / `retro` / `ship` / `document-release`, worktree-subagent execution model with Agent Teams opt-in, Stop hook, no plugin dependencies). Clean clone at the release commit: 12 suites green, checker 0 fails, validate clean; evals 10/11 + re-run of the changed cases. **No milestone is open**: the modernisation programme from the 2026-11-07 research is complete; `ytstack:plan-milestone` for M020 when there is a next goal (candidates: live dogfooding of `spawn-milestone-team` 0.2.0 on a real milestone; PowerShell hook variants if a Windows consumer appears; per-worktree pointer if the orchestrator model needs it). **Operator actions:** `git push origin main --tags` (v0.2.0, v0.3.0, v0.4.0 are local), `gh issue close 24 25 27` (evidence posted), `/plugin update` to 0.4.0, gstack install one-liner (QUICKSTART) for the six gstack-backed skills, catalog sync in `Yesterday-AI/skills` (version 0.4.0, README skill table), skills.sh listing refresh.
 

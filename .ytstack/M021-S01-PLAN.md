@@ -3,9 +3,9 @@ milestone: M021
 slice: S01
 project: ytstack
 created: 2026-11-11T10:25:52Z
-status: planned
+status: done
 task_count: 2
-completed_tasks: 0
+completed_tasks: 2
 ---
 
 # M021-S01 -- Slice Plan
@@ -14,8 +14,8 @@ completed_tasks: 0
 
 ## Tasks
 
-- [ ] T01 -- `yt_progress_parse` in `hooks/lib/git-ctx.sh` (reads STATE content on stdin; sets state none / ok / bad plus label, done, total, waiting_on) and lint finding W7 in `yt_state_lint` for a malformed block; cases in `tests/git-ctx.test.sh`.
-- [ ] T02 -- `bin/ytstack-status`: cwd from the status line JSON (`workspace.current_dir`, `cwd`, else `$PWD`), plan progress from the default branch outside it, task pointer from the local `STATE.md`, slice checkbox fallback, `waiting_on` truncation, `NO_COLOR` / `--no-color`, silent non-zero exit outside a project or on a malformed block; new `tests/ytstack-status.test.sh`.
+- [x] T01 -- `yt_progress_parse` in `hooks/lib/git-ctx.sh` (reads STATE content on stdin; sets state none / ok / bad plus label, done, total, waiting_on) and lint finding W7 in `yt_state_lint` for a malformed block; cases in `tests/git-ctx.test.sh`.
+- [x] T02 -- `bin/ytstack-status`: cwd from the status line JSON (`workspace.current_dir`, `cwd`, else `$PWD`), plan progress from the default branch outside it, task pointer from the local `STATE.md`, slice checkbox fallback, `waiting_on` truncation, `NO_COLOR` / `--no-color`, silent non-zero exit outside a project or on a malformed block; new `tests/ytstack-status.test.sh`.
 
 ## Done when
 

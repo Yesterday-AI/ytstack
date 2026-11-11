@@ -5,7 +5,7 @@ size: M
 created: 2026-11-11T10:25:52Z
 status: in-progress
 total_slices: 2
-completed_slices: 0
+completed_slices: 1
 ---
 
 # M021 Roadmap
@@ -26,7 +26,7 @@ completed_slices: 0
 
 Slice detail lives in per-slice `M021-S##-PLAN.md` files, created by `ytstack:slice-milestone`.
 
-- [ ] S01 -- `bin/ytstack-status` prints the progress segment for any directory, from one shared parser that the STATE lint also uses.
+- [x] S01 -- `bin/ytstack-status` prints the progress segment for any directory, from one shared parser that the STATE lint also uses.
 - [ ] S02 -- The block stays current without hand upkeep and a user can wire the segment into their status line from the documentation.
 
 ## Run order
