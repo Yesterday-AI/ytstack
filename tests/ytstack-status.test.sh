@@ -136,10 +136,17 @@ eq "detached HEAD: plan from main"          "0|V2 70% 7/10 · M003/S01/T04" "$(s
 C="$TMP/clone"; git clone -q "$D" "$C" 2>/dev/null
 ( cd "$C" && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false && git checkout -q -b topic )
 state "$D" M003 S01 T02 'progress:\n  label: V2\n  done: 8\n  total: 10\n'
-( cd "$D" && git add -A && GIT_COMMITTER_DATE="2099-01-01T00:00:00Z" git commit -qm "main state 8" ) >/dev/null 2>&1
+# The refs are compared by ancestry, not by committer date: the origin commit
+# is ahead but carries an older timestamp (equal timestamps tie the same way).
+( cd "$D" && git add -A && GIT_COMMITTER_DATE="2000-01-01T00:00:00Z" git commit -qm "main state 8" ) >/dev/null 2>&1
 git -C "$C" fetch -q origin 2>/dev/null
 state "$C" M003 S01 T05 ''
-eq "clone on a topic branch: newer origin/main wins" "0|V2 80% 8/10 · M003/S01/T05" "$(seg "$C")"
+eq "clone on a topic branch: origin/main ahead wins" "0|V2 80% 8/10 · M003/S01/T05" "$(seg "$C")"
+( cd "$C" && git checkout -q -f main && git merge -q --ff-only origin/main ) >/dev/null 2>&1
+state "$C" M003 S01 T02 'progress:\n  label: V2\n  done: 9\n  total: 10\n'
+( cd "$C" && git add -A && GIT_COMMITTER_DATE="1999-01-01T00:00:00Z" git commit -qm "local main state 9, unpushed" && git checkout -q topic ) >/dev/null 2>&1
+state "$C" M003 S01 T05 ''
+eq "clone on a topic branch: unpushed local main wins" "0|V2 90% 9/10 · M003/S01/T05" "$(seg "$C")"
 
 # slice count without a block: same source rule as the block. Off the default
 # branch the slice plan is read from the default ref (PR #32 review); the

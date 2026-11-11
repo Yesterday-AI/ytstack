@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-11
+
 ### Added
 
 - **Status line segment** (`bin/ytstack-status`, issue #31): one compact
@@ -17,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current task pointer. Plan progress is read from the default branch when
   the checkout is on another branch (linked worktrees), the pointer from the
   checkout. Local refs only, no network. Integration in `docs/statusline.md`.
+  The default ref is `origin/<default>`, or the local `<default>` when it
+  contains the remote one; the two are compared by ancestry.
 - `yt_progress_parse` in the shared library and STATE lint finding W7 for a
   malformed `progress` block; a malformed block prints nothing.
 - `summarize-task` and `quick-task` update the `progress` block when they
@@ -399,6 +403,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.5.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.5.0
 [0.4.2]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.0
