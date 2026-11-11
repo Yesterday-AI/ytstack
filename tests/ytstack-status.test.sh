@@ -141,15 +141,21 @@ git -C "$C" fetch -q origin 2>/dev/null
 state "$C" M003 S01 T05 ''
 eq "clone on a topic branch: newer origin/main wins" "0|V2 80% 8/10 · M003/S01/T05" "$(seg "$C")"
 
-# slice count without a block: belongs to the local pointer, so it is read
-# from the checkout even off the default branch (a slice executed in a
-# worktree flips its checkboxes there first)
+# slice count without a block: same source rule as the block. Off the default
+# branch the slice plan is read from the default ref (PR #32 review); the
+# checkout's copy is used only for a slice plan that does not exist there yet.
 E=$(new_repo slicewt); state "$E" M003 S01 T03; commit "$E" seed
 EW="$TMP/slicewt-wt"; git -C "$E" worktree add -q -b slice-work "$EW" >/dev/null 2>&1
 printf -- '---\nmilestone: M003\nslice: S01\n---\n# plan\n\n- [x] T01 -- one\n- [x] T02 -- two\n- [x] T03 -- three\n- [ ] T04 -- four\n- [ ] T05 -- five\n' > "$EW/.ytstack/M003-S01-PLAN.md"
 state "$EW" M003 S01 T04
-eq "linked worktree, no block: slice count is local" "0|M003/S01/T04 3/5" "$(seg "$EW")"
-eq "main checkout keeps its own count"               "0|M003/S01/T03 2/5" "$(seg "$E")"
+eq "linked worktree, no block: slice count from main, pointer local" "0|M003/S01/T04 2/5" "$(seg "$EW")"
+eq "main checkout: its own working tree"                             "0|M003/S01/T03 2/5" "$(seg "$E")"
+printf -- '---\nmilestone: M003\nslice: S02\n---\n# plan\n\n- [x] T01 -- one\n- [ ] T02 -- two\n' > "$EW/.ytstack/M003-S02-PLAN.md"
+state "$EW" M003 S02 T02
+eq "slice plan only in the worktree: local count"                    "0|M003/S02/T02 1/2" "$(seg "$EW")"
+mkdir -p "$E/.ytstack/milestones/M003"; git -C "$E" mv .ytstack/M003-S01-PLAN.md .ytstack/milestones/M003/; commit "$E" "nested layout"
+state "$EW" M003 S01 T04; rm -f "$EW/.ytstack/M003-S01-PLAN.md"
+eq "slice plan under milestones/M003/ on main"                       "0|M003/S01/T04 2/5" "$(seg "$EW")"
 
 # no default branch at all: working tree
 N="$TMP/nodef"; mkdir -p "$N/.ytstack"

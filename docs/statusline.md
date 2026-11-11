@@ -49,9 +49,9 @@ Keeping it current:
 
 Plan progress belongs to the repository, the task pointer to the checkout.
 
-- **Plan progress** (the `progress` block) is read from the default branch whenever the checkout is on another branch. A linked worktree or a feature branch carries a stale copy of `STATE.md`, so the script reads the file with `git show` from the newer of `origin/<default>` and the local `<default>`. The default branch is taken from `origin/HEAD`, else `main`, else `master`. On the default branch itself, and outside Git, the working tree file is used.
+- **Plan progress** is read from the default branch whenever the checkout is on another branch. A linked worktree or a feature branch carries a stale copy of `STATE.md`, so the script reads the file with `git show` from the newer of `origin/<default>` and the local `<default>`. The default branch is taken from `origin/HEAD`, else `main`, else `master`. On the default branch itself, and outside Git, the working tree file is used.
 - **The task pointer** (`M###/S##/T##`) always comes from the `STATE.md` of the directory you are in.
-- **The slice task count** of a project without a block goes with the pointer: it is read from the slice plan in the directory you are in. A slice that runs in a worktree flips its checkboxes there first, and the default branch may not have that slice plan yet.
+- **The slice task count** of a project without a block follows the same rule as the block: off the default branch the slice plan named by the pointer is read from the default branch. Only when that slice plan does not exist there yet (a slice planned on the branch) is the copy in your directory counted. A slice that runs in a worktree therefore shows the merged count until its work lands.
 
 Only local refs are read. The script makes no network calls and does not use `gh`; one run takes well under a tenth of a second.
 

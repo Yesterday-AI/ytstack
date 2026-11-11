@@ -14,9 +14,9 @@
 #
 # Plan progress is repository-wide: on any branch other than the default one
 # (a linked worktree carries a stale copy) STATE.md is read from the newer of
-# origin/<default> and <default>. The task pointer is always the local one,
-# and so is the slice checkbox count of the fallback: it describes the slice
-# the local pointer names, whose checkboxes are flipped in this checkout first.
+# origin/<default> and <default>, and so is the slice plan of the fallback
+# (the checkout's copy only when the slice plan does not exist there yet).
+# The task pointer is always the local one.
 # Local refs only: no network, no gh. See docs/statusline.md.
 
 set -uo pipefail
@@ -47,7 +47,7 @@ case "$M" in M[0-9][0-9][0-9])
 esac
 
 # ---- plan progress (default branch when we are not on it) --------------------
-PLAN_STATE=""
+PLAN_STATE=""; REF=""
 if [ "$YT_IS_GIT" = yes ] && [ "$YT_SCOPE" = project ]; then
   DEF=$(git -C "$YT_TOPLEVEL" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
   DEF=${DEF#origin/}
@@ -88,13 +88,21 @@ else
   OUT="$POINTER"
   # Fallback: task checkboxes of the active slice plan.
   case "$POINTER" in */S[0-9][0-9]*)
-    PLAN="$YT_DIR/$M-$S-PLAN.md"
-    [ -f "$PLAN" ] || PLAN=$(yt_find_artifacts "$YT_DIR" "$M-$S-PLAN.md" | head -1)
-    if [ -n "$PLAN" ] && [ -f "$PLAN" ]; then
-      TOTAL=$(grep -cE '^- \[[ xX]\] T[0-9][0-9]' "$PLAN")
-      DONE=$(grep -cE '^- \[[xX]\] T[0-9][0-9]' "$PLAN")
-      [ "${TOTAL:-0}" -eq 0 ] || OUT="$OUT $C_PLAN$DONE/$TOTAL$C_OFF"
-    fi ;;
+    # Same source rule as the block: the default ref when we are off the
+    # default branch; the checkout when the slice plan does not exist there.
+    TASKS=""
+    if [ -n "$REF" ]; then
+      TASKS=$(git -C "$YT_TOPLEVEL" show "$REF:.ytstack/$M-$S-PLAN.md" 2>/dev/null) \
+        || TASKS=$(git -C "$YT_TOPLEVEL" show "$REF:.ytstack/milestones/$M/$M-$S-PLAN.md" 2>/dev/null) || TASKS=""
+    fi
+    if [ -z "$TASKS" ]; then
+      PLAN="$YT_DIR/$M-$S-PLAN.md"
+      [ -f "$PLAN" ] || PLAN=$(yt_find_artifacts "$YT_DIR" "$M-$S-PLAN.md" | head -1)
+      [ -z "$PLAN" ] || TASKS=$(cat "$PLAN" 2>/dev/null)
+    fi
+    TOTAL=$(printf '%s\n' "$TASKS" | grep -cE '^- \[[ xX]\] T[0-9][0-9]')
+    DONE=$(printf '%s\n' "$TASKS" | grep -cE '^- \[[xX]\] T[0-9][0-9]')
+    [ "${TOTAL:-0}" -eq 0 ] || OUT="$OUT $C_PLAN$DONE/$TOTAL$C_OFF" ;;
   esac
 fi
 
