@@ -287,6 +287,32 @@ write_state "$NOW" M003 S01 T02
 printf -- '---\nmilestone: M003\nstatus: done\n---\n' > "$SL/.ytstack/M003-ROADMAP.md"
 case "$(lint "$SL/.ytstack")" in *"status: done"*) ok "lint: done milestone still current with open slice";; *) bad "lint: done but current" "$(lint "$SL/.ytstack")";; esac
 
+# ---- 13b. progress block (M021, issue #31) ------------------------------------
+echo "# progress block"
+# prog <frontmatter lines after the pointers>: "state|label|done|total|waiting|errors"
+prog() { printf -- '---\nproject: fx\ncurrent_milestone: M003\n%b---\n# State\n\nprogress:\n  label: BODY\n  done: 9\n  total: 9\n' "$1" \
+  | ( . "$LIB"; yt_progress_parse; printf '%s|%s|%s|%s|%s|%s' "$YT_PROGRESS" "$YT_PROGRESS_LABEL" "$YT_PROGRESS_DONE" "$YT_PROGRESS_TOTAL" "$YT_PROGRESS_WAITING" "$(printf '%s' "$YT_PROGRESS_ERRORS" | tr '\n' ';')" ); }
+eq "progress: no block -> none (body ignored)"   "none|||||" "$(prog '')"
+eq "progress: full block"                        "ok|V2|138|180|review of PR 12|" "$(prog 'progress:\n  label: V2          # short\n  done: 138\n  total: 180\n  waiting_on: "review of PR 12"\nactive_slice: S01\n')"
+eq "progress: without waiting_on"                "ok|V2|0|7||" "$(prog 'progress:\n  label: V2\n  done: 0\n  total: 7\n')"
+eq "progress: comment lines and unknown keys"    "ok|V2|1|7||" "$(prog 'progress:\n  # counts: tasks\n  label: V2\n  unit: tasks\n  done: 1\n  total: 7\n')"
+eq "progress: single quotes, hash inside quotes" "ok|V2|1|7|issue #31|" "$(prog "progress:\n  label: 'V2'\n  done: 1\n  total: 7\n  waiting_on: 'issue #31'\n")"
+eq "progress: key after the block is not part"   "ok|V2|1|7||" "$(prog 'progress:\n  label: V2\n  done: 1\n  total: 7\nlabel: other\ndone: 99\n')"
+case "$(prog 'progress:\n  label: V2\n  done: 8\n  total: 7\n')" in bad\|\|\|\|\|*"done 8 is greater than total 7"*) ok "progress: done > total -> bad, no values";; *) bad "progress: done > total" "$(prog 'progress:\n  label: V2\n  done: 8\n  total: 7\n')";; esac
+case "$(prog 'progress:\n  label: V2\n  done: 1.5\n  total: many\n')" in bad\|*done*integer*total*integer*) ok "progress: non-integers -> two errors";; *) bad "progress: non-integers" "$(prog 'progress:\n  label: V2\n  done: 1.5\n  total: many\n')";; esac
+case "$(prog 'progress:\n  label: V2\n  done: 0\n  total: 0\n')" in bad\|*"total"*) ok "progress: total 0 -> bad";; *) bad "progress: total 0";; esac
+case "$(prog 'progress:\n  done: 1\n  total: 2\n')" in bad\|*label*) ok "progress: missing label -> bad";; *) bad "progress: missing label";; esac
+case "$(prog 'progress:\n  label: this label is far too long\n  done: 1\n  total: 2\n')" in bad\|*label*16*) ok "progress: long label -> bad";; *) bad "progress: long label";; esac
+case "$(prog 'progress: 5\n')" in bad\|*block*) ok "progress: inline value -> bad";; *) bad "progress: inline value" "$(prog 'progress: 5\n')";; esac
+eq "progress: no frontmatter delimiters" "ok|V2|1|2||" "$(printf 'project: fx\nprogress:\n  label: V2\n  done: 1\n  total: 2\n\n# State\n' | ( . "$LIB"; yt_progress_parse; printf '%s|%s|%s|%s|%s|%s' "$YT_PROGRESS" "$YT_PROGRESS_LABEL" "$YT_PROGRESS_DONE" "$YT_PROGRESS_TOTAL" "$YT_PROGRESS_WAITING" "$YT_PROGRESS_ERRORS" ))"
+# lint W7
+printf -- '---\nmilestone: M003\nstatus: in-progress\n---\n' > "$SL/.ytstack/M003-ROADMAP.md"
+write_state_prog() { printf -- '---\nproject: fx\nlast_updated: %s\ncurrent_milestone: M003\nactive_slice: S01\nactive_task: T02\nprogress:\n%b---\n# State\n' "$NOW" "$1" > "$SL/.ytstack/STATE.md"; }
+write_state_prog '  label: V2\n  done: 3\n  total: 7\n'
+eq "lint: valid progress block -> 0 warnings" "0|" "$(lint "$SL/.ytstack")"
+write_state_prog '  label: V2\n  done: 9\n  total: 7\n'
+case "$(lint "$SL/.ytstack")" in 1\|*"progress: done 9 is greater than total 7"*) ok "lint: malformed progress block reported (W7)";; *) bad "lint: W7" "$(lint "$SL/.ytstack")";; esac
+
 # ---- 14. brownfield signals (M010, issue #18) --------------------------------
 echo "# brownfield signals"
 bf()  { ( . "$LIB"; yt_brownfield_signals "$1" >/dev/null; printf '%s' "$YT_BROWNFIELD_SIGNALS" ); }

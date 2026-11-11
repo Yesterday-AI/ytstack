@@ -385,6 +385,74 @@ yt_epoch() {
   printf '%s' "$e"
 }
 
+# ---- progress block (M021, issue #31) ---------------------------------------
+# yt_progress_parse: reads STATE.md content on stdin (a file or `git show`
+# output) and parses the optional frontmatter block
+#   progress:
+#     label: V2        # required, at most 16 characters
+#     done: 138        # integer
+#     total: 180       # integer >= 1, done <= total
+#     waiting_on: "…"  # optional
+# Sets YT_PROGRESS (none | ok | bad); on ok YT_PROGRESS_LABEL / _DONE / _TOTAL
+# / _WAITING; on bad YT_PROGRESS_ERRORS (one line per problem). Shared by
+# bin/ytstack-status and yt_state_lint so both agree on what is malformed.
+yt_progress_parse() {
+  local found="" inline="" label="" done="" total="" waiting="" e=""
+  YT_PROGRESS=none; YT_PROGRESS_LABEL=""; YT_PROGRESS_DONE=""; YT_PROGRESS_TOTAL=""
+  YT_PROGRESS_WAITING=""; YT_PROGRESS_ERRORS=""
+  { IFS= read -r found; IFS= read -r inline; IFS= read -r label; IFS= read -r done
+    IFS= read -r total; IFS= read -r waiting; } <<EOF
+$(awk '
+    function clean(v,   q, i) {
+      sub(/^[ \t]+/, "", v); sub(/[ \t\r]+$/, "", v)
+      q = substr(v, 1, 1)
+      if (q == "\"" || q == "\047") {
+        v = substr(v, 2); i = index(v, q)
+        return i > 0 ? substr(v, 1, i - 1) : v
+      }
+      if (v ~ /^#/) return ""
+      sub(/[ \t]+#.*$/, "", v)
+      return v
+    }
+    NR == 1 && /^---[ \t\r]*$/ { delim = 1; next }
+    /^---[ \t\r]*$/ { exit }
+    !delim && /^#/ { exit }
+    inb && /^[ \t]*$/ { next }
+    inb && /^[ \t]+#/ { next }
+    inb && /^[ \t]+[A-Za-z_]+:/ {
+      line = $0; sub(/^[ \t]+/, "", line)
+      k = line; sub(/:.*/, "", k)
+      val[k] = clean(substr(line, length(k) + 2))
+      next
+    }
+    inb { inb = 0 }
+    !found && /^progress:/ { found = 1; inb = 1; v = $0; sub(/^progress:/, "", v); inline = clean(v) }
+    END { print found + 0; print inline; print val["label"]; print val["done"]; print val["total"]; print val["waiting_on"] }
+  ' 2>/dev/null)
+EOF
+  [ "$found" = 1 ] || return 0
+  _yt_perr() { e="${e:+$e
+}progress: $1"; }
+  [ -z "$inline" ] || _yt_perr "must be a block with label, done and total, not the inline value '$inline'"
+  if [ -z "$label" ]; then _yt_perr "label is missing"
+  elif [ "${#label}" -gt 16 ]; then _yt_perr "label '$label' is longer than 16 characters"; fi
+  local k v nums=ok
+  for k in done total; do
+    eval "v=\$$k"
+    case "$v" in ''|*[!0-9]*|??????????*) _yt_perr "$k '$v' is not a non-negative integer"; nums=bad ;; esac
+  done
+  if [ "$nums" = ok ]; then
+    done=$((10#$done)); total=$((10#$total))
+    if [ "$total" -lt 1 ]; then _yt_perr "total must be at least 1"
+    elif [ "$done" -gt "$total" ]; then _yt_perr "done $done is greater than total $total"; fi
+  fi
+  unset -f _yt_perr
+  if [ -n "$e" ]; then YT_PROGRESS=bad; YT_PROGRESS_ERRORS="$e"; return 0; fi
+  YT_PROGRESS=ok; YT_PROGRESS_LABEL="$label"; YT_PROGRESS_DONE="$done"
+  YT_PROGRESS_TOTAL="$total"; YT_PROGRESS_WAITING="$waiting"
+  return 0
+}
+
 # ---- STATE pointer lint (M018) ----------------------------------------------
 # yt_state_lint <yt_dir>: sets YT_STATE_WARNINGS (one line per finding, "" when
 # clean) and YT_STATE_WARN_COUNT. Read-only. Findings:
@@ -392,6 +460,7 @@ yt_epoch() {
 #   W3 active task already summarized W4 slice/task set while milestone none
 #   W5 last_updated older than the newest commit touching <yt_dir>
 #   W6 current milestone marked done while a slice is still active
+#   W7 malformed `progress` block (one finding per problem)
 yt_state_lint() {
   local ytd="$1" sf="$1/STATE.md" m s t lu w="" n=0
   _yt_warn() { w="${w:+$w
@@ -444,6 +513,14 @@ yt_state_lint() {
     if [ "$(sed -n 's/^status: *//p' "$ytd/$m-ROADMAP.md" | head -1)" = done ]; then
       _yt_warn "$m-ROADMAP.md has status: done but STATE still points at $m / $s"
     fi
+  fi
+  # W7: malformed progress block
+  yt_progress_parse < "$sf"
+  if [ "$YT_PROGRESS" = bad ]; then
+    local pl
+    while IFS= read -r pl; do _yt_warn "$pl"; done <<EOF
+$YT_PROGRESS_ERRORS
+EOF
   fi
   YT_STATE_WARNINGS="$w"; YT_STATE_WARN_COUNT=$n
   unset -f _yt_warn
