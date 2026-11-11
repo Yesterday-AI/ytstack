@@ -14,7 +14,9 @@
 #
 # Plan progress is repository-wide: on any branch other than the default one
 # (a linked worktree carries a stale copy) STATE.md is read from the newer of
-# origin/<default> and <default>. The task pointer is always the local one.
+# origin/<default> and <default>. The task pointer is always the local one,
+# and so is the slice checkbox count of the fallback: it describes the slice
+# the local pointer names, whose checkboxes are flipped in this checkout first.
 # Local refs only: no network, no gh. See docs/statusline.md.
 
 set -uo pipefail

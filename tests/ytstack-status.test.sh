@@ -141,6 +141,16 @@ git -C "$C" fetch -q origin 2>/dev/null
 state "$C" M003 S01 T05 ''
 eq "clone on a topic branch: newer origin/main wins" "0|V2 80% 8/10 · M003/S01/T05" "$(seg "$C")"
 
+# slice count without a block: belongs to the local pointer, so it is read
+# from the checkout even off the default branch (a slice executed in a
+# worktree flips its checkboxes there first)
+E=$(new_repo slicewt); state "$E" M003 S01 T03; commit "$E" seed
+EW="$TMP/slicewt-wt"; git -C "$E" worktree add -q -b slice-work "$EW" >/dev/null 2>&1
+printf -- '---\nmilestone: M003\nslice: S01\n---\n# plan\n\n- [x] T01 -- one\n- [x] T02 -- two\n- [x] T03 -- three\n- [ ] T04 -- four\n- [ ] T05 -- five\n' > "$EW/.ytstack/M003-S01-PLAN.md"
+state "$EW" M003 S01 T04
+eq "linked worktree, no block: slice count is local" "0|M003/S01/T04 3/5" "$(seg "$EW")"
+eq "main checkout keeps its own count"               "0|M003/S01/T03 2/5" "$(seg "$E")"
+
 # no default branch at all: working tree
 N="$TMP/nodef"; mkdir -p "$N/.ytstack"
 ( cd "$N" && git init -q -b trunk && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false )
