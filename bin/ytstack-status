@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# ytstack status line segment (M021, issue #31).
+#
+# Prints one compact segment for the ytstack project that owns the current
+# directory, for a status line script to append:
+#
+#   V2 76% 138/180 · M021/S01/T02 · waiting: review of PR 12   (progress block)
+#   M021/S01/T02 3/7                                           (no block: slice checkboxes)
+#
+# Input: the status line JSON on stdin (only `cwd` is read); without it $PWD.
+# Output: the segment and exit 0, or nothing and exit 1 (no .ytstack, nothing
+# to show, malformed progress block; the STATE lint reports the last one).
+# Colour is on by default; NO_COLOR or --no-color turns it off.
+#
+# Plan progress is repository-wide: on any branch other than the default one
+# (a linked worktree carries a stale copy) STATE.md is read from the newer of
+# origin/<default> and <default>. The task pointer is always the local one.
+# Local refs only: no network, no gh. See docs/statusline.md.
+
+set -uo pipefail
+
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hooks/lib/git-ctx.sh"
+
+COLOR=yes
+[ -z "${NO_COLOR:-}" ] || COLOR=no
+[ "${1:-}" != "--no-color" ] || COLOR=no
+
+yt_read_stdin
+yt_git_ctx "${YT_CWD:-$PWD}"
+yt_resolve_yt_dir >/dev/null
+STATE_FILE="${YT_DIR:+$YT_DIR/STATE.md}"
+[ -n "$STATE_FILE" ] && [ -f "$STATE_FILE" ] || exit 1
+
+# ---- task pointer (local) ----------------------------------------------------
+M=$(sed -n 's/^current_milestone: *//p' "$STATE_FILE" | head -1)
+S=$(sed -n 's/^active_slice: *//p' "$STATE_FILE" | head -1)
+T=$(sed -n 's/^active_task: *//p' "$STATE_FILE" | head -1)
+POINTER=""
+case "$M" in M[0-9][0-9][0-9])
+  POINTER="$M"
+  case "$S" in S[0-9][0-9])
+    POINTER="$POINTER/$S"
+    case "$T" in T[0-9][0-9]) POINTER="$POINTER/$T" ;; esac ;;
+  esac ;;
+esac
+
+# ---- plan progress (default branch when we are not on it) --------------------
+PLAN_STATE=""
+if [ "$YT_IS_GIT" = yes ] && [ "$YT_SCOPE" = project ]; then
+  DEF=$(git -C "$YT_TOPLEVEL" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
+  DEF=${DEF#origin/}
+  if [ -z "$DEF" ]; then
+    for c in main master; do
+      if git -C "$YT_TOPLEVEL" show-ref --verify --quiet "refs/heads/$c"; then DEF=$c; break; fi
+    done
+  fi
+  if [ -n "$DEF" ] && [ "$(git -C "$YT_TOPLEVEL" symbolic-ref --quiet --short HEAD 2>/dev/null)" != "$DEF" ]; then
+    REF=$(git -C "$YT_TOPLEVEL" for-each-ref --sort=-committerdate --count=1 --format='%(refname)' \
+      "refs/heads/$DEF" "refs/remotes/origin/$DEF" 2>/dev/null)
+    [ -z "$REF" ] || PLAN_STATE=$(git -C "$YT_TOPLEVEL" show "$REF:.ytstack/STATE.md" 2>/dev/null)
+  fi
+fi
+if [ -n "$PLAN_STATE" ]; then
+  yt_progress_parse <<EOF
+$PLAN_STATE
+EOF
+else
+  yt_progress_parse < "$STATE_FILE"
+fi
+[ "$YT_PROGRESS" != bad ] || exit 1
+
+if [ "$COLOR" = yes ]; then C_PLAN=$'\033[36m'; C_WAIT=$'\033[33m'; C_OFF=$'\033[0m'; else C_PLAN=""; C_WAIT=""; C_OFF=""; fi
+
+if [ "$YT_PROGRESS" = ok ]; then
+  OUT="$C_PLAN$YT_PROGRESS_LABEL $((YT_PROGRESS_DONE * 100 / YT_PROGRESS_TOTAL))% $YT_PROGRESS_DONE/$YT_PROGRESS_TOTAL$C_OFF"
+  [ -z "$POINTER" ] || OUT="$OUT · $POINTER"
+  if [ -n "$YT_PROGRESS_WAITING" ]; then
+    # shortcut: cut by characters of the current locale; under LC_ALL=C a
+    # multi-byte character at the cut can be split.
+    W="$YT_PROGRESS_WAITING"
+    [ "${#W}" -le 32 ] || W="${W:0:32}…"
+    OUT="$OUT · ${C_WAIT}waiting: $W$C_OFF"
+  fi
+else
+  [ -n "$POINTER" ] || exit 1
+  OUT="$POINTER"
+  # Fallback: task checkboxes of the active slice plan.
+  case "$POINTER" in */S[0-9][0-9]*)
+    PLAN="$YT_DIR/$M-$S-PLAN.md"
+    [ -f "$PLAN" ] || PLAN=$(yt_find_artifacts "$YT_DIR" "$M-$S-PLAN.md" | head -1)
+    if [ -n "$PLAN" ] && [ -f "$PLAN" ]; then
+      TOTAL=$(grep -cE '^- \[[ xX]\] T[0-9][0-9]' "$PLAN")
+      DONE=$(grep -cE '^- \[[xX]\] T[0-9][0-9]' "$PLAN")
+      [ "${TOTAL:-0}" -eq 0 ] || OUT="$OUT $C_PLAN$DONE/$TOTAL$C_OFF"
+    fi ;;
+  esac
+fi
+
+printf '%s\n' "$OUT"
