@@ -797,3 +797,22 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** Keep Codex tool mappings in codex/adapter.md. The Codex SessionStart entry passes these as optional host context to the shared hook. Without trusted hooks, read the adapter explicitly before following skills. The small runtime helper supplies the shared scripts' existing CLAUDE_* inputs and resolves the repository root; those compatibility names do not require a Claude executable. All three lifecycle events use the original hook scripts. Do not reintroduce generated copies or a second skill tree.
 
 **Supersedes:** The earlier generated-package decision and per-skill Codex-link approach. The host-specific manifests, three-event Codex registration, hook trust, and repository-subdirectory fix remain.
+
+---
+
+## 2026-11-11: Status line progress is one optional `progress` block in STATE.md, read by a plugin script (M021, issue #31)
+
+**Context:** A project built its own status line segment by scraping a totals row out of a prose table in `STATE.md`. That works for one table and breaks silently when the prose changes. Claude Code plugins cannot set the main `statusLine`, and no documented path lets a status line command find plugin files across versions.
+
+**Options considered:**
+- A) A new progress file per project.
+- B) An optional `progress` block in the `STATE.md` frontmatter, with the slice plan checkboxes as fallback.
+- C) Several named tracks, or a `done` / `open` pair instead of `done` / `total`.
+
+**Chose:** B with exactly one track (`label`, `done`, `total`, optional `waiting_on`). `bin/ytstack-status` prints the segment; `yt_progress_parse` is the only parser and serves the script and the STATE lint (W7). Plan progress is read from the default branch when the checkout is on another branch, the task pointer from the checkout. The script is found by a glob over the plugin cache in the user's own status line script. SessionStart does not maintain a link.
+
+**Reason:** `STATE.md` exists in every project, already has machine-read frontmatter and is already linted. One parser means the segment and the lint cannot disagree, so a malformed block shows nothing instead of a wrong number. One track covers the case that motivated the issue; a list of tracks can be added later without breaking readers of the single block. A hook-maintained link would break the read-only contract of SessionStart and force every suite that fires the hook to isolate HOME.
+
+**How to apply:** New readers of the block call `yt_progress_parse`; do not add a second parser. Skills that advance STATE update the block (`summarize-task`, `quick-task`). The status script stays free of network calls and `gh`. C is open for a later milestone when a project needs it.
+
+**Supersedes:** None.
