@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Status line segment** (`bin/ytstack-status`, issue #31): one compact
+  line for a status line script. With an optional `progress` block in the
+  `STATE.md` frontmatter (`label`, `done`, `total`, `waiting_on`) it shows
+  label, percentage, done/total and the waiting item; without it the active
+  slice's task count from the slice plan checkboxes; in both cases the
+  current task pointer. Plan progress is read from the default branch when
+  the checkout is on another branch (linked worktrees), the pointer from the
+  checkout. Local refs only, no network. Integration in `docs/statusline.md`.
+- `yt_progress_parse` in the shared library and STATE lint finding W7 for a
+  malformed `progress` block; a malformed block prints nothing.
+- `summarize-task` and `quick-task` update the `progress` block when they
+  advance STATE.
+
 ### Changed
 
 - Docs only: CONTRIBUTING release checklist (fetch + merge before the

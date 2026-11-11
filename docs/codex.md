@@ -55,6 +55,10 @@ Codex itself supplies plugin-root compatibility aliases for hooks; the helper
 also resolves skill paths and the target repository root. No Claude executable
 is needed. Codex-specific tool mappings stay in `codex/adapter.md`.
 
+`bin/ytstack-status` prints the project's progress segment for a status line
+and is host-neutral: run it with the project as working directory or pipe a
+JSON object with a `cwd` field. See `docs/statusline.md`.
+
 ## Supported behavior
 
 | Capability | Codex support |
