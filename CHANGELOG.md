@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-11
+
 ### Added
 
 - **Status line segment** (`bin/ytstack-status`, issue #31): one compact
@@ -401,6 +403,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.5.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.5.0
 [0.4.2]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.0
