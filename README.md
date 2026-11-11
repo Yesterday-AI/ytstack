@@ -333,7 +333,8 @@ Ships:
 
 - 31 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), gstack wrappers over the installed dependency (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
 - 9 hooks (SessionStart / PreCompact / SessionEnd / Stop / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers + STATE lint + lifecycle hints.
-- Twelve shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks) and an eval suite for `claude plugin eval` (`evals/`, 13 cases).
+- A status line segment (`bin/ytstack-status`): project progress from an optional `progress` block in `STATE.md`, or the active slice's task count, plus the current task. See [`docs/statusline.md`](./docs/statusline.md).
+- Thirteen shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks) and an eval suite for `claude plugin eval` (`evals/`, 13 cases).
 - Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
 - Codex manifest + self-marketplace, shared skills, and 3 lifecycle hooks; see [host support](docs/codex.md#supported-behavior)
@@ -348,7 +349,8 @@ ytstack/
 ├── .ytstack/                    dogfood: ytstack tracks itself
 ├── hooks/                       8 hook scripts + hooks.json + lib/git-ctx.sh (shared resolver)
 ├── skills/                      21 skill packages
-├── tests/                       10 shell test suites + run-all.sh (--linux via Docker)
+├── bin/                         ytstack-check (contracts), ytstack-status (status line segment), ytstack-codex, dev-reinstall
+├── tests/                       13 shell test suites + run-all.sh (--linux via Docker)
 ├── vendor/                      read-only subtree: superpowers v7.0.2 (gstack is an installed dependency, not vendored)
 ├── docs/
 │   ├── ux/                      mandatory skill-authoring contracts

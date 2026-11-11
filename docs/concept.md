@@ -272,6 +272,8 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 
 **Ceremony dials and states (M018):** `PREFERENCES.md` `granularity` / `autonomy` / `quick_lane` / `minimal_code` (read via `yt_prefs`), milestone states `planned | in-progress | done | dropped | shipped-informally` (`docs/ux/skill-structure.md` "Artifact states"), STATE pointer lint (`yt_state_lint`, injected by `session-start`, enforced by `plan-task` / `summarize-task`), read-side layout tolerance (`yt_find_artifacts`).
 
+**Status line segment (M021):** `bin/ytstack-status` prints one compact line for a status line script: an optional `progress` block in the `STATE.md` frontmatter (`label`, `done`, `total`, `waiting_on`; parsed by `yt_progress_parse`, linted as W7 by `yt_state_lint`, kept current by `summarize-task` / `quick-task`) or, without it, the active slice's checkbox count, plus the task pointer. Plan progress is read from the default branch outside it, the pointer from the checkout. Details in `docs/statusline.md`.
+
 ### 3.5 Distribution (two marketplaces split by visibility, per-plugin own repos)
 
 Per DECISIONS 2026-04-25 (afternoon) "Marketplace architecture -- split into ystacks (public) + ystacks-internal (private), per-plugin own repos" -- supersedes the morning's "ystacks monorepo + catalog hybrid" decision (its catalog-only-with-some-subdirs model leaked private plugin names through a public catalog and made cross-marketplace deps fragile).
