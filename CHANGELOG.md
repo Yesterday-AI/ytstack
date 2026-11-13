@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Technical spec** (issue #36): every project gets `.ytstack/spec/SPEC.md`
+  (entry point, one page) and one `.ytstack/spec/<area>.md` per system area.
+  They say what applies now: behaviour, contracts, where it is implemented,
+  how a change is verified, which decisions are in force. Plans and summaries
+  stay the history. Where a project already has an authoritative document for
+  an area, the area file points at it (`sources`) and repeats nothing. Format
+  and maintenance rules: `docs/ux/spec-format.md`.
+- `bin/ytstack-spec`: `lint` (format), `drift` (areas whose `paths` changed
+  after their description or its source was last touched, as a prompt to
+  look), `impact` (a task plan's "Spec impact" against what the task changed),
+  `areas` (which area describes a path). Suite `tests/ytstack-spec.test.sh`.
+- `init-project` scaffolds the spec from the pitch, every area
+  `status: planned` and unverified. `adopt-brownfield` builds it over the
+  existing documents and its codebase map, and marks an area `implemented`
+  only after its code was read. For a project that already has `.ytstack/`
+  and no spec, `adopt-brownfield` adds only the spec.
+- `plan-task` writes a `## Spec impact` section (area and section, or `none`
+  with a reason). `summarize-task` does not close a task whose named area was
+  not updated: the area file or one of its `sources` has to have changed with
+  the task. The summary records the result under `## Spec`.
+- `code-review` and the verifier read the area files that cover the changed
+  paths against the change, and nothing else of the spec. `reassess-roadmap`
+  answers the drift report once per area at the slice boundary.
+- `bin/ytstack-check` lints ytstack's own `.ytstack/spec/` and fails when the
+  maintenance block in the two scaffolding skills differs from the format
+  document.
+- Eval case `spec-impact`; second outcome graders on `plan-task`,
+  `summarize-task`, `init-project` and `adopt-brownfield`.
+
+### Changed
+
+- `resume-session`, `handoff-session` and the closing line of the
+  SessionStart injection name `spec/SPEC.md` instead of restating how the
+  system behaves.
+- ytstack's own entry documents agree with the repository again
+  (`PROJECT.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `AGENTS.md`, the wrapper and
+  suite counts in README, QUICKSTART, NOTICE and `docs/concept.md`).
+
+### Upgrade notes
+
+- Existing projects have no spec yet. Run `/ytstack:adopt-brownfield` once:
+  it proposes the areas, asks one question and writes `.ytstack/spec/`. No
+  other artifact is touched.
+- Task plans written before this release have no `## Spec impact` section.
+  `summarize-task` then works the impact out at closure instead of refusing.
+
 ## [0.5.0] - 2026-11-11
 
 ### Added

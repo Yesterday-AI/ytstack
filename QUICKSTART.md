@@ -11,7 +11,7 @@ Code command names; in Codex select the corresponding skill from ytstack with
 ### Prerequisites
 
 - Claude Code >= 2.1.214 (the plugin's hooks use `fork`-session matching and `CLAUDE_PLUGIN_DATA`).
-- For the three planning skills (`office-hours`, `plan-ceo-review`, `plan-eng-review`): **gstack installed** at `~/.claude/skills/gstack` with **bun >= 1.4.2**. ytstack is tested against gstack v1.96.0.0:
+- For the six gstack-backed skills (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`): **gstack installed** at `~/.claude/skills/gstack` with **bun >= 1.4.2**. ytstack is tested against gstack v1.96.0.0:
 
   ```bash
   git clone --branch v1.96.0.0 https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd ~/.claude/skills/gstack && ./setup --no-browser)
@@ -101,7 +101,9 @@ You say:
 
 Agent fires `ytstack:init-project` (description: "Scaffold a ytstack project's `.ytstack/` directory... Use AFTER a pitch has been validated"). You get exactly one question: scope (project-level, committed to git, vs user-level, machine-local). That's it. No "what's the project name?" or "give me a one-liner" -- those come from `OFFICE-HOURS.md` frontmatter automatically. `PROJECT.md` is pre-populated. The pitch gets moved to `.ytstack/OFFICE-HOURS-<slug>.md` as a ytstack artifact.
 
-Result: `.ytstack/` with 6 core files + the consumed pitch.
+Then one more question: the areas of the technical spec, proposed from the parts your pitch names. Each area gets a file under `.ytstack/spec/`, marked `planned`: the approved design, nothing built, nothing verified.
+
+Result: `.ytstack/` with 6 core files, `spec/SPEC.md` plus one file per area, and the consumed pitch.
 
 ### 5. "Plan the first milestone"
 
@@ -163,7 +165,10 @@ Agent fires `ytstack:adopt-brownfield`:
 2. **Decide per artifact.** One question per slot: **reference** (pointer + one-line index, your file untouched; the default for decisions, docs and backlog), **extract** (distill the memory parts, keep the long form public; the default for PROJECT.md and RUNTIME.md), **move** (`git mv` into `.ytstack/` with a pointer left behind), or **leave**. Nothing is moved or deleted without your answer.
 3. **Codebase map.** Four read-only subagents write `.ytstack/codebase/stack.md`, `architecture.md`, `conventions.md`, `concerns.md` (60 lines each, real paths). `plan-milestone` and `plan-task` read these instead of re-discovering the stack.
 4. **Scaffold only the gaps.** `PROJECT.md` gets a **Validated** section ("already shipped, no pitch needed") and an **Adoption** table recording your choices; `KNOWLEDGE.md` is a link index over `docs/` with one-line summaries, not copies; `DECISIONS.md` lists your ADRs by reference; `RUNTIME.md` is derived from the manifests; `STATE.md` carries `tracker: none`.
-5. **Pointers.** A `## ytstack project memory` section lands in your `AGENTS.md`/`CLAUDE.md`; `.gitignore` gets the `.ytstack/.local/` line.
+5. **Technical spec.** One question: the areas of the system, proposed from the architecture map and your docs. Each area gets `.ytstack/spec/<area>.md`. Where one of your documents already describes the area, the file only points at it. An area is marked `implemented` only after its code was read against the description; the rest is `partial`, `planned` or `Unknown`.
+6. **Pointers.** A `## ytstack project memory` section lands in your `AGENTS.md`/`CLAUDE.md`; `.gitignore` gets the `.ytstack/.local/` line.
+
+**Already on ytstack, no spec yet?** Say "write the technical spec". `adopt-brownfield` then runs steps 3 (only for missing map files) and 5 and touches no other artifact.
 
 Then:
 
@@ -199,6 +204,7 @@ Open a new Claude Code session on the project. Before your first message, the `S
 Agent fires `ytstack:resume-session` -- reads `STATE.md` + `HANDOFF.md` + latest 3 task summaries and gives you a 3-paragraph briefing. For a richer snapshot, read the files directly:
 
 - `.ytstack/STATE.md` -- dashboard
+- `.ytstack/spec/SPEC.md` -- what applies now: the areas of the system, one file each (behaviour, where implemented, how to verify)
 - `.ytstack/ROADMAP.md` -- full milestone plan
 - `.ytstack/DECISIONS.md` -- architectural decisions log (append-only)
 - `.ytstack/KNOWLEDGE.md` -- patterns and gotchas learned

@@ -82,11 +82,13 @@ Install all three and you get friction: interactive prompts blocking each other,
 
 **Never lose context across sessions.** Every ytstack project gets a `.ytstack/` directory with `PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, and a milestone / slice / task hierarchy. Files are git-tracked Markdown. The same SessionStart hook injects the relevant state on every session start. The agent always knows where it is.
 
+**A technical spec that says what applies now.** Plans and summaries are history; they do not describe the system. `.ytstack/spec/SPEC.md` is a one-page entry point, `.ytstack/spec/<area>.md` describes one part of the system each: behaviour, contracts, where it is implemented, how to verify a change, which decisions are in force. Where you already have an architecture document, the area file points at it instead of repeating it. The loop keeps it true: a task plan names its spec impact, a task that changed behaviour is not closed until the area file or its source says so, and `bin/ytstack-spec drift` lists the areas whose code moved on. A fix that restores the described behaviour, a refactoring and a typo need no spec edit. An existing ytstack project gets its spec from `/ytstack:adopt-brownfield`, which then touches nothing else. Format: [`docs/ux/spec-format.md`](./docs/ux/spec-format.md).
+
 **Plan like a PM, execute like a senior eng.** Cherry-picked skills from gstack (CEO-review, office-hours, eng-review) lock the plan before code lands. Cherry-picked skills from superpowers (TDD, systematic-debugging, verification-before-completion) lock the code before it ships.
 
 **Parallel execution without a custom runtime.** `ytstack:spawn-milestone-team` turns the main session into a thin orchestrator: one `ytstack:implementer` subagent per slice in its own git worktree (`isolation: worktree`, skills preloaded, fresh context), one `ytstack:verifier` per finished slice branch, then a merge the orchestrator owns. Claude Code Agent Teams remain an opt-in (`team: on`) for milestones where teammates must talk to each other. No separate CLI, no SQLite, no TUI to babysit.
 
-**One namespace, upstreams consumed the way they want to be.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/superpowers/` is a read-only `git subtree` mirror pinned to an upstream tag (v7.0.2); we never modify it, we inline it. gstack is **not** vendored any more: it ships its skills as a Bun-powered install under `~/.claude/skills/gstack`, so ytstack's three planning wrappers check for that install (pinned v1.96.0.0) and invoke it through the Skill tool.
+**One namespace, upstreams consumed the way they want to be.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/superpowers/` is a read-only `git subtree` mirror pinned to an upstream tag (v7.0.2); we never modify it, we inline it. gstack is **not** vendored any more: it ships its skills as a Bun-powered install under `~/.claude/skills/gstack`, so ytstack's six gstack wrappers check for that install (pinned v1.96.0.0) and invoke it through the Skill tool.
 
 ## Workflows
 
@@ -305,7 +307,7 @@ Two kinds of state, two places (since 0.2.0; DECISIONS 2026-11-07):
 
 | Kind | Where | Written by | In git? |
 | --- | --- | --- | --- |
-| Project memory: `PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, `ROADMAP.md`, plans, summaries, the hand-written `HANDOFF.md` | `.ytstack/` in the checkout | you and the skills (`summarize-task`, `handoff-session`, ...) on purpose | yes |
+| Project memory: `PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, `ROADMAP.md`, the technical spec under `spec/`, plans, summaries, the hand-written `HANDOFF.md` | `.ytstack/` in the checkout | you and the skills (`summarize-task`, `handoff-session`, ...) on purpose | yes |
 | Volatile session state: automatic pre-compaction handoff (`HANDOFF.auto.md`), session journal (`session.jsonl`) | `${CLAUDE_PLUGIN_DATA}/repos/<repo-key>/worktrees/<worktree-key>/sessions/<session_id>/` with a `latest-handoff` symlink per worktree (fallback `.ytstack/.local/`, gitignored by `init-project`) | the `pre-compact` and `session-end` hooks | no |
 
 Every hook and skill preamble resolves the checkout from where the agent actually works (the hook payload's `cwd`, via `hooks/lib/git-ctx.sh`), never from `CLAUDE_PROJECT_DIR`, which Claude Code pins to the session-start directory and does not move into a linked worktree. Consequences you can rely on: a session that works in a worktree never dirties the shared main checkout; `HANDOFF.md` is never overwritten by a hook; the draft `T##-SUMMARY.md` stub appears only in the checkout that committed and only when the commit subject carries the task ref (`commit_ref_pattern` in `PREFERENCES.md`, default `^M###-S##-T##:`); `resume-session` reads the automatic handoff first and the manual one second and tells you which it used. `tests/run-all.sh` (also `--linux`) proves all of this.
@@ -334,7 +336,7 @@ Ships:
 - 31 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), gstack wrappers over the installed dependency (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
 - 9 hooks (SessionStart / PreCompact / SessionEnd / Stop / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers + STATE lint + lifecycle hints.
 - A status line segment (`bin/ytstack-status`): project progress from an optional `progress` block in `STATE.md`, or the active slice's task count, plus the current task. See [`docs/statusline.md`](./docs/statusline.md).
-- Thirteen shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks) and an eval suite for `claude plugin eval` (`evals/`, 13 cases).
+- Fourteen shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks, the repository's own technical spec) and an eval suite for `claude plugin eval` (`evals/`, 14 cases).
 - Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
 - Codex manifest + self-marketplace, shared skills, and 3 lifecycle hooks; see [host support](docs/codex.md#supported-behavior)
@@ -347,10 +349,10 @@ See `.ytstack/ROADMAP.md` for the task list, `.ytstack/STATE.md` for progress, `
 ytstack/
 ├── .claude-plugin/              plugin manifest + marketplace
 ├── .ytstack/                    dogfood: ytstack tracks itself
-├── hooks/                       8 hook scripts + hooks.json + lib/git-ctx.sh (shared resolver)
-├── skills/                      21 skill packages
-├── bin/                         ytstack-check (contracts), ytstack-status (status line segment), ytstack-codex, dev-reinstall
-├── tests/                       13 shell test suites + run-all.sh (--linux via Docker)
+├── hooks/                       9 hook scripts + hooks.json + lib/git-ctx.sh (shared resolver)
+├── skills/                      31 skill packages
+├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-status (status line segment), ytstack-codex, dev-reinstall
+├── tests/                       14 shell test suites + run-all.sh (--linux via Docker)
 ├── vendor/                      read-only subtree: superpowers v7.0.2 (gstack is an installed dependency, not vendored)
 ├── docs/
 │   ├── ux/                      mandatory skill-authoring contracts
