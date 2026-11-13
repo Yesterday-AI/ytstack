@@ -1,0 +1,732 @@
+#!/usr/bin/env bash
+# ytstack risk gate: whether a change may merge without a person (M025).
+# Format: docs/ux/review-policy-format.md.
+#
+#   ytstack-risk [-C DIR] floor --base SHA --head SHA
+#   ytstack-risk [-C DIR] route --plan FILE --base SHA --head SHA [--author WORKER]
+#   ytstack-risk [-C DIR] check
+#   ytstack-risk manifest EVIDENCE_DIR
+#
+# DIR is a directory of the repository (default: $PWD). A relative --plan and
+# a relative EVIDENCE_DIR are read from where the command was started.
+#
+# floor   reads the tree difference between two commits and prints
+#           floor: low | normal | person
+#           reason: <path or subject> -- <rule>   one per rule that raised it
+#           areas: <comma list or none>           the areas the change touches
+#           ceiling: none | low | normal          the lowest auto_merge of them
+#           lenses: <comma list or none>          the lenses the change requires
+#         The policy is read at --base, never from the working tree: the paths
+#         and auto_merge of the area files, REVIEW.md, evidence_dir. A change
+#         to one of them is itself "person", so a change cannot relax the
+#         route it takes. Globs are git pathspec globs, matched by git over
+#         the diff. A rule names at most five paths; the rest is counted.
+# route   computes the floor, reads the newest "- Round N:" line under
+#         "## Review" of the plan and prints
+#           route: unattended | person
+#           class: low | normal | high | person | unstated
+#           ceiling: none | low | normal
+#           floor: low | normal | person
+#           areas: <comma list or none>
+#           lenses: <comma list or none>
+#           reason: <path or subject> -- <what failed>   one per failed condition
+#         "unattended" needs all of: a floor that is not "person"; a newest
+#         round line that approves, states risk and "invariants: none", is by
+#         somebody other than --author and is valid for --head; a class (the
+#         higher of floor and stated risk) that is not above the ceiling; for
+#         every required lens a newest "- Lens <name>:" line that says pass,
+#         is by somebody other than --author and is valid for --head, and for
+#         "evidence: visual" a MANIFEST whose hashes match the images.
+#         Without --author the route is "person". A round is valid for a head
+#         when it names it, or when nothing but process records changed since;
+#         a lens line when no path under its "applies" changed since. A
+#         relative evidence directory is read from the root of the repository.
+# check   validates .ytstack/spec/REVIEW.md of the working tree.
+# manifest  writes EVIDENCE_DIR/MANIFEST: one line per image (png, jpg, jpeg,
+#         webp, gif) with its SHA-256 and its name. What a line already said
+#         about an image is kept. The reviewer fills in url, viewport, shows:
+#           <sha256>  <file name> | url: <url> | viewport: <w>x<h> | shows: <text>
+#
+# Exit codes
+#   floor   0 a result was printed; 64 usage; 65 git (no repository, a commit
+#           that does not exist)
+#   route   0 unattended; 10 person; 64 usage, also a plan file that does not
+#           exist; 65 git
+#   check   0 clean, or no REVIEW.md; 1 one line per problem; 64 usage
+#   manifest  0 written; 1 no directory, no image in it, or no sha256 tool;
+#           64 usage
+
+set -uo pipefail
+
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hooks/lib/git-ctx.sh"
+
+# The built-in "never low" patterns: a change to one of these paths is at
+# least "normal". A reviewed list. "## Never low" in REVIEW.md extends it;
+# nothing shortens it. One git pathspec glob per line; a "# " line names the
+# group that follows and is the text of the reason.
+NEVER_LOW='# dependency manifest or lock file (npm, pnpm, yarn, bun)
+**/package.json
+**/package-lock.json
+**/npm-shrinkwrap.json
+**/pnpm-lock.yaml
+**/pnpm-workspace.yaml
+**/yarn.lock
+**/bun.lock
+**/bun.lockb
+# dependency manifest or lock file (Python)
+**/pyproject.toml
+**/requirements*.txt
+**/setup.py
+**/setup.cfg
+**/Pipfile
+**/Pipfile.lock
+**/poetry.lock
+**/uv.lock
+# dependency manifest or lock file (Rust)
+**/Cargo.toml
+**/Cargo.lock
+# dependency manifest or lock file (Go)
+**/go.mod
+**/go.sum
+# dependency manifest or lock file (Ruby)
+**/Gemfile
+**/Gemfile.lock
+**/*.gemspec
+# dependency manifest or lock file (PHP)
+**/composer.json
+**/composer.lock
+# dependency manifest or lock file (JVM)
+**/pom.xml
+**/build.gradle
+**/build.gradle.kts
+**/settings.gradle
+**/settings.gradle.kts
+**/gradle.lockfile
+**/libs.versions.toml
+# migration or schema file
+**/migrations/**
+**/migrate/**
+**/prisma/**
+**/drizzle/**
+**/*.sql
+**/schema.*
+# container definition
+**/Dockerfile*
+**/Containerfile*
+**/docker-compose*
+**/compose.yml
+**/compose.yaml
+# infrastructure definition (Terraform, OpenTofu)
+**/*.tf
+**/*.tfvars
+# infrastructure definition (Helm, Kubernetes)
+**/Chart.yaml
+**/Chart.lock
+**/charts/**
+**/helm/**
+**/k8s/**
+**/kubernetes/**
+**/manifests/**'
+SIZE_LINES=400   # more changed lines than this: never low
+SIZE_FILES=20    # more changed files than this: never low
+SHOWN=5          # paths a rule names; the rest is counted
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+
+usage() { sed -n '5,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+case "$CMD" in floor|route|check|manifest) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+# The resolver falls back to $PWD for a missing directory: refuse it here.
+[ -d "$DIR" ] || { echo "ytstack-risk: -C '$DIR' is not a directory" >&2; exit 64; }
+
+yt_git_ctx "$DIR"
+yt_resolve_yt_dir >/dev/null
+TOP="$YT_TOPLEVEL"
+
+g() { git -C "$TOP" -c core.quotepath=off "$@"; }
+resolve() { g rev-parse --verify --quiet --end-of-options "$1^{commit}" 2>/dev/null; }
+short() { printf '%.7s' "$1"; }
+rank() { case "$1" in none) echo 0 ;; low) echo 1 ;; normal) echo 2 ;; high) echo 3 ;; *) echo 9 ;; esac; }
+# sha256_of <file>: sha256sum (Linux, newer macOS) or shasum (macOS).
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1" | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 < "$1" | cut -d' ' -f1
+  else return 1; fi
+}
+
+# ---- readers -------------------------------------------------------------------
+# fm <file>: frontmatter as "key<TAB>value" lines; list items repeat the key.
+# The same reader as in bin/ytstack-spec: keep the two in step.
+fm() {
+  awk '
+    NR == 1 { if ($0 != "---") exit; next }
+    $0 == "---" { exit }
+    /^[ \t]*#/ { next }
+    /^[A-Za-z_][A-Za-z0-9_]*:/ {
+      key = $0; sub(/:.*/, "", key)
+      val = $0; sub(/^[^:]*:[ \t]*/, "", val); sub(/[ \t]+$/, "", val)
+      if (val == "" || val == "[]") next
+      gsub(/^["'\'']|["'\'']$/, "", val)
+      print key "\t" val; next
+    }
+    /^[ \t]+-[ \t]+/ {
+      val = $0; sub(/^[ \t]+-[ \t]+/, "", val); sub(/[ \t]+$/, "", val)
+      gsub(/^["'\'']|["'\'']$/, "", val)
+      if (key != "" && val != "") print key "\t" val
+    }
+  ' "$1"
+}
+fm_get()  { fm "$1" | awk -F'\t' -v k="$2" '$1 == k { print $2; exit }'; }
+fm_list() { fm "$1" | awk -F'\t' -v k="$2" '$1 == k { print $2 }'; }
+
+# frontmatter, section <name>: the raw text of the frontmatter, and of one
+# "## " section outside code fences, of the Markdown file on stdin.
+frontmatter() { awk 'NR == 1 { if ($0 != "---") exit; next } $0 == "---" { exit } { print }'; }
+section() {
+  awk -v h="$1" '
+    NR == 1 && $0 == "---" { infm = 1; next }
+    infm { if ($0 == "---") infm = 0; next }
+    /^```/ { fence = !fence }
+    !fence && /^## / { t = $0; sub(/^## /, "", t); sub(/[ \t]+$/, "", t); on = (t == h); next }
+    on { print }
+  '
+}
+
+# review_parse: REVIEW.md on stdin as records, one per line:
+#   person|<glob>     neverlow|<glob>     size|<lines>|<files>
+#   lens|<name>|<applies, comma separated>|<reads, comma separated>|<evidence>|<skill>
+#   bad|<what is wrong>
+# Everything that can be judged without the file system is judged here, so
+# check and floor agree on what is malformed.
+review_parse() {
+  awk '
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
+    function bad(m) { gsub(/\|/, "/", m); print "bad|" m }
+    function list(s,   n, i, a, out) {
+      n = split(s, a, ","); out = ""
+      for (i = 1; i <= n; i++) { a[i] = trim(a[i]); if (a[i] != "") out = out (out == "" ? "" : ",") a[i] }
+      return out
+    }
+    /^```/ { fence = !fence; next }
+    fence { next }
+    /^## / {
+      sec = trim(substr($0, 4))
+      if (sec != "Always a person" && sec != "Never low" && sec != "Lenses" && sec != "Size") {
+        bad("section \047## " sec "\047 is not one of Always a person, Never low, Lenses, Size"); sec = ""
+      }
+      next
+    }
+    !/^[ \t]*-[ \t]+/ { next }
+    { item = $0; sub(/^[ \t]*-[ \t]+/, "", item); item = trim(item) }
+    sec == "Always a person" { print "person|" item; next }
+    sec == "Never low" { print "neverlow|" item; next }
+    sec == "Size" {
+      if (item ~ /^size:[ \t]*[0-9]+[ \t]+lines,[ \t]*[0-9]+[ \t]+files$/) {
+        l = item; sub(/^size:[ \t]*/, "", l); f = l
+        sub(/[ \t]+lines.*$/, "", l); sub(/^[0-9]+[ \t]+lines,[ \t]*/, "", f); sub(/[ \t]+files$/, "", f)
+        print "size|" l "|" f
+      } else bad("size line \047" item "\047 is not \047size: <n> lines, <m> files\047")
+      next
+    }
+    sec == "Lenses" {
+      n = split(item, part, "|"); name = trim(part[1])
+      applies = ""; reads = ""; ev = ""; skill = ""
+      for (i = 2; i <= n; i++) {
+        p = trim(part[i]); k = p; sub(/:.*/, "", k); v = trim(substr(p, length(k) + 2))
+        if (k == "applies") applies = list(v)
+        else if (k == "reads") reads = list(v)
+        else if (k == "evidence") ev = v
+        else if (k == "skill") skill = v
+        else bad("lens " name ": field \047" k "\047 is not applies, reads, evidence or skill")
+      }
+      if (name !~ /^[a-z0-9][a-z0-9-]*$/) bad("lens name \047" name "\047 is not a lowercase slug")
+      if (seen[name]++) bad("lens " name " is defined twice")
+      if (applies == "") bad("lens " name " has no applies")
+      if (reads == "") bad("lens " name " has no reads")
+      if (ev == "") bad("lens " name " has no evidence")
+      else if (ev != "visual" && ev != "none") bad("lens " name ": evidence \047" ev "\047 is not visual or none")
+      print "lens|" name "|" applies "|" reads "|" ev "|" skill
+    }
+  '
+}
+
+# ---- check ---------------------------------------------------------------------
+cmd_check() {
+  local f="${YT_DIR:+$YT_DIR/spec/REVIEW.md}" bad=0 n=0 kind a b c d e doc
+  [ $# -eq 0 ] || { usage >&2; return 64; }
+  if [ -z "$f" ] || [ ! -f "$f" ]; then echo "no review policy"; return 0; fi
+  while IFS='|' read -r kind a b c d e; do
+    case "$kind" in
+      bad) bad=$((bad + 1)); echo "REVIEW.md: $a" ;;
+      lens)
+        n=$((n + 1))
+        while IFS= read -r doc; do
+          [ -z "$doc" ] || [ -e "$TOP/$doc" ] || { bad=$((bad + 1)); echo "REVIEW.md: lens $a reads $doc, which does not exist"; }
+        done <<EOD
+$(printf '%s\n' "$c" | tr ',' '\n')
+EOD
+        ;;
+    esac
+  done <<EOF
+$(review_parse < "$f")
+EOF
+  [ "$bad" -eq 0 ] || return 1
+  echo "review policy ok: $n lens(es)"
+}
+
+# ---- the change ----------------------------------------------------------------
+# read_range <args>: sets BASE and HEADC to full commit ids, and for route
+# PLAN and AUTHOR.
+PLAN=""; AUTHOR=""
+read_range() {
+  local b="" h=""
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { echo "ytstack-risk: $1 needs a value" >&2; return 64; }
+    case "$CMD $1" in
+      *" --base") b="$2" ;;
+      *" --head") h="$2" ;;
+      "route --plan") PLAN="$2" ;;
+      "route --author") AUTHOR="$2" ;;
+      *) echo "ytstack-risk: unknown argument $1" >&2; return 64 ;;
+    esac
+    shift 2
+  done
+  [ -n "$b" ] && [ -n "$h" ] || { usage >&2; return 64; }
+  [ "$YT_IS_GIT" = yes ] || { echo "ytstack-risk: $DIR is not in a git repository" >&2; return 65; }
+  BASE=$(resolve "$b") || { echo "ytstack-risk: --base '$b' names no commit" >&2; return 65; }
+  HEADC=$(resolve "$h") || { echo "ytstack-risk: --head '$h' names no commit" >&2; return 65; }
+}
+
+# match_list <from> <to>: globs on stdin, one per line; prints the paths that
+# differ between the two commits and match one of them. A rename counts with
+# its old and its new path.
+match_list() {
+  local from="$1" to="$2" p
+  set --
+  while IFS= read -r p; do [ -z "$p" ] || set -- "$@" ":(glob)$p"; done
+  [ $# -gt 0 ] || return 0
+  g diff --name-only --no-renames "$from" "$to" -- "$@" 2>/dev/null
+}
+
+# note <class> <path or subject> <rule>: one reason. The class is person,
+# normal or route.
+note() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$W/reasons"; }
+
+# print_reasons [classes]: grouped by rule in the order they came up. With
+# classes (an ERE) only the reasons of those classes.
+print_reasons() {
+  awk -F'\t' -v shown="$SHOWN" -v keep="${1:-.}" '
+    $1 !~ keep { next }
+    { r = $3; if (!(r in n)) order[++k] = r; n[r]++; if (n[r] <= shown) line[r, n[r]] = $2 }
+    END {
+      for (i = 1; i <= k; i++) {
+        r = order[i]; m = (n[r] < shown ? n[r] : shown)
+        for (j = 1; j <= m; j++) print "reason: " line[r, j] " -- " r
+        if (n[r] > shown) print "reason: " (n[r] - shown) " more path(s) -- " r
+      }
+    }
+  ' "$W/reasons"
+}
+
+# is_record <path>: a process record of the work itself. Exempt from the
+# coverage rule and from the size count; every other rule applies to it.
+is_record() {
+  case "$1" in
+    .ytstack/STATE.md|.ytstack/LANES.md|.ytstack/KNOWLEDGE.md|.ytstack/ROADMAP.md) return 0 ;;
+    .ytstack/quick/*|.ytstack/questions/*|"$EVIDENCE"/*) return 0 ;;
+    .ytstack/M[0-9][0-9][0-9]-*-PLAN.md|.ytstack/M[0-9][0-9][0-9]-*-SUMMARY.md) return 0 ;;
+    .ytstack/M[0-9][0-9][0-9]-CONTEXT.md|.ytstack/M[0-9][0-9][0-9]-ROADMAP.md|.ytstack/M[0-9][0-9][0-9]-SUMMARY.md) return 0 ;;
+  esac
+  return 1
+}
+
+# spec_file <path>: SPEC.md or an area file is among the changed paths. Its
+# frontmatter and its rule sections are "person"; any other edit is ordinary
+# and, for an area file, touches that area.
+spec_file() {
+  local p="$1" name sec
+  name=${p#.ytstack/spec/}; name=${name%.md}
+  echo "$p" >> "$W/exempt"
+  if ! g cat-file -e "$BASE:$p" 2>/dev/null || ! g cat-file -e "$HEADC:$p" 2>/dev/null; then
+    note person "$p" "always a person: a file of the technical spec was added or deleted"; return 0
+  fi
+  if [ "$name" = SPEC ]; then
+    set -- "Invariants that hold everywhere"
+  else
+    set -- "Invariants and security boundaries" "Decisions that apply now"
+    [ "$(g show "$BASE:$p" | frontmatter)" = "$(g show "$HEADC:$p" | frontmatter)" ] \
+      || note person "$p" "always a person: frontmatter of an area file"
+    echo "$name" >> "$W/touched"
+  fi
+  for sec in "$@"; do
+    [ "$(g show "$BASE:$p" | section "$sec")" = "$(g show "$HEADC:$p" | section "$sec")" ] \
+      || note person "$p" "always a person: section \"$sec\""
+  done
+}
+
+# never_low_group <label> <pathspec>...
+never_low_group() {
+  local label="$1" p; shift
+  [ $# -gt 0 ] || return 0
+  g diff --name-only --no-renames "$BASE" "$HEADC" -- "$@" 2>/dev/null | while IFS= read -r p; do
+    note normal "$p" "never low: $label"
+  done
+}
+
+# compute: the floor of BASE..HEADC. Sets FLOOR, TOUCHED, CEILING and fills
+# $W/reasons.
+compute() {
+  local p name a am kind x rest glob out n=0 line label="" add del lines=0 files=0 applies reads ev
+  local lim_l=$SIZE_LINES lim_f=$SIZE_FILES
+  W=$(mktemp -d "${TMPDIR:-/tmp}/ytrisk.XXXXXX") || return 65
+  trap 'rm -rf "$W"' EXIT
+  mkdir -p "$W/area" "$W/yt"
+  : > "$W/reasons"; : > "$W/exempt"; : > "$W/covered"; : > "$W/touched"
+  g diff --name-only --no-renames "$BASE" "$HEADC" > "$W/changed" \
+    || { echo "ytstack-risk: git cannot compare $(short "$BASE") and $(short "$HEADC")" >&2; return 65; }
+
+  # The policy as the base has it.
+  AREAS=$(g ls-tree --name-only "$BASE" .ytstack/spec/ 2>/dev/null \
+    | sed -n 's|^\.ytstack/spec/\([a-z0-9][a-z0-9-]*\)\.md$|\1|p')
+  for a in $AREAS; do g show "$BASE:.ytstack/spec/$a.md" > "$W/area/$a.md" 2>/dev/null; done
+  g show "$BASE:.ytstack/spec/REVIEW.md" 2>/dev/null | review_parse > "$W/review"
+  g show "$BASE:.ytstack/PREFERENCES.md" > "$W/yt/PREFERENCES.md" 2>/dev/null
+  EVIDENCE=$(yt_pref "$W/yt" evidence_dir .ytstack/evidence); EVIDENCE=${EVIDENCE#./}; EVIDENCE=${EVIDENCE%/}
+  case "$EVIDENCE" in ""|/*|*..*) EVIDENCE=.ytstack/evidence ;; esac
+
+  # Always a person: the fixed paths.
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    case "$p" in
+      .ytstack/spec/REVIEW.md|.ytstack/DECISIONS.md|.ytstack/STANDING.md|.ytstack/PREFERENCES.md)
+        note person "$p" "always a person: rule document"; echo "$p" >> "$W/exempt" ;;
+      .github/workflows/*|.gitlab-ci.yml)
+        note person "$p" "always a person: the checks themselves"; echo "$p" >> "$W/exempt" ;;
+      .ytstack/spec/SPEC.md) spec_file "$p" ;;
+      .ytstack/spec/*.md)
+        name=${p#.ytstack/spec/}; name=${name%.md}
+        case "$name" in ""|*[!a-z0-9-]*) ;; *) spec_file "$p" ;; esac ;;
+    esac
+    case "${p##*/}" in AGENTS.md|CLAUDE.md)
+      note person "$p" "always a person: instruction file"; echo "$p" >> "$W/exempt" ;; esac
+  done < "$W/changed"
+
+  # The project's lists and its size limit.
+  while IFS='|' read -r kind x rest; do
+    glob="$x${rest:+|$rest}"
+    case "$kind" in
+      bad) note person .ytstack/spec/REVIEW.md "always a person: the policy at the base does not parse ($x)" ;;
+      person)
+        printf '%s\n' "$glob" | match_list "$BASE" "$HEADC" | while IFS= read -r p; do
+          note person "$p" "always a person: listed in REVIEW.md ($glob)"
+        done ;;
+      neverlow)
+        printf '%s\n' "$glob" | match_list "$BASE" "$HEADC" | while IFS= read -r p; do
+          note normal "$p" "never low: listed in REVIEW.md ($glob)"
+        done ;;
+      size) lim_l=$x; lim_f=$rest ;;
+    esac
+  done < "$W/review"
+
+  # Always a person: a path no area covers. An area file counts as covered by
+  # its own area; process records are exempt.
+  for a in $AREAS; do
+    out=$(fm_list "$W/area/$a.md" paths | match_list "$BASE" "$HEADC")
+    [ -z "$out" ] || { printf '%s\n' "$out" >> "$W/covered"; echo "$a" >> "$W/touched"; }
+  done
+  cat "$W/covered" "$W/exempt" > "$W/skip"
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    ! is_record "$p" || continue
+    if [ -n "$AREAS" ]; then note person "$p" "always a person: no area covers this path"; else n=$((n + 1)); fi
+  done <<EOF
+$(awk 'FILENAME == ARGV[1] { c[$0] = 1; next } !($0 in c)' "$W/skip" "$W/changed")
+EOF
+  [ "$n" -eq 0 ] || note person "$n path(s)" "always a person: no area covers them, .ytstack/spec/ has no area file at $(short "$BASE")"
+
+  # Never low: the built-in list. One git call when nothing matches, one per
+  # group otherwise.
+  if [ -n "$(printf '%s\n' "$NEVER_LOW" | grep -v '^#' | match_list "$BASE" "$HEADC")" ]; then
+    set --
+    while IFS= read -r line; do
+      case "$line" in
+        "") ;;
+        "# "*) never_low_group "$label" "$@"; label=${line#\# }; set -- ;;
+        *) set -- "$@" ":(glob)$line" ;;
+      esac
+    done <<EOF
+$NEVER_LOW
+EOF
+    never_low_group "$label" "$@"
+  fi
+
+  # Never low: size. A binary file is one file and no lines.
+  while IFS=$'\t' read -r add del p; do
+    [ -n "$p" ] || continue
+    ! is_record "$p" || continue
+    files=$((files + 1))
+    case "$add$del" in *[!0-9]*) ;; *) lines=$((lines + add + del)) ;; esac
+  done <<EOF
+$(g diff --numstat --no-renames "$BASE" "$HEADC")
+EOF
+  if [ "$lines" -gt "$lim_l" ] || [ "$files" -gt "$lim_f" ]; then
+    note normal size "never low: $lines changed lines in $files files, the limit is $lim_l lines and $lim_f files"
+  fi
+
+  if cut -f1 "$W/reasons" | grep -x person >/dev/null; then FLOOR=person
+  elif cut -f1 "$W/reasons" | grep -x normal >/dev/null; then FLOOR=normal
+  else FLOOR=low; fi
+
+  # The ceiling: the lowest auto_merge of the touched areas. No field, an
+  # unreadable value and no touched area are all "none".
+  TOUCHED=$(sort -u "$W/touched" | tr '\n' ',' | sed 's/,$//')
+  CEILING=""
+  for a in $(sort -u "$W/touched"); do
+    am=$(fm_get "$W/area/$a.md" auto_merge)
+    case "$am" in low|normal) ;; *) am=none ;; esac
+    if [ -z "$CEILING" ] || [ "$(rank "$am")" -lt "$(rank "$CEILING")" ]; then CEILING=$am; fi
+  done
+  CEILING=${CEILING:-none}
+
+  # The lenses the change requires: a changed path matches one of "applies".
+  # $W/lenses keeps name|applies|reads|evidence for route.
+  : > "$W/lenses"
+  while IFS='|' read -r kind x applies reads ev rest; do
+    [ "$kind" = lens ] || continue
+    [ -z "$(printf '%s\n' "$applies" | tr ',' '\n' | match_list "$BASE" "$HEADC")" ] \
+      || printf '%s|%s|%s|%s\n' "$x" "$applies" "$reads" "$ev" >> "$W/lenses"
+  done < "$W/review"
+  LENSES=$(cut -d'|' -f1 "$W/lenses" | tr '\n' ',' | sed 's/,$//')
+  return 0
+}
+
+cmd_floor() {
+  read_range "$@" || return $?
+  compute || return $?
+  echo "floor: $FLOOR"
+  print_reasons
+  echo "areas: ${TOUCHED:-none}"
+  echo "ceiling: $CEILING"
+  echo "lenses: ${LENSES:-none}"
+}
+
+# ---- route ---------------------------------------------------------------------
+# review_records: the list lines under "## Review" of the plan.
+review_records() {
+  awk '
+    /^```/ { fence = !fence }
+    !fence && /^## / { on = ($0 ~ /^## Review[ \t]*$/); next }
+    on && !fence && /^- / { print }
+  ' "$PLAN"
+}
+
+# record_fields: one "- Round N: <base>..<head> -- <verdict>; key: value; ..."
+# or "- Lens <name>: <head> -- <verdict>; key: value; ..." line on stdin, as
+# six lines: head, verdict, risk, invariants, by, evidence. A field the line
+# does not have is an empty line. Text after a ";" that starts with no known
+# key belongs to the field before it.
+record_fields() {
+  awk '
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
+    NR == 1 {
+      line = $0; sub(/^- [A-Za-z]+ [^:]*:[ \t]*/, "", line)
+      i = index(line, " -- ")
+      if (i == 0) { range = line; rest = "" } else { range = substr(line, 1, i - 1); rest = substr(line, i + 4) }
+      range = trim(range); sub(/^.*\.\./, "", range)
+      n = split(rest, f, ";"); verdict = trim(f[1]); key = ""
+      for (j = 2; j <= n; j++) {
+        p = trim(f[j]); k = p; sub(/:.*/, "", k)
+        if (k == "blocking" || k == "follow-ups" || k == "risk" || k == "invariants" || k == "by" || k == "evidence") {
+          key = k; val[k] = trim(substr(p, length(k) + 2))
+        } else if (key != "") val[key] = val[key] "; " p
+      }
+    }
+    END { print range; print verdict; print val["risk"]; print val["invariants"]; print val["by"]; print val["evidence"] }
+  '
+}
+
+# manifest_lines: a MANIFEST on stdin as "<sha256>|<file name>|<what the line
+# lacks>", or "bad||<the line>" for a line that is not
+#   <sha256>  <file name> | url: <url> | viewport: <w>x<h> | shows: <text>
+# Blank lines and "#" lines are skipped.
+manifest_lines() {
+  awk '
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
+    /^[ \t]*$/ || /^#/ { next }
+    {
+      n = split($0, part, / \| /); head = part[1]; sum = substr(head, 1, 64); name = trim(substr(head, 67))
+      if (length(sum) != 64 || sum ~ /[^0-9a-f]/ || substr(head, 65, 2) != "  " || name == "") { print "bad||" $0; next }
+      url = ""; view = ""; shows = ""
+      for (i = 2; i <= n; i++) {
+        p = trim(part[i]); k = p; sub(/:.*/, "", k); v = trim(substr(p, length(k) + 2))
+        if (k == "url") url = v; else if (k == "viewport") view = v; else if (k == "shows") shows = v
+      }
+      lacks = ""
+      if (url == "") lacks = "no url"
+      if (view !~ /^[0-9]+x[0-9]+$/) lacks = lacks (lacks == "" ? "" : ", ") "no viewport <w>x<h>"
+      if (shows == "") lacks = lacks (lacks == "" ? "" : ", ") "no shows"
+      print sum "|" name "|" lacks
+    }
+  '
+}
+
+# evidence_check <lens> <evidence field of its line>: the MANIFEST of a visual
+# lens lists at least one image, and every listed image is in the directory
+# with the listed SHA-256 and a complete line.
+evidence_check() {
+  local subject="lens $1" shown="${2% (*}" dir sum name lacks have n=0
+  case "$shown" in ""|none) note route "$subject" "its evidence is visual and its line names no evidence directory"; return 0 ;; esac
+  case "$shown" in /*) dir="$shown" ;; *) dir="$TOP/$shown" ;; esac
+  [ -d "$dir" ] || { note route "$subject" "the evidence directory $shown does not exist"; return 0; }
+  [ -f "$dir/MANIFEST" ] || { note route "$subject" "the evidence directory $shown has no MANIFEST"; return 0; }
+  while IFS='|' read -r sum name lacks; do
+    [ -n "$sum" ] || continue
+    n=$((n + 1))
+    if [ "$sum" = bad ]; then
+      note route "$subject" "a line of $shown/MANIFEST is not '<sha256>  <file name> | url: <url> | viewport: <w>x<h> | shows: <text>': $lacks"; continue
+    fi
+    case "$name" in */*) note route "$shown/$name" "$subject: the MANIFEST names a file outside the evidence directory"; continue ;; esac
+    [ -f "$dir/$name" ] || { note route "$shown/$name" "$subject: the MANIFEST lists an image that is not there"; continue; }
+    have=$(sha256_of "$dir/$name") || { note route "$subject" "no sha256sum and no shasum to check the images with"; return 0; }
+    [ "$have" = "$sum" ] || note route "$shown/$name" "$subject: the image does not have the SHA-256 the MANIFEST lists"
+    [ -z "$lacks" ] || note route "$shown/$name" "$subject: the MANIFEST line has $lacks"
+  done <<EOF
+$(manifest_lines < "$dir/MANIFEST")
+EOF
+  [ "$n" -gt 0 ] || note route "$subject" "$shown/MANIFEST lists no image"
+}
+
+# lens_check <name> <applies> <reads> <evidence>: the newest line of a
+# required lens says pass, is by somebody other than the author, is valid for
+# the head and carries the evidence the lens asks for.
+lens_check() {
+  local name="$1" applies="$2" reads="$3" ev="$4" subject="lens $1"
+  local doc line lhead verdict x1 x2 by evid lh moved
+  while IFS= read -r doc; do
+    [ -z "$doc" ] || g cat-file -e "$HEADC:$doc" 2>/dev/null \
+      || note route "$subject" "it reads $doc, which does not exist at $(short "$HEADC"): the lens cannot run"
+  done <<EOF
+$(printf '%s\n' "$reads" | tr ',' '\n')
+EOF
+  line=$(review_records | awk -v p="- Lens $name: " 'index($0, p) == 1' | tail -1)
+  if [ -z "$line" ]; then
+    note route "$subject" "the plan has no line for this lens under \"## Review\""; return 0
+  fi
+  { IFS= read -r lhead; IFS= read -r verdict; IFS= read -r x1; IFS= read -r x2; IFS= read -r by; IFS= read -r evid; } <<EOF
+$(printf '%s\n' "$line" | record_fields)
+EOF
+  [ "$verdict" = pass ] || note route "$subject" "its verdict is '$verdict', not pass"
+  if [ -z "$by" ]; then note route "$subject" "its line names no reviewer (by:)"
+  elif [ "$by" = "$AUTHOR" ]; then note route "$subject" "its reviewer '$by' is the author of the change"; fi
+  if ! lh=$(resolve "$lhead"); then
+    note route "$subject" "its line names '$lhead', which is no commit here"
+  elif [ "$lh" != "$HEADC" ]; then
+    moved=$(printf '%s\n' "$applies" | tr ',' '\n' | match_list "$lh" "$HEADC")
+    [ -z "$moved" ] || note route "$subject" "it looked at $(short "$lh") and $(printf '%s\n' "$moved" | grep -c .) path(s) under its applies changed since, first $(printf '%s\n' "$moved" | sed -n 1p): it is not valid for $(short "$HEADC")"
+  fi
+  [ "$ev" != visual ] || evidence_check "$name" "$evid"
+}
+
+# moved_since <commit>: the paths that differ between that commit and the
+# head and are no process records. Nothing: a record of that commit is valid
+# for the head.
+moved_since() {
+  local p
+  g diff --name-only --no-renames "$1" "$HEADC" | while IFS= read -r p; do
+    is_record "$p" || printf '%s\n' "$p"
+  done
+}
+
+cmd_route() {
+  local round rhead verdict risk inv by rh moved missing="" class name applies reads ev
+  read_range "$@" || return $?
+  [ -n "$PLAN" ] || { usage >&2; return 64; }
+  [ -f "$PLAN" ] || { echo "ytstack-risk: plan file '$PLAN' not found" >&2; return 64; }
+  compute || return $?
+
+  # The review: the newest round line approves this head, states the risk and
+  # no touched invariant, and comes from somebody other than the author.
+  [ -n "$AUTHOR" ] || note route review "no --author given: that the reviewer is not the author cannot be checked"
+  round=$(review_records | grep -E '^- Round [0-9]+:' | tail -1)
+  { IFS= read -r rhead; IFS= read -r verdict; IFS= read -r risk; IFS= read -r inv; IFS= read -r by; } <<EOF
+$(printf '%s\n' "$round" | record_fields)
+EOF
+  if [ -z "$round" ]; then
+    note route review "the plan has no round line under \"## Review\""
+  else
+    [ "$verdict" = approved ] || note route review "the newest round line says '$verdict', not approved"
+    [ -n "$risk" ] || missing="risk"
+    [ -n "$inv" ] || missing="${missing:+$missing, }invariants"
+    [ -n "$by" ] || missing="${missing:+$missing, }by"
+    [ -z "$missing" ] || note route review "the newest round line does not state: $missing"
+    case "$risk" in ""|low|normal|high) ;; *)
+      note route review "the newest round line states the risk '$risk', which is not low, normal or high" ;; esac
+    case "$inv" in ""|none) ;; *)
+      note route review "the reviewer named an invariant or decision the change touches: $inv" ;; esac
+    [ -z "$AUTHOR" ] || [ "$by" != "$AUTHOR" ] || note route review "the reviewer '$by' is the author of the change"
+    if ! rh=$(resolve "$rhead"); then
+      note route review "the newest round line names '$rhead', which is no commit here"
+    elif [ "$rh" != "$HEADC" ]; then
+      moved=$(moved_since "$rh")
+      [ -z "$moved" ] || note route review "the newest round reviewed $(short "$rh") and $(printf '%s\n' "$moved" | grep -c .) path(s) changed since, first $(printf '%s\n' "$moved" | sed -n 1p): it is not valid for $(short "$HEADC")"
+    fi
+  fi
+
+  # The class is the higher of floor and stated risk; it stays within the
+  # ceiling of the touched areas.
+  case "$FLOOR $risk" in
+    "person "*) class=person ;;
+    *" low"|*" normal"|*" high")
+      class=$risk; [ "$(rank "$FLOOR")" -le "$(rank "$risk")" ] || class=$FLOOR
+      [ "$(rank "$class")" -le "$(rank "$CEILING")" ] \
+        || note route class "$class is above the ceiling $CEILING of the touched areas (${TOUCHED:-none})" ;;
+    *) class=unstated ;;
+  esac
+
+  # The lenses the change requires.
+  while IFS='|' read -r name applies reads ev; do
+    [ -z "$name" ] || lens_check "$name" "$applies" "$reads" "$ev"
+  done < "$W/lenses"
+
+  if cut -f1 "$W/reasons" | grep -xE 'person|route' >/dev/null; then echo "route: person"; else echo "route: unattended"; fi
+  echo "class: $class"
+  echo "ceiling: $CEILING"
+  echo "floor: $FLOOR"
+  echo "areas: ${TOUCHED:-none}"
+  echo "lenses: ${LENSES:-none}"
+  # A never-low reason raised the floor and failed nothing: it is not printed.
+  print_reasons '^(person|route)$'
+  ! cut -f1 "$W/reasons" | grep -xE 'person|route' >/dev/null || return 10
+  return 0
+}
+
+# ---- manifest ------------------------------------------------------------------
+cmd_manifest() {
+  local dir="${1:-}" f name sum rest out="" n=0
+  [ $# -eq 1 ] || { usage >&2; return 64; }
+  [ -d "$dir" ] || { echo "ytstack-risk: '$dir' is not a directory" >&2; return 1; }
+  for f in "$dir"/*; do
+    [ -f "$f" ] || continue
+    name=${f##*/}
+    case "$name" in *.png|*.jpg|*.jpeg|*.webp|*.gif) ;; *) continue ;; esac
+    sum=$(sha256_of "$f") || { echo "ytstack-risk: no sha256sum and no shasum to hash the images with" >&2; return 1; }
+    # What the line of this image already said after the name is kept.
+    rest=""
+    [ ! -f "$dir/MANIFEST" ] || rest=$(awk -v n="$name" '
+      { i = index($0, " | "); if (i && substr($0, 67, i - 67) == n) { print substr($0, i); exit } }' "$dir/MANIFEST")
+    out="$out$sum  $name${rest:- | url:  | viewport:  | shows: }
+"
+    n=$((n + 1))
+  done
+  [ "$n" -gt 0 ] || { echo "ytstack-risk: no image (png, jpg, jpeg, webp, gif) in $dir" >&2; return 1; }
+  printf '%s' "$out" > "$dir/MANIFEST" || return 1
+  echo "$dir/MANIFEST: $n image(s); every line needs url, viewport and shows"
+}
+
+case "$CMD" in
+  floor)    cmd_floor "$@" ;;
+  route)    cmd_route "$@" ;;
+  check)    cmd_check "$@" ;;
+  manifest) cmd_manifest "$@" ;;
+esac

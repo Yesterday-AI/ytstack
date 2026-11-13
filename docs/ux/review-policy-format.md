@@ -18,25 +18,37 @@ The class of a change is the higher of two values: the **floor** a script comput
 
 ## The floor
 
-`bin/ytstack-risk floor --base <sha> --head <sha>` reads the diff and prints the lowest class the change can have, or `person` when no class is low enough for the route without a person.
+`bin/ytstack-risk floor --base <sha> --head <sha>` reads the difference between the two commits and prints the lowest class the change can have, or `person` when no class is low enough for the route without a person.
+
+```
+floor: low | normal | person
+reason: <path or subject> -- <rule>
+areas: <comma list or none>
+ceiling: none | low | normal
+lenses: <comma list or none>
+```
+
+There is one `reason:` line per path and rule that raised the floor. A rule names at most five paths and counts the rest in one more line. `areas` are the areas the change touches, `ceiling` is the lowest `auto_merge` among them (see "Ceilings"), `lenses` are the lenses the change requires (see "Lenses"). The exit code is 0 when a result was printed, 64 for a usage error and 65 when git cannot answer: no repository, or a commit that does not exist.
 
 **Always a person** (`person`):
 
 - a change to `.ytstack/spec/REVIEW.md`, `.ytstack/DECISIONS.md`, `.ytstack/STANDING.md`, `.ytstack/PREFERENCES.md`, or to an instruction file of the repository (`AGENTS.md`, `CLAUDE.md`, at any depth)
-- a change to the frontmatter of an area file, or to the text of its sections "Invariants and security boundaries" and "Decisions that apply now"; the same sections of `SPEC.md` ("Invariants that hold everywhere"). Other edits of an area file are ordinary: a task that changes behaviour updates "Behavior" in the same commits
+- a change to the frontmatter of an area file, or to the text of its sections "Invariants and security boundaries" and "Decisions that apply now"; the same section of `SPEC.md` ("Invariants that hold everywhere"); an area file or a `SPEC.md` that the change adds or deletes. Other edits of an area file are ordinary: a task that changes behaviour updates "Behavior" in the same commits
 - a change to the checks themselves: `.github/workflows/**`, `.gitlab-ci.yml`, and whatever the project lists
-- a changed path that no area covers (see "Ceilings"), other than the process records of the work itself
+- a changed path that no area covers (see "Ceilings"), other than the process records of the work itself. An area file counts as covered by its own area and touches it; `SPEC.md` needs no area. A renamed or deleted file counts with its old and its new path
 - every path the project lists under "Always a person"
 
 **Never low** (at least `normal`):
 
 - dependency manifests and lock files, migrations and schema files, container and infrastructure definitions; the built-in patterns are the list `NEVER_LOW` at the top of the script
-- more than 400 changed lines or more than 20 changed files (`size:` in `REVIEW.md` changes the two numbers)
+- more than 400 changed lines or more than 20 changed files (`size:` in `REVIEW.md` changes the two numbers). Changed lines are added plus deleted lines; a binary file is one file and no lines
 - every path the project lists under "Never low"
 
 The built-in lists cannot be shortened by the project, only extended. `REVIEW.md` is itself under "Always a person", so the policy cannot be relaxed on the route it governs.
 
-**Process records** are exempt from the coverage rule: the plan, summary and context files of milestones, slices and tasks, `STATE.md`, `LANES.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `quick/`, `questions/`, `evidence/`.
+**Process records** are exempt from the coverage rule and do not count towards the size. They are, under `.ytstack/`: the files `M###-CONTEXT.md`, `M###-ROADMAP.md`, `M###-...-PLAN.md` and `M###-...-SUMMARY.md`, `STATE.md`, `LANES.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `quick/` and `questions/`; and the evidence directory (`evidence_dir`, when it is a path inside the repository). Every other rule applies to them.
+
+**Where the policy is read.** The script reads the policy at the base commit, never from the working tree: the `paths` and `auto_merge` of the area files, `REVIEW.md` and `evidence_dir`. A change to one of them is itself `person`, so the base and the head agree whenever the floor is not `person`, and an edit that is not committed changes nothing. A `REVIEW.md` that does not parse at the base sends every change to a person. A repository without area files has no covered path: the floor is `person` with one reason for all paths.
 
 ## Ceilings: what an area allows
 
@@ -75,7 +87,7 @@ It is the highest class that may merge into this area without a person. No field
 - size: 400 lines, 20 files
 ```
 
-Paths are git pathspec globs relative to the repository root, one per line. Every section is optional.
+Paths are git pathspec globs relative to the repository root, one per line. Every section is optional. Git itself matches them, the way `bin/ytstack-spec lint` and `drift` read `paths`: `*` stays inside one directory, `**` crosses directories, and `**/name` also matches at the root.
 
 ## Lenses: what a kind of change requires
 
@@ -102,6 +114,14 @@ Rules for every lens:
 - It stores them under `<evidence dir>/<lane>/<short sha>/<lens>/` with a `MANIFEST` file: one line per image with its SHA-256, the URL, the viewport and what it shows. The evidence directory is `evidence_dir:` in `PREFERENCES.md`, default `.ytstack/evidence`; whether a project commits it is the project's choice.
 - No way to start the product, or no browser tool: the verdict is `not run`.
 
+A `MANIFEST` line:
+
+```
+<sha256>  <file name> | url: <url> | viewport: <w>x<h> | shows: <text>
+```
+
+The hash and the name are separated by two spaces, the way `sha256sum` prints them. The name is a file in the same directory. Blank lines and lines that start with `#` do not count. `bin/ytstack-risk manifest <dir>` writes the hash and the name for every image in the directory (`png`, `jpg`, `jpeg`, `webp`, `gif`) and keeps what a line already said; the reviewer fills in `url`, `viewport` and `shows`. `route` reads the evidence directory a lens line names in the working tree; a relative path starts at the root of the repository.
+
 The procedure is the skill `visual-review`.
 
 ## Records
@@ -115,6 +135,12 @@ A review leaves lines in the plan of what it reviewed (the slice plan for a slic
 - Lens ui: e4f5a6b -- pass; by: ui-M004-S02; evidence: .ytstack/evidence/M004-S02/e4f5a6b/ui (5 images)
 ```
 
+A lens line has this form, with `none` as evidence for a lens that asks for none:
+
+```
+- Lens <name>: <head> -- pass | fail | not run; by: <reviewer>; evidence: <dir> (<n> images) | none
+```
+
 The round line is the one `code-review` already writes, with three more fields. The reviewer's report states them with these labels:
 
 ```
@@ -126,16 +152,36 @@ Invariants touched: <none | area: the invariant or decision, in its own words>
 
 "Invariants touched" is answered by reading the change against "Invariants and security boundaries" and "Decisions that apply now" of every area the change touches. A change that shifts such a rule in code without editing the document is still named here, and its class is `high`.
 
-A record is **valid for a head** when it names that head, or when no file it covered changed between its head and that head (for a lens: the paths under `applies`).
+The script reads a record line tolerantly. After ` -- ` comes the verdict, then `key: value` fields separated by `;`. A round line without `risk`, `invariants` and `by` (the form `code-review` wrote before) is a round that states none of them. The newest line counts: the last round line under `## Review`.
+
+A round line is **valid for a head** when it names that head, or when nothing but process records changed between its head and that head. The plan that carries the line, a summary and `STATE.md` move the head without touching the change; a file of the change that came after the review does not. A lens line is valid for a head when it names that head, or when no path under its `applies` changed since.
 
 ## The route
 
-`bin/ytstack-risk route --plan <plan file> --base <sha> --head <sha> [--author <worker>]` prints `route: unattended` or `route: person`, and one `reason:` line per condition that failed. The route is `unattended` only when all of this holds:
+`bin/ytstack-risk route --plan <plan file> --base <sha> --head <sha> [--author <worker>]` decides between `unattended` and `person`:
+
+```
+route: unattended | person
+class: low | normal | high | person | unstated
+ceiling: none | low | normal
+floor: low | normal | person
+areas: <comma list or none>
+lenses: <comma list or none>
+reason: <path or subject> -- <what failed>
+```
+
+There is one `reason:` line per condition that failed, and none when the route is `unattended`. The subject of a reason is a path of the change, `size`, `review`, `class` or `lens <name>`. `class` is `person` when the floor is, and `unstated` when the newest round line states no risk.
+
+The exit code is 0 for `unattended` and 10 for `person`. 64 is a usage error, also a plan file that does not exist; 65 means git cannot answer. A caller treats everything but 0 as "not unattended".
+
+`--author` is the worker that made the change. The script compares it with `by:` of each record. Without `--author` it cannot tell the reviewer from the author, says so in a reason and routes to a person.
+
+The route is `unattended` only when all of this holds:
 
 1. The floor is not `person`.
-2. The plan has an approving round line that is valid for the head, with `risk` stated, `invariants: none`, and a reviewer other than the author.
-3. The class (the higher of floor and stated risk) is not above the ceiling of the touched areas.
-4. Every required lens has a line with `pass` that is valid for the head, from a reviewer other than the author; for `evidence: visual` the manifest exists and its hashes match the images.
+2. The newest round line of the plan approves, is valid for the head, states `risk` and `invariants: none`, and names a reviewer other than the author.
+3. The class (the higher of floor and stated risk) is not above the ceiling of the touched areas. A change that touches no area has the ceiling `none`.
+4. Every required lens has a newest line with `pass` that is valid for the head, from a reviewer other than the author, and its `reads` documents exist at the head. For `evidence: visual` the directory the line names holds a `MANIFEST` with at least one image; every listed image is there with the listed SHA-256, and its line states `url`, `viewport` and `shows`.
 
 The route says nothing about the host. `finish-lane` reads the host's gates (checks, review threads, mergeability, the reviewed commit) as before, and merges on its own only when both hold and `merge_by` is `risk`.
 
@@ -147,6 +193,8 @@ The route says nothing about the host. `finish-lane` reads the host's gates (che
 
 ## Checked mechanically
 
-`bin/ytstack-risk check` fails on a `REVIEW.md` with a section outside the four, a lens without `applies`, `reads` or `evidence`, an `evidence` outside the two values, a `reads` document that does not exist, a lens name used twice, and a `size` line that is not two numbers. `bin/ytstack-spec lint` fails on an `auto_merge` outside the three values.
+`bin/ytstack-risk check` reads the `REVIEW.md` of the working tree. It fails on a section outside the four, a lens whose name is not a lowercase slug, a lens without `applies`, `reads` or `evidence`, a lens field outside the five, an `evidence` outside the two values, a `reads` document that does not exist, a lens name used twice, and a `size` line that is not two numbers. It prints one line per problem (`REVIEW.md: <what is wrong>`) and exits 1; a clean policy and a project without `REVIEW.md` exit 0.
+
+`bin/ytstack-spec lint` runs that check when `REVIEW.md` exists and counts each line as a failure. It also fails on an `auto_merge` outside the three values and on a `REVIEW.md` that `SPEC.md` does not link.
 
 What stays a judgment: the class the reviewer states, and the verdict of a lens. The script makes sure the judgment was made by somebody else, on this commit, with the evidence the lens asks for.
