@@ -51,8 +51,16 @@ code is needed at all, whether it exists, whether the standard library or an
 existing dependency covers it, whether one line suffices, and only then write
 the minimum; never cut validation, security, accessibility or the one small
 test) is adapted from the ponytail project
-(<https://github.com/DietrichGebert/ponytail>, MIT). No ponytail text, code or
-assets are included; the prose is ytstack's own.
+(<https://github.com/DietrichGebert/ponytail>, MIT). Further concepts in the
+same file and in skills/code-review/SKILL.md follow ponytail 5.3.3 (reviewed
+2026-11-13): list what a change must reach before choosing the smallest
+solution, fix a bug once in the shared code after checking every caller, no
+test for a trivial change, a shortcut comment that names its limit and when to
+upgrade, review findings with a concrete case and what happens if they are
+skipped, a stated assumed load, and a closing "not checked" line. Applying
+these ideas to verification, review rounds and dispatched agents is ytstack's
+own extension. No ponytail text, code or assets are included; the prose is
+ytstack's own.
 
 ## External AI-first methodology
 

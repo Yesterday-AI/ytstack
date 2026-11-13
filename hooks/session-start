@@ -159,7 +159,7 @@ fi
 yt_prefs "$YT_DIR" >/dev/null
 MINIMAL_CODE_LINES=""
 if [ "${YT_PREF_MINIMAL_CODE:-on}" = on ]; then
-  MINIMAL_CODE_LINES="Minimal-code guard is on (PREFERENCES minimal_code). Before writing code, load ytstack:minimal-code via the Skill tool: climb the ladder (needed at all? exists in the codebase? stdlib? existing dependency? one line? otherwise the minimum that passes the test), never cut validation / auth / boundary error handling / accessibility / the one small test, mark deliberate shortcuts with a \`shortcut:\` comment."
+  MINIMAL_CODE_LINES="Minimal-code guard is on (PREFERENCES minimal_code): smallest complete change, smallest sufficient evidence. Before writing code or adding a check, load ytstack:minimal-code via the Skill tool: climb the ladder (needed at all? in the codebase? stdlib? existing dependency? one line?), never cut validation / auth / boundary error handling / accessibility / the one small test, run what the plan's Verification names and no more, end reports with 'Not checked:'."
 fi
 
 # Handoffs: the user-written one in the tree, the automatic one out of tree.
