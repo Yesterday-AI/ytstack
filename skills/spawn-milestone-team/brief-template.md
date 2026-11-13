@@ -1,5 +1,5 @@
 <!-- Skeleton of a worker brief. `bin/ytstack-brief render` fills the {{MARKERS}} from the plan and drops these comment lines. -->
-<!-- By hand: replace each marker with the named part of the plan (CONTRACT: the body of skills/minimal-code/SKILL.md; KIND and COMMIT_RULE: the sentences below for the lane's kind) and leave out a section whose marker has no value (Gates, Git). -->
+<!-- By hand: replace each marker with the named part of the plan (CONTRACT: the body of skills/minimal-code/SKILL.md; KIND and COMMIT_RULE: the sentences below for the lane's kind) and leave out a section whose marker has no value (Lens, Gates, Git). -->
 <!-- What stands in for a part the plan does not have: -->
 <!-- no-verification: No verification command in the plan. Stop and report this as a blocker. -->
 <!-- no-spec-impact: not stated in the plan -->
@@ -15,6 +15,20 @@
 <!-- round-review: You are not the author of this change, and you state its class; its author never does. If you wrote any part of it, stop and report that. After `Next:` the report carries four more labels, each at the start of a line: `Risk: <low | normal | high>`, `Severity: <what the worst plausible mistake in this change costs>`, `Reach: <what it can affect: these files, one area, several areas, stored data, users>` and `Invariants touched: <none | area: the invariant or decision, in its own words>`. -->
 <!-- round-review: `Risk:` follows from severity and reach, not from the size of the diff. `high`: the change touches an invariant or a decision that applies now, a security boundary, stored data or its shape, an interface another part or a user relies on, or a revert does not take it back. `low`: a mistake in it is contained and cheap to take back, and nothing a user or another part relies on changes (documentation, tests, comments, copy, an internal rename). `normal`: behaviour changes inside the contract of one area, and a revert takes it back. -->
 <!-- round-review: For `Invariants touched:` read the change against the sections "Invariants and security boundaries" and "Decisions that apply now" of every area file under "Read for context". Name a rule the change shifts with its area, in the document's own words, also when the change edits only code and leaves the document alone; its `Risk:` is then `high`. With no area file listed the answer is `none`, and `Not checked:` says so. -->
+<!-- The lens of a review, with `--lens <name>` (docs/ux/review-policy-format.md, "Lenses"): KIND ends with the lens-kind line in place of the round-review lines, and LENS is filled: the lens-intro line, the lens line of REVIEW.md, the lens-reads line, the `reads` documents as a list, the lens-rules lines, the lens-visual or the lens-none lines by the `evidence` of the lens, the lens-skill line when the lens names a skill, and the lens-report line. EVIDENCE is `<evidence_dir>/<ref>/<short sha>/<lens>`, EVIDENCE_ROOT the main checkout of the repository, SKILL_FILE the path of skills/visual-review/SKILL.md. Without `--lens` the section "Lens" is left out. -->
+<!-- lens-kind: This is a lens review: a second, independent review with one question, described under "Lens". Its verdict is `pass`, `fail` or `not run` and stands under `Lens:`. `Outcome:` says what you looked at and names the reviewed commit. -->
+<!-- lens-intro: This review is the lens `{{LENS_NAME}}` of the project's review policy (`.ytstack/spec/REVIEW.md`): -->
+<!-- lens-reads: Review the change against these documents, as they are at the reviewed commit, and against nothing else: -->
+<!-- lens-rules: You are not the author of this change and you start with a fresh context: this brief, the documents above and the pinned commit, nothing of the author's reasoning. If you wrote any part of the change, stop and report that. -->
+<!-- lens-rules: The verdict is `pass`, `fail` or `not run`. `fail` names each finding with the sentence of the document it breaks. If you could not do what the lens asks, the verdict is `not run` and the report says why. `not run` never counts as `pass`, and a partial look is no pass. -->
+<!-- lens-rules: A document above that you cannot read means the lens cannot run: `not run`. -->
+<!-- lens-visual: The evidence of this lens is visual: you look at the running product, not at its code. Load the skill `ytstack:visual-review` and follow it; on a host without a skill tool read `{{SKILL_FILE}}` and follow that. -->
+<!-- lens-visual: You start the product yourself, in a worktree of your own at the reviewed commit, through `bin/ytstack-runtime up`, and operate it in a browser. You take your own screenshots of the views, states and widths the change affects, and you look at each of them. Images from the author do not count. Reading code or the DOM does not count as this lens. -->
+<!-- lens-visual: Store the images with their `MANIFEST` under `{{EVIDENCE}}`. A relative path starts at the root of the main checkout of the repository (`{{EVIDENCE_ROOT}}`), not at your worktree: the route reads it there, and the lens line names it relative to that root. It is the one place you write to. -->
+<!-- lens-visual: No "Run" section in `RUNTIME.md`, a product that does not come up, or no browser tool that renders the page and returns a screenshot you can look at: the verdict is `not run`. -->
+<!-- lens-none: This lens asks for no evidence: the report says `Evidence: none`. -->
+<!-- lens-skill: The project names a skill for this lens: load `{{LENS_SKILL}}` before you start. -->
+<!-- lens-report: After `Next:` the report carries two more labels, each at the start of a line: `Lens: {{LENS_NAME}} -- <pass | fail | not run>` and `Evidence: <directory> (<n> images)`, or `Evidence: none` when there is none. -->
 <!-- kind-prepare: Prepare: write the files named under Scope and no others. -->
 <!-- kind-prepare: List every file you wrote under `Uncommitted:` in the report. -->
 <!-- commit-prepare: Commit nothing. -->
@@ -27,6 +41,10 @@
 ## Kind
 
 {{KIND}}
+
+## Lens
+
+{{LENS}}
 
 ## Scope
 
