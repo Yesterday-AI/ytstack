@@ -2,7 +2,7 @@
 name: code-review
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.2.0
 description: "Reviews the active task's commits with a fresh-context reviewer subagent and handles the feedback with technical rigor, through the vendored superpowers requesting-code-review and receiving-code-review procedures, with the task plan and commit range injected. Use after a task's commits exist and before summarize-task, before a merge or PR, or when the user says review this, code review, check my changes. Not for reviewing a plan (plan-eng-review) and not without commits for the task."
 allowed-tools:
   - Bash
@@ -64,6 +64,18 @@ echo "HEAD_SHA: $_HEAD_SHA"
 echo "COMMITS_BEGIN"
 echo "${_COMMITS:-(none)}"
 echo "COMMITS_END"
+# Technical spec (M022): the area files that cover what the task changed.
+_SPEC_EXISTS=$([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/spec/SPEC.md" ] && echo yes || echo no)
+_SPEC_TOOL="${CLAUDE_SKILL_DIR}/../../bin/ytstack-spec"
+echo "SPEC_EXISTS: $_SPEC_EXISTS"
+echo "SPEC_AREAS_BEGIN"
+if [ "$_SPEC_EXISTS" = yes ] && [ -f "$_SPEC_TOOL" ] && [ -n "$_BASE_SHA" ]; then
+  # shortcut: paths are split on whitespace; a path with a space finds no area.
+  # shellcheck disable=SC2046
+  bash "$_SPEC_TOOL" areas --names $(git diff --name-only "$_BASE_SHA..HEAD" 2>/dev/null | head -200) 2>/dev/null \
+    | sed "s|^|.ytstack/spec/|; s|\$|.md|"
+fi
+echo "SPEC_AREAS_END"
 ```
 
 ## ytstack invocation notes
@@ -72,10 +84,12 @@ You are invoked inside a ytstack project after the active task's commits exist. 
 
 HARD-GATE: if `IS_GIT=no`, abort. If `ACTIVE_TASK` has `none` in it or `TASK_PLAN_EXISTS=no`, abort with "no active task plan; run `ytstack:plan-task` or review a plain diff without ytstack". If `COMMITS_SOURCE=none` or `BASE_SHA=none`, abort with "no commits found for the task; commit with the `M###-S##-T##:` prefix (or set `commit_ref_pattern` in PREFERENCES) and re-run".
 
+**Spec check, bounded to the touched area.** When `SPEC_EXISTS=yes`, add to the reviewer's requirements the plan's `## Spec impact` section and the paths listed under `SPEC_AREAS` (the area files of `.ytstack/spec/` that cover the changed files). The reviewer reads those area files, and the section of a `sources` document they point to, against the diff. Two things are findings: the diff changes behaviour, an interface, an invariant or an error path that an area file describes while the plan says `none`; or an area file (or its source) now states something the diff contradicts. A change that restores the described behaviour needs no spec edit and is not a finding. The reviewer does not audit the rest of the spec, other areas or the repository's documentation.
+
 After the reviewer subagent returns, the vendored `receiving-code-review` procedure applies to its findings. ytstack additions:
 
 - Critical and Important findings fixed now get their own task-ref commits; Minor findings and "push-backs with reasoning" go into the task summary's Follow-ups (`ytstack:summarize-task` reads them from the conversation).
-- A finding that reveals a repo-wide pattern goes to `KNOWLEDGE.md`; a reversal of an earlier choice goes to `DECISIONS.md`, never silently.
+- A finding that reveals a repo-wide pattern goes to `KNOWLEDGE.md`; a reversal of an earlier choice goes to `DECISIONS.md`, never silently, and the area file it concerns lists the new entry under "Decisions that apply now" instead of the old one.
 - Do NOT run `ytstack:summarize-task` or `ytstack:verification-before-completion` automatically; name them as the next step.
 
 ## Vendored procedure 1: requesting (inlined verbatim)

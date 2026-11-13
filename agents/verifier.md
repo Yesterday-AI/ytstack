@@ -40,7 +40,8 @@ Your worktree starts from the default branch. If the brief names a slice branch 
    - Does the output show the expected signal (tests named, row counts, etc.)?
    - Are there unexpected warnings, skipped tests, deprecations that the implementer didn't flag?
 5. **Spot-check the Files section.** Do the files exist? Do they have non-trivial content? If the plan said "Create: src/auth.ts", does `src/auth.ts` exist and implement something?
-6. **Verdict:**
+6. **Check the spec claim, for the touched area only.** If the project has `.ytstack/spec/` and the plan has a `## Spec impact` section: for each area it names, confirm from the task's commits (`git log --name-only`) that `.ytstack/spec/<area>.md` or a path under its `sources` changed, and read the changed section against what the task did. If the plan says `none`, read the area file that covers the changed files (its `paths` frontmatter) and check that no statement in it is now false. A named area with no change, or a statement the task made false, is a FAIL with the file and the sentence. You do not read other areas and you do not audit the rest of the documentation.
+7. **Verdict:**
    - **PASS** -- command exits 0, output matches expectation, files exist with real content. Task closure approved.
    - **PASS WITH CAVEATS** -- exits 0 but with warnings / skips / unexplained output. Closure approved, but flag the caveats so the lead / summarize-task can log them in Deviations.
    - **FAIL** -- command exits non-zero, or output doesn't match expectation, or files are missing / stub content. Task closure REJECTED. Implementer must re-open the task.
