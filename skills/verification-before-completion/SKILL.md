@@ -2,7 +2,7 @@
 name: verification-before-completion
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.2.0
 description: "Evidence before any done claim, through the vendored superpowers verification-before-completion procedure with the current task's verification command injected. Use before a commit, before a PR, before summarize-task, before telling the user that something works. Not a substitute for test-first work during implementation (test-driven-development)."
 allowed-tools:
   - Bash
@@ -54,6 +54,11 @@ echo "TASK_PLAN: $_TASK_PLAN"
 echo "TASK_PLAN_EXISTS: $([ -f "$_TASK_PLAN" ] && echo yes || echo no)"
 echo "VERIFICATION_CMD_FOUND: $([ -n "$_VERIFICATION" ] && echo yes || echo no)"
 if [ -n "$_VERIFICATION" ]; then echo "VERIFICATION_CMD:"; echo "$_VERIFICATION"; fi
+# How often and where (M023): the plan's "Runs: ... Environment: ..." line, if it has one.
+_RUNS_LINE=""
+[ -f "$_TASK_PLAN" ] && _RUNS_LINE=$(awk '/^## Verification/{on=1; next} /^## /{on=0} on && /^Runs:/{print; exit}' "$_TASK_PLAN")
+echo "RUNS_LINE: ${_RUNS_LINE:-Runs: once. Environment: local checkout. (plan states nothing)}"
+echo "HEAD: $(git rev-parse --short HEAD 2>/dev/null || echo none)"
 ```
 
 ## ytstack invocation notes
@@ -61,6 +66,13 @@ if [ -n "$_VERIFICATION" ]; then echo "VERIFICATION_CMD:"; echo "$_VERIFICATION"
 The command(s) printed above are the current task's verification commands, extracted from the `## Verification` section of the task-plan. These are what the vendored procedure must actually execute and confirm output of; do not substitute a different "looks like it should work" command.
 
 HARD-GATE: if `TASK_PLAN_EXISTS=no` or `VERIFICATION_CMD_FOUND=no`, abort with: "No verification command in the active task-plan. Either run `ytstack:plan-task` to add one, or invoke this skill outside a ytstack task context where the user will provide the command." Do not invoke the vendored procedure without a command to verify.
+
+**How much evidence (ytstack).** Where the vendored text below and this paragraph differ, this paragraph applies.
+
+- Run the command as often as the plan's `Runs:` line says (`RUNS_LINE` above; once when the plan says nothing) and in the environment it names. Do not add passes, scenarios, suites or environments. A plan that asks for one pass of 44 scenarios is verified by 44, not by 88.
+- Evidence is the check, the commit and the environment together. Note `git rev-parse --short HEAD` with the output. The vendored rule "run it fresh before you claim" means: for the commit you are claiming about. A result for this commit in this environment, with output you can cite (your own earlier run in this session, a verifier verdict, CI for this SHA), is fresh; a new context alone does not expire it. A result for an older commit is not, and neither is a claim without output.
+- A check the project requires for every change (CI on the current head, a deployment check) stays required; a result for an earlier head does not count.
+- If the result does not establish what the task claims, say what is missing. Do not answer doubt with a second identical run.
 
 After the vendored procedure completes:
 - If verification passed: the user may now run `ytstack:summarize-task`.

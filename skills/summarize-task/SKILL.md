@@ -3,7 +3,7 @@ name: summarize-task
 description: "Closes the active task: writes M###-S##-T##-SUMMARY.md with commits, outcome, deviations, follow-ups and the verification result, flips the slice-plan checkbox and advances STATE. Use when a task's verification passed, or when the user says task done, close the task, summarize. Not before verification passed and not for quick-lane changes (quick-task writes its own summary)."
 metadata:
   tier: core
-  version: 0.2.0
+  version: 0.3.0
   triggers:
     - summarize task
     - task done
@@ -285,8 +285,12 @@ This section replaces the throwaway hook draft; it is the durable commit-to-task
 
 ## Verification
 
-Command: `{VERIFICATION_CMD}` -- {VERIFICATION_RESULT}.
+Command: `{VERIFICATION_CMD}` -- {VERIFICATION_RESULT} at `{short SHA the check ran on}` in {environment the plan names, default: local checkout}{, runs: N -- only when the plan asks for more than one}.
+
+Not checked: {what was not run or not looked at, and why; "nothing" only when that is true}
 ```
+
+The Verification line is the task's evidence: the check, the commit and the environment. It records the run that `ytstack:verification-before-completion` already made; closing a task is not a reason to run the check again (`ytstack:minimal-code`, "Evidence").
 
 ### Step 10: Flip slice-plan checkbox
 
