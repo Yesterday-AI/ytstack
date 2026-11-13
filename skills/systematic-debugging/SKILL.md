@@ -2,7 +2,7 @@
 name: systematic-debugging
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.1.1
 description: "Root-cause debugging through the vendored superpowers systematic-debugging procedure, with findings routed into KNOWLEDGE.md and DECISIONS.md. Use when hitting a bug, a failing test, flaky behaviour or any unexpected output, before proposing a fix. Not for a one-line fix with an obvious, already-known cause (quick-task)."
 allowed-tools:
   - Bash
@@ -49,6 +49,8 @@ echo "ACTIVE_TASK: $_T"
 You are invoked inside a ytstack project (or without -- systematic-debugging is useful outside ytstack too). The Iron Law from the vendored skill holds: no fixes until root cause is identified.
 
 HARD-GATE: none. Debugging may happen before ytstack is initialized.
+
+**A test that fails only sometimes.** Do not rerun it until it is green, and do not skip it. Raise the reproduction rate first: run it in a loop, alone and inside the full suite, with the same seed and with a changed one, and pin the randomness, the clock and the order. Then run the same test on the base commit. If it flakes there too, the flake is not this change's defect: it becomes a tracked follow-up with the reproduction rate and the conditions, and the required check on the current commit still has to turn green before the change is called done. If it fails only with the change, it is a defect of the change and goes through the root-cause procedure below. Where the vendored text and this paragraph differ, this paragraph applies.
 
 After the vendored procedure completes:
 - If `HAS_YTSTACK=yes` and the root cause reveals a project-level pattern (e.g. "config race between env-vars and config.json reads that will recur elsewhere"), append to `KNOWLEDGE.md` under `## Gotchas` or `## Lessons learned`.

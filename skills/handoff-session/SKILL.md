@@ -3,7 +3,7 @@ name: handoff-session
 description: "Writes a hand-authored HANDOFF.md so the next session, machine or teammate continues without re-explanation. Use when the user says handoff, pause work, save context for later, or before switching machines, a long break or a deliberate context clear. Not for routine session ends (the SessionEnd hook writes an automatic handoff) and not for closing a task (summarize-task)."
 metadata:
   tier: task
-  version: 0.1.1
+  version: 0.1.2
   triggers:
     - handoff session
     - pause work
@@ -101,6 +101,8 @@ Remember as `_WARNINGS`.
 
 **Point, do not copy.** A handoff carries what exists nowhere else: what was in flight, the next step, what is undecided, what is easy to miss. It does not restate how the system behaves or what a plan says. Where the answers of Steps 3 to 6 describe behaviour or scope, replace the description with the path that holds it: the area file under `.ytstack/spec/`, the task plan, the decision entry.
 
+**Suggested skills.** Pick the one or two ytstack skills the next session should start with, from `_NEXT_ACTION` and not as a list of everything that might apply: for example `ytstack:resume-session`, then `ytstack:plan-task`. They go into the handoff's "Suggested skills" section, one line each, with half a sentence why.
+
 **Step 7 -- Write HANDOFF.md.** Use Write tool. Path: `{YT_DIR}/HANDOFF.md`. This file is user-owned: since M016 no hook writes it (automatic pre-compaction breadcrumbs live out of tree and `resume-session` reads both), so whatever is there was written by a person or by this skill -- read it before overwriting and carry forward anything still open.
 
 ```markdown
@@ -133,6 +135,10 @@ Written by the user via `/ytstack:handoff-session` at {ISO_TIMESTAMP}.
 ## Next action
 
 {NEXT_ACTION}
+
+## Suggested skills
+
+- `ytstack:{skill}` -- {half a sentence: why the next session starts with it}
 
 ## Open decisions blocking progress
 
