@@ -668,6 +668,72 @@ def check_gstack_wrappers(root):
     return fails, warns
 
 
+# ---------- check: the repository's own technical spec (M022) ----------
+
+def check_spec(root):
+    """ytstack keeps its own .ytstack/spec/ (docs/ux/spec-format.md). Format
+    errors fail; an area whose paths moved on without its description is a
+    warning to look, never a failure. Skipped when the tree has no spec."""
+    import subprocess
+    fails = []
+    warns = []
+    tool = root / "bin" / "ytstack-spec"
+    if not (root / ".ytstack" / "spec").is_dir() or not tool.is_file():
+        return fails, warns
+    lint = subprocess.run(["bash", str(tool), "-C", str(root), "lint"], capture_output=True, text=True)
+    for line in lint.stdout.splitlines():
+        if line.startswith("FAIL "):
+            fails.append(f"spec: {line[5:]}")
+        elif line.startswith("warn "):
+            warns.append(f"spec: {line[5:]}")
+    if lint.returncode not in (0, 1, 2):
+        fails.append(f"spec: ytstack-spec lint exit {lint.returncode}: {lint.stderr.strip()[:200]}")
+    drift = subprocess.run(["bash", str(tool), "-C", str(root), "drift"], capture_output=True, text=True)
+    for line in drift.stdout.splitlines():
+        if "possible documentation impact" in line:
+            warns.append(f"spec: {line}")
+    return fails, warns
+
+
+_KEEPING_COPIES = ("skills/init-project/SKILL.md", "skills/adopt-brownfield/SKILL.md")
+
+
+def _keeping_block(text):
+    """The bullets under the first '## Keeping this true' heading."""
+    out = []
+    on = False
+    for line in text.split("\n"):
+        if line.strip() == "## Keeping this true":
+            on = True
+            continue
+        if on:
+            if line.startswith("```") or line.startswith("## "):
+                break
+            if line.startswith("- "):
+                out.append(line.strip())
+    return out
+
+
+def check_keeping_block(root):
+    """The 'Keeping this true' section of SPEC.md is the maintenance rule a
+    session without hooks or skills finds in the repository. The scaffolding
+    skills carry it verbatim; a copy that drifts from docs/ux/spec-format.md
+    ships a different rule into every new project."""
+    fails = []
+    src = root / "docs" / "ux" / "spec-format.md"
+    if not src.is_file():
+        return fails, []
+    want = _keeping_block(src.read_text(encoding="utf-8", errors="replace"))
+    for rel in _KEEPING_COPIES:
+        path = root / rel
+        if not path.is_file():
+            continue
+        got = _keeping_block(path.read_text(encoding="utf-8", errors="replace"))
+        if got != want:
+            fails.append(f"{rel}: the 'Keeping this true' block differs from docs/ux/spec-format.md (copy it verbatim)")
+    return fails, []
+
+
 # ---------- main ----------
 
 def main():
@@ -718,6 +784,14 @@ def main():
 
     # gstack wrappers (M017): installed-dependency contract
     f, w = check_gstack_wrappers(root)
+    all_fails.extend(f)
+    all_warns.extend(w)
+
+    # Technical spec (M022): format of .ytstack/spec/, areas to look at
+    f, w = check_spec(root)
+    all_fails.extend(f)
+    all_warns.extend(w)
+    f, w = check_keeping_block(root)
     all_fails.extend(f)
     all_warns.extend(w)
 
