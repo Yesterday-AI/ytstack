@@ -12,6 +12,7 @@ verification: passed
 ## Commits
 
 - The commit that carries this file (`M025-S02-T03: bin/ytstack-risk route`).
+- `M025-S02-T03: by: self counts as the author in route`: a session that reviewed its own change writes `by: self`; as first built, that line passed whenever `--author` named somebody else.
 
 ## Outcome
 

@@ -174,7 +174,7 @@ There is one `reason:` line per condition that failed, and none when the route i
 
 The exit code is 0 for `unattended` and 10 for `person`. 64 is a usage error, also a plan file that does not exist; 65 means git cannot answer. A caller treats everything but 0 as "not unattended".
 
-`--author` is the worker that made the change. The script compares it with `by:` of each record. Without `--author` it cannot tell the reviewer from the author, says so in a reason and routes to a person.
+`--author` is the worker that made the change. The script compares it with `by:` of each record. Without `--author` it cannot tell the reviewer from the author, says so in a reason and routes to a person. `by: self` is what a session writes that reviewed its own change: it counts as the author in a round line and in a lens line, whatever `--author` names.
 
 The route is `unattended` only when all of this holds:
 
