@@ -1,0 +1,238 @@
+#!/usr/bin/env bash
+# ytstack brief: the prompt a dispatched worker gets, and the check of its report.
+#
+#   ytstack-brief [-C DIR] render --task M###-S##-T## [--branch NAME] [--base NAME]
+#   ytstack-brief [-C DIR] render --slice M###-S##   [--branch NAME] [--base NAME]
+#   ytstack-brief check [FILE]             validate a worker's report (FILE or stdin)
+#
+# render prints one Markdown brief on stdout, built from the plan files under
+# the .ytstack directory of DIR (default: $PWD): outcome, scope, what to read,
+# verification, spec impact, gates, the Git instructions (only with --branch;
+# --base defaults to the current branch of DIR), the work contract and the
+# report shape. The work contract is the body of skills/minimal-code/SKILL.md,
+# read at render time; its text lives nowhere else. Skeleton, fixed sentences
+# and the report shape: skills/spawn-milestone-team/brief-template.md.
+#
+# Exit codes
+#   render  0 brief printed; 1 no plan, no scope, no contract or no template
+#           (no brief is printed); 64 usage
+#   check   0 "report ok"; 1 one line per problem; 64 usage
+
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TPL="$ROOT/skills/spawn-milestone-team/brief-template.md"
+CONTRACT="$ROOT/skills/minimal-code/SKILL.md"
+NL='
+'
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+
+usage() { sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+die() { echo "ytstack-brief: $*" >&2; exit 1; }
+
+# section <file> <heading>: body of "## <heading>" without the blank lines
+# around it. A "## " line inside a code fence does not end the section.
+section() {
+  awk -v h="## $2" '
+    /^```/ { fence = !fence }
+    !fence && /^## / { t = $0; sub(/[ \t]+$/, "", t); on = (t == h); next }
+    on && (NF || body) { print; body = 1 }
+  ' "$1"
+}
+# field <file> <label>: the text after the first "**<label>:**"
+field() { sed -n "s/^\*\*$2:\*\*[ ]*//p" "$1" | head -1; }
+# snip <name>: a fixed sentence from the template ("<!-- name: text -->")
+snip() { sed -n "s/^<!-- $1: \(.*\) -->\$/\1/p" "$TPL" | head -1; }
+# para <a> <b>: both, with a blank line between them when both have text
+para() { printf '%s' "$1${1:+${2:+$NL$NL}}$2"; }
+rel() { case "$1" in "$TOP"/*) printf '%s' "${1#"$TOP"/}" ;; *) printf '%s' "$1" ;; esac; }
+find_plan() { yt_find_artifacts "${YT_DIR:-}" "$1-PLAN.md" | head -1; }
+
+# add <label> <plan>: one plan's files, verification, spec impact and gates,
+# appended to the B_* values. The label ("T01") is empty for a single task.
+add() {
+  local l="${1:+**$1**$NL$NL}" x
+  x=$(section "$2" Files)
+  [ -n "$x" ] || die "no '## Files' section in $(rel "$2"); a brief without a scope must not be produced"
+  PLANS="$PLANS$NL$2"; ALL_FILES="$ALL_FILES$NL$x"
+  B_FILES=$(para "$B_FILES" "$l$x")
+  x=$(section "$2" Verification);  B_VERIFICATION=$(para "$B_VERIFICATION" "$l${x:-$(snip no-verification)}")
+  x=$(section "$2" "Spec impact"); B_SPEC_IMPACT=$(para "$B_SPEC_IMPACT" "$l${x:-$(snip no-spec-impact)}")
+  x=$(section "$2" Gates);         [ -z "$x" ] || B_GATES=$(para "$B_GATES" "$l$x")
+}
+
+# ---- render --------------------------------------------------------------------
+cmd_render() {
+  local kind="" ref="" branch="" base="" plan ids t tp x
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { usage >&2; return 64; }
+    case "$1" in
+      --task|--slice) kind=${1#--}; ref=$2 ;;
+      --branch) branch=$2 ;;
+      --base) base=$2 ;;
+      *) usage >&2; return 64 ;;
+    esac
+    shift 2
+  done
+  case "$kind:$ref" in
+    task:M[0-9][0-9][0-9]-S[0-9][0-9]-T[0-9][0-9]|slice:M[0-9][0-9][0-9]-S[0-9][0-9]) ;;
+    *) usage >&2; return 64 ;;
+  esac
+  # The resolver falls back to $PWD for a missing directory: refuse it here.
+  [ -d "$DIR" ] || { echo "ytstack-brief: -C '$DIR' is not a directory" >&2; return 64; }
+  [ -f "$CONTRACT" ] || die "the work contract $CONTRACT is missing; a brief without it must not be produced"
+  [ -f "$TPL" ] || die "the brief template $TPL is missing"
+
+  . "$ROOT/hooks/lib/git-ctx.sh"
+  yt_git_ctx "$DIR"
+  yt_resolve_yt_dir >/dev/null
+  TOP="$YT_TOPLEVEL"
+  plan=$(find_plan "$ref")
+  [ -n "$plan" ] || die "no plan for $ref: looked for ${YT_DIR:-$TOP/.ytstack}/$ref-PLAN.md"
+
+  PLANS="$plan"; ALL_FILES=""
+  B_REF="$ref"; B_COMMIT_PREFIX="$ref"
+  B_OUTCOME=""; B_FILES=""; B_VERIFICATION=""; B_SPEC_IMPACT=""; B_GATES=""; B_BRANCH=""; B_BASE=""
+
+  if [ "$kind" = task ]; then
+    B_OUTCOME=$(para "$(field "$plan" Summary)" "$(section "$plan" "What this does")")
+    add "" "$plan"
+  else
+    B_COMMIT_PREFIX="$ref-T##"
+    B_OUTCOME=$(para "$(field "$plan" Goal)" "$(section "$plan" Tasks)")
+    if [ -n "$(section "$plan" Files)" ]; then
+      # granularity: slice -- the slice plan is the one plan, there are no T## plans
+      B_OUTCOME=$(para "$B_OUTCOME" "$(section "$plan" "What this does")")
+      add "" "$plan"
+    else
+      B_GATES=$(section "$plan" Gates)
+      ids=$(section "$plan" Tasks | sed -n 's/^- \[[ xX]\] \(T[0-9][0-9]\) .*/\1/p')
+      [ -n "$ids" ] || die "no tasks in $(rel "$plan"): expected '- [ ] T## -- <text>' under '## Tasks'"
+      for t in $ids; do
+        tp=$(find_plan "$ref-$t")
+        if [ -n "$tp" ]; then add "$t" "$tp"; continue; fi
+        B_FILES=$(para "$B_FILES" "**$t** -- $(snip unplanned)")
+        B_VERIFICATION=$(para "$B_VERIFICATION" "**$t** -- $(snip unplanned-part)")
+        B_SPEC_IMPACT=$(para "$B_SPEC_IMPACT" "**$t** -- $(snip unplanned-part)")
+      done
+    fi
+  fi
+  [ -n "$B_OUTCOME" ] || die "no outcome in $(rel "$plan"): expected '**Summary:**' or '**Goal:**'"
+
+  B_PROJECT=$(awk '
+    NR == 1 { if ($0 != "---") exit; next }
+    $0 == "---" { exit }
+    sub(/^name:[ \t]*/, "") { gsub(/^["'\'']|["'\'']$/, ""); print; exit }
+  ' "$YT_DIR/PROJECT.md" 2>/dev/null)
+  B_PROJECT=${B_PROJECT:-$(basename "$TOP")}
+
+  B_CONTEXT=$(printf '%s\n' "$PLANS" | awk 'NF && !seen[$0]++' | while IFS= read -r x; do
+    printf -- '- `%s`\n' "$(rel "$x")"
+  done)
+  if [ -f "$YT_DIR/spec/SPEC.md" ]; then
+    B_CONTEXT="$B_CONTEXT$NL- \`$(rel "$YT_DIR/spec/SPEC.md")\`"
+    # The planned paths: what the Files sections name in backticks, without a ":12-40" line range.
+    set --
+    while IFS= read -r x; do [ -z "$x" ] || set -- "$@" "$x"; done <<EOF
+$(printf '%s\n' "$ALL_FILES" | grep -oE '`[^` ]+`' | tr -d '`' | sed 's/:[0-9][0-9,-]*$//' | sort -u)
+EOF
+    if [ $# -gt 0 ] && [ -f "$ROOT/bin/ytstack-spec" ]; then
+      for x in $(bash "$ROOT/bin/ytstack-spec" -C "$DIR" areas --names "$@"); do
+        B_CONTEXT="$B_CONTEXT$NL- \`$(rel "$YT_DIR/spec/$x.md")\`"
+      done
+    fi
+  elif [ -f "$YT_DIR/KNOWLEDGE.md" ]; then
+    # No technical spec: the conventions and gotchas are the nearest thing to it.
+    B_CONTEXT="$B_CONTEXT$NL- \`$(rel "$YT_DIR/KNOWLEDGE.md")\`"
+  fi
+
+  if [ -n "$branch" ]; then
+    [ -n "$base" ] || base=$(git -C "$TOP" branch --show-current 2>/dev/null)
+    [ -n "$base" ] || die "--base is needed: $TOP has no current branch"
+    B_BRANCH="$branch"; B_BASE="$base"
+  fi
+
+  # The contract: everything after the frontmatter, headings two levels down
+  # so that they sit under the brief's "## Work contract".
+  B_CONTRACT=$(awk '
+    NR == 1 && $0 == "---" { fm = 1; next }
+    fm { if ($0 == "---") fm = 0; next }
+    /^```/ { fence = !fence }
+    !fence && /^#+ / { $0 = "##" $0 }
+    NF || body { print; body = 1 }
+  ' "$CONTRACT")
+  [ -n "$B_CONTRACT" ] || die "the work contract $CONTRACT has no body; a brief without it must not be produced"
+
+  # Fill the template. Values are inserted as literal text (no regex
+  # replacement, so "&", "/", backticks and "$" survive) and are not scanned
+  # again. A "## " section with an empty marker is left out (Gates, Git).
+  # shortcut: values travel through the environment, so one value is limited to
+  # what the OS allows per variable (about 128 KB on Linux); upgrade to
+  # temporary files if a plan section ever gets that long.
+  export B_REF B_PROJECT B_OUTCOME B_FILES B_CONTEXT B_VERIFICATION B_SPEC_IMPACT B_GATES B_BRANCH B_BASE B_COMMIT_PREFIX B_CONTRACT
+  awk '
+    function flush() { if (!drop) printf "%s", buf; buf = ""; drop = 0 }
+    /^<!--/ { next }
+    /^## / { flush() }
+    {
+      line = $0; out = ""
+      while (match(line, /[{][{][A-Z_]+[}][}]/)) {
+        val = ENVIRON["B_" substr(line, RSTART + 2, RLENGTH - 4)]
+        if (val == "") drop = 1
+        out = out substr(line, 1, RSTART - 1) val
+        line = substr(line, RSTART + RLENGTH)
+      }
+      buf = buf out line "\n"
+    }
+    END { flush() }
+  ' "$TPL"
+}
+
+# ---- check ---------------------------------------------------------------------
+# A label counts at the start of a line, inside a code fence or not. Its value
+# is the rest of that line plus the lines that follow, up to a blank line, a
+# fence or the next label ("Commits:" is often a list).
+cmd_check() {
+  [ $# -le 1 ] || { usage >&2; return 64; }
+  if [ $# -eq 1 ]; then
+    [ -r "$1" ] && [ ! -d "$1" ] || { echo "ytstack-brief: cannot read report '$1'" >&2; return 64; }
+    exec < "$1"
+  fi
+  awk '
+    BEGIN { n = split("Task|Outcome|Commits|Checks run|Spec|Deviations|Blockers|Not checked", L, "|") }
+    function done(   v) {
+      if (!cur) return
+      v = val; gsub(/^[ \t]+|[ \t]+$/, "", v)
+      if (v == "") empty[cur] = 1
+      else if (L[cur] == "Checks run" && v !~ /exit [0-9]+/ && v !~ /^none/) nocode[++nc] = v
+      cur = 0
+    }
+    {
+      for (i = 1; i <= n; i++) if (index($0, L[i] ":") == 1) {
+        done(); cur = i; seen[i] = 1; val = substr($0, length(L[i]) + 2); next
+      }
+      if ($0 ~ /^[ \t]*$/ || $0 ~ /^[ \t]*```/) done()
+      else if (cur) val = val " " $0
+    }
+    END {
+      done()
+      for (i = 1; i <= n; i++) {
+        if (!seen[i]) { print "missing: " L[i]; bad = 1 }
+        else if (empty[i]) { print "empty: " L[i]; bad = 1 }
+      }
+      for (i = 1; i <= nc; i++) { print "Checks run: no exit code in \"" nocode[i] "\""; bad = 1 }
+      if (bad) exit 1
+      print "report ok"
+    }
+  '
+}
+
+case "$CMD" in
+  render) cmd_render "$@" ;;
+  check)  cmd_check "$@" ;;
+  -h|--help|help) usage ;;
+  *) usage >&2; exit 64 ;;
+esac
