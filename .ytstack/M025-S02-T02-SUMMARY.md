@@ -12,6 +12,7 @@ verification: passed
 ## Commits
 
 - The commit that carries this file (`M025-S02-T02: bin/ytstack-risk floor and check`).
+- `M025-S02-T02: a verified_at stamp alone does not route to a person`.
 
 ## Outcome
 
@@ -32,7 +33,7 @@ The policy was read at the base commit. `bin/ytstack-risk check` validated the `
 
 ## Follow-ups
 
-- A `verified_at` stamp is a frontmatter change, so answering a drift report routes that change to a person. That is the format as written; whether the stamp should be exempt is a decision for the operator.
+- Resolved in a second commit of this task (`M025-S02-T02: a verified_at stamp alone does not route to a person`): as first built, a `verified_at` stamp was a frontmatter change and routed to a person, although the stamp is the sanctioned answer to a drift report. `floor` now compares the frontmatter without the `verified_at` line; `area`, `status`, `paths`, `sources` and `auto_merge` stay `person`.
 - An instruction file that is a symlink to a file with another name (`CLAUDE.md -> docs/rules.md`) is not followed: a change to the target alone is not caught by the instruction-file rule. The project can list the target under "Always a person".
 - `bin/ytstack-spec areas` still matches wider than git does. It is a hint for `plan-task`, not a gate.
 - The two frontmatter readers could move into `hooks/lib/git-ctx.sh`.

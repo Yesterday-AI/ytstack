@@ -4,7 +4,8 @@
 # Contract:
 #   floor   the lowest class a change can have, from the tree difference of
 #           two commits. "person" for a rule document, an instruction file,
-#           the checks, the frontmatter and the rule sections of an area file,
+#           the checks, the frontmatter (but for a verified_at stamp alone)
+#           and the rule sections of an area file,
 #           a spec file that was added or deleted, a path no area covers and
 #           the project's own list; process records are exempt from coverage.
 #           "normal" for the built-in never-low patterns, the project's list
@@ -143,6 +144,13 @@ person "the GitLab pipeline" "reason: .gitlab-ci.yml -- always a person: the che
 change "$R" frontmatter 'edit "s/^auto_merge: low/auto_merge: normal/" .ytstack/spec/auth.md; echo b >> src/auth/login.sh'
 person "the frontmatter of an area file" "reason: .ytstack/spec/auth.md -- always a person: frontmatter of an area file"
 eq "the ceiling is the one the base has, not the raised one" "ceiling: low" "$(line ceiling)"
+change "$R" stamp 'edit "s/^verified_at: none/verified_at: $(git rev-parse --short base)/" .ytstack/spec/auth.md'; fl
+eq "a verified_at stamp alone is ordinary: it answers a drift report" "floor: low
+areas: auth
+ceiling: low
+lenses: none" "$OUT"
+change "$R" stamp-and-more 'edit "s/^verified_at: none/verified_at: $(git rev-parse --short base)/; s/^auto_merge: low/auto_merge: normal/" .ytstack/spec/auth.md'
+person "a stamp together with another field" "reason: .ytstack/spec/auth.md -- always a person: frontmatter of an area file"
 change "$R" invariant 'edit "s/tokens expire/tokens never expire/" .ytstack/spec/auth.md'
 person "the invariants section of an area file" 'always a person: section "Invariants and security boundaries"'
 change "$R" decision 'edit "s/^- none$/- D-12/" .ytstack/spec/auth.md'
