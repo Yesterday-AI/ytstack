@@ -1,0 +1,437 @@
+#!/usr/bin/env bash
+# ytstack signals: what production reported, recorded once.
+# Format: docs/ux/signal-format.md.
+#
+#   ytstack-signals [-C DIR] new --source NAME --key KEY --title TEXT [--kind KIND] [--read-at TIME] < sighting
+#   ytstack-signals [-C DIR] list [--state open|planned|fixed|dismissed|all]
+#   ytstack-signals [-C DIR] set <id> --state STATE [--ref REF] [< reason]
+#   ytstack-signals [-C DIR] check
+#
+# A finding is one file, signals/F###-<slug>.md, inside the .ytstack directory
+# of DIR (default: $PWD). new decides by the key: the newest finding that
+# carries it says whether the sighting is a new finding, one seen again, a
+# dismissed one or the regression of a fixed one. A write changes one file,
+# under a lock, through a temporary file in the same directory.
+#
+# Exit codes
+#   new    0 "<case> <id> <path>", the case being new, seen-again, dismissed or
+#          regression; 1 no .ytstack directory, no sighting on stdin, a source
+#          that "Signals" does not declare and no --kind, or a finding with the
+#          key in a state check rejects; 64 usage
+#   list   0; one line per finding: id, state, source, kind, count, last_seen,
+#          ref, reopens, key, title (tab separated); without --state the open
+#          and the planned ones
+#   set    0 "<id> <state>"; 1 unknown id, dismissed without a reason on stdin,
+#          planned without a reference, or a state other than fixed while
+#          another finding with the key is newer or not fixed; 64 usage
+#   check  0 "signals ok: <n> finding(s)", or "no signals" without the
+#          directory; 1 one line per problem
+
+set -uo pipefail
+# Keys, ids and slugs are ASCII: ranges and classes mean bytes everywhere below.
+export LC_ALL=C
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/hooks/lib/git-ctx.sh"
+
+STATES='open|planned|fixed|dismissed'
+KINDS='errors|performance|alerts|logs'
+WORD='letters, digits and . _ : / @ + = -'
+TAB=$'\t'
+NL='
+'
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+
+usage() { sed -n '5,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+die() { echo "ytstack-signals: $*" >&2; exit 1; }
+case "$CMD" in new|list|set|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+# The resolver falls back to $PWD for a missing directory: refuse it here.
+[ -d "$DIR" ] || { echo "ytstack-signals: -C '$DIR' is not a directory" >&2; exit 64; }
+
+yt_git_ctx "$DIR"
+yt_resolve_yt_dir >/dev/null
+SDIR="${YT_DIR:+$YT_DIR/signals}"
+LOCK="${YT_DIR:+$YT_DIR/signals.lock}"
+
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+oneline() { printf '%s' "$1" | tr '\n\r\t' '   ' | sed 's/  */ /g; s/^ //; s/ $//'; }
+# listed <value> <a|b|c>
+listed() { case "|$2|" in *"|$1|"*) return 0 ;; esac; return 1; }
+# word <value>: a key or a reference, one word that is safe in a frontmatter line.
+word() { case "$1" in ""|*[!A-Za-z0-9._:/@+=-]*) return 1 ;; esac; return 0; }
+is_utc() {
+  case "$1" in
+    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) return 0 ;;
+  esac
+  return 1
+}
+
+# rows: one line per finding file, in id order, tab separated, "-" for an empty
+# value: id state source kind count last_seen ref reopens key first_seen file title
+rows() {
+  local f
+  [ -n "$SDIR" ] || return 0
+  set --
+  for f in "$SDIR"/F[0-9][0-9][0-9]-*.md; do
+    [ ! -f "$f" ] || set -- "$@" "$f"
+  done
+  [ $# -gt 0 ] || return 0
+  awk '
+    function v(k) { return ((k in V) && V[k] != "") ? V[k] : "-" }
+    function out() {
+      if (file == "") return
+      printf "%s\t%s\t%s\t%s\t%s\t", v("id"), v("state"), v("source"), v("kind"), v("count")
+      printf "%s\t%s\t%s\t%s\t%s\t", v("last_seen"), v("ref"), v("reopens"), v("key"), v("first_seen")
+      printf "%s\t%s\n", file, (title == "" ? "-" : title)
+    }
+    FNR == 1 { out(); file = FILENAME; split("", V); title = ""; fm = ($0 == "---"); next }
+    fm && $0 == "---" { fm = 0; next }
+    fm {
+      c = index($0, ":")
+      if (c > 1) {
+        k = substr($0, 1, c - 1); val = substr($0, c + 1)
+        gsub(/\t/, " ", val); gsub(/^ +| +$/, "", val)
+        if (!(k in V)) V[k] = val
+      }
+      next
+    }
+    title == "" && /^# F[0-9][0-9][0-9] -- / { title = substr($0, 11); gsub(/\t/, " ", title) }
+    END { out() }
+  ' "$@"
+}
+
+# lock: one writer at a time. Two intake runs that record the same key in the
+# same moment would otherwise both find no finding and write two files.
+# The lock is a file the shell creates itself: under noclobber bash opens it
+# with O_EXCL, so exactly one caller gets it. Not `mkdir`: the mkdir of Ubuntu
+# 26.04 (uutils coreutils) reports success to several callers that create the
+# same directory in the same moment.
+# shortcut: a lock left behind by a killed process is not recognised as stale,
+# the message names the file to remove; upgrade to a pid check if that ever
+# happens in practice.
+TMPF=""
+lock() {
+  local n=0
+  [ -w "$YT_DIR" ] || die "cannot write in $YT_DIR"
+  until ( set -o noclobber; : > "$LOCK" ) 2>/dev/null; do
+    n=$((n + 1))
+    [ "$n" -le 100 ] || die "$LOCK exists: another ytstack-signals is writing. Remove the file if none is."
+    sleep 0.1 2>/dev/null || sleep 1
+  done
+  trap '[ -z "$TMPF" ] || rm -f "$TMPF"; rm -f "$LOCK"' EXIT
+}
+
+# edit <file>: rewrite one finding. What changes comes from the environment:
+#   YTS_SET   "key=value" lines: the frontmatter lines to replace
+#   YTS_SEEN  a sighting to append under "What was seen"; the newest five stay
+#   YTS_NOTE  a line to append under "Assessment"
+# Everything else is copied as it is. A file without the section a text
+# belongs under is not written.
+YTS_SET=""; YTS_SEEN=""; YTS_NOTE=""
+export YTS_SET YTS_SEEN YTS_NOTE
+edit() {
+  TMPF="$1.tmp"
+  awk '
+    function trimnl(s) { sub(/^[\n \t]+/, "", s); sub(/[\n \t]+$/, "", s); return s }
+    # flush: the lines held back for the section that just ended, rebuilt.
+    function flush(   j, k, nblk, pre, first) {
+      if (sec == "## What was seen" && seen != "") {
+        nblk = 0; pre = ""; split("", B)
+        for (j = 1; j <= nb; j++) {
+          if (buf[j] ~ /^### /) B[++nblk] = buf[j]
+          else if (nblk) B[nblk] = B[nblk] "\n" buf[j]
+          else pre = pre buf[j] "\n"
+        }
+        B[++nblk] = seen
+        print ""
+        pre = trimnl(pre)
+        if (pre != "") { print pre; print "" }
+        first = (nblk > 5) ? nblk - 4 : 1
+        for (k = first; k <= nblk; k++) { print trimnl(B[k]); print "" }
+        placed_seen = 1
+      } else if (sec == "## Assessment" && note != "") {
+        pre = ""
+        for (j = 1; j <= nb; j++) pre = pre buf[j] "\n"
+        print ""
+        pre = trimnl(pre)
+        if (pre != "") { print pre; print "" }
+        print note
+        print ""
+        placed_note = 1
+      }
+      nb = 0
+    }
+    BEGIN {
+      n = split(ENVIRON["YTS_SET"], kv, "\n")
+      for (i = 1; i <= n; i++) { c = index(kv[i], "="); if (c > 1) SET[substr(kv[i], 1, c - 1)] = substr(kv[i], c + 1) }
+      seen = ENVIRON["YTS_SEEN"]; note = ENVIRON["YTS_NOTE"]
+    }
+    { L[NR] = $0 }
+    END {
+      i = 1
+      if (L[1] == "---") {
+        print L[1]
+        for (i = 2; i <= NR && L[i] != "---"; i++) {
+          k = L[i]; sub(/:.*$/, "", k)
+          if (k in SET) print k ": " SET[k]; else print L[i]
+        }
+      }
+      sec = ""; nb = 0
+      for (; i <= NR; i++) {
+        if (L[i] ~ /^## /) { flush(); sec = L[i]; sub(/[ \t]+$/, "", sec); print L[i]; continue }
+        if ((sec == "## What was seen" && seen != "") || (sec == "## Assessment" && note != "")) { buf[++nb] = L[i]; continue }
+        print L[i]
+      }
+      flush()
+      if ((seen != "" && !placed_seen) || (note != "" && !placed_note)) exit 3
+    }
+  ' "$1" > "$TMPF" && mv "$TMPF" "$1" \
+    || die "could not rewrite $1: the sections \"What was seen\" and \"Assessment\" must exist; run 'ytstack-signals check'"
+  TMPF=""
+}
+
+# ---- new -----------------------------------------------------------------------
+cmd_new() {
+  local src="" key="" title="" kind="" at="" sighting block r n=0 f id slug reopens=none
+  local hit="" hst="" hcnt="" hlast="" hfile=""
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { usage >&2; return 64; }
+    case "$1" in
+      --source)  src=$2 ;;
+      --key)     key=$2 ;;
+      --title)   title=$(oneline "$2") ;;
+      --kind)    kind=$2 ;;
+      --read-at) at=$2 ;;
+      *) usage >&2; return 64 ;;
+    esac
+    shift 2
+  done
+  [ -n "$src" ] && [ -n "$key" ] && [ -n "$title" ] || { usage >&2; return 64; }
+  case "$src" in
+    [!a-z0-9]*|*[!a-z0-9-]*) echo "ytstack-signals: --source takes the name of a signal source: a lowercase slug (a-z, 0-9, -)" >&2; return 64 ;;
+  esac
+  word "$key" || { echo "ytstack-signals: --key takes one word of $WORD" >&2; return 64; }
+  [ -z "$kind" ] || listed "$kind" "$KINDS" || { echo "ytstack-signals: --kind takes one of: $KINDS" >&2; return 64; }
+  if [ -z "$at" ]; then at=$(now)
+  else is_utc "$at" || { echo "ytstack-signals: --read-at takes a UTC time like 2026-11-13T09:15:00Z" >&2; return 64; }
+  fi
+  [ -n "$SDIR" ] || die "no .ytstack directory for $DIR"
+  if [ -z "$kind" ]; then
+    kind=$(bash "$ROOT/bin/ytstack-runtime" -C "$DIR" signals 2>/dev/null | YTS_SRC="$src" awk -F'\t' '$1 == ENVIRON["YTS_SRC"] { k = $2 } END { print k }')
+    listed "$kind" "$KINDS" || die "the source '$src' is not declared under \"Signals\" in RUNTIME.md; pass --kind (one of: $KINDS)"
+  fi
+  [ ! -t 0 ] || die "the raw sighting comes on stdin: the line or lines the source printed"
+  # At most twenty lines of a sighting are kept: a record, not a log.
+  sighting=$(tr -d '\r' | awk 'NF { n++; if (n <= 20) print } END { if (n > 20) print "(" (n - 20) " more lines not recorded)" }')
+  [ -n "$sighting" ] || die "no sighting on stdin: a finding is recorded with the line or lines the source printed"
+  block=$(printf '### read %s\n\n' "$at"; printf '%s\n' "$sighting" | sed 's/^/    /')
+
+  mkdir -p "$SDIR" || die "cannot create $SDIR"
+  lock
+  # The newest finding that carries the key decides.
+  r=$(rows | YTS_KEY="$key" awk -F'\t' '$9 == ENVIRON["YTS_KEY"] { hit = $0 } END { if (hit != "") print hit }')
+  if [ -n "$r" ]; then
+    IFS=$TAB read -r hit hst _ _ hcnt hlast _ _ _ _ hfile _ <<EOF
+$r
+EOF
+  fi
+  case "$hst" in
+    open|planned|dismissed)
+      case "$hcnt" in ""|*[!0-9]*) die "$hit has the count '$hcnt'; run 'ytstack-signals check'" ;; esac
+      # A sighting that was read earlier than the newest one does not move last_seen back.
+      [ "$hlast" \> "$at" ] || hlast=$at
+      YTS_SET="last_seen=$hlast${NL}count=$((10#$hcnt + 1))"
+      if [ "$hst" = dismissed ]; then
+        edit "$hfile"; echo "dismissed $hit $hfile"
+      else
+        YTS_SEEN=$block; edit "$hfile"; echo "seen-again $hit $hfile"
+      fi
+      return 0 ;;
+    fixed) reopens=$hit ;;
+    "") ;;
+    *) die "$hit carries the key and has the state '$hst'; run 'ytstack-signals check'" ;;
+  esac
+
+  # The next id follows the highest one in use; a gap is not filled.
+  for f in "$SDIR"/F[0-9][0-9][0-9]-*; do
+    [ -e "$f" ] || continue
+    id=${f##*/}; id=$((10#${id:1:3}))
+    [ "$id" -le "$n" ] || n=$id
+  done
+  [ "$n" -lt 999 ] || die "F999 is in use; the id has three digits"
+  id=$(printf 'F%03d' $((n + 1)))
+  slug=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed 's/--*/-/g; s/^-//' | cut -c1-48 | sed 's/-$//')
+  f="$SDIR/$id-${slug:-finding}.md"
+  TMPF="$f.tmp"
+  printf -- '---\nid: %s\nkey: %s\nsource: %s\nkind: %s\nstate: open\nfirst_seen: %s\nlast_seen: %s\ncount: 1\nref: none\nreopens: %s\n---\n\n# %s -- %s\n\n## What was seen\n\n%s\n\n## Assessment\n\n## Next\n' \
+    "$id" "$key" "$src" "$kind" "$at" "$at" "$reopens" "$id" "$title" "$block" > "$TMPF" && mv "$TMPF" "$f" || die "cannot write $f"
+  TMPF=""
+  if [ "$reopens" = none ]; then echo "new $id $f"; else echo "regression $id $f"; fi
+}
+
+# ---- list ----------------------------------------------------------------------
+cmd_list() {
+  local want=""
+  if [ $# -gt 0 ]; then
+    { [ "$1" = "--state" ] && [ $# -eq 2 ]; } || { usage >&2; return 64; }
+    listed "$2" "$STATES|all" || { usage >&2; return 64; }
+    want=$2
+  fi
+  # Without --state everything that is neither fixed nor dismissed: a file with a broken state stays visible.
+  rows | awk -F'\t' -v want="$want" '
+    want == "all" || (want == "" ? ($2 != "fixed" && $2 != "dismissed") : $2 == want) {
+      printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $12
+    }
+  '
+}
+
+# ---- set -----------------------------------------------------------------------
+cmd_set() {
+  local id="${1:-}" st="" ref="" reason="" all r cur oldref key f other
+  case "$id" in F[0-9][0-9][0-9]) shift ;; *) usage >&2; return 64 ;; esac
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { usage >&2; return 64; }
+    case "$1" in
+      --state) st=$2 ;;
+      --ref)   ref=$2 ;;
+      *) usage >&2; return 64 ;;
+    esac
+    shift 2
+  done
+  listed "$st" "$STATES" || { echo "ytstack-signals: --state takes one of: $STATES" >&2; return 64; }
+  [ -z "$ref" ] || word "$ref" || { echo "ytstack-signals: --ref takes one word of $WORD" >&2; return 64; }
+  if [ "$st" = dismissed ]; then
+    [ -t 0 ] || reason=$(oneline "$(cat)")
+    [ -n "$reason" ] || die "dismissed needs a reason on stdin: why this is not a finding"
+  fi
+  [ -n "$SDIR" ] && [ -d "$SDIR" ] || die "no finding $id: no signals directory for $DIR"
+  lock
+  all=$(rows)
+  r=$(printf '%s\n' "$all" | awk -F'\t' -v id="$id" '$1 == id && !n++ { print }')
+  [ -n "$r" ] || die "no finding $id in $SDIR"
+  IFS=$TAB read -r _ cur _ _ _ _ oldref _ key _ f _ <<EOF
+$r
+EOF
+  if [ "$st" = planned ] && [ -z "$ref" ]; then
+    case "$oldref" in none|-) die "planned needs --ref: the task, quick task or question the finding became" ;; esac
+  fi
+  if [ "$st" != fixed ]; then
+    # Only the newest finding of a key is not fixed: new decides by that one.
+    other=$(printf '%s\n' "$all" | YTS_KEY="$key" awk -F'\t' -v id="$id" '
+      $9 == ENVIRON["YTS_KEY"] && $1 != id && ($1 > id || $2 != "fixed") && !n++ { print $1 " (" $2 ")" }')
+    [ -z "$other" ] || die "$id stays '$cur': $other carries the same key and is newer or not fixed"
+  fi
+  YTS_SET="state=$st"
+  [ -z "$ref" ] || YTS_SET="$YTS_SET${NL}ref=$ref"
+  [ "$st" != dismissed ] || YTS_NOTE="- $(now) -- dismissed: $reason"
+  edit "$f"
+  echo "$id $st"
+}
+
+# ---- check ---------------------------------------------------------------------
+cmd_check() {
+  [ $# -eq 0 ] || { usage >&2; return 64; }
+  local f name n=0 bad=0
+  if [ -z "$SDIR" ] || [ ! -d "$SDIR" ]; then echo "no signals"; return 0; fi
+  for f in "$SDIR"/*.md; do
+    [ -f "$f" ] || continue
+    n=$((n + 1)); name=${f##*/}
+    case "$name" in
+      F[0-9][0-9][0-9]-?*.md)
+        if [ -s "$f" ]; then set -- "$@" "$f"; else echo "$name: no frontmatter"; bad=1; fi ;;
+      *) echo "$name: the name is not F###-<slug>.md"; bad=1 ;;
+    esac
+  done
+  if [ $# -gt 0 ]; then
+    awk -v states="$STATES" -v kinds="$KINDS" -v wordtext="$WORD" '
+      function listed(v, list) { return index("|" list "|", "|" v "|") > 0 }
+      function p(msg) { print name ": " msg; bad = 1 }
+      function utc(v) { return v ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ }
+      function word(v) { return v ~ "^[A-Za-z0-9._:/@+=-]+$" }
+      # finish: the rules one file can break on its own.
+      function finish(   id) {
+        if (name == "") return
+        id = substr(name, 1, 4)
+        if (used[id]++) p("the id " id " is used by more than one file")
+        if (!hadfm) { p("no frontmatter"); return }
+        if (fm) { p("the frontmatter is not closed"); return }
+        if (V["id"] != id) p("id \"" V["id"] "\" does not match the file name")
+        if (!word(V["key"])) p("key \"" V["key"] "\" is not one word of " wordtext)
+        if (V["source"] !~ /^[a-z0-9][a-z0-9-]*$/) p("source \"" V["source"] "\" is not a lowercase slug")
+        if (!listed(V["kind"], kinds)) p("kind \"" V["kind"] "\" is not one of " kinds)
+        if (!listed(V["state"], states)) p("state \"" V["state"] "\" is not one of " states)
+        if (!utc(V["first_seen"])) p("first_seen \"" V["first_seen"] "\" is not a UTC time like 2026-11-13T09:15:00Z")
+        if (!utc(V["last_seen"])) p("last_seen \"" V["last_seen"] "\" is not a UTC time like 2026-11-13T09:15:00Z")
+        if (V["count"] !~ /^[1-9][0-9]*$/) p("count \"" V["count"] "\" is not a number from 1")
+        if (!word(V["ref"])) p("ref \"" V["ref"] "\" is not \"none\" or one word of " wordtext)
+        else if (V["state"] == "planned" && V["ref"] == "none") p("state planned, but ref is \"none\"")
+        if (V["reopens"] != "none" && V["reopens"] !~ /^F[0-9][0-9][0-9]$/) p("reopens \"" V["reopens"] "\" is not \"none\" or an id")
+        if (order != "123") p("the sections are not \"What was seen\", \"Assessment\" and \"Next\", each once and in this order")
+        if (V["state"] == "dismissed" && !reason) p("state dismissed, but there is no reason under \"## Assessment\"")
+        if (word(V["key"])) { nf++; NAME[nf] = name; ID[nf] = id; KEY[nf] = V["key"]; ST[nf] = V["state"]; REO[nf] = V["reopens"]; AT[id] = nf }
+      }
+      FNR == 1 {
+        finish()
+        name = FILENAME; sub(/^.*\//, "", name)
+        split("", V); order = ""; reason = 0; sec = 0; fence = 0
+        hadfm = ($0 == "---"); fm = hadfm
+        next
+      }
+      fm && $0 == "---" { fm = 0; next }
+      fm {
+        c = index($0, ":")
+        if (c > 1) {
+          k = substr($0, 1, c - 1); val = substr($0, c + 1); gsub(/^[ \t]+|[ \t]+$/, "", val)
+          if (!(k in V)) V[k] = val
+        }
+        next
+      }
+      index($0, "```") == 1 { fence = !fence }
+      !fence && /^## / {
+        h = $0; sub(/[ \t]+$/, "", h)
+        sec = 0
+        if (h == "## What was seen") sec = 1
+        else if (h == "## Assessment") sec = 2
+        else if (h == "## Next") sec = 3
+        if (sec) order = order sec
+        next
+      }
+      sec == 2 && NF { reason = 1 }
+      END {
+        finish()
+        # The rules that need all findings of a key, in id order.
+        for (i = 1; i <= nf; i++) {
+          name = NAME[i]; k = KEY[i]
+          if (REO[i] == "none") {
+            if (k in rootof) p("the key \"" k "\" is the key of " rootof[k] " already, and this finding reopens nothing")
+            else rootof[k] = ID[i]
+          } else if (REO[i] ~ /^F[0-9][0-9][0-9]$/) {
+            j = AT[REO[i]]
+            if (!j) p("reopens " REO[i] ", which does not exist")
+            else if (KEY[j] != k) p("reopens " REO[i] ", which has another key")
+            else if (j >= i) p("reopens " REO[i] ", which is not an older finding")
+          }
+          newest[k] = i
+        }
+        for (i = 1; i <= nf; i++) {
+          name = NAME[i]
+          if (ST[i] != "fixed" && newest[KEY[i]] != i)
+            p("state " ST[i] ", but " ID[newest[KEY[i]]] " is a newer finding with the same key; only the newest finding of a key is not fixed")
+        }
+        exit bad
+      }
+    ' "$@" || bad=1
+  fi
+  [ "$bad" -eq 0 ] || return 1
+  echo "signals ok: $n finding(s)"
+}
+
+case "$CMD" in
+  new)   cmd_new "$@" ;;
+  list)  cmd_list "$@" ;;
+  set)   cmd_set "$@" ;;
+  check) cmd_check "$@" ;;
+esac
