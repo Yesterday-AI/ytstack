@@ -2,7 +2,7 @@
 name: code-review
 metadata:
   tier: task
-  version: 0.3.0
+  version: 0.4.0
 description: "Reviews the active task's commits with a fresh-context reviewer subagent and handles the feedback with technical rigor, through the vendored superpowers requesting-code-review and receiving-code-review procedures, with the task plan and commit range injected. Use after a task's commits exist and before summarize-task, before a merge or PR, or when the user says review this, code review, check my changes. Not for reviewing a plan (plan-eng-review) and not without commits for the task."
 allowed-tools:
   - Bash
@@ -87,6 +87,16 @@ if [ -f "$_TASK_PLAN" ]; then
 fi
 echo "REVIEW_ROUND: $((_ROUNDS + 1))"
 echo "LAST_REVIEWED_HEAD: ${_LAST_HEAD:-none}"
+# The risk gate (M025): what the script decided about the whole change of the
+# task before any reviewer speaks, and the lenses that change requires.
+_RISK_TOOL="${CLAUDE_SKILL_DIR}/../../bin/ytstack-risk"
+echo "RISK_FLOOR_BEGIN"
+if [ -f "$_RISK_TOOL" ] && [ -n "$_BASE_SHA" ] && [ "$_HEAD_SHA" != none ]; then
+  bash "$_RISK_TOOL" floor --base "$_BASE_SHA" --head "$_HEAD_SHA" 2>&1 | head -40
+else
+  echo "floor: unknown (bin/ytstack-risk is not reachable, or the task has no commit range)"
+fi
+echo "RISK_FLOOR_END"
 ```
 
 ## ytstack invocation notes
@@ -117,16 +127,35 @@ A review ends. Where the vendored text below and this section differ, this secti
 4. A `shortcut:` comment that names its limit is a decision, not a finding, unless the assumed load is already beyond that limit.
 5. No acceptance conditions the plan does not have, no vague worries, no style preferences.
 6. Close with `Not checked:` what was not looked at, and why.
+7. After `Not checked:` come four labels, each at the start of a line. How to decide them: "The class of the change" below. Hand the reviewer that paragraph and the lines between `RISK_FLOOR_BEGIN` and `RISK_FLOOR_END`.
+
+```
+Risk: <low | normal | high>
+Severity: <what the worst plausible mistake in this change costs>
+Reach: <what it can affect: these files, one area, several areas, stored data, users>
+Invariants touched: <none | area: the invariant or decision, in its own words>
+```
+
+**The class of the change.** Whether a person has to look at a change is decided from its class. The table under "Risk classes" in `${CLAUDE_SKILL_DIR}/../../docs/ux/review-policy-format.md` says what `low`, `normal` and `high` mean; the reviewer reads it there. The reviewer states the class. The author of a change never does.
+
+- **Severity and reach first.** What does the worst plausible mistake in this change cost, and what can it affect? The class follows from those two answers, not from the size of the diff.
+- **The floor.** The lines between `RISK_FLOOR_BEGIN` and `RISK_FLOOR_END` are what `bin/ytstack-risk floor` computed from the diff of the whole task: `floor:`, one `reason:` per rule that raised it, the `areas:` the change touches, their `ceiling:` and the `lenses:` it requires. A reviewer cannot state a class below `floor:`. `floor: person` means the change goes to a person whatever the review says; the review still runs and still states its class. A first line other than `floor: low`, `floor: normal` or `floor: person` means the floor is unknown: the report says so under `Not checked:`.
+- **Invariants.** The reviewer reads the change against the sections "Invariants and security boundaries" and "Decisions that apply now" of every area file under `SPEC_AREAS`. A rule the change shifts is named under `Invariants touched:` with its area, in the document's own words. That holds also when the diff changes only code and leaves the document alone: no path rule sees that case, only this reading does. A change that touches such a rule is `high`. With no area file to read against, the answer is `none`, and `Not checked:` says that no area file covers the change.
+- **Round 2.** It looks at the fix only, but the newest round line is the one that counts, so its four labels speak for the whole change. Give the reviewer the four labels of round 1. It restates them and changes one only when the fix changes the answer.
+
+**Who reviews.** The reviewer is never the author. This skill dispatches a fresh reviewer (the vendored procedure below); name the Agent call `review-{ACTIVE_TASK}`, and that name goes into the round line as `by:`. A session that reviews its own change without a dispatched reviewer writes `by: self`. Say then, in plain words, that this was no independent review: the route of that change is `person` (`bin/ytstack-risk route`), and nothing merges it without one.
 
 **Whose severity counts.** If the project says what blocks a change (a review policy in `AGENTS.md`, `CONTRIBUTING.md` or a reviewers folder), that policy rates the findings. A finding it rates non-blocking is never used to hold the task: it goes to Follow-ups. A risk the policy says a person has to accept is written as a gate in the task plan (`## Gates`, format in `ytstack:plan-task`); nobody in this session accepts it.
 
 **Record the round.** After the findings are handled, append one line to the task plan under `## Review` (add the heading on the first round), with seven-character SHAs:
 
 ```
-- Round {REVIEW_ROUND}: {base}..{HEAD_SHA} -- {approved | changes requested}; blocking: {n}; follow-ups: {n}
+- Round {REVIEW_ROUND}: {base}..{HEAD_SHA} -- {approved | changes requested}; blocking: {n}; follow-ups: {n}; risk: {low | normal | high}; invariants: {none | area: the rule}; by: {reviewer}
 ```
 
 `{base}` is `BASE_SHA` in round 1 and `LAST_REVIEWED_HEAD` afterwards. The line is what the next run counts; without it every review looks like the first.
+
+`risk` and `invariants` are the reviewer's `Risk:` and `Invariants touched:` values, unchanged, on this one line: no `;` inside a value, several rules joined with commas. You do not raise or lower them; `bin/ytstack-risk` takes the higher of the stated class and the floor. `by` is the reviewer's name, or `self`. A reviewer that left a label out is asked for it once. A line without `risk`, `invariants` or `by` reads as a round that states none of them, and the change goes to a person.
 
 **Third round.** Two rounds are recorded and the change is still not accepted. A third review would find a third thing. Stop and diagnose instead, from the round lines, the findings and the fix commits:
 

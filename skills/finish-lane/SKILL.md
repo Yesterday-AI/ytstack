@@ -3,11 +3,12 @@ name: finish-lane
 description: "Takes a delegated lane from the worker's report to a pull request merged at the reviewed commit, with every gate read from the host. Use in the coordinating session when a lane reported and its work has to become a merged pull request, or when the user says finish the lane, land this lane, get this lane merged. Not for the session's own branch (finish-branch), not for a release (ship) and not for the worker of the lane."
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.2.0
 allowed-tools:
   - Bash
   - Read
   - Write
+  - Edit
   - Agent
 ---
 
@@ -38,7 +39,7 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 4. **Push and open the pull request** -- `push`, a body file, `open-pr`
 5. **Wait for the head, check the body** -- `wait-head`, `body-check`, one read of the body against the diff
 6. **Commission the review** -- a `review` lane pinned to that commit, in a fresh context; at most two rounds
-7. **Post the review, record head and round** -- on the pull request, then `ytstack-frontier set`
+7. **Post the review, record head and round** -- on the pull request, then `ytstack-frontier set`, then the round line with the reviewer's class in the lane's plan
 8. **Read the gates** -- `gates`; a failing gate is handled by what it is
 9. **Merge or hand over** -- `MERGE_BY: human`: stop with the command; `coordinator`: `merge`
 10. **Report + return** -- one line per step, the read time of the gates, what was not checked
@@ -241,7 +242,9 @@ The round is the lane's `Round` cell plus one.
 
 The rules of `ytstack:code-review`, section "Bounded review", apply as written there: what a finding needs, what round 2 may report, whose severity counts. Do not invoke that skill; it reviews the session's own active task.
 
-The rendered brief is the prompt of one `Agent` call in a fresh context: no transcript of the lane, no summary of yours beyond the brief. The reviewer reads only. Its report's `Outcome:` carries the verdict (`approved` or `changes requested`) and the reviewed commit. Check the report with `bin/ytstack-brief check`. A review whose commit is not `{SHA}` is a review of something else: dispatch again.
+The rendered brief is the prompt of one `Agent` call in a fresh context, named `review-{REF}`: no transcript of the lane, no summary of yours beyond the brief. The reviewer is never the lane's worker. The reviewer reads only. Its report's `Outcome:` carries the verdict (`approved` or `changes requested`) and the reviewed commit. Check the report with `bin/ytstack-brief check`. A review whose commit is not `{SHA}` is a review of something else: dispatch again.
+
+The report ends with the class of the change, which the brief asks for: `Risk:`, `Severity:`, `Reach:` and `Invariants touched:` (`docs/ux/review-policy-format.md`, "Records"). The reviewer states them, never the worker and never you. A report without them goes back to the reviewer once, with the checker's lines. In round 2 append the four labels of round 1 to the brief, beside the findings: the newest round speaks for the whole change, and the reviewer changes a label only when the fix changes the answer.
 
 **Third round.** Two rounds are recorded and the change is still not accepted. Diagnose as `ytstack:code-review` describes under "Third round" (scope the plan never decided, two rules in conflict, a fix that moves the problem) and put it to the human as one question. The lane becomes `blocked` on that question.
 
@@ -255,6 +258,14 @@ Write the review to a file: first line `Verdict: approved` or `Verdict: changes 
 gh pr review {N} --comment --body-file {REVIEW_FILE}
 "${CLAUDE_SKILL_DIR}/../../bin/ytstack-frontier" set {REF} --head {SHA} --round {n} --status in-review
 ```
+
+Then append the round to the lane's plan in this checkout: the slice plan `{REF}-PLAN.md` for a slice lane, the task plan for a task lane. It goes under `## Review` (add the heading on the first round), with seven-character commits:
+
+```
+- Round {n}: {base}..{SHA} -- {approved | changes requested}; blocking: {n}; follow-ups: {n}; risk: {low | normal | high}; invariants: {none | area: the rule}; by: review-{REF}
+```
+
+`{base}` is where the lane left its base in round 1 (`git merge-base origin/{BASE} {SHA}`) and the reviewed head of round 1 afterwards. `risk` and `invariants` are the reviewer's `Risk:` and `Invariants touched:` values, unchanged, on this one line: no `;` inside a value, several rules joined with commas. You state no class and you correct none. A lane without a plan file has no place for the line: say so in the report.
 
 `changes requested`: the findings go to the worker through whoever dispatches (same branch, same pull request). When the fix is reported, start again at Step 3; that is round 2. Do not read the gates on a head with open findings.
 
@@ -313,7 +324,7 @@ In both cases the merge happens at the reviewed commit or not at all. No `gh pr 
 
 ## What is written down, and what is not
 
-`.ytstack/` receives what this session did and the identifiers it needs to continue: the pull request number, the reviewed commit, the round, the lane's status. It never receives the state of the pull request as if it were current. Checks, threads, mergeability and the head live on the host and change without you, so they are read when they matter, and every status that mentions one says when: `read 2026-11-13T10:42Z`. A gate line from an earlier read is quoted with its time or not at all.
+`.ytstack/` receives what this session did and the identifiers it needs to continue: the pull request number, the reviewed commit, the round, the lane's status, and in the lane's plan one line per review round with the class its reviewer stated. It never receives the state of the pull request as if it were current. Checks, threads, mergeability and the head live on the host and change without you, so they are read when they matter, and every status that mentions one says when: `read 2026-11-13T10:42Z`. A gate line from an earlier read is quoted with its time or not at all.
 
 ## Terminal State
 

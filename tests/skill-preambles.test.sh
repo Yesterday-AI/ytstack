@@ -268,6 +268,21 @@ printf -- '\n## Review\n\n- Round 1: %s..%s -- changes requested; blocking: 1; f
 pre code-review "$WT"
 has "code-review: one recorded round -> round 2"              "$OUT" "REVIEW_ROUND: 2"
 has "code-review: the follow-up base is the last reviewed head" "$OUT" "LAST_REVIEWED_HEAD: $(git -C "$WT" rev-parse --short HEAD)"
+# The risk gate (M025): a round line with risk, invariants and by counts like
+# the form before it, and the floor of the task's commit range is printed. T02
+# has a commit with a parent; T01 starts at the root commit, which has no base.
+printf -- '- Round 2: %s..%s -- approved; blocking: 0; follow-ups: 1; risk: low; invariants: none; by: review-M999-S01-T01\n' "$(git -C "$WT" rev-parse --short HEAD~1)" "$(git -C "$WT" rev-parse --short HEAD)" >> "$WT/.ytstack/M999-S01-T01-PLAN.md"
+pre code-review "$WT"
+has "code-review: a round line with risk, invariants and by counts -> round 3" "$OUT" "REVIEW_ROUND: 3"
+has "code-review: and its head is the last reviewed head"      "$OUT" "LAST_REVIEWED_HEAD: $(git -C "$WT" rev-parse --short HEAD)"
+cp "$WT/.ytstack/STATE.md" "$TMP/state.risk.bak"
+sed 's/^active_task: T01/active_task: T02/' "$TMP/state.risk.bak" > "$WT/.ytstack/STATE.md"
+printf -- '---\ntask: T02\n---\n## Files\n\n- Modify: f.txt\n' > "$WT/.ytstack/M999-S01-T02-PLAN.md"
+( cd "$WT" && echo more >> f.txt && git add f.txt && git commit -qm "M999-S01-T02: change f" ) >/dev/null 2>&1
+pre code-review "$WT"
+has "code-review: the floor of the task's commit range is printed" "$OUT" "floor: low"
+has "code-review: with the area the change touches"            "$OUT" "areas: core"
+cp "$TMP/state.risk.bak" "$WT/.ytstack/STATE.md"; rm -f "$WT/.ytstack/M999-S01-T02-PLAN.md"
 pre reassess-roadmap "$WT"
 has "reassess-roadmap: drift report printed" "$OUT" "spec drift:"
 pre verification-before-completion "$WT"

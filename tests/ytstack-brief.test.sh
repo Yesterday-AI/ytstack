@@ -13,13 +13,16 @@
 #   render --kind   "## Kind" says what the worker may do: implement (the
 #                   default) commits with the prefix; review is read only, pins
 #                   the range from --head (a commit hash, required) and --base,
-#                   and has no Git section; prepare commits nothing
+#                   has no Git section and asks for the class of the change
+#                   (Risk, Severity, Reach, Invariants touched); prepare
+#                   commits nothing
 #   failures        no plan, no Files section, no contract: exit 1, no brief;
 #                   usage errors: exit 64
 #   check           a complete report passes; a missing or empty label, a
 #                   "Checks run:" without an exit code, a "Status:" outside the
 #                   three values and one that contradicts "Blockers:" are
-#                   named, exit 1
+#                   named, exit 1; the four labels of a review stand together,
+#                   and "Risk:" is low, normal or high
 #
 # Run: /bin/bash tests/ytstack-brief.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -205,6 +208,13 @@ has "review: the pinned range" 'review exactly the range `def5678..abc1234`' "$K
 has "review: read only" "Change nothing: no file, no commit, no branch." "$K"
 has "review: how findings are reported" "per finding a concrete case and what happens if it is skipped" "$K"
 has "review: the verdict goes into Outcome" '`Outcome:` carries the verdict (`approved` or `changes requested`) and the reviewed commit.' "$K"
+has "review: the reviewer is not the author and states the class" "You are not the author of this change, and you state its class; its author never does." "$K"
+has "review: the four labels" 'four more labels, each at the start of a line: `Risk: <low | normal | high>`, `Severity: <' "$K"
+has "review: the last of the four" '`Invariants touched: <none | area: the invariant or decision, in its own words>`' "$K"
+has "review: what makes a change high" '`high`: the change touches an invariant or a decision that applies now' "$K"
+has "review: the change is read against invariants and decisions" '"Invariants and security boundaries" and "Decisions that apply now" of every area file under "Read for context"' "$K"
+has "review: a rule shifted in code alone is named" "also when the change edits only code and leaves the document alone" "$K"
+hasnt "an implementer is not asked for the class" "Invariants touched" "$DEFAULT"
 hasnt "review: no commit rule" "Commit each task" "$OUT"
 hasnt "review: no Git section, even with --branch" "## Git" "$OUT"
 has "review: the work contract is included" "## Work contract" "$OUT"
@@ -268,6 +278,10 @@ grep -v '^<!-- kind-review: ' "$ROOT/skills/spawn-milestone-team/brief-template.
 OUT=$(bash "$T/bin/ytstack-brief" -C "$R" render --task M001-S01-T01 --kind review --head abc1234 2>&1); EC=$?
 eq "a template without the kind's sentences: exit 1" 1 "$EC"
 has "names the kind" "no 'kind-review' sentences" "$OUT"
+grep -v '^<!-- round-review: ' "$ROOT/skills/spawn-milestone-team/brief-template.md" > "$T/skills/spawn-milestone-team/brief-template.md"
+OUT=$(bash "$T/bin/ytstack-brief" -C "$R" render --task M001-S01-T01 --kind review --head abc1234 2>&1); EC=$?
+eq "a template that does not ask a reviewer for the class: exit 1" 1 "$EC"
+has "names what is missing" "no 'round-review' sentences" "$OUT"
 
 # ---- 5. check -----------------------------------------------------------------
 echo "# check"
@@ -339,6 +353,27 @@ def5678 two/')"
 eq "a value on the lines after its label counts" "report ok" "$OUT"
 chk "$(printf '%s\n' "$GOOD" | sed 's/^Task:/- **Task:**/')"
 eq "a label that does not start its line is missing" "missing: Task" "$OUT"
+
+# The class of a change: what a reviewer adds after the eleven labels.
+REVIEW="$GOOD
+Risk: high
+Severity: archived rows reach a customer's export
+Reach: one area, stored data
+Invariants touched: export: archived rows are never exported"
+chk "$REVIEW"
+eq "a review report with the four labels passes" "report ok" "$OUT"
+chk "$(printf '%s\n' "$REVIEW" | sed 's/^Risk:.*/Risk: medium/')"
+eq "a Risk outside the three classes fails" 1 "$EC"
+eq "and is quoted" 'Risk: "medium" is not low, normal or high' "$OUT"
+chk "$(printf '%s\n' "$REVIEW" | grep -v '^Invariants touched:')"
+eq "three of the four labels: the fourth is named" "missing: Invariants touched" "$OUT"
+chk "$(printf '%s\n' "$REVIEW" | sed 's/^Reach:.*/Reach:/')"
+eq "one of the four without a value is named" "empty: Reach" "$OUT"
+chk "$GOOD
+Severity: a wrong total on one invoice"
+eq "one of the four alone: the other three are named" "missing: Risk
+missing: Reach
+missing: Invariants touched" "$OUT"
 
 # The report shape in the brief and the checker know the same eleven labels:
 # the checker misses none in the shape, and the shape has no twelfth.
