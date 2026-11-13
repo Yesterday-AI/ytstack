@@ -338,6 +338,9 @@ plan_with "$(round "approved; blocking: 0; follow-ups: 0; risk: low; invariants:
 only_reason "a touched invariant" "reason: review -- the reviewer named an invariant or decision the change touches: auth: tokens expire; sessions too"
 plan_with "$(round "$GOOD")"; rt --author review-1
 only_reason "the reviewer is the author" "reason: review -- the reviewer 'review-1' is the author of the change"
+plan_with "$(round "approved; blocking: 0; follow-ups: 0; risk: low; invariants: none; by: self")"; rt --author worker-1
+only_reason "by: self is the author, whatever --author says" "reason: review -- the reviewer is the author of the change (by: self)"
+plan_with "$(round "$GOOD")"
 rt
 only_reason "no --author" "reason: review -- no --author given: that the reviewer is not the author cannot be checked"
 plan_with "$(round "$GOOD" base | sed 's/\.\.[0-9a-f]*/..0000000/')"; rt --author worker-1
@@ -421,6 +424,8 @@ plan_with "$(round "$GOOD")" "$(lens api "not run; by: api-review; evidence: non
 only_reason "not run never counts as pass" "reason: lens api -- its verdict is 'not run', not pass"
 plan_with "$(round "$GOOD")" "$(lens api "pass; by: worker-1; evidence: none")"; rt --author worker-1
 only_reason "a lens reviewed by the author" "reason: lens api -- its reviewer 'worker-1' is the author of the change"
+plan_with "$(round "$GOOD")" "$(lens api "pass; by: self; evidence: none")"; rt --author worker-1
+only_reason "a lens with by: self" "reason: lens api -- its reviewer is the author of the change (by: self)"
 plan_with "$(round "$GOOD")" "$(lens api "pass; evidence: none")"; rt --author worker-1
 only_reason "a lens line without a reviewer" "reason: lens api -- its line names no reviewer (by:)"
 plan_with "$(round "$GOOD")" "$(lens api "fail; by: api-review; evidence: none")" "$(lens api "pass; by: api-review; evidence: none")"; rt --author worker-1

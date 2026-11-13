@@ -37,7 +37,8 @@
 #         every required lens a newest "- Lens <name>:" line that says pass,
 #         is by somebody other than --author and is valid for --head, and for
 #         "evidence: visual" a MANIFEST whose hashes match the images.
-#         Without --author the route is "person". A round is valid for a head
+#         Without --author the route is "person"; "by: self" always counts as
+#         the author. A round is valid for a head
 #         when it names it, or when nothing but process records changed since;
 #         a lens line when no path under its "applies" changed since. A
 #         relative evidence directory is read from the root of the repository.
@@ -620,6 +621,7 @@ $(printf '%s\n' "$line" | record_fields)
 EOF
   [ "$verdict" = pass ] || note route "$subject" "its verdict is '$verdict', not pass"
   if [ -z "$by" ]; then note route "$subject" "its line names no reviewer (by:)"
+  elif [ "$by" = self ]; then note route "$subject" "its reviewer is the author of the change (by: self)"
   elif [ "$by" = "$AUTHOR" ]; then note route "$subject" "its reviewer '$by' is the author of the change"; fi
   if ! lh=$(resolve "$lhead"); then
     note route "$subject" "its line names '$lhead', which is no commit here"
@@ -666,7 +668,9 @@ EOF
       note route review "the newest round line states the risk '$risk', which is not low, normal or high" ;; esac
     case "$inv" in ""|none) ;; *)
       note route review "the reviewer named an invariant or decision the change touches: $inv" ;; esac
-    [ -z "$AUTHOR" ] || [ "$by" != "$AUTHOR" ] || note route review "the reviewer '$by' is the author of the change"
+    # "self" is what a session writes that reviewed its own change.
+    if [ "$by" = self ]; then note route review "the reviewer is the author of the change (by: self)"
+    elif [ -n "$AUTHOR" ] && [ "$by" = "$AUTHOR" ]; then note route review "the reviewer '$by' is the author of the change"; fi
     if ! rh=$(resolve "$rhead"); then
       note route review "the newest round line names '$rhead', which is no commit here"
     elif [ "$rh" != "$HEADC" ]; then
