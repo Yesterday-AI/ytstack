@@ -3,7 +3,7 @@ name: slice-milestone
 description: "Breaks the current milestone into slices of one to seven tasks and writes M###-S##-PLAN.md per slice. Use after plan-milestone (and plan-ceo-review when it ran), or when the user says slice the milestone, plan the slices, break it down. Not for task-level detail (plan-task)."
 metadata:
   tier: core
-  version: 0.2.0
+  version: 0.3.0
   triggers:
     - slice milestone
     - plan slices
@@ -182,6 +182,8 @@ completed_tasks: 0
 
 **Goal:** {SLICE_GOAL}
 
+**Blocked by:** {none | S##, S##}
+
 ## Tasks
 
 {For each task in _SLICE_TASKS, emit:}
@@ -203,6 +205,8 @@ All tasks marked `[x]` and verified via `ytstack:summarize-task`.
 ```
 
 Task numbering: T01, T02, T03, ... in order provided. Zero-pad to 2 digits.
+
+**Blocked by: real dependencies only.** A slice is blocked by another slice when it cannot start without that slice's result: a table, an interface or a file the other one produces. Name those slices (`S01, S03`), or write `none`. An order you would merely prefer is not a dependency, and neither is the position in the roadmap: every entry keeps this slice from starting while the other one runs (`bin/ytstack-frontier` reads the line). Work it out from the goals and task lists you were given and from `{CURRENT_MILESTONE}-CONTEXT.md`; do not ask for it. If a goal given later shows that a plan already written needs this slice, correct that plan's line with Edit.
 
 **Done by work, accepted by a gate.** "Done when" holds only what work in this slice can establish. If the slice goal or the milestone's exit criteria in `{CURRENT_MILESTONE}-CONTEXT.md` name something work cannot produce (a person's acceptance, an approval, a measurement that has to hold before or after a step outside this slice), write it under `## Gates`, one line each, with who decides, how the verdict is obtained and when the gate lapses (the point after which it can no longer be met or no longer matters, for example "when the cutover has been made"). A field nobody stated is `unknown`; do not invent it and do not ask for it here. No gate: leave the section out. A slice is closed by work when its tasks are done and accepted when its gates are given or lapsed; `ytstack:reassess-roadmap` reports both numbers and takes the open gates to the human in one question. An expensive verification (several passes, a sample, another environment) is not a gate: it belongs in the task plan's Verification section with its reason.
 

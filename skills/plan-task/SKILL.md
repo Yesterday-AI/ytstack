@@ -3,7 +3,7 @@ name: plan-task
 description: "Turns the next task of the current slice into M###-S##-T##-PLAN.md with exact files and a verification command, and sets STATE active_task. Use after slice-milestone, before executing a task, or when the user says plan the task, next task, detail the task. Not for one-sentence changes (quick-task) and not for closing a task (summarize-task)."
 metadata:
   tier: core
-  version: 0.3.0
+  version: 0.3.1
   triggers:
     - plan task
     - detail next task
@@ -229,6 +229,8 @@ If A: proceed.
 
 ### Step 9: Write `M###-S##-T##-PLAN.md`
 
+Write the `**Blocked by:**` line only when this task cannot start without the result of another task of the slice (`T01`, or `T01, T03`); the order of the task list alone is not a reason, and without such a task the line is left out.
+
 ```markdown
 ---
 milestone: {CURRENT_MILESTONE}
@@ -242,6 +244,9 @@ status: planned
 # {CURRENT_MILESTONE}-{ACTIVE_SLICE}-{NEXT_TASK} -- Task Plan
 
 **Summary:** {TASK_DESCRIPTION}
+
+{Only when the task needs another task's result:}
+**Blocked by:** T##
 
 ## Files
 
