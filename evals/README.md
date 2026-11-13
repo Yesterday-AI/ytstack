@@ -18,6 +18,9 @@ Behavioural tests for `claude plugin eval` (Claude Code >= 2.1.269): one case pe
 | `reconcile` | one `closed: draft` stub | `RECONCILE-<date>.md` |
 | `adopt-brownfield` | README + docs/ + CHANGELOG + commits, no `.ytstack/` | `.ytstack/PROJECT.md`, `.ytstack/spec/SPEC.md` |
 | `init-project` | fresh repo with `OFFICE-HOURS.md` | `.ytstack/STATE.md`, `.ytstack/spec/SPEC.md` |
+| `bounded-evidence` | T01 committed, its plan asks for one run of a 44-scenario script that counts its own runs | `M001-S01-T01-SUMMARY.md`, `tests/.scenario-runs` holds `1` |
+| `gates-one-question` | S01 done with two open gates: one needs the product owner, one whose lapse condition already occurred | reply names G01 and G02, the product owner, and G02 as lapsed |
+| `review-round-three` | T01 with two fix commits that flip one comparison, two review rounds recorded in the plan | no reviewer subagent dispatched, reply carries a diagnosis |
 
 ## Run
 

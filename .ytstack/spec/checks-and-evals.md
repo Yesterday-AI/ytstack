@@ -4,6 +4,7 @@ status: implemented
 paths:
   - bin/ytstack-check
   - bin/ytstack-spec
+  - bin/ytstack-brief
   - tests/**
   - evals/**
   - .github/workflows/**
@@ -37,13 +38,18 @@ Everything that tells a contributor whether a change is acceptable: the static c
 - A bash script on git and awk. `lint` checks the format of `.ytstack/spec/`, `drift` lists areas whose `paths` changed after the description or one of its `sources` was last touched, `impact` checks a task plan's "Spec impact" against what the task changed, `areas` names the area of a path. Rules and exit codes: `docs/ux/spec-format.md` and the comment at the top of the script.
 - `drift` is advisory and exits 0 unless `--exit-code` is given. It never reads `verified_at`; an area file that is new or edited in the working tree is skipped.
 
+**`bin/ytstack-brief`: the brief of a dispatched worker and its report**
+
+- A bash script on awk. `render --task <ref>` or `--slice <ref>` prints a brief built from the plan files and `skills/spawn-milestone-team/brief-template.md`, and includes the body of `skills/minimal-code/SKILL.md` as the work contract, read at render time. It prints no brief when the plan, its `## Files` section, the template or the contract is missing (exit 1).
+- `check` validates a worker's report from a file or stdin: the eight labels of the template's "Report" section, each with a value, and an exit code in every `Checks run:` line. It prints one line per problem and exits 1, or `report ok`.
+
 **Shell suites: `tests/*.test.sh`**
 
 - Plain bash, no framework. A suite prints one line per assertion and ends with its pass and fail count; fixtures live in `mktemp` directories. The comment at the top of each file states the contract it pins.
 - `tests/run-all.sh` runs every suite from a neutral temporary directory and prints `PASS` or `FAIL` per suite with that suite's last line. It stops at the first failing suite, prints up to ten of its `FAIL` lines and exits 1. The last line is `ALL SUITES PASSED` or `SUITE FAILURE`.
 - `tests/run-all.sh --linux` runs the same inside an `alpine/git` container with the repository mounted read-only. Without a working Docker daemon it prints a skip line and exits 0.
 - `tests/gstack-live.test.sh` prints a skip line and exits 0 unless `GSTACK_HOME` points at a gstack install.
-- `tests/ytstack-check.test.sh` tests the checker on a copy of the plugin tree. `tests/ytstack-spec.test.sh` tests `bin/ytstack-spec` on fixture repositories, one case per rule.
+- `tests/ytstack-check.test.sh` tests the checker on a copy of the plugin tree. `tests/ytstack-spec.test.sh` tests `bin/ytstack-spec` on fixture repositories, one case per rule. `tests/ytstack-brief.test.sh` does the same for `bin/ytstack-brief` and compares the rendered contract with the real `skills/minimal-code/SKILL.md`.
 
 **Python tests: `tests/codex_plugin_test.py`**
 
@@ -105,6 +111,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 - `bin/ytstack-check` -- the checker; its docstring names the flags and exit codes.
 - `bin/ytstack-spec` -- the spec tool; `tests/ytstack-spec.test.sh` pins it.
+- `bin/ytstack-brief` -- brief renderer and report check; `tests/ytstack-brief.test.sh` pins it.
 - `tests/run-all.sh` -- the suite runner. `tests/*.test.sh` -- the suites. `tests/codex_plugin_test.py` -- the Python tests.
 - `evals/<case>/` -- the eval cases. `evals/README.md` -- how to run them.
 - `.github/workflows/ci.yml`, `plugin-check.yml`, `secret-scan.yml`.
@@ -125,6 +132,7 @@ Not covered by these four: `claude plugin eval` (costs money) and `bash tests/ru
 ## Decisions that apply now
 
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)". Source of `bin/ytstack-spec` and the two spec checks.
+- DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)". Source of `bin/ytstack-brief`.
 - DECISIONS.md -- "2026-04-23: UX contracts enforced by CI, not convention"
 - DECISIONS.md -- "2026-05-31: Add `kind: reference` skill class (exempt from procedure-section contract)"
 - DECISIONS.md -- "2026-11-07: Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree". Source of the banned shell patterns and the shared-resolver rule in the checker.

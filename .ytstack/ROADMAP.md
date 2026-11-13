@@ -1,9 +1,9 @@
 ---
 project: ytstack
-last_updated: 2026-11-13T15:30:00Z
+last_updated: 2026-11-13T16:10:00Z
 total_milestones: 23
-completed_milestones: 17
-current_milestone: M022 (in progress; M020 and M023 planned, M014 reserved, M011 and M013 absorbed into M019)
+completed_milestones: 18
+current_milestone: M022 (S01 and S02 done, S03 waits for M020; M023 done; M020 planned, M014 reserved, M011 and M013 absorbed into M019)
 ---
 
 # ytstack Roadmap
@@ -40,7 +40,7 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M020 | Kimi Code CLI host support (issue #30) -- planned 2026-11-09 in the main checkout; its `M020-*` files are not committed yet. The earlier candidates stay unscheduled: (a) dogfood `spawn-milestone-team` 0.2.0 on a real multi-slice milestone (orchestrator + worktree subagents, merge step, STATE resolution) and fix what the live run shows; (b) Codex host: verify the SessionStart `additionalContextLimit` (REVIEW-NOTES 2026-11-07) and the hook-free flow on a real Codex install; (c) PowerShell hook variants when a Windows consumer appears; (d) per-worktree STATE pointer if (a) needs it; (e) re-run the consumer audit (`docs/research/2026-11-07-notes/local-consumer-repos-audit.md`) after the 17 repos update to 0.4.x. | planned | TBD | 0 |
 | M021 | Status line segment (issue #31) -- `bin/ytstack-status`, optional `progress` block in the `STATE.md` frontmatter, `yt_progress_parse` + STATE lint W7, upkeep in `summarize-task` / `quick-task`, `docs/statusline.md`. Done 2026-11-11 (2 slices, 5 tasks); unreleased. Numbered M021 because M020 is taken by the Kimi adapter planning (issue #30). | **done** | 5 | 5 |
 | M022 | Technical spec (issue #36) -- new artifacts `.ytstack/spec/SPEC.md` and `.ytstack/spec/<area>.md` that state what applies now; `bin/ytstack-spec` (lint, drift, impact); the loop keeps them true; ytstack's own spec. S01 and S02 built 2026-11-13; S03 (STATE as a pointer, milestone fold, fresh-session cases) waits for M020. Section "Planned 2026-11-13" below. | **in-progress** | 11 | 11 |
-| M023 | Bounded work (issue #35) -- the work contract reaches every dispatched agent, completion and gates are defined before execution, reviews and evidence stay bounded. Section "Planned 2026-11-13" below. | planned | TBD | 0 |
+| M023 | Bounded work (issue #35) -- `minimal-code` as the one work contract for code, evidence and reports; `bin/ytstack-brief` (rendered brief with the contract, report check); runs and environment in the plan; gates with one question and two progress numbers in `reassess-roadmap`; review rounds, assumed load and evidence identity. Built 2026-11-13. Section "Planned 2026-11-13" below. | **done** | 8 | 8 |
 | later | Coordinator mode (issue #34) -- what remains of its seven items after M022 and M023. Section "Planned 2026-11-13" below. | candidate | TBD | 0 |
 
 **Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 done (6/6, 2026-11-07); M011 task count pending milestone planning.

@@ -253,7 +253,7 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - `session-end` -- appends one JSON line to the per-session `session.jsonl` out of tree (no `.ytstack/journal/`)
 - `teammate-idle`, `task-created`, `task-completed` -- Agent Teams coordination (resolved per checkout)
 - `pre-tool-use-edit` (advisory, exit 0), `post-tool-use-bash` (draft summary stub, once, only in the committing checkout and only for commits carrying the task ref) -- quality / safety gates
-- Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (14 suites incl. the #26 acceptance and concurrency suites)
+- Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (15 suites incl. the #26 acceptance and concurrency suites)
 
 #### `quick-task` (execution: quick lane, M018)
 
@@ -267,9 +267,9 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 **Triggers on:** "reconcile", "clean up .ytstack", a `STATE lint` warning at session start.
 **Differs from everything else:** the only skill allowed to move `.ytstack` artifacts; agents never delete or revert them on their own (using-ytstack rule).
 
-#### `minimal-code` (directive, injected when `minimal_code: on`, M018)
+#### `minimal-code` (directive, injected when `minimal_code: on`, M018; the work contract since M023)
 
-**Purpose:** six-rung ladder (needed at all? exists in the codebase? stdlib? dependency? one line? minimum that passes) plus the never-cut list and `shortcut:` markers; concept adapted from ponytail (NOTICE), prose ytstack's own. Under 60 lines; the SessionStart hook injects a six-line pointer, the TDD wrapper references it for the GREEN step.
+**Purpose:** the one work contract: smallest complete change (reach before size, the six-rung ladder: needed at all? exists in the codebase? stdlib? dependency? one line? minimum that passes; the never-cut list; `shortcut:` markers that name their limit) and smallest sufficient evidence (run what the plan's Verification names as often as it says; evidence is a check on a commit in an environment; a verdict only a person can give is never recorded as given; every report ends with "Not checked:"). Concepts adapted from ponytail (NOTICE), prose ytstack's own. The SessionStart hook injects a pointer, the TDD wrapper references it for the GREEN step, and `bin/ytstack-brief render` includes its body verbatim in every dispatched brief, so a worker has it without loading a skill (DECISIONS 2026-11-13 "Verification, review and orchestration work are bounded like code").
 
 **Ceremony dials and states (M018):** `PREFERENCES.md` `granularity` / `autonomy` / `quick_lane` / `minimal_code` (read via `yt_prefs`), milestone states `planned | in-progress | done | dropped | shipped-informally` (`docs/ux/skill-structure.md` "Artifact states"), STATE pointer lint (`yt_state_lint`, injected by `session-start`, enforced by `plan-task` / `summarize-task`), read-side layout tolerance (`yt_find_artifacts`).
 

@@ -37,12 +37,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   document.
 - Eval case `spec-impact`; second outcome graders on `plan-task`,
   `summarize-task`, `init-project` and `adopt-brownfield`.
+- **Bounded work** (issue #35): `minimal-code` is now the work contract for
+  code, evidence and reports: list what a change must reach before choosing
+  the smallest solution, fix a bug once in the shared code, no new test for a
+  trivial change, run what the plan's Verification names as often as it says,
+  end every report with "Not checked:".
+- `bin/ytstack-brief`: `render` builds the brief for a dispatched worker from
+  the plan files and includes the contract verbatim (the same text for a
+  Claude subagent and for `codex exec`); `check` validates the worker's
+  report (eight fixed labels). `spawn-milestone-team` dispatches with the
+  rendered brief and checks the report before the verifier runs. Suite
+  `tests/ytstack-brief.test.sh`.
+- Gates: a slice plan or task plan can carry `## Gates` (what, who decides,
+  how the verdict is obtained, when it lapses). A gate never holds a task
+  open and no agent records it as given. `reassess-roadmap` puts all open
+  gates and all non-converging work to the human in one question and reports
+  two numbers: slices closed by work, slices accepted.
+- `plan-task` records how often and where a verification runs (`Runs:`,
+  `Environment:`, optional `Sample:` with its reason).
+- `code-review` counts rounds in the task plan (`## Review`): round 1 is
+  complete, round 2 covers the fix and its consequences, a third round is a
+  diagnosis of scope, conflicting rules or solution instead of another
+  review. The reviewer states the assumed load, gives a concrete case and
+  "if skipped" per finding, treats a `shortcut:` comment that names its limit
+  as a decision, and follows the project's severity policy.
+- Eval cases `bounded-evidence`, `gates-one-question`, `review-round-three`.
 
 ### Changed
 
 - `resume-session`, `handoff-session` and the closing line of the
   SessionStart injection name `spec/SPEC.md` instead of restating how the
   system behaves.
+- Evidence is a check on a commit in an environment. The verifier still makes
+  the independent run, once per commit; neither it nor
+  `verification-before-completion` repeats a check for the same commit and
+  environment because the context is new. The summary's Verification line
+  records the commit and the environment.
+- The TDD wrapper says which changes get a new test (logic, bug fixes) and
+  which do not (a rename, a constant, a text, a config value).
 - ytstack's own entry documents agree with the repository again
   (`PROJECT.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `AGENTS.md`, the wrapper and
   suite counts in README, QUICKSTART, NOTICE and `docs/concept.md`).

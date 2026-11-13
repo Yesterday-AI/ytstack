@@ -841,3 +841,30 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - The codebase maps of `adopt-brownfield` stay beside the spec.
 
 **Supersedes:** None. It adds a fourth role to the artifact model: plans and summaries are history, the spec is the description of the system.
+
+---
+
+## 2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)
+
+**Context:** `minimal-code` limited implementation code and nothing else. A consumer migration showed the gap: an evaluation planned as one pass of 44 scenarios ran as 88, findings the project's own rules rated non-blocking held pull requests, one change went through six review rounds, and plan rows that only a person's verdict could close were worked on for days. The rules also did not reach agents that were dispatched with a brief and never loaded a skill.
+
+**Options considered:**
+- A) A second directive for verification and review beside `minimal-code`.
+- B) One work contract: `minimal-code` covers code, evidence and the report, and travels inside every dispatched brief.
+- C) New preferences that switch review depth and evidence levels per project.
+
+**Chose:** B. The contract is the body of `skills/minimal-code/SKILL.md`; `bin/ytstack-brief render` puts it verbatim into the brief for a Claude subagent or `codex exec`, and `bin/ytstack-brief check` validates the worker's report. The decision points carry the detail: `plan-task` (runs, environment, gates), `reassess-roadmap` (one question, two numbers), `code-review` (rounds, assumed load, concrete findings), the verifier and `verification-before-completion` (evidence identity).
+
+**Reason:** A second directive is a second copy of the policy and the two drift. Preferences for evidence levels invite silent weakening of approved gates. One text that is rendered into the brief reaches every worker on every host without a hook.
+
+**How to apply:**
+- More work than the plan asks for needs a named reason: an unmet requirement, a reachable failure case, or evidence that does not establish the result.
+- A plan's Verification section is the whole evidence a task owes: command, runs, environment. Execution neither adds to it nor drops from it.
+- Evidence is a check on a commit in an environment. It is renewed when one of the three changed, when the run failed or flaked, or when an independent run is required and missing; never because a new context reads it.
+- A gate (`## Gates`: what, who decides, how, when it lapses) never holds a task open, and no agent records it as given. `reassess-roadmap` takes all open gates to the human in one question per slice boundary. A gate whose condition can no longer be met is recorded as lapsed, never as passed.
+- Review round 1 is complete, round 2 covers the fix and its consequences, round 3 is a diagnosis of scope, conflicting rules or solution. The round is recorded in the task plan.
+- A review states the load it assumed and rates scale findings against it. The project's severity policy decides what blocks; a non-blocking finding is a follow-up.
+- Every report ends with "Not checked:".
+- Checks the project requires for every change (CI on the current head, a required review, a deployment check) stay required.
+
+**Supersedes:** None. Narrows two older rules to the commit being claimed: the verifier's "run it again, now" (`agents/verifier.md`) and the vendored "run it fresh" in `verification-before-completion`. Extends 2026-11-07 "Ceremony scales with the change" from code to evidence and review.

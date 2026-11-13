@@ -194,6 +194,7 @@ minimal_code: on         # on | off
 - `autonomy: step` when you want to approve every step.
 - Milestones you will not do: say "reassess the roadmap" and pick `dropped` or `shipped-informally` instead of leaving them `planned` forever.
 - Leftovers (draft stubs, stray files): say "reconcile .ytstack" -> `ytstack:reconcile` asks per class and archives; nothing is deleted.
+- The minimal-code guard is a work contract, not only a code rule: a task's Verification section says which command runs, how often and where, and the agent does not add passes or scenarios on its own. A review is complete in round one, covers the fix in round two and becomes a diagnosis in round three. What only you can decide is a gate in the plan (`## Gates`: what, who decides, how, when it lapses); at the slice boundary `reassess-roadmap` brings all open gates in one question and tells you two numbers: closed by work, and accepted.
 
 ## Reading the state
 

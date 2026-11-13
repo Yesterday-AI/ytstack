@@ -57,7 +57,7 @@ Read from `PREFERENCES.md` in the resolved `.ytstack` directory by `yt_prefs` in
 | `granularity` | The smallest unit that gets a plan and a summary. Below `task`, `plan-task` appends the plan sections to the slice plan (or the milestone roadmap) and sets `active_task: all`; `summarize-task` writes one summary per slice or milestone; at `milestone`, `slice-milestone` writes a single slice. | `plan-task`, `summarize-task`, `slice-milestone` |
 | `autonomy` | `loop`: inside a slice, `plan-task` continues into `test-driven-development`, `verification-before-completion` and `summarize-task`, and `summarize-task` continues with the next `plan-task`, without asking. It stops at the slice boundary and at every gate. `step`: every skill returns control. `slice-milestone` never chains. | `using-ytstack`, `plan-task`, `summarize-task` |
 | `quick_lane` | `off`: `quick-task` stops at its gate and points at `plan-task`. `on`: `using-ytstack` routes one-sentence changes with a known cause to `quick-task`. | `quick-task`, `using-ytstack` |
-| `minimal_code` | `on`: `hooks/session-start` adds a pointer that tells the agent to load `minimal-code` before writing code, and the TDD wrapper applies its ladder in the GREEN step. `off`: no pointer. | `hooks/session-start`, `test-driven-development` |
+| `minimal_code` | `on`: `hooks/session-start` adds a pointer that tells the agent to load `minimal-code` before writing code or adding a check, and the TDD wrapper applies its ladder in the GREEN step. `off`: no pointer. A rendered brief carries the contract in both cases. | `hooks/session-start`, `test-driven-development`, `bin/ytstack-brief` |
 | `team` | `off`: `spawn-milestone-team` dispatches worktree subagents. `on`: it emits an Agent Teams instruction and requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. | `spawn-milestone-team` |
 
 ### Non-interactive mode
@@ -86,13 +86,24 @@ No other skill reads the flag.
 - `reassess-roadmap` answers the drift report of `bin/ytstack-spec` at the slice boundary, once per area: correct the description, or set `verified_at`.
 - `resume-session`, `handoff-session` and the SessionStart injection name `spec/SPEC.md`; they do not restate it. `quick-task` corrects an area file only when the change made a statement in it false.
 
+### The work contract
+
+`skills/minimal-code/SKILL.md` is the one text that says how much work is enough: the smallest complete change and the smallest sufficient evidence. The other skills apply it at their decision point and do not restate it.
+
+- **Dispatch.** `bin/ytstack-brief render` builds a worker's brief from the plan files and includes the body of `minimal-code` verbatim. `spawn-milestone-team` dispatches with that text and checks the worker's report with `bin/ytstack-brief check` before a verifier runs. The report has eight fixed labels and ends with "Not checked:".
+- **Plan.** A task plan's Verification section names the command, `Runs:` and `Environment:`. What work cannot produce is a gate line under `## Gates` (what, who decides, how, when it lapses). A gate never holds a task open.
+- **Slice boundary.** `reassess-roadmap` collects the open gates of the milestone and work that repeats without advancing (three or more review rounds on a task), puts them to the human in one question, records only what was answered, and reports two numbers: slices closed by work and slices accepted. In non-interactive mode it asks nothing and records nothing.
+- **Review.** `code-review` counts rounds from the `## Review` lines in the task plan. Round 1 reviews the whole change, round 2 the fix, and from round 3 no reviewer is dispatched: the skill diagnoses scope, conflicting rules or solution and asks the human. The reviewer states the assumed load, gives a concrete case and "If skipped" per finding and follows the project's severity policy.
+- **Evidence.** A result is a check on a commit in an environment. `verification-before-completion` runs the plan's command as often as the plan says and notes the commit. The verifier makes one independent run per commit and cites an earlier verdict when the task's files are unchanged since. `summarize-task` records check, commit and environment and does not run the check again.
+- **Tests.** The TDD wrapper writes a failing test first for logic and bug fixes; a trivial change gets none.
+
 ## Interfaces and contracts
 
 - `docs/ux/skill-structure.md`: frontmatter, required sections, the resolver block, banned preamble patterns, terminal state, artifact states.
 - `docs/ux/askuserquestion-format.md`: the four-part question body, option annotations, tiers.
 - `docs/ux/agent-structure.md`: agent frontmatter, body sections, size limit.
 - `hooks/lib/git-ctx.sh`: the comment above each function names the globals it sets. `YT_GSTACK_PIN` and `YT_BUN_MIN` there are the gstack pin and the bun minimum.
-- The implementer and verifier briefs: `skills/spawn-milestone-team/SKILL.md`, Steps 5 and 6.
+- The worker brief and the report shape: `skills/spawn-milestone-team/brief-template.md`, rendered by `bin/ytstack-brief`. Dispatch, report check and verifier prompt: `skills/spawn-milestone-team/SKILL.md`, Steps 5 to 7.
 - The artifacts skills read and write: [artifacts.md](artifacts.md).
 
 ## Invariants and security boundaries
@@ -159,3 +170,4 @@ No other skill reads the flag.
 - DECISIONS.md -- "2026-11-07: Brownfield adoption is a reference-first distillation, never a pitch" (narrows the greenfield flow: an existing codebase skips the pitch)
 - DECISIONS.md -- "2026-10-13: Remove generated Codex copies; load the existing skills directly" (one skill tree for both hosts)
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)" (the spec steps in the loop)
+- DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)" (the work contract; extends the ceremony entry of 2026-11-07 from code to evidence and review)

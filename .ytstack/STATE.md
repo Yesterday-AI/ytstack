@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-11T10:53:05Z
+last_updated: 2026-11-13T16:05:00Z
 current_milestone: none
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-11-13):** M022 (technical spec, issue #36) S01 and S02 built, S03 waits for M020. M023 (bounded work, issue #35) built. Both on the branch `spec-and-bounded-work` (worktree `.claude/worktrees/spec-and-bounded-work`, on top of `f4f54ab`), not pushed. What exists: `.ytstack/spec/SPEC.md` plus six area files for ytstack itself, the format `docs/ux/spec-format.md`, `bin/ytstack-spec` (lint, drift, impact, areas), spec scaffolds in `init-project` and `adopt-brownfield` (also for an initialized project without a spec), "Spec impact" in `plan-task`, the closure check in `summarize-task`; `minimal-code` as the one work contract, `bin/ytstack-brief` (rendered brief with the contract, report check), runs and environment in the plan, gates with one question and two progress numbers in `reassess-roadmap`, review rounds and assumed load in `code-review`, evidence identity in the verifier. Checked: 15 suites `ALL SUITES PASSED` (macOS bash 3.2, and `--linux` from an export of the tree), checker 27 warnings as on `main`, 13 Codex tests OK, `claude plugin validate .` passed, eval run 17/17 against 5/7 for the current instructions on the 7 comparable cases (`KNOWLEDGE.md`, "Eval runs"). Not run: a live dispatch with a rendered brief, a live session on Codex. No milestone is in flight: the pointer is `none` until M022-S03 starts. What applies now is in `spec/SPEC.md`; this file only says where the work stands.
 
 **Status (2026-11-11):** M021 DONE and merged as `b9daa42` (PR #32, issue #31 closed; review follow-up for ref selection and the `set -e` snippet in the next PR): `bin/ytstack-status` status line segment, optional `progress` block in the STATE frontmatter, `yt_progress_parse` + lint W7, upkeep in `summarize-task` / `quick-task`, `docs/statusline.md`. 13 suites green on macOS, checker 27 warnings as on `main`, `claude plugin validate .` passed. CI green on `main` (macOS and ubuntu). Released as 0.5.0 (manifests, badge and CHANGELOG in the follow-up PR; tag `v0.5.0` on its merge commit). M020 (Kimi adapter, issue #30) is planned in the main checkout and uncommitted there; it is the next pointer once both lines meet.
 
@@ -85,7 +87,9 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Operator actions for M021:** `/plugin update` to 0.5.0, wire the snippet from `docs/statusline.md` into the status line script. Pulling `main` into the main checkout meets the uncommitted M020 planning in `STATE.md` and `DECISIONS.md`: keep both DECISIONS entries and the M020 pointer.
+**Operator actions for M022 / M023:** review the branch `spec-and-bounded-work` and merge it (pull request or fast-forward); release; `/plugin update`. In each consumer project run `/ytstack:adopt-brownfield` once: it adds only `.ytstack/spec/`. Merging meets the uncommitted M020 planning in the main checkout in `STATE.md`, `DECISIONS.md` and `ROADMAP.md`: keep both sides. **Then:** M022-S03 after M020 has landed (STATE size bound, "Next action" back in the SessionStart injection, milestone fold, fresh-session cases); coordinator mode (#34) via `ytstack:plan-milestone`.
+
+**Previous operator actions (M021):** `/plugin update` to 0.5.0, wire the snippet from `docs/statusline.md` into the status line script. Pulling `main` into the main checkout meets the uncommitted M020 planning in `STATE.md` and `DECISIONS.md`: keep both DECISIONS entries and the M020 pointer.
 
 **Previous status:** **M019 DONE -- delivered as 0.4.2 (0.4.0 -> 0.4.1 Codex-support merge of PR #23 -> 0.4.2 Linux `stat` fix), pushed, CI green on `f2a439c`, issues #18/#24/#25/#27 closed, installed plugin on 0.4.2, gstack v1.96.0.0 installed and live-validated (`tests/gstack-live.test.sh` 39/39).** The public catalog (`Yesterday-AI/skills`) pins no version, so it tracks `plugin.json`. No milestone open; M020 candidates are listed in ROADMAP. 0.4.0 bundles M010 (adopt-brownfield), M018 (ceremony dials, quick-task, reconcile, minimal-code, STATE lint, states, layouts) and M019 (`metadata:` frontmatter + trigger-only descriptions, `evals/` for `claude plugin eval` + CI, six lifecycle skills `code-review` / `finish-branch` / `grill` / `retro` / `ship` / `document-release`, worktree-subagent execution model with Agent Teams opt-in, Stop hook, no plugin dependencies). Clean clone at the release commit: 12 suites green, checker 0 fails, validate clean; evals 10/11 + re-run of the changed cases. **No milestone is open**: the modernisation programme from the 2026-11-07 research is complete; `ytstack:plan-milestone` for M020 when there is a next goal (candidates: live dogfooding of `spawn-milestone-team` 0.2.0 on a real milestone; PowerShell hook variants if a Windows consumer appears; per-worktree pointer if the orchestrator model needs it). **Operator actions:** `git push origin main --tags` (v0.2.0, v0.3.0, v0.4.0 are local), `gh issue close 24 25 27` (evidence posted), `/plugin update` to 0.4.0, gstack install one-liner (QUICKSTART) for the six gstack-backed skills, catalog sync in `Yesterday-AI/skills` (version 0.4.0, README skill table), skills.sh listing refresh.
 

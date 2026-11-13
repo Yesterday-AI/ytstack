@@ -85,6 +85,9 @@ The frontmatter and section template of each file is in the `SKILL.md` of the sk
 - A slice plan goes from `planned` to `done`. A quick plan goes from `in-progress` to `done`.
 - `closed:` in a summary holds a timestamp, `draft` (hook stub) or `abandoned` (`reconcile`). A draft is not a closure: `yt_state_lint`, `hooks/stop`, `finish-branch` and `ship` treat the task as open.
 - A task plan has a `## Spec impact` section: one line per area the task changes, or `none` with a reason. `plan-task` works it out from the area files; it does not ask.
+- A task plan's `## Verification` section holds the command and a line `Runs: <n>. Environment: <where>.`, with `Sample:` and a reason when the check covers a sample. A summary's Verification line records the check, the commit it ran on and the environment, and is followed by `Not checked:`.
+- `## Gates` in a slice plan or task plan holds one line per gate: `- [ ] G## -- <what> | decides: <who> | how: <how> | lapses: <when>`. `- [x]` with `| given: <date> <who>` is a gate a person gave, `- [-]` with `| lapsed: <date> <reason>` one that lapsed. Only `reassess-roadmap` changes the box, and only to what the human answered.
+- `## Review` in a task plan holds one line per review round: `- Round <n>: <base>..<head> -- <verdict>; blocking: <n>; follow-ups: <n>`. `code-review` appends it and counts the lines.
 - `summarize-task` runs `bin/ytstack-spec impact` in its preamble. A named area is satisfied when its area file or one of its `sources` changed in the task's commits or the working tree. Otherwise the task is not closed. The summary records the result under `## Spec`. A plan that says `none` closes without a spec edit.
 
 ### Commits and tasks
@@ -154,6 +157,7 @@ Automatic handoffs and the session journal are not artifacts. `hooks/pre-compact
 ## Decisions that apply now
 
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)"
+- DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)" (the `Runs:` line, `## Gates`, `## Review`, the evidence fields of a summary)
 - DECISIONS.md -- "2026-04-23: `.ytstack/` location is user-chosen (project vs user vs both)"
 - DECISIONS.md -- "2026-05-31: active_slice is plan-task-owned and team-member-guarded (M012 / issue #21-RC1)"
 - DECISIONS.md -- "2026-05-31: post-tool-use-bash is stub-once; summarize-task owns commit-to-task linking (M015 / issue #22)"

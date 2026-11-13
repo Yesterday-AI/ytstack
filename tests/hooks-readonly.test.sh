@@ -87,6 +87,12 @@ lacks "ss-main: no in-progress line with <2 milestones" "$CTX" "Milestones in pr
 
 # ---- 1c. session-start: STATE lint + minimal-code pointer (M018) ----------
 has "ss-main: minimal-code pointer injected by default" "$CTX" "Minimal-code guard is on"
+# technical spec (M022): the closing line names spec/SPEC.md only when it exists
+lacks "ss-main: no spec -> closing line does not name one" "$CTX" "spec/SPEC.md for what applies now"
+mkdir -p "$MAIN/.ytstack/spec"; printf '# spec\n' > "$MAIN/.ytstack/spec/SPEC.md"
+run session-start "{\"session_id\":\"s1spec\",\"cwd\":$(jstr "$MAIN")}"
+has "ss-main: spec present -> closing line names it" "$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)" "spec/SPEC.md for what applies now"
+rm -f "$MAIN/.ytstack/spec/SPEC.md"; rmdir "$MAIN/.ytstack/spec"
 cp "$MAIN/.ytstack/STATE.md" "$TMP/state.good"
 printf 'project: fixture\ncurrent_milestone: M3\nactive_slice: S01\nactive_task: T01\n' > "$MAIN/.ytstack/STATE.md"
 run session-start "{\"session_id\":\"s1d\",\"cwd\":$(jstr "$MAIN")}"

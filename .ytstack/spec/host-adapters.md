@@ -47,6 +47,7 @@ How one `skills/` tree and one set of hook scripts serve two hosts, Claude Code 
 - `ytstack-codex hook <name>` accepts only the three registered names and no further arguments. For `session-start` it exports `YTSTACK_HOST_CONTEXT`: one line with the plugin root, then the text of `codex/adapter.md`. It then replaces itself with the shared hook script.
 - `ytstack-codex skill <name>` accepts a lowercase slug whose `skills/<name>/SKILL.md` exists. It exports `CLAUDE_SKILL_DIR` and runs `bash` with the remaining arguments; the shell block arrives on stdin. The exit code of the block is the exit code of the helper.
 - `codex/adapter.md` tells the agent to run each shell block of a skill through `ytstack-codex skill`, maps the Claude tool names to Codex tools, and stops `spawn-milestone-team` before its capability probe.
+- A prompt that starts with `# Brief:` is a rendered brief (`bin/ytstack-brief render`): `codex/adapter.md` tells a Codex worker to follow it without loading a skill and to end with the eight report lines. An orchestrator on another host starts such a worker with `codex exec` in a worktree of its own. Unknown -- no live run has exercised this.
 - Volatile state goes under `PLUGIN_DATA` when it is set, else under the remaining bases of `yt_state_base` in `hooks/lib/git-ctx.sh`.
 
 ### What a host loses
