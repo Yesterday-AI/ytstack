@@ -3,7 +3,7 @@ name: reassess-roadmap
 description: "Checks at a slice boundary whether the milestone roadmap still fits reality: deviations from the summaries, stale milestones to mark dropped or shipped-informally, slices to add, split, reorder or remove. Use after summarize-task closed the last task of a slice, or when the user says reassess, review the roadmap, does the plan still hold. Not mid-slice and not for task detail (plan-task)."
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.2.0
   triggers:
     - reassess roadmap
     - review milestone plan
@@ -34,7 +34,7 @@ Run it anyway. It takes 2 minutes and either confirms the plan (good -- more con
 
 1. **Run preamble** -- detect milestone + just-completed slice
 2. **HARD-GATE** -- slice must be fully complete (all tasks `[x]`)
-3. **Summarize the slice** -- show outcomes of the N task summaries
+3. **Summarize the slice** -- show outcomes of the N task summaries; answer the spec drift report once per area (Step 3a)
 4. **Ask: does the remaining roadmap still fit?**
 5. **If no, prompt for changes** -- add / split / reorder / remove slices
 6. **Update `M###-ROADMAP.md`** with agreed changes
@@ -107,6 +107,11 @@ echo "ACTIVE_SLICE: $_ACTIVE_SLICE"
 echo "SLICE_COMPLETE: $_SLICE_COMPLETE"
 echo "STALE_MILESTONES: ${_STALE_MILESTONES:-none}"
 echo "TRACKER: $_TRACKER"
+# Technical spec (M022): areas whose code moved on without their description.
+_SPEC_TOOL="${CLAUDE_SKILL_DIR}/../../bin/ytstack-spec"
+echo "SPEC_DRIFT_BEGIN"
+if [ -f "$_YT_DIR/spec/SPEC.md" ] && [ -f "$_SPEC_TOOL" ]; then bash "$_SPEC_TOOL" drift 2>&1; else echo "(no technical spec, or script not reachable)"; fi
+echo "SPEC_DRIFT_END"
 ```
 
 ## Procedure
@@ -119,6 +124,14 @@ echo "TRACKER: $_TRACKER"
 >
 > {For each task summary:}
 > - **T##:** {OUTCOME_FIRST_LINE} (deviations: {DEVIATIONS_SHORT})
+
+**Step 3a -- Spec drift.** Read the lines between `SPEC_DRIFT_BEGIN` and `SPEC_DRIFT_END`. Each `<area>: possible documentation impact` line names an area whose code changed after its description was last touched. That is a prompt to look, not a finding. Answer it here, once per area, for the whole slice:
+
+- Read `.ytstack/spec/<area>.md` (and the section of a `sources` document it points to) against the commits the line counts (`git log --oneline <sha>..HEAD -- <the area's paths>`).
+- A statement became false: correct the area file or its source now.
+- Nothing became false (refactoring, a fix that restored the described behaviour): set `verified_at` in the area file to the commit you checked. Do not edit a description to quiet the report.
+
+List what you did per area in the Step 3 message. No line, or no technical spec: skip. Slice closure never waits on this step; an area you could not assess is named in the report as not checked.
 
 **Step 4.** Use AskUserQuestion:
 

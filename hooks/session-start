@@ -178,6 +178,10 @@ if [ -L "$LATEST_LINK" ] && [ -f "$LATEST_LINK" ]; then
 }Latest automatic handoff: $A_TARGET${A_TS:+ ($A_TS)}"
 fi
 
+# Technical spec (M022): name the entry point when the project has one.
+SPEC_HINT=""
+[ ! -f "$YT_DIR/spec/SPEC.md" ] || SPEC_HINT=" spec/SPEC.md for what applies now,"
+
 build_state_context() {
   local next="$1"
   local ctx="[ytstack active -- scope: $YT_SCOPE]
@@ -225,7 +229,7 @@ $MINIMAL_CODE_LINES"
   fi
   ctx="$ctx
 
-The files in $YT_DIR are the source of truth for this project's state. Read STATE.md for the full dashboard, DECISIONS.md for locked architectural choices, KNOWLEDGE.md for patterns and gotchas, ROADMAP.md for the task list. Do not rely on prior-conversation context for these facts."
+The files in $YT_DIR are the source of truth for this project's state. Read STATE.md for the full dashboard,${SPEC_HINT} DECISIONS.md for locked architectural choices, KNOWLEDGE.md for patterns and gotchas, ROADMAP.md for the task list. Do not rely on prior-conversation context for these facts."
   printf '%s' "$ctx"
 }
 
