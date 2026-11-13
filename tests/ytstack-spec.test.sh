@@ -4,8 +4,9 @@
 # Contract:
 #   lint    a well-formed spec passes; each format rule fails on its own;
 #           oversize files warn (exit 2); no spec is a failure; auto_merge
-#           takes none, low or normal; REVIEW.md is no area file and has to
-#           be linked from SPEC.md
+#           takes none, low or normal; REVIEW.md is no area file, has to be
+#           linked from SPEC.md, and every line of `ytstack-risk check` on it
+#           is a failure
 #   drift   an area is listed when its paths changed after the description (or
 #           its source) was last touched, and only then; a re-stamped
 #           verified_at quiets it; planned areas are skipped; exit 0 unless
@@ -138,6 +139,10 @@ run "$R" lint;                eq "a linked REVIEW.md passes" 0 "$EC"
 has "REVIEW.md is not counted as an area file" "2 area file(s), 0 failure(s)" "$OUT"
 run "$R" areas --names src/auth/login.sh
 eq "areas does not read REVIEW.md" "auth" "$OUT"
+printf '# Review policy\n\n## Reviewers\n\n- x\n\n## Lenses\n\n- ui | applies: src/** | evidence: none\n' > "$R/.ytstack/spec/REVIEW.md"
+run "$R" lint;                eq "a malformed REVIEW.md fails lint" 1 "$EC"
+has "with the lines of ytstack-risk check" "FAIL REVIEW.md: section '## Reviewers' is not one of" "$OUT"
+has "each line is one failure" "2 area file(s), 2 failure(s)" "$OUT"
 rm -f "$R/.ytstack/spec/REVIEW.md"; spec "$R" auth billing
 
 NOSPEC="$TMP/nospec"; mkdir -p "$NOSPEC/.ytstack"

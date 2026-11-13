@@ -54,6 +54,7 @@ TOP="$YT_TOPLEVEL"
 SPEC_DIR="${YT_DIR:+$YT_DIR/spec}"
 
 # fm <file>: frontmatter as "key<TAB>value" lines; list items repeat the key.
+# bin/ytstack-risk carries a copy of this reader: keep the two in step.
 fm() {
   awk '
     NR == 1 { if ($0 != "---") exit; next }
@@ -127,6 +128,12 @@ $(grep -oE '\]\([a-z0-9][a-z0-9-]*\.md\)' "$SPEC_DIR/SPEC.md" | sed 's/^](//; s/
 EOF
   if [ -f "$SPEC_DIR/REVIEW.md" ]; then
     grep -qF "](REVIEW.md)" "$SPEC_DIR/SPEC.md" || fail "REVIEW.md: not linked from SPEC.md"
+    # The policy has its own checker; each line it prints is a failure here.
+    if ! s=$(bash "$(dirname "${BASH_SOURCE[0]}")/ytstack-risk" -C "$DIR" check 2>&1); then
+      while IFS= read -r h; do [ -z "$h" ] || fail "$h"; done <<EOF
+$s
+EOF
+    fi
   fi
 
   while IFS= read -r f; do

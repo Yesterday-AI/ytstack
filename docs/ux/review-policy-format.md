@@ -18,25 +18,36 @@ The class of a change is the higher of two values: the **floor** a script comput
 
 ## The floor
 
-`bin/ytstack-risk floor --base <sha> --head <sha>` reads the diff and prints the lowest class the change can have, or `person` when no class is low enough for the route without a person.
+`bin/ytstack-risk floor --base <sha> --head <sha>` reads the difference between the two commits and prints the lowest class the change can have, or `person` when no class is low enough for the route without a person.
+
+```
+floor: low | normal | person
+reason: <path or subject> -- <rule>
+areas: <comma list or none>
+ceiling: none | low | normal
+```
+
+There is one `reason:` line per path and rule that raised the floor. A rule names at most five paths and counts the rest in one more line. `areas` are the areas the change touches, `ceiling` is the lowest `auto_merge` among them (see "Ceilings"). The exit code is 0 when a result was printed, 64 for a usage error and 65 when git cannot answer: no repository, or a commit that does not exist.
 
 **Always a person** (`person`):
 
 - a change to `.ytstack/spec/REVIEW.md`, `.ytstack/DECISIONS.md`, `.ytstack/STANDING.md`, `.ytstack/PREFERENCES.md`, or to an instruction file of the repository (`AGENTS.md`, `CLAUDE.md`, at any depth)
-- a change to the frontmatter of an area file, or to the text of its sections "Invariants and security boundaries" and "Decisions that apply now"; the same sections of `SPEC.md` ("Invariants that hold everywhere"). Other edits of an area file are ordinary: a task that changes behaviour updates "Behavior" in the same commits
+- a change to the frontmatter of an area file, or to the text of its sections "Invariants and security boundaries" and "Decisions that apply now"; the same section of `SPEC.md` ("Invariants that hold everywhere"); an area file or a `SPEC.md` that the change adds or deletes. Other edits of an area file are ordinary: a task that changes behaviour updates "Behavior" in the same commits
 - a change to the checks themselves: `.github/workflows/**`, `.gitlab-ci.yml`, and whatever the project lists
-- a changed path that no area covers (see "Ceilings"), other than the process records of the work itself
+- a changed path that no area covers (see "Ceilings"), other than the process records of the work itself. An area file counts as covered by its own area and touches it; `SPEC.md` needs no area. A renamed or deleted file counts with its old and its new path
 - every path the project lists under "Always a person"
 
 **Never low** (at least `normal`):
 
 - dependency manifests and lock files, migrations and schema files, container and infrastructure definitions; the built-in patterns are the list `NEVER_LOW` at the top of the script
-- more than 400 changed lines or more than 20 changed files (`size:` in `REVIEW.md` changes the two numbers)
+- more than 400 changed lines or more than 20 changed files (`size:` in `REVIEW.md` changes the two numbers). Changed lines are added plus deleted lines; a binary file is one file and no lines
 - every path the project lists under "Never low"
 
 The built-in lists cannot be shortened by the project, only extended. `REVIEW.md` is itself under "Always a person", so the policy cannot be relaxed on the route it governs.
 
-**Process records** are exempt from the coverage rule: the plan, summary and context files of milestones, slices and tasks, `STATE.md`, `LANES.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `quick/`, `questions/`, `evidence/`.
+**Process records** are exempt from the coverage rule and do not count towards the size. They are, under `.ytstack/`: the files `M###-CONTEXT.md`, `M###-ROADMAP.md`, `M###-...-PLAN.md` and `M###-...-SUMMARY.md`, `STATE.md`, `LANES.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `quick/` and `questions/`; and the evidence directory (`evidence_dir`, when it is a path inside the repository). Every other rule applies to them.
+
+**Where the policy is read.** The script reads the policy at the base commit, never from the working tree: the `paths` and `auto_merge` of the area files, `REVIEW.md` and `evidence_dir`. A change to one of them is itself `person`, so the base and the head agree whenever the floor is not `person`, and an edit that is not committed changes nothing. A `REVIEW.md` that does not parse at the base sends every change to a person. A repository without area files has no covered path: the floor is `person` with one reason for all paths.
 
 ## Ceilings: what an area allows
 
@@ -75,7 +86,7 @@ It is the highest class that may merge into this area without a person. No field
 - size: 400 lines, 20 files
 ```
 
-Paths are git pathspec globs relative to the repository root, one per line. Every section is optional.
+Paths are git pathspec globs relative to the repository root, one per line. Every section is optional. Git itself matches them, the way `bin/ytstack-spec lint` and `drift` read `paths`: `*` stays inside one directory, `**` crosses directories, and `**/name` also matches at the root.
 
 ## Lenses: what a kind of change requires
 
@@ -147,6 +158,8 @@ The route says nothing about the host. `finish-lane` reads the host's gates (che
 
 ## Checked mechanically
 
-`bin/ytstack-risk check` fails on a `REVIEW.md` with a section outside the four, a lens without `applies`, `reads` or `evidence`, an `evidence` outside the two values, a `reads` document that does not exist, a lens name used twice, and a `size` line that is not two numbers. `bin/ytstack-spec lint` fails on an `auto_merge` outside the three values.
+`bin/ytstack-risk check` reads the `REVIEW.md` of the working tree. It fails on a section outside the four, a lens whose name is not a lowercase slug, a lens without `applies`, `reads` or `evidence`, a lens field outside the five, an `evidence` outside the two values, a `reads` document that does not exist, a lens name used twice, and a `size` line that is not two numbers. It prints one line per problem (`REVIEW.md: <what is wrong>`) and exits 1; a clean policy and a project without `REVIEW.md` exit 0.
+
+`bin/ytstack-spec lint` runs that check when `REVIEW.md` exists and counts each line as a failure. It also fails on an `auto_merge` outside the three values and on a `REVIEW.md` that `SPEC.md` does not link.
 
 What stays a judgment: the class the reviewer states, and the verdict of a lens. The script makes sure the judgment was made by somebody else, on this commit, with the evidence the lens asks for.

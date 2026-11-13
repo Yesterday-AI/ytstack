@@ -189,7 +189,7 @@ A new `DECISIONS.md` entry that changes what applies in an area is added to that
 - an area file that `SPEC.md` does not list, or a listed file that does not exist
 - a `SPEC.md` without the sections "Areas" and "Keeping this true"
 - an `auto_merge` that is not `none`, `low` or `normal`
-- a `REVIEW.md` that `SPEC.md` does not link
+- a `REVIEW.md` that `SPEC.md` does not link, and every line `bin/ytstack-risk check` prints about it
 
 It warns on an area file above 200 lines, a `SPEC.md` above 80 and a `verified_at` that names no commit in the repository.
 
