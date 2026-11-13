@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+# ytstack upkeep: one run that collects what needs a look in a project's
+# .ytstack directory. Meant for a schedule: docs/recipes/recurring-upkeep.md.
+#
+#   ytstack-upkeep [-C DIR] [--question] [--open-days N] [--asked-days N] [--lane-hours N]
+#
+# Prints one report for the project of DIR (default: $PWD): a first line with
+# the directory and the UTC time of the read, seven sections with a count and
+# one "  - " line per item, and a last line with the sum.
+#   spec           failures of `ytstack-spec lint` and the areas that
+#                  `ytstack-spec drift` lists, when there is a technical spec
+#   state          the findings of the STATE.md lint (yt_state_lint)
+#   gates          open gate lines of the plans ("- [ ] G## -- ..."); "lapsed"
+#                  marks one whose `lapses:` holds a date before today (UTC)
+#   questions      open for more than --open-days days (default 3) and never
+#                  asked; asked more than --asked-days days ago (default 7)
+#                  and not answered
+#   lanes          rows of LANES.md in a held status that were claimed more
+#                  than --lane-hours hours ago (default 24); the problems of
+#                  `ytstack-frontier check` instead when the table has some
+#   runtime        the problems of `ytstack-runtime check`
+#   review policy  the problems of `ytstack-risk check`, when that script is
+#                  part of this installation
+#
+# It only reads. With --question, and only when something needs a look, it
+# writes ONE question file through `ytstack-questions new` ("Upkeep found N
+# things that need a look") with the report under "## Context", and prints
+# "question: <path>". While an earlier question of this script is open or
+# asked it writes none. It never changes another file, and it never commits.
+#
+# Exit codes
+#   0   nothing needs a look
+#   10  something needs a look
+#   1   no .ytstack directory; with --question: the file could not be written
+#   64  usage
+
+set -uo pipefail
+
+BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$BIN/../hooks/lib/git-ctx.sh"
+
+usage() { sed -n '5p' "${BASH_SOURCE[0]}" | sed 's/^# *//'; }
+bad_usage() { [ $# -eq 0 ] || echo "ytstack-upkeep: $*" >&2; usage >&2; exit 64; }
+die() { echo "ytstack-upkeep: $*" >&2; exit 1; }
+
+DIR="$PWD"; QUESTION=no; OPEN_DAYS=3; ASKED_DAYS=7; LANE_HOURS=24
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --question) QUESTION=yes; shift; continue ;;
+    -h|--help|help) usage; exit 0 ;;
+    -C|--open-days|--asked-days|--lane-hours) [ $# -ge 2 ] || bad_usage "$1 needs a value" ;;
+    *) bad_usage "unknown argument '$1'" ;;
+  esac
+  case "$1" in
+    -C) DIR=$2 ;;
+    *) case "$2" in ''|*[!0-9]*) bad_usage "$1 takes a whole number, got '$2'" ;; esac ;;
+  esac
+  case "$1" in
+    --open-days) OPEN_DAYS=$((10#$2)) ;;
+    --asked-days) ASKED_DAYS=$((10#$2)) ;;
+    --lane-hours) LANE_HOURS=$((10#$2)) ;;
+  esac
+  shift 2
+done
+# The resolver falls back to $PWD for a missing directory: refuse it here.
+[ -d "$DIR" ] || bad_usage "-C '$DIR' is not a directory"
+
+yt_git_ctx "$DIR"
+yt_resolve_yt_dir >/dev/null
+[ -n "$YT_DIR" ] || die "no .ytstack directory for $DIR"
+
+NL='
+'
+TAB=$(printf '\t')
+READ=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+NOW=$(date -u +%s)
+TOTAL=0
+REPORT="ytstack upkeep: $YT_DIR, read $READ"
+if [ "$YT_IS_GIT" = yes ]; then
+  HEAD_NOW=$(git -C "$YT_TOPLEVEL" rev-parse --short HEAD 2>/dev/null) && REPORT="$REPORT, at commit $HEAD_NOW"
+fi
+
+# tool <name> <args...>: one of the sibling scripts on the project, under the
+# bash that runs this one.
+tool() { local t="$1"; shift; "$BASH" "$BIN/$t" -C "$DIR" "$@"; }
+# section <name> <items, one per line> [<note>]: adds the section to the report.
+section() {
+  local n
+  n=$(printf '%s\n' "$2" | awk 'NF { n++ } END { print n + 0 }')
+  REPORT="$REPORT$NL$1: $n${3:+ ($3)}"
+  [ "$n" -eq 0 ] || REPORT="$REPORT$NL$(printf '%s\n' "$2" | awk 'NF { print "  - " $0 }')"
+  TOTAL=$((TOTAL + n))
+}
+# age <time>: the seconds since a UTC time, with or without seconds in it;
+# nothing for a value that is no time (the check of its own script names that).
+age() {
+  local t="$1" e
+  case "$t" in *T[0-9][0-9]:[0-9][0-9]Z) t="${t%Z}:00Z" ;; esac
+  e=$(yt_epoch "$t")
+  [ -z "$e" ] || echo $((NOW - e))
+}
+
+# ---- spec --------------------------------------------------------------------------
+items=""; note=""
+if [ -f "$YT_DIR/spec/SPEC.md" ]; then
+  items=$(tool ytstack-spec lint 2>&1 | sed -n 's/^FAIL /lint: /p')
+  items="$items$NL$(tool ytstack-spec drift 2>&1 | grep -v '^spec drift:' | sed 's/^/drift: /')"
+else
+  note="no technical spec"
+fi
+section spec "$items" "$note"
+
+# ---- state -------------------------------------------------------------------------
+yt_state_lint "$YT_DIR" >/dev/null
+section state "$YT_STATE_WARNINGS"
+
+# ---- gates -------------------------------------------------------------------------
+# The pattern of reassess-roadmap, over the plans of every milestone.
+items=$(grep -Hn -E '^- \[ \] G[0-9]+ --' "$YT_DIR"/M[0-9][0-9][0-9]-*PLAN.md 2>/dev/null \
+  | YTU_DIR="$YT_DIR/" awk -v today="$(date -u +%Y-%m-%d)" '
+      {
+        line = $0; pre = ENVIRON["YTU_DIR"]
+        if (index(line, pre) == 1) line = substr(line, length(pre) + 1)
+        sub(/:- \[ \] /, ": ", line)
+        mark = "open"; i = index(line, "| lapses:")
+        if (i > 0) {
+          v = substr(line, i)
+          if (match(v, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/) && (substr(v, RSTART, 10) "") < (today "")) mark = "lapsed"
+        }
+        print mark ": " line
+      }')
+lapsed=$(printf '%s\n' "$items" | grep -c '^lapsed: ')
+note=""; [ "$lapsed" -eq 0 ] || note="$lapsed lapsed"
+section gates "$items" "$note"
+
+# ---- questions ---------------------------------------------------------------------
+items=""
+while IFS="$TAB" read -r id st rest; do
+  [ -n "$id" ] || continue
+  f=""
+  for g in "$YT_DIR/questions/$id"-*.md; do [ ! -f "$g" ] || f=$g; done
+  [ -n "$f" ] || continue
+  case "$st" in
+    open)  t=$(sed -n 's/^opened: *//p' "$f" | sed -n 1p); limit=$OPEN_DAYS; what="open since $t, never asked" ;;
+    asked) t=$(sed -n 's/^asked: *//p' "$f" | sed -n 1p); limit=$ASKED_DAYS; what="asked $t, not answered" ;;
+    *) continue ;;
+  esac
+  a=$(age "$t")
+  [ -n "$a" ] && [ "$a" -gt $((limit * 86400)) ] || continue
+  items="$items$id: $what ($((a / 86400)) days): ${rest##*"$TAB"}$NL"
+done <<EOF
+$(tool ytstack-questions list 2>/dev/null)
+EOF
+section questions "$items"
+
+# ---- lanes -------------------------------------------------------------------------
+# The rows are read here and not through `ytstack-frontier list`: that prints
+# the slices of one milestone, and a lane may be a task or a named piece.
+items=""
+if [ -f "$YT_DIR/LANES.md" ]; then
+  if out=$(tool ytstack-frontier check 2>&1); then
+    while IFS="$TAB" read -r lane st by next; do
+      [ -n "$lane" ] || continue
+      a=$(age "${by##* }")
+      [ -n "$a" ] && [ "$a" -gt $((LANE_HOURS * 3600)) ] || continue
+      items="$items$lane: $st, claimed by $by ($((a / 3600)) hours ago); next: $next$NL"
+    done <<EOF
+$(awk -v tab="$TAB" '
+      /^\|/ && ++n > 2 {
+        split($0, c, "|")
+        for (i = 2; i <= 11; i++) { gsub(/^[ \t]+|[ \t]+$/, "", c[i]); if (c[i] == "") c[i] = "-" }
+        if (c[4] ~ /^(claimed|running|reported|in-review|ready)$/) print c[2] tab c[4] tab c[5] tab c[11]
+      }' "$YT_DIR/LANES.md")
+EOF
+  else
+    items=$(printf '%s\n' "$out" | sed 's/^/check: /')
+  fi
+fi
+section lanes "$items"
+
+# ---- runtime -----------------------------------------------------------------------
+items=""
+out=$(tool ytstack-runtime check 2>&1) || items=$out
+section runtime "$items"
+
+# ---- review policy -----------------------------------------------------------------
+# bin/ytstack-risk came after this script; an installation may not have it.
+items=""; note=""
+if [ -x "$BIN/ytstack-risk" ]; then
+  out=$("$BIN/ytstack-risk" -C "$DIR" check 2>&1) || items=$out
+else
+  note="bin/ytstack-risk is not part of this installation"
+fi
+section "review policy" "$items" "$note"
+
+# ---- the report, and the question --------------------------------------------------
+case "$TOTAL" in
+  0) REPORT="$REPORT${NL}nothing needs a look" ;;
+  1) THINGS="1 thing that needs a look"; REPORT="$REPORT${NL}1 thing needs a look" ;;
+  *) THINGS="$TOTAL things that need a look"; REPORT="$REPORT$NL$TOTAL things need a look" ;;
+esac
+printf '%s\n' "$REPORT"
+[ "$TOTAL" -gt 0 ] || exit 0
+
+if [ "$QUESTION" = yes ]; then
+  # An earlier question of this script is recognised by the start of its title.
+  earlier=$(tool ytstack-questions list 2>/dev/null \
+    | awk -F'\t' '$NF ~ /^Upkeep found / && hit == "" { hit = $1 " (" $2 ")" } END { print hit }')
+  if [ -n "$earlier" ]; then
+    echo "question: none written, $earlier already carries an upkeep report"
+  else
+    f=$(tool ytstack-questions new --question "Upkeep found $THINGS" --decides "the operator") || die "could not write the question"
+    YTU_TEXT="\`bin/ytstack-upkeep\` wrote this file at $READ and changed nothing else. Its report:$NL$NL$(printf '%s\n' "$REPORT" | sed 's/^/    /')" \
+      awk '{ print } $0 == "## Context" && !done { print ""; print ENVIRON["YTU_TEXT"]; done = 1 }' "$f" > "$f.tmp" \
+      && mv "$f.tmp" "$f" || die "could not write the report into $f"
+    echo "question: $f"
+  fi
+fi
+exit 10
