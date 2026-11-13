@@ -1,0 +1,383 @@
+#!/usr/bin/env bash
+# ytstack runtime: how the product of a project is started, where its release
+# is read and where its signals come from. Format: docs/ux/runtime-format.md.
+#
+#   ytstack-runtime [-C DIR] get <section> <key>
+#   ytstack-runtime [-C DIR] signals
+#   ytstack-runtime [-C DIR] check
+#   ytstack-runtime [-C DIR] up [--timeout <seconds>]
+#   ytstack-runtime [-C DIR] down
+#   ytstack-runtime [-C DIR] status
+#
+# Reads the sections "Run", "Release" and "Signals" of RUNTIME.md inside the
+# .ytstack directory of DIR (default: $PWD). Text outside them is never read.
+# up, down and status handle one instance of the product per worktree. Its
+# state (pid, port, log) lives outside the checkout (yt_state_wt_dir).
+#
+# Exit codes
+#   get      0 the value; 1 no RUNTIME.md, no such section, no such key; 64 usage
+#   signals  0; one line per source: name, kind, read, scope (tab separated,
+#            "-" for an empty one)
+#   check    0 "runtime ok: <the sections that exist>"; 1 one line per problem
+#   up       0 URL:, PORT:, PID:, LOG: and COMMIT: of the instance; 1 not
+#            started or not ready, with the reason and the end of the log on
+#            stderr and nothing left running; 64 usage
+#   down     0 stopped, or "not running"; 1 the process group did not end
+#   status   0 the five lines of the instance; 1 "not running"
+
+set -uo pipefail
+
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hooks/lib/git-ctx.sh"
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+
+usage() { sed -n '5,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+die() { echo "ytstack-runtime: $*" >&2; exit 1; }
+case "$CMD" in get|signals|check|up|down|status) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+# The resolver falls back to $PWD for a missing directory: refuse it here.
+[ -d "$DIR" ] || { echo "ytstack-runtime: -C '$DIR' is not a directory" >&2; exit 64; }
+
+yt_git_ctx "$DIR"
+yt_resolve_yt_dir >/dev/null
+TOP="$YT_TOPLEVEL"
+FILE="${YT_DIR:+$YT_DIR/RUNTIME.md}"
+have_file() { [ -n "$FILE" ] && [ -f "$FILE" ]; }
+
+# parse <mode> [<Section> <key>]: one awk pass over the three sections.
+#   check    one line per problem, or "runtime ok: ..."; status 1 with a problem
+#   signals  the sources
+#   get      the value of <key> in <Section>; status 1 no such key, 2 no such section
+# A section runs from its heading to the next "# " or "## " heading. In it a
+# list line ("- ...") is read and every other line is free text; a section
+# without a list line counts as absent. A heading inside a code fence is text.
+parse() {
+  awk -v mode="$1" -v S="${2:-}" -v K="${3:-}" '
+    function trim(s) { sub(/^ +/, "", s); sub(/ +$/, "", s); return s }
+    function problem(t) { bad++; if (mode == "check") print t }
+    function known(sec, k) { return index(" " KEYS[sec] " ", " " k " ") > 0 }
+    function dash(v) { return v == "" ? "-" : v }
+    # token(value): the rule of bin/ytstack-handover, unchanged. A run of 32 or
+    # more hex digits, or of 40 or more characters from [A-Za-z0-9+_=-] that
+    # mixes upper case, lower case and digits.
+    # shortcut: "/" ends a run, so a path is never flagged; a password inside a
+    # connection string is not seen. Upgrade together with ytstack-handover.
+    function token(v,   i, c, run) {
+      v = v " "; run = ""
+      for (i = 1; i <= length(v); i++) {
+        c = substr(v, i, 1)
+        if (c ~ /[A-Za-z0-9+_=-]/) { run = run c; continue }
+        if (length(run) >= 32 && run !~ /[^0-9A-Fa-f]/) return 1
+        if (length(run) >= 40 && run ~ /[A-Z]/ && run ~ /[a-z]/ && run ~ /[0-9]/) return 1
+        run = ""
+      }
+      return 0
+    }
+    BEGIN {
+      KEYS["Run"] = "start ports ready url logs needs stop"
+      KEYS["Release"] = "target deployed healthy settle"
+      KEYS["Signals"] = "read kind scope"
+      NAME["run"] = "Run"; NAME["release"] = "Release"; NAME["signals"] = "Signals"
+    }
+    { sub(/\r$/, ""); gsub(/\t/, " ") }
+    sec == "" && (index($0, "```") == 1 || index($0, "~~~") == 1) { fence = !fence; next }
+    !fence && /^##? / {
+      h = $0; sub(/^##? +/, "", h); h = tolower(trim(h))
+      sec = (h in NAME) ? NAME[h] : ""
+      next
+    }
+    sec == "" || /^ *$/ { next }
+    { at = "line " NR ": " sec ": " }
+    token($0) { problem(at "token-looking string; RUNTIME.md names a credential, the value comes from the environment of whoever runs the command") }
+    !/^ *- / {
+      # Free text. One slip is caught: a key line that lost its dash.
+      if (sec != "Signals" && match($0, /^ *[a-z]+:/)) {
+        k = trim(substr($0, 1, RLENGTH - 1))
+        if (known(sec, k)) { has[sec] = 1; problem(at "\"" k ":\" without the leading \"- \"") }
+      }
+      next
+    }
+    { has[sec] = 1; item = $0; sub(/^ *- +/, "", item) }
+    sec == "Signals" {
+      # "name | key: value | ...". A " | " inside a command stays part of it:
+      # a field starts only where "<word>: " follows the bar.
+      n = split(item, seg, / \| /)
+      name = trim(seg[1]); cur = ""; split("", F)
+      if (name !~ /^[a-z0-9][a-z0-9-]*$/) { problem(at "the name \"" name "\" is not a lowercase slug (a-z, 0-9, -)"); next }
+      for (i = 2; i <= n; i++) {
+        s = trim(seg[i])
+        if (match(s, /^[a-z_]+:( |$)/)) {
+          cur = substr(s, 1, index(s, ":") - 1)
+          if (!known(sec, cur)) problem(at name ": unknown field \"" cur "\" (the fields: " KEYS[sec] ")")
+          else if (cur in F) problem(at name ": the field \"" cur "\" stands twice")
+          F[cur] = trim(substr(s, index(s, ":") + 1))
+        } else if (cur != "") F[cur] = F[cur] " | " s
+        else problem(at name ": \"" s "\" is not a \"key: value\" field")
+      }
+      if (F["read"] == "") problem(at name ": no read")
+      if (F["kind"] == "") problem(at name ": no kind")
+      else if (F["kind"] !~ /^(errors|performance|alerts|logs)$/) problem(at name ": kind \"" F["kind"] "\" is not errors, performance, alerts or logs")
+      if (name in SEEN) problem(at "the name \"" name "\" is used twice")
+      SEEN[name] = 1
+      if (mode == "signals") printf "%s\t%s\t%s\t%s\n", name, dash(F["kind"]), dash(F["read"]), dash(F["scope"])
+      next
+    }
+    {
+      c = index(item, ":"); k = substr(item, 1, c - 1); v = trim(substr(item, c + 1))
+      if (c < 2 || k !~ /^[a-z]+$/ || v == "") { problem(at "not a \"- key: value\" line: " item); next }
+      if (!known(sec, k)) { problem(at "unknown key \"" k "\" (the keys: " KEYS[sec] ")"); next }
+      if ((sec, k) in V) { problem(at "the key \"" k "\" stands twice"); next }
+      V[sec, k] = v; L[sec, k] = NR
+      if (mode == "get" && sec == S && k == K) { print v; found = 1; exit }
+    }
+    END {
+      if (mode == "get") exit (found ? 0 : (has[S] ? 1 : 2))
+      if (mode != "check") exit 0
+      if (has["Run"]) {
+        if (!(("Run", "start") in V)) problem("Run: no start")
+        if (!(("Run", "ready") in V)) problem("Run: no ready")
+        n = split("start ready url logs stop", u, " "); uses = 0
+        for (i = 1; i <= n; i++) if ((("Run", u[i]) in V) && index(V["Run", u[i]], "{port}")) uses = 1
+        if (("Run", "ports") in V) {
+          p = V["Run", "ports"]; ok = (p ~ /^[0-9]+-[0-9]+$/)
+          if (ok) { split(p, r, "-"); ok = (r[1] + 0 >= 1 && r[1] + 0 < r[2] + 0 && r[2] + 0 <= 65535) }
+          if (!ok) problem("line " L["Run", "ports"] ": Run: ports \"" p "\" is not <first>-<last> with first below last, within 1-65535")
+        } else if (uses) problem("Run: {port} is used, but there is no ports line")
+      }
+      if (has["Release"]) {
+        if (!(("Release", "deployed") in V)) problem("Release: no deployed")
+        if ((("Release", "settle") in V) && V["Release", "settle"] !~ /^[0-9]+$/)
+          problem("line " L["Release", "settle"] ": Release: settle \"" V["Release", "settle"] "\" is not a number of seconds")
+      }
+      if (bad) exit 1
+      list = ""; n = split("Run Release Signals", u, " ")
+      for (i = 1; i <= n; i++) if (has[u[i]]) list = list (list == "" ? "" : ", ") u[i]
+      print "runtime ok: " (list == "" ? "no sections" : list)
+    }
+  ' "$FILE"
+}
+# val <key>: one value of "Run", empty when it is not there.
+val() { parse get Run "$1" 2>/dev/null || true; }
+
+# ---- get, signals, check ---------------------------------------------------------
+cmd_get() {
+  [ $# -eq 2 ] || { usage >&2; return 64; }
+  local s
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    run) s=Run ;;
+    release) s=Release ;;
+    *) echo "ytstack-runtime: get reads \"Run\" or \"Release\"; the sources of \"Signals\" come from: ytstack-runtime signals" >&2; return 64 ;;
+  esac
+  have_file || die "no RUNTIME.md${YT_DIR:+ in $YT_DIR}"
+  parse get "$s" "$2"
+  case $? in
+    0) ;;
+    2) die "RUNTIME.md has no \"$s\" section" ;;
+    *) die "no \"$2\" in the \"$s\" section of RUNTIME.md" ;;
+  esac
+}
+
+cmd_signals() { ! have_file || parse signals; }
+
+cmd_check() {
+  if ! have_file; then echo "runtime ok: no RUNTIME.md"; return 0; fi
+  parse check
+}
+
+# ---- the instance of this worktree -----------------------------------------------
+# <state>/runtime/instance   pid, born, port, url, log, commit (key=value lines)
+# <state>/runtime/start.log  the output of the start command and of "stop"
+# <state>/runtime/ready.out  the output of the last finished "ready" attempt
+# One agent works in a worktree, so the files have one writer.
+# shortcut: two "up" at the same moment in one worktree both start; add a
+# noclobber claim on "instance" if a worktree ever gets two agents.
+state_init() {
+  yt_state_wt_dir >/dev/null
+  RT="$YT_STATE_WT_DIR/runtime"; INST="$RT/instance"; LOG="$RT/start.log"
+  mkdir -p "$RT" 2>/dev/null || die "cannot create $RT"
+}
+# st <key>: one value of the instance file.
+st() { [ ! -f "$INST" ] || sed -n "s/^$1=//p" "$INST" | sed -n 1p; }
+# fill <text>: the placeholders replaced. The replacement is quoted: bash 5.2
+# reads an unquoted "&" in it as "the match".
+fill() { local s="$1"; s=${s//\{port\}/"$P"}; s=${s//\{log\}/"$LOG"}; printf '%s' "$s"; }
+# in_checkout <command>: replaces the calling subshell by the command, run in
+# the root of the checkout, with PORT exported when a port was chosen.
+in_checkout() {
+  cd "$TOP" || exit 1
+  [ "$P" = - ] || export PORT="$P"
+  exec bash -c "$1"
+}
+# born <pid>: when that process started. A pid alone does not name a process:
+# after a reboot another one carries it, and its group must never be ended.
+# Linux: field 22 of /proc/<pid>/stat. Elsewhere: ps. Empty when neither
+# answers (then the pid alone decides).
+born() {
+  if [ -r "/proc/$1/stat" ]; then sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20
+  else LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//; s/ *$//'
+  fi
+}
+# alive: the recorded process runs and is the one that was started. Sets PID and P.
+alive() {
+  PID=$(st pid); P=$(st port)
+  case "$PID" in ''|*[!0-9]*) return 1 ;; esac
+  kill -0 "$PID" 2>/dev/null || return 1
+  [ "$(born "$PID")" = "$(st born)" ]
+}
+# in_use <port>: something accepts connections on it, on 127.0.0.1 or ::1.
+# bash opens the socket itself (/dev/tcp), so no tool has to be installed.
+# A bash built without /dev/tcp says "No such file": then nc is asked, and
+# without nc the port counts as free (a taken one then fails at "start").
+in_use() {
+  local h err
+  for h in 127.0.0.1 ::1; do
+    if err=$( (LC_ALL=C; exec 3<>"/dev/tcp/$h/$1") 2>&1 ); then return 0; fi
+    case "$err" in *"No such file"*) ! nc -z "$h" "$1" >/dev/null 2>&1 || return 0 ;; esac
+  done
+  return 1
+}
+# end_group <pid>: TERM to the process group, KILL after five seconds. Status 0
+# when the group is gone. Its stderr is closed: bash reports a job it ended
+# ("Terminated") there, and that line is not a finding.
+end_group() {
+  local sig i
+  for sig in TERM KILL; do
+    kill "-$sig" -- "-$1" || break
+    i=0
+    while kill -0 -- "-$1" && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+  done
+  wait "$1"
+  ! kill -0 -- "-$1"
+} 2>/dev/null
+# end_instance: the "stop" command when one is set, then the process group.
+end_instance() {
+  local stop=""
+  ! have_file || stop=$(val stop)
+  if [ -n "$stop" ] && [ "$stop" != "(default)" ]; then
+    ( in_checkout "$(fill "$stop")" ) >> "$LOG" 2>&1 < /dev/null
+  fi
+  end_group "$PID" || return 1
+  rm -f "$INST"
+}
+show() {
+  printf 'URL: %s\nPORT: %s\nPID: %s\nLOG: %s\nCOMMIT: %s\n' "$(st url)" "$(st port)" "$(st pid)" "$(st log)" "$(st commit)"
+}
+# commit_now: what the checkout holds, which is what an instance proves.
+commit_now() {
+  local c
+  c=$(git -C "$TOP" rev-parse --short HEAD 2>/dev/null) || { printf 'none'; return 0; }
+  [ -z "$(git -C "$TOP" status --porcelain 2>/dev/null | sed -n 1p)" ] || c="$c (with uncommitted changes)"
+  printf '%s' "$c"
+}
+# ready_once: one attempt of "ready", ended when the deadline passes, so that a
+# check that hangs cannot outlast the timeout. ready.out keeps the output of
+# the last attempt that came to its own end.
+ready_once() {
+  local rp rc
+  set -m
+  ( in_checkout "$READY" ) > "$RT/ready.new" 2>&1 < /dev/null &
+  rp=$!
+  set +m
+  while kill -0 "$rp" 2>/dev/null; do
+    if [ "$SECONDS" -ge "$DEADLINE" ]; then end_group "$rp"; return 1; fi
+    sleep 0.1
+  done
+  wait "$rp"; rc=$?
+  mv -f "$RT/ready.new" "$RT/ready.out"
+  return "$rc"
+}
+# fail_up <reason>: stop what was started, show why, exit 1.
+fail_up() {
+  echo "ytstack-runtime: $1" >&2
+  end_instance || echo "ytstack-runtime: the process group $PID did not end (kill -- -$PID)" >&2
+  if [ -s "$RT/ready.out" ]; then echo "last output of \"ready\":" >&2; tail -n 5 "$RT/ready.out" >&2; fi
+  echo "last lines of $LOG:" >&2
+  tail -n 20 "$LOG" >&2
+  [ -z "$NEEDS" ] || echo "needs, from RUNTIME.md: $NEEDS" >&2
+  exit 1
+}
+
+cmd_up() {
+  local timeout=60 problems start url logs ports first n k i p
+  while [ $# -gt 0 ]; do
+    { [ "$1" = "--timeout" ] && [ $# -ge 2 ]; } || { usage >&2; return 64; }
+    timeout="$2"; shift 2
+  done
+  case "$timeout" in ''|*[!0-9]*) usage >&2; return 64 ;; esac
+  have_file || die "no RUNTIME.md${YT_DIR:+ in $YT_DIR}; the product cannot be started from it"
+  problems=$(parse check) || { printf '%s\n' "$problems" >&2; die "RUNTIME.md does not pass check; nothing was started"; }
+  start=$(val start)
+  [ -n "$start" ] || die "RUNTIME.md has no \"Run\" section; the product cannot be started from it"
+  NEEDS=$(val needs)
+  state_init
+  if ! alive; then
+    rm -f "$INST"
+    P="-"
+    ports=$(val ports)
+    if [ -n "$ports" ]; then
+      # The start position comes from the worktree key, so two worktrees begin
+      # at different ports; from there the first one nobody listens on.
+      first=$((10#${ports%-*})); n=$(( 10#${ports#*-} - first + 1 ))
+      k=${YT_WT_KEY//[!0-9a-fA-F]/}; k=${k:0:7}
+      i=0
+      while [ "$i" -lt "$n" ]; do
+        p=$(( first + (16#${k:-0} + i) % n ))
+        if ! in_use "$p"; then P=$p; break; fi
+        i=$((i + 1))
+      done
+      [ "$P" != - ] || die "no free port in $ports"
+    fi
+    url=$(val url); logs=$(val logs)
+    : > "$LOG" || die "cannot write $LOG"
+    rm -f "$RT/ready.out"
+    # Job control gives the background command a process group of its own
+    # (group id = its pid) on macOS and on Linux. setsid would do the same but
+    # macOS does not ship it. "down" ends that group, children included.
+    set -m
+    ( in_checkout "$(fill "$start")" ) > "$LOG" 2>&1 < /dev/null &
+    PID=$!
+    set +m
+    printf 'pid=%s\nborn=%s\nport=%s\nurl=%s\nlog=%s\ncommit=%s\n' \
+      "$PID" "$(born "$PID")" "$P" "$(fill "${url:--}")" "$(fill "${logs:-$LOG}")" "$(commit_now)" > "$INST" \
+      || { end_group "$PID"; die "cannot write $INST"; }
+  fi
+  # Also for an instance that already runs: "up" returns 0 only for a product that answers.
+  READY=$(fill "$(val ready)")
+  DEADLINE=$((SECONDS + timeout))
+  while :; do
+    kill -0 "$PID" 2>/dev/null || fail_up "the start command exited before the product was ready"
+    if ready_once; then
+      # A second process on the same port answers "ready" for a start that failed.
+      # shortcut: a start that dies only after this line is not seen here; it
+      # needs two worktrees that pick the same port in the same second, and
+      # "status" shows it. Claim the port in a shared file if that ever happens.
+      kill -0 "$PID" 2>/dev/null || fail_up "the start command exited; something else answered \"ready\""
+      break
+    fi
+    [ "$SECONDS" -lt "$DEADLINE" ] || fail_up "\"ready\" did not pass within ${timeout}s"
+    sleep 0.5
+  done
+  show
+}
+
+cmd_down() {
+  state_init
+  if ! alive; then rm -f "$INST"; echo "not running"; return 0; fi
+  end_instance || die "the process group $PID did not end (kill -- -$PID)"
+  echo "stopped: pid $PID, port $P"
+}
+
+cmd_status() {
+  state_init
+  if alive; then show; else echo "not running"; return 1; fi
+}
+
+case "$CMD" in
+  get)     cmd_get "$@" ;;
+  signals) cmd_signals ;;
+  check)   cmd_check ;;
+  up)      cmd_up "$@" ;;
+  down)    cmd_down ;;
+  status)  cmd_status ;;
+esac
