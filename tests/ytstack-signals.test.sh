@@ -14,8 +14,14 @@
 #           one state or all with --state
 #   set     changes the state; planned needs a reference, dismissed a reason on
 #           stdin; only the newest finding of a key leaves fixed
-#   check   well-formed files pass; each defect is named, exit 1; without the
-#           directory "no signals", exit 0
+#   incident new   the skeleton of a record, incidents/<YYYY-MM-DD>-<slug>.md;
+#           a record of that day with that title is never overwritten
+#   incident list  one tab separated line per record; the ones that are not
+#           closed by default
+#   check   well-formed files pass; each defect of a finding and of an incident
+#           record is named, exit 1; a mitigation that is not declined names a
+#           script that exists and passes ytstack-handover check; without both
+#           directories "no signals", exit 0
 #
 # Run: /bin/bash tests/ytstack-signals.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -110,7 +116,7 @@ reopens: none
 ## Assessment
 
 ## Next" "$(cat "$F1")"
-run "$D" check; eq "the file new wrote passes the check" "signals ok: 1 finding(s)" "$OUT"
+run "$D" check; eq "the file new wrote passes the check" "signals ok: 1 finding(s), 0 incident(s)" "$OUT"
 
 feed "/api/export p95=2400ms breach" "$D" new --source latency --key latency:/api/export --title "Export is
  slow   again"
@@ -161,7 +167,7 @@ feed "x" "$D" new --source errors --title "No key";                          eq 
 feed "x" "$D" new --source errors --key errors:x --title;                    eq "an option without a value: exit 64" 64 "$EC"
 eq "none of the refused calls wrote a file" "$N0" "$(ls "$S" | grep -c .)"
 run "$D" check
-eq "everything new wrote passes the check" "signals ok: $N0 finding(s)" "$OUT"
+eq "everything new wrote passes the check" "signals ok: $N0 finding(s), 0 incident(s)" "$OUT"
 
 # ---- 3. new: the key of an open or planned finding ----------------------------
 echo "# seen again"
@@ -206,7 +212,7 @@ run "$D" set F001 --state planned --ref M004-S02-T03
 feed "while planned" "$D" new --source errors --key errors:4812 --kind errors --title x
 eq "a planned finding is seen again as well" "seen-again F001 $A" "$OUT"
 eq "and stays planned" "planned" "$(field "$A" state)"
-run "$D" check; eq "the file still passes the check" "signals ok: 1 finding(s)" "$OUT"
+run "$D" check; eq "the file still passes the check" "signals ok: 1 finding(s), 0 incident(s)" "$OUT"
 
 # ---- 4. new: the key of a dismissed finding -----------------------------------
 echo "# dismissed"
@@ -231,7 +237,7 @@ eq "it stays dismissed" "dismissed" "$(field "$B" state)"
 eq "count rose" 2 "$(field "$B" count)"
 eq "last_seen moved" "2031-01-01T00:00:00Z" "$(field "$B" last_seen)"
 eq "nothing else changed: the sighting is not kept" "$BEFORE" "$(grep -v '^last_seen: \|^count: ' "$B")"
-run "$D" check; eq "a dismissed finding with its reason passes the check" "signals ok: 1 finding(s)" "$OUT"
+run "$D" check; eq "a dismissed finding with its reason passes the check" "signals ok: 1 finding(s), 0 incident(s)" "$OUT"
 
 # ---- 5. new: the key of a fixed finding ---------------------------------------
 echo "# regression"
@@ -259,7 +265,7 @@ run "$D" set F003 --state fixed
 run "$D" set F002 --state open
 eq "nor can it while the newer one is fixed as well" 1 "$EC"
 has "and names it" "F003 (fixed) carries the same key" "$OUT"
-run "$D" check; eq "the chain passes the check" "signals ok: 3 finding(s)" "$OUT"
+run "$D" check; eq "the chain passes the check" "signals ok: 3 finding(s), 0 incident(s)" "$OUT"
 
 # ---- 6. list and set ----------------------------------------------------------
 echo "# list, set"
@@ -307,7 +313,7 @@ run "$D" list --state dismissed; has "list --state dismissed" "F004${TAB}dismiss
 run "$D" list --state all;       eq "list --state all: every finding" 4 "$(printf '%s\n' "$OUT" | grep -c .)"
 run "$D" list --state closed;    eq "list --state with an unknown state: exit 64" 64 "$EC"
 run "$D" check
-eq "open, planned, fixed and dismissed findings pass the check" "signals ok: 4 finding(s)" "$OUT"
+eq "open, planned, fixed and dismissed findings pass the check" "signals ok: 4 finding(s), 0 incident(s)" "$OUT"
 
 # ---- 7. two writers at once ---------------------------------------------------
 echo "# at the same time"
@@ -344,7 +350,7 @@ wait
 eq "once it is free, the waiting call writes its finding" 8 "$(ls "$S" | grep -c .)"
 if [ -e "$D/.ytstack/signals.lock" ] || ls "$S" | grep '\.tmp$' >/dev/null; then bad "no lock and no temporary file left behind"; else ok "no lock and no temporary file left behind"; fi
 run "$D" check
-eq "and the files pass the check" "signals ok: 8 finding(s)" "$OUT"
+eq "and the files pass the check" "signals ok: 8 finding(s), 0 incident(s)" "$OUT"
 
 # ---- 8. check: each defect on its own -----------------------------------------
 echo "# check: defects"
@@ -410,6 +416,172 @@ fresh; see "$D" errors:2 "Another one"; edit "$F" 's/^reopens: .*/reopens: F002/
 defect "a reopens that names a newer finding" "$NAME: reopens F002, which is not an older finding"
 fresh; run "$D" set F001 --state fixed; see "$D" errors:1 "Back"; edit "$F" 's/^state: .*/state: open/'
 defect "an older finding of a key that is not fixed" "$NAME: state open, but F002 is a newer finding with the same key; only the newest finding of a key is not fixed"
+
+# ---- 9. incident new, incident list -------------------------------------------
+echo "# incident"
+HANDOVER="$ROOT/bin/ytstack-handover"
+TODAY=$(date -u +%Y-%m-%d)
+project incident; I="$D/.ytstack/incidents"
+run "$D" incident list; eq "incident list without the directory: exit 0, nothing" "0 " "$EC $OUT"
+run "$D" incident new --title "Checkout returns 502" --severity "all customers,
+ no orders"
+R="$I/$TODAY-checkout-returns-502.md"
+eq "incident new prints the path: the day in UTC and a slug from the title" "0 $R" "$EC $OUT"
+OPENED=$(field "$R" opened)
+if is_utc "$OPENED"; then ok "opened is a UTC time"; else bad "opened is a UTC time" "$OPENED"; fi
+eq "the skeleton: frontmatter, the six sections in order, the first timeline line" "---
+id: $TODAY-checkout-returns-502
+state: open
+opened: $OPENED
+mitigated: none
+closed: none
+severity: all customers, no orders
+root_cause: none
+---
+
+# Incident -- Checkout returns 502
+
+## What is seen
+
+## Timeline
+
+- $OPENED -- record opened
+
+## Hypotheses
+
+## Proposed mitigations
+
+## Decisions
+
+## After" "$(cat "$R")"
+run "$D" check; eq "the skeleton passes the check" "signals ok: 0 finding(s), 1 incident(s)" "$OUT"
+printf 'kept\n' >> "$R"
+run "$D" incident new --title "Checkout returns 502"
+eq "a record of that day with that title is not opened twice: exit 1" 1 "$EC"
+has "and says to resume it" "exists: resume that record" "$OUT"
+has "the record is not overwritten" "kept" "$(tail -1 "$R")"
+run "$D" incident new --title "Search is slow"
+eq "without --severity it is unstated" "unstated" "$(field "$OUT" severity)"
+run "$D" incident new --title "???"
+eq "a title without letters still gets a file name" "$I/$TODAY-incident.md" "$OUT"
+run "$D" incident new;                         eq "incident new without --title: exit 64" 64 "$EC"
+run "$D" incident new --title;                 eq "an option without a value: exit 64" 64 "$EC"
+run "$D" incident;                             eq "incident without a command: exit 64" 64 "$EC"
+run "$D" incident close x;                     eq "an unknown incident command: exit 64" 64 "$EC"
+run "$TMP/bare" incident new --title "Nowhere"; eq "incident new without a .ytstack directory: exit 1" 1 "$EC"
+if [ ! -e "$TMP/bare/.ytstack" ]; then ok "and creates none"; else bad "and creates none"; fi
+edit "$I/$TODAY-search-is-slow.md" 's/^state: open/state: closed/; s/^closed: none/closed: 2026-11-13T12:00:00Z/; s/^root_cause: none/root_cause: M005-S01-T02/'
+edit "$I/$TODAY-incident.md" 's/^state: open/state: mitigated/; s/^mitigated: none/mitigated: 2026-11-13T11:00:00Z/'
+run "$D" incident list
+eq "incident list: id, state, opened, severity, title; the closed one left out" "$TODAY-checkout-returns-502${TAB}open${TAB}$OPENED${TAB}all customers, no orders${TAB}Checkout returns 502
+$TODAY-incident${TAB}mitigated${TAB}$(field "$I/$TODAY-incident.md" opened)${TAB}unstated${TAB}???" "$OUT"
+run "$D" incident list --state closed; has "incident list --state closed" "$TODAY-search-is-slow${TAB}closed" "$OUT"
+run "$D" incident list --state all;    eq "incident list --state all" 3 "$(printf '%s\n' "$OUT" | grep -c .)"
+run "$D" incident list --state fixed;  eq "incident list --state with an unknown state: exit 64" 64 "$EC"
+edit "$R" '$d'
+run "$D" check; eq "open, mitigated and closed records pass the check" "signals ok: 0 finding(s), 3 incident(s)" "$OUT"
+see "$D" errors:1
+run "$D" check; eq "findings and incidents are counted side by side" "signals ok: 1 finding(s), 3 incident(s)" "$OUT"
+
+# ---- 10. check: incident records, each defect on its own -----------------------
+echo "# check: incident defects"
+# inc: a new project with one well-formed open record. Sets D, I, R and INAME.
+inc() {
+  N=$((N + 1)); project "i$N"; I="$D/.ytstack/incidents"
+  run "$D" incident new --title "Checkout returns 502"; R="$OUT"; INAME=${R##*/}
+}
+# passes <case>: check is clean
+passes() {
+  run "$D" check
+  eq "$1" "0 signals ok: 0 finding(s), 1 incident(s)" "$EC $OUT"
+}
+# script <name> [bare]: a handover script under .ytstack/handover/ of the project;
+# with "bare" it is the unfilled template, which does not pass its check.
+script() {
+  local p="$D/.ytstack/handover/$1.sh"
+  bash "$HANDOVER" new "$p" --title "Restart the checkout" >/dev/null || return 1
+  [ "${2:-}" != bare ] || return 0
+  sed -e 's/^# Purpose:$/# Purpose: the checkout answers again/' \
+      -e 's/^# Prepared by:$/# Prepared by: test agent, for the incident/' \
+      -e 's/^# Changes:$/# Changes: the pods of one deployment/' \
+      -e 's/^# Undo:$/# Undo: none needed/' "$p" > "$p.tmp" && cat "$p.tmp" > "$p" && rm -f "$p.tmp"
+  printf 'stage "Prove the target" "Reads only."\ncheck "true holds" true\n' >> "$p"
+}
+# mitigation <status> [<script path>]: one mitigation line under "Proposed mitigations"
+mitigation() {
+  edit "$R" "s%^## Proposed mitigations\$%&\\
+\\
+- M1 -- Restart the checkout | changes: the pods of deployment checkout | effect: 502 stops | risk: requests in flight fail | undo: none needed | script: ${2:-.ytstack/handover/restart.sh} | status: $1%"
+}
+
+inc; edit "$R" "s/^id: .*/id: $TODAY-something-else/"
+defect "an id that differs from the file name" "$INAME: id \"$TODAY-something-else\" does not match the file name"
+eq "one line per problem" 1 "$(printf '%s\n' "$OUT" | grep -c .)"
+inc; cp "$R" "$I/notes.md"
+defect "a file name outside <YYYY-MM-DD>-<slug>.md" "notes.md: the name is not <YYYY-MM-DD>-<slug>.md"
+inc; edit "$R" '1d'
+defect "a record without frontmatter" "$INAME: no frontmatter"
+inc; edit "$R" 's/^state: .*/state: resolved/'
+defect "a state outside the three" "$INAME: state \"resolved\" is not one of open|mitigated|closed"
+inc; edit "$R" 's/^opened: .*/opened: this morning/'
+defect "an opened that is no time" "$INAME: opened \"this morning\" is not a UTC time"
+inc; edit "$R" 's/^mitigated: .*/mitigated: 2026-11-13T11:00:00Z/'
+defect "open with a mitigated time" "$INAME: state open, but mitigated is \"2026-11-13T11:00:00Z\""
+inc; edit "$R" 's/^closed: .*/closed: 2026-11-13T11:00:00Z/'
+defect "open with a closed time" "$INAME: state open, but closed is \"2026-11-13T11:00:00Z\""
+inc; edit "$R" 's/^state: .*/state: mitigated/'
+defect "mitigated without its time" "$INAME: state mitigated, but mitigated is not set"
+inc; edit "$R" 's/^state: .*/state: mitigated/; s/^mitigated: .*/mitigated: soon/'
+defect "a mitigated that is neither none nor a time" "$INAME: mitigated \"soon\" is not \"none\" or a UTC time"
+inc; edit "$R" 's/^state: .*/state: mitigated/; s/^mitigated: .*/mitigated: 2026-11-13T11:00:00Z/; s/^closed: .*/closed: 2026-11-13T12:00:00Z/'
+defect "mitigated with a closed time" "$INAME: state mitigated, but closed is \"2026-11-13T12:00:00Z\""
+inc; edit "$R" 's/^state: .*/state: closed/; s/^root_cause: .*/root_cause: M005-S01-T02/'
+defect "closed without its time" "$INAME: state closed, but closed is not set"
+inc; edit "$R" 's/^state: .*/state: closed/; s/^closed: .*/closed: 2026-11-13T12:00:00Z/'
+defect "closed without a root cause" "$INAME: state closed, but root_cause is \"none\""
+inc; edit "$R" 's/^state: .*/state: closed/; s/^closed: .*/closed: 2026-11-13T12:00:00Z/; s/^root_cause: .*/root_cause: not pursued/'
+defect "not pursued without a reason" "$INAME: root_cause \"not pursued\" gives no reason"
+inc; edit "$R" 's/^state: .*/state: closed/; s/^closed: .*/closed: 2026-11-13T12:00:00Z/; s/^root_cause: .*/root_cause: not pursued -- the provider confirmed an outage on their side/'
+passes "closed without a mitigation, the cause not pursued with a reason"
+inc; edit "$R" 's/^severity: .*/severity:/'
+defect "a record without severity" "$INAME: no severity"
+inc; edit "$R" '/^## Hypotheses$/d'
+defect "a missing section" "$INAME: the sections are not \"What is seen\", \"Timeline\", \"Hypotheses\", \"Proposed mitigations\", \"Decisions\" and \"After\", each once and in this order"
+inc; edit "$R" 's/^## Decisions$/## After/; $s/^## After$/## Decisions/'
+defect "sections out of order" "$INAME: the sections are not"
+
+inc; script restart; mitigation proposed
+passes "a proposed mitigation whose script exists and passes ytstack-handover check"
+inc; script restart; mitigation proposed '`.ytstack/handover/restart.sh`'
+passes "a script path written as code"
+inc; mitigation proposed
+defect "a mitigation whose script does not exist" "$INAME: M1: the script .ytstack/handover/restart.sh does not exist"
+inc; script restart bare; mitigation proposed
+defect "a mitigation whose script does not pass ytstack-handover check" "$INAME: M1: .ytstack/handover/restart.sh does not pass ytstack-handover check: no stage: a handover script has at least one"
+inc; mitigation declined
+passes "a declined mitigation needs no script on disk"
+inc; script restart; mitigation "ordered by Kim at 2026-11-13T09:31:00Z"
+passes "an ordered mitigation with who and when"
+inc; script restart; mitigation "ordered by Kim"
+defect "an ordered mitigation without its time" "$INAME: M1: status \"ordered by Kim\" is not \"proposed\""
+inc; script restart; mitigation "done"
+defect "a status outside the four forms" "$INAME: M1: status \"done\" is not \"proposed\""
+inc; script restart; mitigation "carried out, receipt .ytstack/handover/restart.sh.receipt-20261113T094712Z.txt"
+defect "carried out without the receipt on disk" "$INAME: M1: the receipt .ytstack/handover/restart.sh.receipt-20261113T094712Z.txt does not exist"
+printf 'Handover receipt\nResult:  completed\n' > "$D/.ytstack/handover/restart.sh.receipt-20261113T094712Z.txt"
+passes "carried out with its receipt"
+inc; script restart; mitigation proposed; edit "$R" 's/ | risk: requests in flight fail//'
+defect "a mitigation without one of its fields" "$INAME: M1: no risk"
+inc; script restart; mitigation proposed; edit "$R" 's/ | undo: none needed/ | undo: kubectl get pods | grep checkout, then nothing/'
+passes "a bar inside a value stays part of the value"
+inc; script restart; mitigation proposed; edit "$R" 's/^- M1 -- /- /'
+defect "a mitigation line without its id" "$INAME: line 23: a mitigation line starts with \"- M<n> -- <what it is>\""
+inc; script restart; mitigation proposed; mitigation proposed
+defect "a mitigation id used twice" "$INAME: M1 stands twice"
+inc; script restart; mitigation proposed; edit "$R" 's/^## Proposed mitigations$/&\
+\
+Smallest reversible one first./'
+passes "free text beside the mitigation lines"
 
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

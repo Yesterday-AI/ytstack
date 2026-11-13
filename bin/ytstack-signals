@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-# ytstack signals: what production reported, recorded once.
-# Format: docs/ux/signal-format.md.
+# ytstack signals: what production reported, recorded once, and the record of
+# an incident. Format: docs/ux/signal-format.md.
 #
 #   ytstack-signals [-C DIR] new --source NAME --key KEY --title TEXT [--kind KIND] [--read-at TIME] < sighting
 #   ytstack-signals [-C DIR] list [--state open|planned|fixed|dismissed|all]
 #   ytstack-signals [-C DIR] set <id> --state STATE [--ref REF] [< reason]
+#   ytstack-signals [-C DIR] incident new --title TEXT [--severity TEXT]
+#   ytstack-signals [-C DIR] incident list [--state open|mitigated|closed|all]
 #   ytstack-signals [-C DIR] check
 #
 # A finding is one file, signals/F###-<slug>.md, inside the .ytstack directory
 # of DIR (default: $PWD). new decides by the key: the newest finding that
 # carries it says whether the sighting is a new finding, one seen again, a
-# dismissed one or the regression of a fixed one. A write changes one file,
-# under a lock, through a temporary file in the same directory.
+# dismissed one or the regression of a fixed one. An incident record is one
+# file, incidents/<YYYY-MM-DD>-<slug>.md; the script writes its skeleton and
+# checks it, the content is written by whoever works the incident. A write
+# changes one file, under a lock, through a temporary file in the same directory.
 #
 # Exit codes
 #   new    0 "<case> <id> <path>", the case being new, seen-again, dismissed or
@@ -24,8 +28,12 @@
 #   set    0 "<id> <state>"; 1 unknown id, dismissed without a reason on stdin,
 #          planned without a reference, or a state other than fixed while
 #          another finding with the key is newer or not fixed; 64 usage
-#   check  0 "signals ok: <n> finding(s)", or "no signals" without the
-#          directory; 1 one line per problem
+#   incident new   0 the path of the new record; 1 no .ytstack directory, or a
+#                  record of that day with that title exists; 64 usage
+#   incident list  0; one line per record: id, state, opened, severity, title
+#                  (tab separated); without --state the ones that are not closed
+#   check  0 "signals ok: <n> finding(s), <m> incident(s)", or "no signals"
+#          without both directories; 1 one line per problem
 
 set -uo pipefail
 # Keys, ids and slugs are ASCII: ranges and classes mean bytes everywhere below.
@@ -36,6 +44,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 STATES='open|planned|fixed|dismissed'
 KINDS='errors|performance|alerts|logs'
+ISTATES='open|mitigated|closed'
 WORD='letters, digits and . _ : / @ + = -'
 TAB=$'\t'
 NL='
@@ -45,15 +54,16 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '5,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '5,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "ytstack-signals: $*" >&2; exit 1; }
-case "$CMD" in new|list|set|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+case "$CMD" in new|list|set|incident|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 # The resolver falls back to $PWD for a missing directory: refuse it here.
 [ -d "$DIR" ] || { echo "ytstack-signals: -C '$DIR' is not a directory" >&2; exit 64; }
 
 yt_git_ctx "$DIR"
 yt_resolve_yt_dir >/dev/null
 SDIR="${YT_DIR:+$YT_DIR/signals}"
+IDIR="${YT_DIR:+$YT_DIR/incidents}"
 LOCK="${YT_DIR:+$YT_DIR/signals.lock}"
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
@@ -331,11 +341,215 @@ EOF
   echo "$id $st"
 }
 
+# ---- incident ------------------------------------------------------------------
+incident_new() {
+  local title="" sev="" at slug f
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { usage >&2; return 64; }
+    case "$1" in
+      --title)    title=$(oneline "$2") ;;
+      --severity) sev=$(oneline "$2") ;;
+      *) usage >&2; return 64 ;;
+    esac
+    shift 2
+  done
+  [ -n "$title" ] || { usage >&2; return 64; }
+  [ -n "$IDIR" ] || die "no .ytstack directory for $DIR"
+  at=$(now)
+  slug=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed 's/--*/-/g; s/^-//' | cut -c1-48 | sed 's/-$//')
+  f="$IDIR/${at%%T*}-${slug:-incident}.md"
+  mkdir -p "$IDIR" || die "cannot create $IDIR"
+  lock
+  # A record is never overwritten: it is resumed.
+  if [ -e "$f" ] || [ -L "$f" ]; then die "$f exists: resume that record, or give the new incident another title"; fi
+  TMPF="$f.tmp"
+  printf -- '---\nid: %s\nstate: open\nopened: %s\nmitigated: none\nclosed: none\nseverity: %s\nroot_cause: none\n---\n\n# Incident -- %s\n\n## What is seen\n\n## Timeline\n\n- %s -- record opened\n\n## Hypotheses\n\n## Proposed mitigations\n\n## Decisions\n\n## After\n' \
+    "${at%%T*}-${slug:-incident}" "$at" "${sev:-unstated}" "$title" "$at" > "$TMPF" && mv "$TMPF" "$f" || die "cannot write $f"
+  TMPF=""
+  printf '%s\n' "$f"
+}
+
+incident_list() {
+  local want="" f
+  if [ $# -gt 0 ]; then
+    { [ "$1" = "--state" ] && [ $# -eq 2 ]; } || { usage >&2; return 64; }
+    listed "$2" "$ISTATES|all" || { usage >&2; return 64; }
+    want=$2
+  fi
+  [ -n "$IDIR" ] || return 0
+  set --
+  for f in "$IDIR"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*.md; do
+    [ ! -f "$f" ] || set -- "$@" "$f"
+  done
+  [ $# -gt 0 ] || return 0
+  # Without --state everything that is not closed: a record with a broken state stays visible.
+  awk -v want="$want" '
+    function v(k) { return ((k in V) && V[k] != "") ? V[k] : "-" }
+    function out() {
+      if (file == "") return
+      if (want == "all" || (want == "" ? V["state"] != "closed" : V["state"] == want))
+        printf "%s\t%s\t%s\t%s\t%s\n", v("id"), v("state"), v("opened"), v("severity"), (title == "" ? "-" : title)
+    }
+    FNR == 1 { out(); file = FILENAME; split("", V); title = ""; fm = ($0 == "---"); next }
+    fm && $0 == "---" { fm = 0; next }
+    fm {
+      c = index($0, ":")
+      if (c > 1) {
+        k = substr($0, 1, c - 1); val = substr($0, c + 1)
+        gsub(/\t/, " ", val); gsub(/^ +| +$/, "", val)
+        if (!(k in V)) V[k] = val
+      }
+      next
+    }
+    title == "" && /^# Incident -- / { title = substr($0, 15); gsub(/\t/, " ", title) }
+    END { out() }
+  ' "$@"
+}
+
+cmd_incident() {
+  local sub="${1:-}"
+  [ $# -eq 0 ] || shift
+  case "$sub" in
+    new)  incident_new "$@" ;;
+    list) incident_list "$@" ;;
+    *) usage >&2; return 64 ;;
+  esac
+}
+
 # ---- check ---------------------------------------------------------------------
-cmd_check() {
-  [ $# -eq 0 ] || { usage >&2; return 64; }
+# check_incidents: the records under incidents/. Sets NI; status 1 with a problem.
+# What a file cannot show on its own is asked afterwards: a mitigation's script
+# has to exist and pass ytstack-handover check, a receipt has to exist. Paths
+# are read from the root of the checkout.
+NI=0
+check_incidents() {
+  local f name bad=0 out line kind mid path full msg
+  NI=0
+  [ -n "$IDIR" ] && [ -d "$IDIR" ] || return 0
+  set --
+  for f in "$IDIR"/*.md; do
+    [ -f "$f" ] || continue
+    NI=$((NI + 1)); name=${f##*/}
+    case "$name" in
+      [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-?*.md)
+        if [ -s "$f" ]; then set -- "$@" "$f"; else echo "$name: no frontmatter"; bad=1; fi ;;
+      *) echo "$name: the name is not <YYYY-MM-DD>-<slug>.md"; bad=1 ;;
+    esac
+  done
+  [ $# -gt 0 ] || return "$bad"
+  out=$(awk -v states="$ISTATES" '
+    function listed(v, list) { return index("|" list "|", "|" v "|") > 0 }
+    function p(msg) { print name ": " msg }
+    function utc(v) { return v ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ }
+    function unset(v) { return v == "none" }
+    function when(k) { if (!unset(V[k]) && !utc(V[k])) p(k " \"" V[k] "\" is not \"none\" or a UTC time like 2026-11-13T09:15:00Z") }
+    function finish(   st, rc) {
+      if (name == "") return
+      if (!hadfm) { p("no frontmatter"); return }
+      if (fm) { p("the frontmatter is not closed"); return }
+      if (V["id"] ".md" != name) p("id \"" V["id"] "\" does not match the file name")
+      st = V["state"]
+      if (!listed(st, states)) p("state \"" st "\" is not one of " states)
+      if (!utc(V["opened"])) p("opened \"" V["opened"] "\" is not a UTC time like 2026-11-13T09:15:00Z")
+      when("mitigated"); when("closed")
+      if (st == "open" && !unset(V["mitigated"])) p("state open, but mitigated is \"" V["mitigated"] "\"")
+      if (st == "mitigated" && unset(V["mitigated"])) p("state mitigated, but mitigated is not set")
+      if ((st == "open" || st == "mitigated") && !unset(V["closed"])) p("state " st ", but closed is \"" V["closed"] "\"")
+      if (st == "closed" && unset(V["closed"])) p("state closed, but closed is not set")
+      if (V["severity"] == "") p("no severity; \"unstated\" when nobody stated one")
+      rc = V["root_cause"]
+      if (rc == "") p("no root_cause; \"none\" until there is one")
+      else if (st == "closed" && rc == "none") p("state closed, but root_cause is \"none\": name the task, or \"not pursued -- <reason>\"")
+      else if (rc ~ /^not pursued/ && rc !~ /^not pursued -- [^ ]/) p("root_cause \"" rc "\" gives no reason: \"not pursued -- <reason>\"")
+      if (order != "123456") p("the sections are not \"What is seen\", \"Timeline\", \"Hypotheses\", \"Proposed mitigations\", \"Decisions\" and \"After\", each once and in this order")
+    }
+    BEGIN { nk = split("changes effect risk undo script status", KEYS, " ") }
+    FNR == 1 {
+      finish()
+      name = FILENAME; sub(/^.*\//, "", name)
+      split("", V); split("", M); order = ""; sec = 0; fence = 0
+      hadfm = ($0 == "---"); fm = hadfm
+      next
+    }
+    fm && $0 == "---" { fm = 0; next }
+    fm {
+      c = index($0, ":")
+      if (c > 1) {
+        k = substr($0, 1, c - 1); val = substr($0, c + 1); gsub(/^[ \t]+|[ \t]+$/, "", val)
+        if (!(k in V)) V[k] = val
+      }
+      next
+    }
+    index($0, "```") == 1 { fence = !fence }
+    !fence && /^## / {
+      h = $0; sub(/[ \t]+$/, "", h); sec = 0
+      if (h == "## What is seen") sec = 1
+      else if (h == "## Timeline") sec = 2
+      else if (h == "## Hypotheses") sec = 3
+      else if (h == "## Proposed mitigations") sec = 4
+      else if (h == "## Decisions") sec = 5
+      else if (h == "## After") sec = 6
+      if (sec) order = order sec
+      next
+    }
+    # A mitigation: "- M<n> -- <what> | changes: .. | effect: .. | risk: .. | undo: .. | script: .. | status: ..".
+    # A " | " inside a value stays part of it: a field starts only where "<word>: " follows the bar.
+    sec == 4 && !fence && /^- / {
+      item = $0; sub(/^- +/, "", item); gsub(/\t/, " ", item)
+      n = split(item, seg, / \| /)
+      if (seg[1] !~ /^M[0-9]+ -- [^ ]/) { p("line " FNR ": a mitigation line starts with \"- M<n> -- <what it is>\""); next }
+      mid = seg[1]; sub(/ .*$/, "", mid)
+      if (mid in M) p(mid " stands twice")
+      M[mid] = 1
+      split("", F); cur = ""
+      for (i = 2; i <= n; i++) {
+        s = seg[i]
+        if (s ~ /^[a-z_]+:( |$)/) {
+          cur = substr(s, 1, index(s, ":") - 1)
+          if (cur in F) p(mid ": the field \"" cur "\" stands twice")
+          val = substr(s, index(s, ":") + 1); gsub(/^ +| +$/, "", val); F[cur] = val
+        } else if (cur != "") F[cur] = F[cur] " | " s
+      }
+      for (i = 1; i <= nk; i++) if (F[KEYS[i]] == "") p(mid ": no " KEYS[i])
+      st = F["status"]; receipt = ""
+      if (st == "" || st == "proposed" || st == "declined") { }
+      else if (st ~ /^ordered by .+ at [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/) { }
+      else if (st ~ /^carried out, receipt [^ ]/) receipt = substr(st, 22)
+      else p(mid ": status \"" st "\" is not \"proposed\", \"ordered by <who> at <UTC time>\", \"carried out, receipt <path>\" or \"declined\"")
+      path = F["script"]; gsub(/^`|`$/, "", path); gsub(/^`|`$/, "", receipt)
+      if (path != "" && st != "declined") print "=script\t" name "\t" mid "\t" path
+      if (receipt != "") print "=receipt\t" name "\t" mid "\t" receipt
+    }
+    END { finish() }
+  ' "$@")
+  while IFS= read -r line; do
+    case "$line" in
+      "") continue ;;
+      "=script$TAB"*|"=receipt$TAB"*)
+        IFS=$TAB read -r kind name mid path <<EOF
+$line
+EOF
+        case "$path" in /*) full=$path ;; *) full="$YT_TOPLEVEL/$path" ;; esac
+        if [ ! -f "$full" ]; then
+          echo "$name: $mid: the ${kind#=} $path does not exist"; bad=1
+        elif [ "$kind" = "=script" ] && ! msg=$(bash "$ROOT/bin/ytstack-handover" check "$full" 2>&1); then
+          echo "$name: $mid: $path does not pass ytstack-handover check: $(printf '%s\n' "$msg" | sed -n 1p)"; bad=1
+        fi ;;
+      *) echo "$line"; bad=1 ;;
+    esac
+  done <<EOF
+$out
+EOF
+  return "$bad"
+}
+
+# check_findings: the files under signals/. Sets NF; status 1 with a problem.
+NF=0
+check_findings() {
   local f name n=0 bad=0
-  if [ -z "$SDIR" ] || [ ! -d "$SDIR" ]; then echo "no signals"; return 0; fi
+  NF=0
+  [ -n "$SDIR" ] && [ -d "$SDIR" ] || return 0
+  set --
   for f in "$SDIR"/*.md; do
     [ -f "$f" ] || continue
     n=$((n + 1)); name=${f##*/}
@@ -425,13 +639,24 @@ cmd_check() {
       }
     ' "$@" || bad=1
   fi
+  NF=$n
+  return "$bad"
+}
+
+cmd_check() {
+  [ $# -eq 0 ] || { usage >&2; return 64; }
+  local bad=0
+  if [ -z "$YT_DIR" ] || { [ ! -d "$SDIR" ] && [ ! -d "$IDIR" ]; }; then echo "no signals"; return 0; fi
+  check_findings || bad=1
+  check_incidents || bad=1
   [ "$bad" -eq 0 ] || return 1
-  echo "signals ok: $n finding(s)"
+  echo "signals ok: $NF finding(s), $NI incident(s)"
 }
 
 case "$CMD" in
-  new)   cmd_new "$@" ;;
-  list)  cmd_list "$@" ;;
-  set)   cmd_set "$@" ;;
-  check) cmd_check "$@" ;;
+  new)      cmd_new "$@" ;;
+  list)     cmd_list "$@" ;;
+  set)      cmd_set "$@" ;;
+  incident) cmd_incident "$@" ;;
+  check)    cmd_check "$@" ;;
 esac
