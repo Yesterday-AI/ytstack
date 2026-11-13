@@ -67,7 +67,29 @@ What an instance proves is what was started: the script prints the commit of the
 | `healthy` | no | A command that exits 0 while the target is healthy. |
 | `settle` | no | How many seconds `healthy` keeps being asked after the commit arrived. Default 120. |
 
-`bin/ytstack-watch release --commit <sha> [--timeout <seconds>]` reads these keys through `bin/ytstack-runtime get`. It asks `deployed` until the output contains the commit, then asks `healthy` for the settle time, and prints one receipt: target, commit, when it arrived, how often `healthy` was asked and how often it failed, each with its read time. It deploys nothing and rolls nothing back.
+`bin/ytstack-watch release --commit <sha> [--timeout <seconds>] [--interval <seconds>] [-C <dir>]` reads these keys through `bin/ytstack-runtime get`. It deploys nothing and rolls nothing back: it runs the two commands, in the root of the checkout, and nothing else.
+
+1. It runs `deployed` every interval (default 15 seconds) until the output names the commit, for at most the timeout (default 900 seconds). The output names the commit when a run of hex digits in it starts with `<sha>`, or when `<sha>` starts with that run and the run has seven characters or more. So the target may print a short SHA while the caller passes the full one, and the other way round. `--commit` takes seven hex digits or more.
+2. It runs `healthy`, when there is one, every interval for the settle time, and counts the calls and the ones that failed. One failed call makes the result `unhealthy`; the watch still asks until the settle time is over, so the receipt tells one blip from a target that stays down.
+
+A call that still runs after 30 seconds is stopped and counts as failed. While the watch waits it prints a line only when something changed (`<UTC> deployed: <first line of the output>`, `<UTC> arrived: ...`, `<UTC> healthy: ok` or `failed (exit <n>)`). At the end it prints one receipt, five lines with fixed labels, each host fact with the UTC time it was read:
+
+```
+Target: production (https://app.example.com)
+Commit: a1b2c3d4e5f60718293a4b5c6d7e8f9012345678
+Arrived: yes, the target printed a1b2c3d, read 2026-11-13T19:02:11Z
+Health: asked 9, failed 0, last read 2026-11-13T19:04:12Z
+Result: released
+```
+
+| Result | Exit code | The receipt says |
+|---|---|---|
+| `released` | 0 | the commit arrived and every health call passed |
+| `no health command` | 0 | the commit arrived; `Health: not asked: the "Release" section names no healthy command` |
+| `not arrived` | 2 | `Arrived: no, not within <n> seconds; the target printed last: <first line>, read <UTC>` and `Health: not asked` |
+| `unhealthy` | 3 | `Health: asked <n>, failed <m>, first failure read <UTC>, last read <UTC>` |
+
+Without a "Release" section, or without `deployed` in it, the watch prints one line that names this document and exits 4; nothing is run. A `RUNTIME.md` that does not pass `check` is not run either (exit 1, the problems on stderr). A usage error exits 64.
 
 ## `## Signals` -- where production speaks
 
