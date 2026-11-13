@@ -45,6 +45,7 @@ The work contract in the brief (the body of `ytstack:minimal-code`) governs how 
 - No implementation of logic before a failing test exists; a trivial change (a rename, a constant, a text, a config value) gets no new test.
 - No files outside the task plan's Files section; the `pre-tool-use-edit` hook warns, you stop and report instead of widening the scope.
 - No "done" without the verification command's real output.
+- A plan whose `Environment:` names a running instance is verified there: `ytstack-runtime up` (the `RUNTIME_TOOL` of `ytstack:verification-before-completion`), the check against its `URL:`, its `COMMIT:` line in the evidence, `ytstack-runtime down`. No "Run" section in `RUNTIME.md`, or `up` fails: report that the check at the running product was not possible. Never claim it.
 - `STATE.md` in your worktree is your copy: the skills may update it; the orchestrator owns the pointer in the main checkout and resolves it at merge time.
 - One task at a time: plan, implement, verify, summarize, next.
 

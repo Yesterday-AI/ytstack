@@ -3,7 +3,7 @@ name: plan-task
 description: "Turns the next task of the current slice into M###-S##-T##-PLAN.md with exact files and a verification command, and sets STATE active_task. Use after slice-milestone, before executing a task, or when the user says plan the task, next task, detail the task. Not for one-sentence changes (quick-task) and not for closing a task (summarize-task)."
 metadata:
   tier: core
-  version: 0.3.1
+  version: 0.3.2
   triggers:
     - plan task
     - detail next task
@@ -180,6 +180,8 @@ Use AskUserQuestion (open-ended):
 > One pass in the local checkout is the default. If the check needs several passes, a sample, or another environment (CI, a preview, a device), say how many, where, and why.
 
 Remember as `_VERIFICATION`, plus `_RUNS` (default `once`), `_ENVIRONMENT` (default `local checkout`) and, only when the check covers a sample, `_SAMPLE` (`<n> of <m>, because <reason>`). A number above one, and a sample, carry their reason in the plan.
+
+A task whose result shows only at the running product (a page, an endpoint, a flow) names `Environment: instance from bin/ytstack-runtime up` and says what is checked there: the path or the action, and what must be seen. The instance comes from the "Run" section of `RUNTIME.md`. If that section does not exist yet, tell the user: the check will be reported as not possible until it does.
 
 What this section says is all the evidence the task owes. Execution does not add passes, scenarios, suites or environments, and it does not drop any (`ytstack:minimal-code`, "Evidence").
 

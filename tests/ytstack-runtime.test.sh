@@ -9,8 +9,9 @@
 #   signals  one tab separated line per source: name, kind, read, scope; a bar
 #            inside a command stays part of the command
 #   check    a well-formed file passes and names its sections; free text in a
-#            section and a section without a list line pass; each defect is
-#            named on its own, exit 1
+#            section and a section without a list line pass, and so does the
+#            RUNTIME.md template of init-project and of adopt-brownfield; each
+#            defect is named on its own, exit 1
 #   up       starts the product on a free port of the range, waits for "ready",
 #            prints URL, PORT, PID, LOG and COMMIT; state outside the checkout;
 #            a second up prints the same instance; two directories get two
@@ -111,6 +112,22 @@ run "$D" get run start; eq "get from a section without a list line: exit 1" 1 "$
 has "and says that the section is missing" 'no "Run" section' "$OUT"
 run "$D" up; eq "up without a Run section: exit 1" 1 "$EC"
 has "and says so" 'no "Run" section' "$OUT"
+
+# What the two scaffold skills write passes as it is.
+# template <skill>: the fenced block under "#### RUNTIME.md" of that skill
+template() {
+  awk '
+    /^#### / { on = ($0 == "#### RUNTIME.md"); next }
+    on && index($0, "```") == 1 { if (inb) exit; inb = 1; next }
+    inb { print }
+  ' "$ROOT/skills/$1/SKILL.md"
+}
+for s in init-project adopt-brownfield; do
+  project "scaffold-$s"; template "$s" > "$F"
+  has "$s: the RUNTIME.md template has the three headings" "## Run|## Release|## Signals|" "$(grep -E '^## (Run|Release|Signals)$' "$F" | tr '\n' '|')"
+  run "$D" check
+  eq "$s: the template passes check untouched" "runtime ok: no sections" "$OUT"
+done
 
 # ---- 2. get, signals, check on a full file ------------------------------------
 echo "# get, signals"

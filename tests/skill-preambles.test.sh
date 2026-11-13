@@ -273,6 +273,12 @@ has "reassess-roadmap: drift report printed" "$OUT" "spec drift:"
 pre verification-before-completion "$WT"
 has "verification-before-completion: no Runs line -> the default is stated" "$OUT" "RUNS_LINE: Runs: once. Environment: local checkout."
 has "verification-before-completion: the commit is printed" "$OUT" "HEAD: $(git -C "$WT" rev-parse --short HEAD)"
+has "verification-before-completion: the runtime script is named" "$OUT" "RUNTIME_TOOL: $ROOT/skills/verification-before-completion/../../bin/ytstack-runtime"
+has "verification-before-completion: no Run section in RUNTIME.md is stated" "$OUT" "RUN_SECTION: no"
+printf '# Runtime\n\n## Run\n\n- start: sleep 300\n- ready: true\n' > "$WT/.ytstack/RUNTIME.md"
+pre verification-before-completion "$WT"
+has "verification-before-completion: a Run section is stated" "$OUT" "RUN_SECTION: yes"
+rm -f "$WT/.ytstack/RUNTIME.md"
 cp "$TMP/tp.spec.bak" "$WT/.ytstack/M999-S01-T01-PLAN.md"
 ( cd "$WT" && git rm -rq .ytstack/spec && git commit -qm "chore: remove fixture spec" ) >/dev/null 2>&1
 rm -f "$WT/.ytstack/spec/core.md"; rmdir "$WT/.ytstack/spec" 2>/dev/null
