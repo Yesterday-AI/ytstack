@@ -20,7 +20,8 @@
 #                  `ytstack-frontier check` instead when the table has some
 #   runtime        the problems of `ytstack-runtime check`
 #   review policy  the problems of `ytstack-risk check`, when that script is
-#                  part of this installation
+#                  part of this installation (the spec lint repeats them; they
+#                  are counted here only)
 #
 # It only reads. With --question, and only when something needs a look, it
 # writes ONE question file through `ytstack-questions new` ("Upkeep found N
@@ -100,10 +101,23 @@ age() {
   [ -z "$e" ] || echo $((NOW - e))
 }
 
+# ---- review policy (read first, reported last) -------------------------------------
+# bin/ytstack-risk came after this script; an installation may not have it.
+POLICY=""; POLICY_NOTE=""
+if [ -x "$BIN/ytstack-risk" ]; then
+  out=$("$BIN/ytstack-risk" -C "$DIR" check 2>&1) || POLICY=$out
+else
+  POLICY_NOTE="bin/ytstack-risk is not part of this installation"
+fi
+
 # ---- spec --------------------------------------------------------------------------
+# The lint repeats every line of `ytstack-risk check` as a failure of its own.
+# Such a line is listed once, under "review policy".
 items=""; note=""
 if [ -f "$YT_DIR/spec/SPEC.md" ]; then
-  items=$(tool ytstack-spec lint 2>&1 | sed -n 's/^FAIL /lint: /p')
+  items=$(tool ytstack-spec lint 2>&1 | sed -n 's/^FAIL //p' | YTU_POLICY="$POLICY" awk '
+    BEGIN { n = split(ENVIRON["YTU_POLICY"], p, "\n"); for (i = 1; i <= n; i++) if (p[i] != "") policy[p[i]] = 1 }
+    !($0 in policy) { print "lint: " $0 }')
   items="$items$NL$(tool ytstack-spec drift 2>&1 | grep -v '^spec drift:' | sed 's/^/drift: /')"
 else
   note="no technical spec"
@@ -183,15 +197,7 @@ items=""
 out=$(tool ytstack-runtime check 2>&1) || items=$out
 section runtime "$items"
 
-# ---- review policy -----------------------------------------------------------------
-# bin/ytstack-risk came after this script; an installation may not have it.
-items=""; note=""
-if [ -x "$BIN/ytstack-risk" ]; then
-  out=$("$BIN/ytstack-risk" -C "$DIR" check 2>&1) || items=$out
-else
-  note="bin/ytstack-risk is not part of this installation"
-fi
-section "review policy" "$items" "$note"
+section "review policy" "$POLICY" "$POLICY_NOTE"
 
 # ---- the report, and the question --------------------------------------------------
 case "$TOTAL" in

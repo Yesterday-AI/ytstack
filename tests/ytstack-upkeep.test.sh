@@ -243,7 +243,8 @@ cp -p "$ROOT/bin/ytstack-upkeep" "$ROOT/bin/ytstack-spec" "$ROOT/bin/ytstack-que
 cp -p "$ROOT/hooks/lib/git-ctx.sh" "$PL/hooks/lib/"
 UP="$PL/bin/ytstack-upkeep"
 project policy
-echo "a broken lens" > "$Y/REVIEW.md"
+mkdir -p "$Y/spec"
+echo "a broken lens" > "$Y/spec/REVIEW.md"
 run "$D"
 eq "an installation without ytstack-risk: exit 0" 0 "$EC"
 has "the section says that it was not checked" "review policy: 0 (bin/ytstack-risk is not part of this installation)" "$OUT"
@@ -252,9 +253,9 @@ cat > "$PL/bin/ytstack-risk" <<'EOF'
 # Stand-in for bin/ytstack-risk in this fixture: `check` fails on a REVIEW.md
 # that holds the word "broken".
 [ "${1:-}" = -C ] && [ "${3:-}" = check ] || { echo "stand-in: expected -C DIR check, got: $*" >&2; exit 64; }
-if grep broken "$2/.ytstack/REVIEW.md" >/dev/null 2>&1; then
-  echo 'line 4: lens "visual" has no evidence'
-  echo 'line 9: size is not two numbers'
+if grep broken "$2/.ytstack/spec/REVIEW.md" >/dev/null 2>&1; then
+  echo 'REVIEW.md: lens visual has no evidence'
+  echo 'REVIEW.md: the size line is not two numbers'
   exit 1
 fi
 echo "review policy ok"
@@ -265,8 +266,30 @@ chmod +x "$PL/bin/ytstack-risk"
 run "$D"
 eq "with ytstack-risk, a REVIEW.md that fails its check: exit 10" 10 "$EC"
 eq "review policy: 2" 2 "$(count "review policy")"
-has "one item per problem" "  - line 4: lens \"visual\" has no evidence" "$OUT"
-echo "fine" > "$Y/REVIEW.md"
+has "one item per problem" "  - REVIEW.md: lens visual has no evidence" "$OUT"
+# A spec lint that calls ytstack-risk repeats its lines as failures of its own.
+# The stand-in for bin/ytstack-spec does that, and adds one failure of its own.
+cp -p "$PL/bin/ytstack-spec" "$PL/bin/ytstack-spec.real"
+cat > "$PL/bin/ytstack-spec" <<'EOF'
+#!/usr/bin/env bash
+# Stand-in for bin/ytstack-spec in this fixture: `lint` prints the lines of
+# `ytstack-risk check` as failures, as the lint that calls it does.
+case "${3:-}" in
+  lint)
+    echo "FAIL billing.md: no frontmatter"
+    "$(dirname "$0")/ytstack-risk" -C "$2" check | sed -n 's/^REVIEW/FAIL REVIEW/p'
+    echo "spec lint: 1 area file(s), 3 failure(s), 0 warning(s)"; exit 1 ;;
+  drift) echo "spec drift: no area to look at" ;;
+esac
+EOF
+echo "# fx" > "$Y/spec/SPEC.md"
+run "$D"
+eq "a problem that the lint repeats is counted once: spec 1, review policy 2" "1:2" "$(count spec):$(count "review policy")"
+has "the lint keeps its own failure" "  - lint: billing.md: no frontmatter" "$OUT"
+hasnt "and does not list the policy's" "lint: REVIEW.md" "$OUT"
+eq "three things then" "3 things need a look" "$(printf '%s\n' "$OUT" | tail -1)"
+mv "$PL/bin/ytstack-spec.real" "$PL/bin/ytstack-spec"; rm -f "$Y/spec/SPEC.md"
+echo "fine" > "$Y/spec/REVIEW.md"
 run "$D"
 eq "a REVIEW.md that passes: exit 0" 0 "$EC"
 eq "the section carries no note then" "review policy: 0" "$(printf '%s\n' "$OUT" | grep '^review policy:')"

@@ -11,7 +11,8 @@ verification: passed
 
 ## Commits
 
-- The commit that carries this file (`M026-S02-T01: bin/ytstack-upkeep collects what needs a look and can leave one question`).
+- `a330684` -- `M026-S02-T01: bin/ytstack-upkeep collects what needs a look and can leave one question`
+- A second commit with the same prefix (`M026-S02-T01: ytstack-upkeep lists a review policy problem once`), written after M026-S02-T02 when the report of M025-S02 showed that `bin/ytstack-spec lint` repeats every line of `ytstack-risk check`. See "Added after the first commit".
 
 ## Outcome
 
@@ -32,10 +33,16 @@ On this repository the run listed nine things: five drifted areas, three finding
 - **Exit 1** also when the question file could not be written.
 - **The report names the commit** of the checkout in its first line when the project is a repository.
 
+## Added after the first commit
+
+`bin/ytstack-risk` (M025-S02, another branch) prints `REVIEW.md: <problem>` lines, and its `bin/ytstack-spec lint` prints each of them again as a `FAIL` line. With both scripts in one tree the first version of this script counted such a problem twice, under `spec` and under `review policy`. Now the review policy is read first, and a lint failure that is exactly one of its lines is left out of `spec`. The suite pins it in the stand-in directory with a stand-in `ytstack-spec` that repeats the lines (four assertions, 101 in all).
+
+Probe, not part of the suite: a temporary directory with `bin/ytstack-risk`, `bin/ytstack-spec`, `bin/ytstack-questions`, `bin/ytstack-frontier` and `hooks/lib/git-ctx.sh` of the branch `risk-gate-b1` at `f9d7dba` and this script. A `REVIEW.md` with an unknown section gave `spec: 0`, `review policy: 1` and exit 10; without the file `review policy: 0` and exit 0. `ytstack-risk -C <dir> check` is the call the real script takes.
+
 ## Follow-ups
 
 - shortcut: a question or a lane whose time does not parse is skipped here; `ytstack-questions check` and `ytstack-frontier check` name it. Only the second runs as part of this script.
-- `bin/ytstack-risk` did not exist in this worktree. The section calls `ytstack-risk -C <dir> check` and takes every output line of a failing call as an item. Check after the merge that the real script takes `-C` in front and prints one line per problem; the suite then runs the clean project against it.
+- After the merge with M025-S02 the suite's clean project runs against the real `bin/ytstack-risk` (it prints `no review policy` there and exits 0, as the probe showed).
 - One run took 0.2 seconds on an empty fixture project and 2.7 seconds on this repository (six spec areas, 253 entries in `.ytstack/`), measured once each on this machine. No cache.
 - A scheduled run in CI needs the full history for the drift section (`fetch-depth: 0`); the recipe (M026-S02-T02) says so.
 
@@ -50,6 +57,8 @@ Command: `/bin/bash tests/ytstack-upkeep.test.sh` -- passed at the tree `3c2cd11
 
 Also run on that tree: `bash tests/run-all.sh` locally, `ALL SUITES PASSED` (23 suites), exit 0; `python3 bin/ytstack-check`, exit 2, 32 warnings, no `[fail]` (the baseline of 27 and five spec drift warnings; the one for `checks-and-evals` now also counts `bfe6d14`, the commit of M026-S01-T01); `bash tests/run-all.sh` in `ubuntu:26.04` (bash 5.3.9) from an export of the tree, `ALL SUITES PASSED`, exit 0; the same in `alpine` with `coreutils` (bash 5.3.9), `ALL SUITES PASSED`, exit 0.
 
+The second commit: `/bin/bash tests/ytstack-upkeep.test.sh` -- passed at the tree `8c0d964` (its staged files on top of `75198d2`) in the local checkout (macOS, bash 3.2.57), `101 passed, 0 failed`, exit 0. On that tree also `bash tests/run-all.sh` locally, in `ubuntu:26.04` and in `alpine` with `coreutils` from an export: `ALL SUITES PASSED` (23 suites) three times, exit 0; `python3 bin/ytstack-check`, exit 2, 32 warnings, no `[fail]`.
+
 The suite was written before the script and first run after it; no failing run was recorded.
 
-Not checked: the real `bin/ytstack-risk` (see Follow-ups). A scheduled run on any host. A project with the `.ytstack` directory in user scope (`~/.ytstack/projects/<key>`). `alpine` without `coreutils` (BusyBox `date`).
+Not checked: the merged tree with `bin/ytstack-risk` in the real `bin/` (the probe used copies in a temporary directory). A scheduled run on any host. A project with the `.ytstack` directory in user scope (`~/.ytstack/projects/<key>`). `alpine` without `coreutils` (BusyBox `date`).
