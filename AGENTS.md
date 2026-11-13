@@ -4,6 +4,8 @@ Read this before modifying anything in this repo.
 
 ## Read first
 
+For what applies now, read `.ytstack/spec/SPEC.md` and the area file of what you touch: behaviour, where it is implemented, how to verify it. Plans and summaries are history, not a description of the system.
+
 Before any architectural proposal, read in order: `docs/concept.md` (stable summary of what ytstack wraps and skips), `.ytstack/DECISIONS.md` (locked-in decisions, append-only), `.ytstack/VENDOR-INVENTORY.md` (what actually exists upstream). Do not debate a point that these files already settle.
 
 ## If you are an AI agent
@@ -27,7 +29,7 @@ If you can't verify all five above, stop and tell the human what you can't verif
 **Is:**
 - A Claude Code and Codex plugin (one shared skill tree and lifecycle scripts, host-specific registration; see `docs/codex.md` for the support boundary)
 - A curated clamp around selected superpowers skills (vendored via git subtree, NEVER modified) and gstack skills (an installed, tag-pinned dependency invoked through the Skill tool, never inlined)
-- An artifact-first system: `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, milestone/slice/task hierarchy
+- An artifact-first system: `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, the technical spec under `spec/` (what applies now, `docs/ux/spec-format.md`), milestone/slice/task hierarchy
 - SessionStart-hook-driven context injection (following superpowers' using-superpowers pattern)
 - MIT licensed, shareable, team-usable
 
@@ -51,7 +53,7 @@ If you need different behavior, wrap the vendored skill in a ytstack-namespaced 
 
 ### gstack is an installed dependency, never vendored or inlined
 
-Since 0.3.0 (DECISIONS 2026-11-07 "Vendor strategy") gstack is not in this repo. The three planning wrappers (`office-hours`, `plan-ceo-review`, `plan-eng-review`) detect `~/.claude/skills/gstack` via `yt_gstack_ctx` (pin `YT_GSTACK_PIN` in `hooks/lib/git-ctx.sh`, bun >= 1.4.2), stop with the install command when it is missing, and invoke the installed skill through the Skill tool. Do not re-add a `vendor/gstack` subtree, do not `cat` gstack files, do not copy gstack prose into ytstack. To move the pin: bump `YT_GSTACK_PIN`, re-run the live validation (`tests/` + a temp-HOME install), update README/QUICKSTART/NOTICE.
+Since 0.3.0 (DECISIONS 2026-11-07 "Vendor strategy") gstack is not in this repo. The six gstack wrappers (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`) detect `~/.claude/skills/gstack` via `yt_gstack_ctx` (pin `YT_GSTACK_PIN` in `hooks/lib/git-ctx.sh`, bun >= 1.4.2), stop with the install command when it is missing, and invoke the installed skill through the Skill tool. Do not re-add a `vendor/gstack` subtree, do not `cat` gstack files, do not copy gstack prose into ytstack. To move the pin: bump `YT_GSTACK_PIN`, re-run the live validation (`tests/` + a temp-HOME install), update README/QUICKSTART/NOTICE.
 
 ### Never copy third-party methodology content verbatim
 

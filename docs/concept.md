@@ -146,9 +146,9 @@ Per DECISIONS 2026-04-24 "Wrapper mechanism = shell-exec inject + cross-ref chec
 
 **Vendor is the single source of truth.** Subtree pulls to a release tag flow through without manual adaptation; no fork divergence possible by construction.
 
-Applies to: `test-driven-development`, `systematic-debugging`, `verification-before-completion` (vendor/superpowers/skills).
+Applies to: `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill` (vendor/superpowers/skills).
 
-**gstack wrappers use a second shape (since 0.3.0):** `plan-ceo-review`, `plan-eng-review`, `office-hours` run the same preamble plus `yt_gstack_ctx`, a `## HARD-GATE: gstack installed?` section, and a `## Procedure` that invokes the installed gstack skill through the Skill tool before applying ytstack post-processing. Nothing is inlined, because gstack's v1.9x skeletons load `sections/*.md` and run Bun helpers from their install dir (see §2.1).
+**gstack wrappers use a second shape (since 0.3.0):** `plan-ceo-review`, `plan-eng-review`, `office-hours`, `retro`, `ship`, `document-release` run the same preamble plus `yt_gstack_ctx`, a `## HARD-GATE: gstack installed?` section, and a `## Procedure` that invokes the installed gstack skill through the Skill tool before applying ytstack post-processing. Nothing is inlined, because gstack's v1.9x skeletons load `sections/*.md` and run Bun helpers from their install dir (see §2.1).
 
 **Supersedes:** the earlier 2026-04-23 "Known risk -- superpowers interactive prompts may block Claude Code input" rule that required every superpowers wrapper to pass `YTSTACK_NON_INTERACTIVE=1`. That rule was a defensive workaround for a different wrapper shape (prose indirection telling the agent to "read vendor file and follow it"). Shell-exec-inject sidesteps the interactive-prompt risk because the vendor content is inlined as the same turn's prompt, not re-invoked as a separate Claude Code interaction.
 
@@ -244,6 +244,7 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - Per-slice: `M###-S##-PLAN.md`
 - Per-task: `M###-S##-T##-PLAN.md`, `M###-S##-T##-SUMMARY.md`
 - Per-pitch (greenfield input): `OFFICE-HOURS.md` (pre-init) -> `OFFICE-HOURS-<slug>.md` (post-init, moved into `.ytstack/`)
+- Technical spec (M022, DECISIONS 2026-11-13): `spec/SPEC.md` (entry point, one page) and `spec/<area>.md` (one per system area). They say what applies now; plans and summaries stay the history. Written by `init-project` (every area `planned`) and `adopt-brownfield` (pointer-only over existing documents, also for an initialized project without a spec), kept true by `plan-task` ("Spec impact"), `summarize-task` (closure check), `code-review`, the verifier and `reassess-roadmap` (drift answer). Format and maintenance rules: `docs/ux/spec-format.md`; checked by `bin/ytstack-spec`.
 - Brownfield import (adopt-brownfield): `codebase/{stack,architecture,conventions,concerns}.md`, optional `backlog/README.md`; `STATE.md` frontmatter `tracker:` (`none | linear | github-projects | paperclip | jira`) read by plan-milestone / reassess-roadmap
 
 **Hooks** (under `hooks/`, registered in `hooks/hooks.json`; all source `hooks/lib/git-ctx.sh` and resolve the checkout from the payload `cwd`, never `CLAUDE_PROJECT_DIR` -- DECISIONS 2026-11-07):
@@ -252,7 +253,7 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - `session-end` -- appends one JSON line to the per-session `session.jsonl` out of tree (no `.ytstack/journal/`)
 - `teammate-idle`, `task-created`, `task-completed` -- Agent Teams coordination (resolved per checkout)
 - `pre-tool-use-edit` (advisory, exit 0), `post-tool-use-bash` (draft summary stub, once, only in the committing checkout and only for commits carrying the task ref) -- quality / safety gates
-- Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (10 suites incl. the #26 acceptance and concurrency suites)
+- Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (14 suites incl. the #26 acceptance and concurrency suites)
 
 #### `quick-task` (execution: quick lane, M018)
 

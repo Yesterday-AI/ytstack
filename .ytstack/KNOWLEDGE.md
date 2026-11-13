@@ -4,8 +4,8 @@ Patterns, rules, and lessons learned while building ytstack. This file is read b
 
 ## Conventions
 
-- **UX contracts are mandatory.** Every skill must pass `docs/ux/*` checks. `bin/ytstack-check` enforces them locally (run before commit); there is no UX-contract CI gate, only `secret-scan.yml`. Non-procedural skills opt out of the structural sections via `kind: directive` or `kind: reference` (see DECISIONS 2026-05-31 + skill-structure.md).
-- **No 1:1 copying from upstream.** Vendored superpowers/gstack content is read-only. If we need to change behavior, wrap it in a ytstack-namespaced skill, don't modify the vendor.
+- **UX contracts are mandatory.** Every skill must pass `docs/ux/*` checks. `bin/ytstack-check` enforces the mechanical part locally (run before commit) and in CI (`ci.yml` and `plugin-check.yml` run it; exit 2, warnings only, passes). Non-procedural skills opt out of the structural sections via `kind: directive` or `kind: reference` (see DECISIONS 2026-05-31 + skill-structure.md).
+- **No 1:1 copying from upstream.** Vendored superpowers content is read-only, and gstack is an installed dependency that is never copied into the tree. If we need to change behavior, wrap it in a ytstack-namespaced skill, don't modify the vendor.
 - **Artifact-first thinking.** If a decision or learning would help future sessions, write it to `DECISIONS.md` or `KNOWLEDGE.md`, not just conversation.
 - **Third-party methodology attribution is "inspired by", never verbatim.** Concepts adapted, prose rewritten. Do not name the external source in public artifacts.
 
@@ -106,6 +106,7 @@ Patterns, rules, and lessons learned while building ytstack. This file is read b
 - **Task (T##):** one atomic unit that fits in one context window. If it doesn't, split into two tasks.
 - **Artifact:** a persistent file in `.ytstack/` that survives across sessions.
 - **Spec:** a design doc written before code, committed under `docs/ytstack/specs/`.
+- **Technical spec:** the files under `.ytstack/spec/` that say what applies now, one per system area. Not the design doc above. Format: `docs/ux/spec-format.md`.
 - **Handoff (manual):** `.ytstack/HANDOFF.md`, written on purpose by `handoff-session` (`event: user-triggered`); user-owned, committable, never touched by hooks.
 - **Handoff (automatic):** `HANDOFF.auto.md` written by the `pre-compact` hook out of tree under `${CLAUDE_PLUGIN_DATA}/repos/<repo-key>/worktrees/<wt-key>/sessions/<session_id>/`; `latest-handoff` symlink per worktree; read by `session-start` and `resume-session`.
 - **Repo key / worktree key:** 16 hex chars (md5) of the canonical git common dir / toplevel; identify a repo across all its worktrees without basename collisions.
@@ -115,5 +116,5 @@ Patterns, rules, and lessons learned while building ytstack. This file is read b
 ## Related projects
 
 - **superpowers** -- vendored in `vendor/superpowers/` from M005. https://github.com/obra/superpowers
-- **gstack** -- vendored in `vendor/gstack/` from M004. Garry Tan's framework.
+- **gstack** -- an installed, tag-pinned dependency since 0.3.0 (was vendored in `vendor/gstack/` from M004 to M017). Garry Tan's framework.
 - **GSD v2** -- NOT vendored, but informs our artifact model. https://github.com/gsd-build/gsd-2

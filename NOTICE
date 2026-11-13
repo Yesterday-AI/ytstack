@@ -31,8 +31,9 @@ Required install, NOT redistributed (since ytstack 0.3.0; it was a git
 subtree at vendor/gstack/ from 0.1.x to 0.2.0). Source repository:
 <https://github.com/garrytan/gstack>
 
-License: MIT (upstream). ytstack does not ship any gstack file. Three ytstack
-skills (skills/office-hours/, skills/plan-ceo-review/, skills/plan-eng-review/)
+License: MIT (upstream). ytstack does not ship any gstack file. Six ytstack
+skills (skills/office-hours/, skills/plan-ceo-review/, skills/plan-eng-review/,
+skills/retro/, skills/ship/, skills/document-release/)
 detect a gstack installation under ~/.claude/skills/gstack (tested against
 v1.96.0.0, requires bun >= 1.4.2) and invoke its skills through the Skill tool.
 
