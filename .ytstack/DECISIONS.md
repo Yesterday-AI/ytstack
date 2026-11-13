@@ -816,3 +816,28 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** New readers of the block call `yt_progress_parse`; do not add a second parser. Skills that advance STATE update the block (`summarize-task`, `quick-task`). The status script stays free of network calls and `gh`. C is open for a later milestone when a project needs it.
 
 **Supersedes:** None.
+
+---
+
+## 2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)
+
+**Context:** The artifact model answered "what did we plan and what happened" (plans, summaries, decisions) and had no place for "what applies now". A fresh session had to rebuild the present from history. In ytstack itself the entry documents contradicted the code (`PROJECT.md` said M001 in progress and gstack vendored, `KNOWLEDGE.md` denied a CI gate that two workflows run). A consumer audit on the same day showed the cost at scale.
+
+**Options considered:**
+- A) Clarify the roles inside the existing files and project conventions, no new files (issue #36 as first written).
+- B) Dedicated artifacts: `spec/SPEC.md` as the entry point and one file per system area, at the same paths in every project.
+- C) Generate a full architecture document (all twelve arc42 sections) per project.
+
+**Chose:** B, by the operator's instruction of 13 November 2026, with what A protects kept as a rule: an existing document stays authoritative and is named under `sources` (pointer-only); nothing is copied. The format is `docs/ux/spec-format.md`. `bin/ytstack-spec` checks it (`lint`), reports areas whose paths changed after their description (`drift`) and checks a task's documentation impact at closure (`impact`).
+
+**Reason:** A fixed path is what a fresh session, a dispatched agent and a host without hooks can all find without being told. One file per area keeps a task's documentation edit local, so parallel work does not collide in one growing root document. C produces filler nobody maintains.
+
+**How to apply:**
+- A plan names its spec impact; a task that changes behaviour updates the area file or the source it names in the same commits; a fix that restores the described behaviour, a refactoring and a trivial edit close with `none`.
+- A documentation impact is satisfied by the area file or by one of its `sources`. A correct pointer is not edited to close a task.
+- The drift report is a prompt to look. "Contract unchanged" is answered by setting `verified_at`. It never holds a task open.
+- A scaffold from a pitch is `status: planned` with `verified_at: none`. The spec states what is planned and what was read against the code; it never states deployment or acceptance.
+- A new decision that changes what applies in an area is linked under that area's "Decisions that apply now"; this file stays append-only.
+- The codebase maps of `adopt-brownfield` stay beside the spec.
+
+**Supersedes:** None. It adds a fourth role to the artifact model: plans and summaries are history, the spec is the description of the system.

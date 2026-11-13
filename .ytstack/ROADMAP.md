@@ -1,9 +1,9 @@
 ---
 project: ytstack
-last_updated: 2026-04-25T16:00:00Z
-total_milestones: 11
-completed_milestones: 9
-current_milestone: M016 (next; M011/M014/M017-M019 planned; M010 done 2026-11-07)
+last_updated: 2026-11-13T15:30:00Z
+total_milestones: 23
+completed_milestones: 17
+current_milestone: M022 (in progress; M020 and M023 planned, M014 reserved, M011 and M013 absorbed into M019)
 ---
 
 # ytstack Roadmap
@@ -37,8 +37,11 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M017 | Vendor strategy (issue #25; report point 6; DECISIONS 2026-11-07) -- superpowers at v7.0.2 + inline-leak check; gstack de-vendored into a tag-pinned installed dependency (precheck + Skill-tool invocation, live-validated); SECURITY.md; release **0.3.0** (tag local; push = operator). | **done** | 7 | 7 |
 | M018 | Ceremony scaling + STATE pointer validation (report point 5) -- `granularity`/`autonomy`/`quick_lane`/`minimal_code` preferences, `quick-task`, states incl. `dropped`/`shipped-informally`, `yt_state_lint` + session-start injection, `reconcile`, `minimal-code` guard (ponytail concept), read-side layouts. Per-worktree `active_task` deferred to M019. Ships in 0.4.0. | **done** | 11 | 11 |
 | M019 | Skill quality, evals, execution model (report point 7 + developer-skills research; absorbs M013) -- trigger-only descriptions within the 1,536-char budget (mattpocock/Anthropic criteria, superpowers' "never summarise the workflow"), `tier`/`version` -> `metadata`, `disable-model-invocation`/`user-invocable` instead of `tier`, `claude plugin eval` suite + CI gate, new skills `code-review` (standards + spec reviewers), `pr`, `retro`, `grilling`, `writing-for-agents` wrapper; orchestrator + `Agent(isolation: worktree)` slices with `worktree.baseRef: head`, verifier Stop-hook; listing on skills.sh; version bump discipline. Released 0.4.0 -> 0.4.1 (Codex merge, PR #23) -> 0.4.2 (Linux `stat` fix), all pushed with green CI 2026-11-07. Shipped: `metadata:` + trigger-only descriptions + checker rules (S01), `evals/` 13 cases + CI (S02), `code-review` / `finish-branch` / `grill` / `retro` / `ship` / `document-release` (S03, absorbs M011), `spawn-milestone-team` 0.2.0 orchestrator + worktree subagents with Agent Teams opt-in, agents to the subagent contract, Stop hook (S04), release 0.4.0 (S05). Not done: `writing-for-agents` wrapper (no consumer asked), skills.sh listing (operator action). | **done** | 18 | 18 |
-| M020 | Candidates, not planned (pick with `ytstack:plan-milestone`): (a) dogfood `spawn-milestone-team` 0.2.0 on a real multi-slice milestone (orchestrator + worktree subagents, merge step, STATE resolution) and fix what the live run shows; (b) Codex host: verify the SessionStart `additionalContextLimit` (REVIEW-NOTES 2026-11-07) and the hook-free flow on a real Codex install; (c) PowerShell hook variants when a Windows consumer appears; (d) per-worktree STATE pointer if (a) needs it; (e) re-run the consumer audit (`docs/research/2026-11-07-notes/local-consumer-repos-audit.md`) after the 17 repos update to 0.4.x. | candidate | TBD | 0 |
+| M020 | Kimi Code CLI host support (issue #30) -- planned 2026-11-09 in the main checkout; its `M020-*` files are not committed yet. The earlier candidates stay unscheduled: (a) dogfood `spawn-milestone-team` 0.2.0 on a real multi-slice milestone (orchestrator + worktree subagents, merge step, STATE resolution) and fix what the live run shows; (b) Codex host: verify the SessionStart `additionalContextLimit` (REVIEW-NOTES 2026-11-07) and the hook-free flow on a real Codex install; (c) PowerShell hook variants when a Windows consumer appears; (d) per-worktree STATE pointer if (a) needs it; (e) re-run the consumer audit (`docs/research/2026-11-07-notes/local-consumer-repos-audit.md`) after the 17 repos update to 0.4.x. | planned | TBD | 0 |
 | M021 | Status line segment (issue #31) -- `bin/ytstack-status`, optional `progress` block in the `STATE.md` frontmatter, `yt_progress_parse` + STATE lint W7, upkeep in `summarize-task` / `quick-task`, `docs/statusline.md`. Done 2026-11-11 (2 slices, 5 tasks); unreleased. Numbered M021 because M020 is taken by the Kimi adapter planning (issue #30). | **done** | 5 | 5 |
+| M022 | Technical spec (issue #36) -- new artifacts `.ytstack/spec/SPEC.md` and `.ytstack/spec/<area>.md` that state what applies now; `bin/ytstack-spec` (lint, drift, impact); the loop keeps them true; ytstack's own spec. S01 and S02 built 2026-11-13; S03 (STATE as a pointer, milestone fold, fresh-session cases) waits for M020. Section "Planned 2026-11-13" below. | **in-progress** | 11 | 11 |
+| M023 | Bounded work (issue #35) -- the work contract reaches every dispatched agent, completion and gates are defined before execution, reviews and evidence stay bounded. Section "Planned 2026-11-13" below. | planned | TBD | 0 |
+| later | Coordinator mode (issue #34) -- what remains of its seven items after M022 and M023. Section "Planned 2026-11-13" below. | candidate | TBD | 0 |
 
 **Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 done (6/6, 2026-11-07); M011 task count pending milestone planning.
 
@@ -212,7 +215,7 @@ Open design questions for `ytstack:plan-milestone` to resolve:
 
 ---
 
-## M011 -- Post-Summarize Lifecycle (5-skill cherry-pick) (planned)
+## M011 -- Post-Summarize Lifecycle (5-skill cherry-pick) (absorbed into M019-S03, done)
 
 **Goal:** Close the lifecycle arc between `summarize-task` and a released version. Today ytstack covers Plan -> Code -> Verify -> Close (`summarize-task`) and stops. Per DECISIONS 2026-04-25 "Lifecycle-phase as the curation heuristic" + 2026-04-25 "M011 scope -- 5-skill cherry-pick", ytstack covers the full dev-loop with a balanced cherry-pick across gstack (ship-mechanics) and superpowers (PR-review-cycle discipline).
 
@@ -244,7 +247,7 @@ Plus: README + QUICKSTART updated with the post-summarize loop diagram.
 
 ---
 
-## M016 -- Worktree-safe hooks + out-of-tree state (next, release 0.2.0)
+## M016 -- Worktree-safe hooks + out-of-tree state ✓ done (released 0.2.0)
 
 **Goal:** Stop every hook from writing into a checkout the user did not choose, and stop writing volatile session state into tracked files at all. Closes #24, #26, #27. Design locked in DECISIONS 2026-11-07 "Hooks never write relative to CLAUDE_PROJECT_DIR".
 
@@ -264,7 +267,7 @@ Plus: README + QUICKSTART updated with the post-summarize loop diagram.
 
 ---
 
-## M017 -- Vendor strategy (planned)
+## M017 -- Vendor strategy ✓ done (released 0.3.0)
 
 **Goal:** Execute DECISIONS 2026-11-07 "Vendor strategy": superpowers subtree to `22f0b46` (v7.0.2) with namespace/relative-link leak check; gstack de-vendored into a tag-pinned installed dependency. Closes #25 (vulnerable vendored `Dockerfile.ci` leaves the repo).
 
@@ -274,7 +277,7 @@ Plus: README + QUICKSTART updated with the post-summarize loop diagram.
 
 ---
 
-## M018 -- Ceremony scaling + STATE pointer validation (planned)
+## M018 -- Ceremony scaling + STATE pointer validation ✓ done (in 0.4.0)
 
 **Goal:** Make the M/S/T loop fit real usage (audit: 7/17 brownfield, 3 repos on Ralph-loop autonomy, ceremony skipped under delivery pressure with no state for it, STATE pointer drift M034 vs M040). Report point 5; details in `docs/research/2026-11-07-modernisierung-best-practices.md`.
 
@@ -282,11 +285,143 @@ Plus: README + QUICKSTART updated with the post-summarize loop diagram.
 
 ---
 
-## M019 -- Evals, budgets, execution model (planned; absorbs M013)
+## M019 -- Evals, budgets, execution model ✓ done (in 0.4.0; absorbed M011 and M013)
 
 **Goal:** `claude plugin eval` suite per wrapper skill; skill descriptions within the 1,536-char / 1 % listing budget; `tier`/`version` under `metadata`; `spawn-milestone-team` rebuilt as orchestrator + `Agent(isolation: "worktree")` per slice (`worktree.baseRef: "head"`), verifier Stop-hook; release discipline (`plugin.json` bump + `claude plugin tag`). Report point 7.
 
 **Plan via:** `ytstack:plan-milestone`.
+
+---
+
+## Planned 2026-11-13 -- issues #35, #36 and #34
+
+Three issues from one consumer migration: #35 (bound verification, review and orchestration work), #36 (current technical specification) and #34 (coordinator mode). The measurements are in the issues and in the comments of 2026-11-13 on #35 and #36. This section fixes the order, who builds what where the issues overlap, and the exit criteria. Slices and tasks come from `ytstack:slice-milestone` when each milestone starts.
+
+**Numbers:** the technical spec is M022 and bounded work is M023 (M020 is the Kimi adapter, planned in the main checkout and not committed; M021 is the status line segment). Coordinator mode takes the next free `M###` when it starts. Detail lives in `M022-*.md` and `M023-*.md`; where those files and this section differ, the milestone files apply.
+
+**Corrections of 13 November 2026** (review comment on #36, applied before the affected rules were built):
+
+1. A documentation impact is satisfied by a change to the area file **or to the authoritative source it names**. A correct pointer is not edited to close a task.
+2. The drift report is a prompt to look ("possible documentation impact"), not a finding. "Contract unchanged" is a valid answer and is recorded by setting `verified_at`. A change to a source counts like a change to the area file.
+3. A scaffold from a pitch is `status: planned` with `verified_at: none`. Planned, implemented-and-checked, and deployed-or-accepted are three different statements; the spec makes only the first two.
+4. The plan and the work live on the branch `spec-and-bounded-work` in a worktree of its own, not in the shared main checkout.
+
+### Order
+
+1. **Technical spec (#36).** First, by the operator's priority of 13 November 2026. Its slices S1 and S2 can start now: the spec artifacts, their templates and the loop changes touch neither `hooks/session-start` nor `STATE.md`, the two files M020 has open. Only S3 waits for M020.
+2. **Bounded work (#35).** Second.
+3. **Coordinator mode (#34).** After both: it builds on the lane contract of 2 and on the STATE rules of 1.
+
+1 and 2 run one after the other, not in parallel: both edit `plan-task`, `code-review`, `reassess-roadmap` and the verifier agent.
+
+### Overlap -- each thing is built once
+
+| Topic | #34 | #35 | #36 | Built in |
+|---|---|---|---|---|
+| Brief and report contract for a dispatched agent | item 3, lane contract | "rules must reach agents dispatched with a brief" | parallel work gets a bounded scope and the applicable contracts | Bounded work S1. #34 keeps only the coordinator-specific lane types. |
+| A step or verdict only the human can give | item 6, decision queue; item 5, handover step | point 4; comment: who gives the verdict, how it is obtained, when it lapses | unresolved decisions are identifiable | Bounded work S2 defines the gate fields and the detection, carried in the existing open-decisions list. #34 item 6 replaces the carrier with queue files. |
+| Review round and evidence tied to a commit | item 4, finishing pipeline; lanes table columns "reviewed head, round" | points 2 and 3 | -- | Bounded work S3 defines round and evidence identity. #34 item 4 builds the host pipeline on them. |
+| STATE as a pointer | item 2, lanes table; item 1, host facts never stored as current | point 5, accurate pointers, no history at startup | point 6 and comment: size bound | Technical spec S3. The lanes table of #34 has to fit under that bound. |
+| Pointers instead of copies in a handoff | "smaller ones", `handoff-session` | -- | integration point `resume-session` / `handoff-session` | Technical spec S2. |
+| What a dispatched agent reads for context | item 3: rules reached by pointer, not pasted | "bounded context" in briefs | the spec artifacts | Technical spec S1 creates the area files; the brief of Bounded work S1 points at the area file instead of plans and history. |
+| Dispatch by dependency, frontier, claims | item 2 | point 5, one sentence | -- | #34. |
+| Coordinator context: rotation through a handoff, polling outside the model, standing instructions in a file | item 1 | points 5 and 6; comment, measured | -- | #34. |
+| A mechanical mistake becomes a check, not prose | item 7, lane retros | comment: the consumer's prose rules did not hold | -- | Principle used in Bounded work S3 (round count); the retro itself stays in #34. |
+| Hosts without hooks (#28 OpenCode, #29 Vibe, #30 Kimi / M020) | brief rendered for `codex exec` too | reach must not depend on skill invocation | "hook support must not be the only route" | Constraint on Bounded work S1 and Technical spec S1 and S2: the contract and the spec live in repository files and skill text; a hook is an optional enhancer. |
+
+Closed issues that set boundaries: #21 and #31 read the STATE frontmatter (the size bound must leave it unchanged), #26 and #27 forbid hook writes into the shared checkout, #16 already added the backlog sweep that the fold step of Technical spec S3 extends.
+
+### Technical spec (issue #36)
+
+**Goal:** A fresh session finds what applies now for an area, where it is implemented and how a change is verified, in one spec file per area, without reading plans and history.
+
+**Decision (operator, 13 November 2026):** the technical spec gets artifacts of its own, and they come first. This departs from #36 as written, which says "do not mandate a new folder tree". What #36 protects stays: an existing architecture document keeps its authority, and nothing is copied (see "pointer-only" below). The DECISIONS entry is written when the milestone starts.
+
+**New artifacts** (every ytstack project has them, at the same paths):
+
+| Artifact | What it holds |
+|---|---|
+| `.ytstack/spec/SPEC.md` | The entry point. One page: what the system is, the areas with one line each and a link to each area file, the invariants that hold everywhere, the commands to build and test. The first thing a new session reads after `STATE.md`. |
+| `.ytstack/spec/<area>.md` | One file per system area, describing the area as it is now. Fixed sections: Purpose; Behavior; Interfaces and contracts (links into code, schemas and API definitions, no copies); Data flow; Invariants and security boundaries; Error behavior; Runtime and deployment assumptions; Known limits; Where implemented; How to verify; Decisions that apply now (links to the decision entries, a partial narrowing included). |
+| Frontmatter of an area file | `area`, `paths` (the globs of the code it describes), `verified_at` (the commit it was last checked against), `sources` (existing documents that stay authoritative, optional). |
+| Frontmatter, continued | `status`: `planned` (the approved design, not built or not checked), `partial`, `implemented` (exists at `verified_at`, its checks passed there). Never a statement about deployment or acceptance. |
+| `bin/ytstack-spec` | `lint`: the format. `drift`: the areas whose `paths` changed after the area file and its `sources` were last touched, as a possible documentation impact. `impact`: a task's "Spec impact" against what the task changed. `areas`: which area describes a path. (Planned as `bin/yt-spec-drift`; one script with the repository's `ytstack-` prefix instead.) |
+| `docs/ux/spec-format.md` | The format contract for both files and the maintenance rules. |
+
+An area file is rewritten when the area changes; it is a current description, not a log. Plans, summaries and decisions stay the history and are linked from it. **Pointer-only:** where a project already has an authoritative document for an area, the area file holds the frontmatter, the links and the sections that document lacks, and `sources` names the document.
+
+**Exit criteria:**
+
+- `init-project` scaffolds `SPEC.md` and the area files from the pitch and the engineering review, every area `planned` and unverified; `adopt-brownfield` builds them over the existing documents and its four codebase maps, pointer-only where a document exists.
+- ytstack has its own `.ytstack/spec/` (areas at least: skills and wrappers, hooks and state, the artifact model, host adapters, the vendored and installed dependencies, checks and evals), and its entry documents agree with the repository: `PROJECT.md` (says M001 in progress and gstack vendored), `KNOWLEDGE.md` line 7 (denies the CI gate that `ci.yml` and `plugin-check.yml` run), this file (frontmatter names 11 milestones and M016 as current; the sections M016 to M019 are headed "planned" while the overview says done; the M020 row says "candidates") and `STATE.md`.
+- The task-plan template has a "Spec impact" field naming the area file and section a task changes, or "none"; a new-requirement case produces a plan with it.
+- A task whose plan names a spec impact is not summarized unless the area file or one of its `sources` changed in the task's commits, checked from the commits and not from the summary's wording; a bug fix that restores the described behavior, a refactoring and a trivial edit close with "none".
+- `bin/ytstack-spec drift` lists an area whose `paths` changed after its description was last touched, stays silent for an untouched one and after `verified_at` was set to the checked commit; `ytstack-check` runs `lint` and `drift` on ytstack's own spec.
+- `yt_state_lint` warns when `STATE.md` exceeds the size bound or carries history; the SessionStart injection names `SPEC.md` and shows "Next action" again instead of "omitted ... near the 10,000-char cap".
+- Closing a milestone folds what still holds into the area files and offers that milestone's plans and summaries for archiving through `reconcile`; nothing moves without consent.
+- Three fresh-session cases (resume, bug fix, new requirement) on one repository snapshot, current against revised instructions, the session allowed to read `STATE.md` and `.ytstack/spec/` first: accuracy, contradictions met, reading effort.
+
+**Slices:**
+
+- S1 -- The spec artifacts exist, and ytstack has its own. The format of `SPEC.md` and of an area file as a contract under `docs/ux/` and a section in `docs/concept.md`; the templates in `init-project` and `adopt-brownfield`; ytstack's own `.ytstack/spec/`; the reconciliation of its entry documents.
+- S2 -- The loop keeps the spec true. The "Spec impact" field in `plan-task`; the closure check in `summarize-task` against the task's commits; `bin/ytstack-spec` and its place in `ytstack-check`; a spec check in `code-review` and the verifier, bounded to the touched area; "Decisions that apply now" maintained when a decision is added; `resume-session` and `handoff-session` point at `SPEC.md` instead of copying.
+- S3 -- STATE stays a pointer, milestone close folds, fresh sessions prove it. The size bound in `yt_state_lint`; the `SPEC.md` pointer in the SessionStart injection; history out of `STATE.md` with consent; the fold step in `reassess-roadmap` or `retro` with the archive offer through `reconcile`; the three cases with their baseline. **Depends on M020 landed** (`hooks/session-start`, `STATE.md`).
+
+**Not in scope:** the full twelve sections of arc42, a documentation generator, copies of existing documents, any migration of a consumer's artifacts.
+
+**Open questions for slicing:** how a project names its areas (proposed by `adopt-brownfield` from the codebase maps, confirmed by the human); whether `.ytstack/codebase/` of `adopt-brownfield` is folded into `.ytstack/spec/` or kept beside it; the size bound of an area file.
+
+### Bounded work (issue #35)
+
+**Goal:** An agent dispatched on a ytstack project finishes the agreed task with the smallest sufficient evidence, a review ends after its fix round, and a plan row that no work can close reaches the human as one question.
+
+**Exit criteria** (each a case under `evals/` or a fixture under `tests/`, compared with the current instructions on the same input):
+
+- A plan that asks for one pass of 44 scenarios stays at 44 unless a named failure or requirement justifies more.
+- A finding the project's policy rates non-blocking stays a tracked follow-up and holds nothing; an open residual-risk acceptance appears in the consolidated question to the human.
+- A follow-up review covers the fix and its consequences; an authorization or data-loss defect the fix introduced still blocks; a third round yields a diagnosis of scope or conflicting rules, not another review.
+- A fresh verifier accepts evidence for the same commit, environment and check; a changed head gets the check again.
+- A general-purpose subagent dispatched with the rendered brief has the work contract without invoking a skill; a validator rejects a report with a missing field.
+- `reassess-roadmap` lists, in one question, a row gated on a human verdict and a row gated on a condition that can no longer be met, each with who decides, how and when the gate lapses; rows that work can close are not listed.
+- A review opens with the load and the product stage it assumed, taken from the project's documents. A scale finding is rated against that load; a `shortcut:` comment that names its limit is a decision, not a finding. Case: a slow path at a volume the stated load never reaches is at most a note.
+- A report ends with what was not run or not checked, and why.
+- Correctness and completeness are not worse than the baseline; rounds, turns and cost are recorded in `KNOWLEDGE.md` ("Eval runs"; `evals/results/` is gitignored).
+- `bin/ytstack-check` and `tests/run-all.sh` pass; no file under `vendor/` changed.
+
+**From Ponytail** (reviewed 13 November 2026 at 5.3.3, `96608e0`: the skill, the review command and the agentic benchmark of 2026-10-07; concepts only, ytstack's own prose, NOTICE extended). `minimal-code` 0.1.0 carries the ladder of an older Ponytail; what the current one adds and ytstack lacks:
+
+- Reach before size: list every place the change must reach (callers, tests, fixtures, config, exports) and what it could break, then pick the smallest solution. Lazy about the solution, never about the change.
+- A bug fix greps every caller and fixes the cause once in the shared code; moved or merged code keeps its validation and error handling; between options of equal size the one that is right on edge cases wins.
+- A trivial change needs no test. The benchmark shows the opposite pull too: with the skill a test appeared where none was needed in 45 % of cells against 36 % without, so the rule needs its own case.
+- The shortcut comment names the limit and when to upgrade.
+- The review command: every finding has a concrete case confirmed by re-reading the lines; findings are grouped Must fix / Should fix / Nice to have and each says what happens if it is skipped; the review states the load it assumed and ends with "Not checked".
+- The method: a rule change has to beat the current rules in a paired run, one change at a time, several runs per case with the median, hidden checks for correctness, a blind completeness judge, isolated sessions. Its limit, stated upstream: shell execution is disabled, so it shows nothing about multi-agent orchestration.
+
+Not taken over: the levels lite / full / ultra (ytstack has the `minimal_code` preference and `grill`), the session-wide mode switch, the reply style rules beyond the closing line.
+
+**Slices:**
+
+- S1 -- The work contract reaches every dispatched agent. One ytstack-owned directive text: `minimal-code` extended from "smallest code" to "smallest complete change with the smallest sufficient evidence" (reach before size, the caller rule, no test for a trivial change, the closing line), not a second directive beside it; pointers from `using-ytstack` and the three agent definitions; brief and report templates under `skills/spawn-milestone-team/`, rendered the same for a Claude subagent and for `codex exec`; the report validator.
+- S2 -- Completion and gates are defined before execution. `plan-task` and `slice-milestone` record repetitions, sampling and environment of the verification; a gate names who gives the verdict, how it is obtained and when it lapses; `reassess-roadmap` detects rows no work can close and repeated work that does not advance completion, and reports progress as two numbers (closed by work, accepted).
+- S3 -- Reviews and evidence stay bounded. `code-review`: the assumed load and stage stated first, a concrete case per finding, "if skipped" per finding, complete first round, fix-only follow-up, a recorded round count, diagnosis at the third round, the project's severity policy respected. Verifier and `verification-before-completion`: evidence identity and the reasons that renew it, resolving the conflict with the verifier's cold re-run rule. The eval cases and the baseline run.
+
+**Not in scope:** coordinator rotation, polling outside the model, frontier and claims (#34). For point 6 of #35 nothing is built: the three agents already declare `model: inherit`.
+
+**Open questions for slicing:** how many runs per case the comparison needs and what it may cost (`claude plugin eval` runs one arm with the plugin; current against revised rules needs two plugin directories); where the round count lives when no pull request host exists; whether the host offers an event at subagent start (`hooks/hooks.json` registers none today) and what #28 to #30 offer instead.
+
+### Coordinator mode (issue #34) -- candidate
+
+What is left of its seven items once the two milestones above are done:
+
+- Item 1, coordinator mode, extended by the three measured points of the comment on #35: rotation through a handoff at a context or compaction threshold, polling by a script that emits events, a standing instruction of the human written to a file when it is given.
+- Item 2, blocking edges, claims, the frontier and the lanes table, sized to the STATE bound.
+- Item 3, lane contract: delivered by Bounded work S1; only the coordinator-specific lane types remain.
+- Item 4, finishing pipeline, on the round count and evidence identity of Bounded work S3.
+- Item 5, handover step.
+- Item 6, decision queue, replacing the carrier of Bounded work S2.
+- Item 7, lane retros that end in checks.
+
+**Plan via:** `ytstack:plan-milestone`, one milestone at a time.
 
 ---
 

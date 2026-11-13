@@ -58,6 +58,7 @@ ytstack-specific:
 - `task` -- one atomic unit that fits in one context window (T01, T02...)
 - `artifact` -- a persistent file in `.ytstack/` that survives across sessions
 - `spec` -- a design doc written before code (committed under `docs/ytstack/specs/`)
+- `technical spec` -- the files under `.ytstack/spec/` that say what applies now, one per system area (not the design doc above; format in `docs/ux/spec-format.md`)
 - `handoff` -- state written when a session ends, read when the next session starts
 - `context rot` -- degradation of Claude's quality as its context window fills
 
