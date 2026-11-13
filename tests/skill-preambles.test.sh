@@ -36,7 +36,7 @@ MAIN="$TMP/main"; mkdir -p "$MAIN/.ytstack"
   echo seed > f.txt; git add -A; git commit -qm "M999-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL fixture; exit 2; }
 WT="$TMP/wt"; git -C "$MAIN" worktree add -q -b wt-branch "$WT" >/dev/null 2>&1 || { echo FATAL worktree; exit 2; }
 
-SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill coordinate finish-lane handover-step lane-retro"
+SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill coordinate finish-lane handover-step lane-retro visual-review"
 
 # Brownfield fixture (M010, issue #18): existing docs, no .ytstack -> >= 2 signals
 BF="$TMP/brown"; mkdir -p "$BF/docs/adr"
@@ -226,6 +226,23 @@ for s in $SKILLS; do
       has "$s: a merge_by outside the three values reads as human" "$OUT" "MERGE_BY: human"
       has "$s: and the note names the value" "$OUT" "MERGE_BY_NOTE: merge_by: 'coordinater' is not human|coordinator|risk (using human)"
       rm -f "$WT/.ytstack/PREFERENCES.md" ;;
+    visual-review)
+      # the evidence of a visual review (M025) is read from the main checkout, also from a worktree
+      has "$s: worktree -> no Run section in the bare fixture" "$OUT" "RUN_SECTION: no"
+      has "$s: worktree -> the runtime script is found" "$OUT" "RUNTIME_TOOL: $ROOT/bin/ytstack-runtime"
+      has "$s: worktree -> evidence_dir defaults" "$OUT" "EVIDENCE_DIR: .ytstack/evidence"
+      has "$s: worktree -> the evidence root is the main checkout" "$OUT" "EVIDENCE_ROOT: $MAIN"
+      mkdir -p "$WT/.ytstack/spec"
+      printf '# Runtime\n\n## Run\n\n- start: sleep 300\n- ready: true\n- needs: DATABASE_URL\n' > "$WT/.ytstack/RUNTIME.md"
+      printf '# Review policy\n\n## Lenses\n\n- ui | applies: src/** | reads: docs/design.md | evidence: visual\n- api | applies: src/** | reads: docs/api.md | evidence: none\n' > "$WT/.ytstack/spec/REVIEW.md"
+      printf 'evidence_dir: review/shots/\n' > "$WT/.ytstack/PREFERENCES.md"
+      run_pre "$P" "$WT"
+      has "$s: a Run section is stated" "$OUT" "RUN_SECTION: yes"
+      has "$s: with what it needs" "$OUT" "RUN_NEEDS: DATABASE_URL"
+      has "$s: evidence_dir from PREFERENCES" "$OUT" "EVIDENCE_DIR: review/shots"
+      has "$s: the visual lens is listed" "$OUT" "- ui | applies: src/** | reads: docs/design.md | evidence: visual"
+      case "$OUT" in *"- api |"*) bad "$s: a lens without visual evidence is not listed";; *) ok "$s: a lens without visual evidence is not listed";; esac
+      rm -f "$WT/.ytstack/RUNTIME.md" "$WT/.ytstack/spec/REVIEW.md" "$WT/.ytstack/PREFERENCES.md"; rmdir "$WT/.ytstack/spec" ;;
     finish-branch)
       has "$s: worktree -> IS_LINKED_WORKTREE yes" "$OUT" "IS_LINKED_WORKTREE: yes"
       case "$OUT" in *"OPEN_TASKS:"*T01*) ok "$s: worktree -> open tasks listed (T01 has no summary)";; *) bad "$s: worktree -> open tasks listed (T01 has no summary)" "$(printf '%s' "$OUT" | grep OPEN_TASKS)";; esac ;;

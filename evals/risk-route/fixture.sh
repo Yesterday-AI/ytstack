@@ -19,6 +19,10 @@ git init -q . && git config user.email eval@ytstack.test && git config user.name
 git config commit.gpgsign false
 mkdir -p .ytstack/spec src tests
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+# A first commit, so that the area file can name the commit it was checked against.
+echo "# csvexport" > README.md
+git add README.md && git commit -qm "chore: init"
+V=$(git rev-parse --short=7 HEAD)
 cat > .ytstack/PROJECT.md <<'EOF'
 ---
 name: csvexport
@@ -144,16 +148,9 @@ Nothing is built. From the repository root: `bash tests/run.sh`.
 - A task plan names its **Spec impact**: the area and section it changes, or `none`.
 - A task that changes behaviour updates the area file in the same commits.
 EOF
-cat > .ytstack/spec/export.md <<'EOF'
----
-area: export
-status: implemented
-paths:
-  - src/**
-  - tests/**
-verified_at: none
-auto_merge: low
----
+{
+  printf -- '---\narea: export\nstatus: implemented\npaths:\n  - src/**\n  - tests/**\nverified_at: %s\nauto_merge: low\n---\n' "$V"
+  cat <<'EOF'
 
 # export
 
@@ -181,8 +178,8 @@ Decides which rows of a user go into an export.
 
 - 2026-11-01: archived rows stay in the database and never leave it through an export (`DECISIONS.md`).
 EOF
+} > .ytstack/spec/export.md
 printf '{ "name": "csvexport", "private": true, "type": "module" }\n' > package.json
-echo "# csvexport" > README.md
 cat > src/export.js <<'EOF'
 // exportRows: the rows that go into an export.
 export function exportRows(rows) {
