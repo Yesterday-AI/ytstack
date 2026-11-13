@@ -3,7 +3,7 @@ name: adopt-brownfield
 description: "Brings an existing codebase under ytstack by reference, without a greenfield pitch. Use when a repo has a README, docs, CHANGELOG, ADRs or months of commits but no .ytstack/ yet, when a project has .ytstack/ but no technical spec under .ytstack/spec/ yet (adds only the spec), or when the user says adopt ytstack, set up ytstack here, onboard this codebase, map the codebase, write the technical spec. Not for ideas without code yet (office-hours, then init-project) and not for repos that already have .ytstack/ with a spec (resume-session)."
 metadata:
   tier: core
-  version: 0.2.0
+  version: 0.2.1
   triggers:
     - adopt ytstack
     - existing project
@@ -394,7 +394,28 @@ Derived on {TODAY} from {package.json scripts | pyproject | go.mod}, `.env.examp
 ## Deploy target
 
 {from workflows: platform, trigger branch, workflow file} or "unknown"
+
+## Run
+
+{The source of the key lines, e.g. "From `package.json` (script `dev`) and `README.md`, section Development." -- or: "No document or script of this project states how the product is started and how to tell that it answers. Add `- start:` and `- ready:` lines."}
+
+## Release
+
+{The source of the key lines -- or: "No document or script states where the deployed commit can be read. Add a `- deployed:` line."}
+
+## Signals
+
+{The source of the lines -- or: "No document or script states where production errors are read."}
 ```
+
+The sections "Run", "Release" and "Signals" have a fixed line format (`docs/ux/runtime-format.md` in the ytstack plugin); other skills start the product and watch a release from them. They are pointer-only like everything else here:
+
+- Write a key line (`- start: <command>`, `- ready: <command>`, `- deployed: <command>`, a signal line) only when a document or a script of the project states that command. Copy the command as stated. The free-text line of the section names the file it came from.
+- Never invent a command, a health URL or a port range. "Run" needs `start` and `ready` together: when the project states only one of them, write no key line and say in the free-text line what was found and what is missing.
+- A value of a credential is never written, only its name (the rule of "Environment variables").
+- A section without a key line keeps its heading and its one line. That is valid: a section without a list line counts as absent.
+
+After writing, run `"${CLAUDE_SKILL_DIR}/../../bin/ytstack-runtime" check` and fix what it names. When the script is not reachable, read the three sections against "Checked mechanically" in that document by hand.
 
 #### STATE.md
 
