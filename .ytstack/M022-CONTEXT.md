@@ -57,5 +57,8 @@ GitHub issue #36, the comments of 13 November 2026 on it, and the operator's ins
 
 ## Open questions
 
-- S03 waits for M020 (`hooks/session-start`, `STATE.md`). The size bound for `STATE.md` and the fold step are designed then.
-- How many runs per case the fresh-session comparison needs and what it may cost (S03).
+(none)
+
+## Reassessment 2026-11-13
+
+After S02 the plan changed in one point: S03 did not wait for M020. The operator asked for the whole plan to be built; the two files S03 shares with M020 (`hooks/session-start`, `STATE.md`) had already been touched by S02 and by the close of M023, so waiting no longer avoided a merge. Decisions of S03: the size bound for `STATE.md` is 12,000 bytes; history leaves `STATE.md` only through `reconcile` and only with consent; the fold happens in `reassess-roadmap` at the last slice, the archive offer belongs to `reconcile`; the fresh-session comparison ran once per case and arm (3 of 3 in both arms: on a small project the model finds the spec on its own, so the cases guard the behaviour and show no gain). ytstack's own `STATE.md` (29 KB) is not trimmed in this milestone: that needs the operator's answer to `reconcile`.
