@@ -123,6 +123,26 @@ for s in $SKILLS; do
       has "$s: planned-never-sliced counted"  "$OUT" "PLANNED_NEVER_SLICED: 1"
       has "$s: untracked counted (3 new files)" "$OUT" "UNTRACKED: 3"
       rm -f "$WT/.ytstack/M999-S01-T09-SUMMARY.md" "$WT/.ytstack/M777-ROADMAP.md" "$WT/.ytstack/stray.md" ;;
+    reassess-roadmap)
+      # bounded work (M023): open gates, non-converging reviews, the two numbers
+      has "$s: no gates in the bare fixture -> accepted follows work" "$OUT" "SLICES_ACCEPTED: 0"
+      has "$s: an open task keeps the slice incomplete" "$OUT" "SLICE_COMPLETE: no"
+      cp "$WT/.ytstack/M999-S01-PLAN.md" "$TMP/sp.bak"; cp "$WT/.ytstack/M999-S01-T01-PLAN.md" "$TMP/tp.bak"
+      printf -- '---\nmilestone: M999\nslice: S01\n---\n- [x] T01 -- x\n\n## Gates\n\n- [ ] G01 -- owner accepts the format | decides: product owner | how: opens the sample | lapses: when S02 ships\n- [x] G02 -- legal review | decides: counsel | how: mail | lapses: never | given: 2026-01-02 counsel\n- [-] G03 -- latency before cutover | decides: measurement | how: load test | lapses: at cutover | lapsed: 2026-01-03 cutover made\n' > "$WT/.ytstack/M999-S01-PLAN.md"
+      printf -- '\n## Review\n\n- Round 1: aaaaaaa..bbbbbbb -- changes requested; blocking: 1; follow-ups: 0\n- Round 2: bbbbbbb..ccccccc -- changes requested; blocking: 1; follow-ups: 0\n- Round 3: ccccccc..ddddddd -- changes requested; blocking: 1; follow-ups: 0\n' >> "$WT/.ytstack/M999-S01-T01-PLAN.md"
+      run_pre "$P" "$WT"
+      has "$s: all tasks done, gates open -> slice complete" "$OUT" "SLICE_COMPLETE: yes"
+      has "$s: open gate listed with its file"       "$OUT" "M999-S01-PLAN.md:"
+      has "$s: open gate listed by id"                "$OUT" "G01 -- owner accepts the format"
+      case "$OUT" in *"G02 -- legal review"*|*"G03 -- latency"*) bad "$s: given and lapsed gates are not listed as open";; *) ok "$s: given and lapsed gates are not listed as open";; esac
+      has "$s: three review rounds reported"          "$OUT" "M999-S01-T01: 3 review rounds"
+      has "$s: slices total from the roadmap"         "$OUT" "SLICES_TOTAL: 1"
+      has "$s: slice with all tasks done counts as closed by work" "$OUT" "SLICES_CLOSED_BY_WORK: 1"
+      has "$s: an open gate keeps it out of accepted" "$OUT" "SLICES_ACCEPTED: 0"
+      sed 's/^- \[ \] G01/- [x] G01/' "$WT/.ytstack/M999-S01-PLAN.md" > "$TMP/sp.given"; cp "$TMP/sp.given" "$WT/.ytstack/M999-S01-PLAN.md"
+      run_pre "$P" "$WT"
+      has "$s: all gates given or lapsed -> accepted" "$OUT" "SLICES_ACCEPTED: 1"
+      cp "$TMP/sp.bak" "$WT/.ytstack/M999-S01-PLAN.md"; cp "$TMP/tp.bak" "$WT/.ytstack/M999-S01-T01-PLAN.md" ;;
     quick-task)
       has "$s: QUICK_LANE on by default" "$OUT" "QUICK_LANE: on"
       has "$s: NEXT_Q starts at Q001"    "$OUT" "NEXT_Q: Q001"
@@ -192,6 +212,48 @@ for s in $SKILLS; do
       has "$s: main -> manual handoff timestamp read" "$OUT" "MANUAL_HANDOFF_TS: 2026-01-01T00:00:00Z" ;;
   esac
 done
+
+# ---- technical spec in the preambles (M022) ----------------------------------
+# One area `core` over f.txt and cr.txt (the file the code-review case committed
+# under the task ref). The spec is committed without the task ref, so a plan
+# that names `core` is unmet until the area file changes again.
+echo "# technical spec"
+pre() { run_pre "$(extract "$1")" "$2"; }
+pre plan-task "$WT";        has "plan-task: no spec -> HAS_SPEC no" "$OUT" "HAS_SPEC: no"
+pre summarize-task "$WT";   has "summarize-task: no spec -> impact check not run" "$OUT" "SPEC_IMPACT_EXIT: not-run"
+mkdir -p "$WT/.ytstack/spec"
+printf -- '---\nproject: fixture\n---\n\n# spec\n\n## Areas\n\n| Area | Covers | Status | File |\n|---|---|---|---|\n| core | x | implemented | [core.md](core.md) |\n\n## Keeping this true\n\n- x\n' > "$WT/.ytstack/spec/SPEC.md"
+printf -- '---\narea: core\nstatus: implemented\npaths:\n  - f.txt\n  - cr.txt\nverified_at: %s\n---\n\n## Purpose\n\nx\n\n## Where implemented\n\nx\n\n## How to verify\n\nx\n\n## Decisions that apply now\n\nx\n' "$(git -C "$WT" rev-parse --short HEAD)" > "$WT/.ytstack/spec/core.md"
+( cd "$WT" && git add .ytstack/spec && git commit -qm "docs: technical spec" ) >/dev/null 2>&1
+for s in plan-task resume-session adopt-brownfield; do
+  pre "$s" "$WT"; has "$s: spec present -> HAS_SPEC yes" "$OUT" "HAS_SPEC: yes"
+done
+pre summarize-task "$WT"
+has "summarize-task: plan without the section -> exit 3" "$OUT" "SPEC_IMPACT_EXIT: 3"
+cp "$WT/.ytstack/M999-S01-T01-PLAN.md" "$TMP/tp.spec.bak"
+printf '\n## Spec impact\n\n- core: Behavior -- x\n' >> "$WT/.ytstack/M999-S01-T01-PLAN.md"
+pre summarize-task "$WT"
+has "summarize-task: named area not updated -> exit 1" "$OUT" "SPEC_IMPACT_EXIT: 1"
+has "summarize-task: says what did not change"         "$OUT" "FAIL core: neither .ytstack/spec/core.md"
+printf '\nedited with the task\n' >> "$WT/.ytstack/spec/core.md"
+pre summarize-task "$WT"
+has "summarize-task: area file changed with the task -> exit 0" "$OUT" "SPEC_IMPACT_EXIT: 0"
+pre code-review "$WT"
+has "code-review: spec present -> SPEC_EXISTS yes"            "$OUT" "SPEC_EXISTS: yes"
+has "code-review: the area of the changed files is listed"    "$OUT" ".ytstack/spec/core.md"
+has "code-review: first review -> round 1"                    "$OUT" "REVIEW_ROUND: 1"
+printf -- '\n## Review\n\n- Round 1: %s..%s -- changes requested; blocking: 1; follow-ups: 0\n' "$(git -C "$WT" rev-parse --short HEAD~1)" "$(git -C "$WT" rev-parse --short HEAD)" >> "$WT/.ytstack/M999-S01-T01-PLAN.md"
+pre code-review "$WT"
+has "code-review: one recorded round -> round 2"              "$OUT" "REVIEW_ROUND: 2"
+has "code-review: the follow-up base is the last reviewed head" "$OUT" "LAST_REVIEWED_HEAD: $(git -C "$WT" rev-parse --short HEAD)"
+pre reassess-roadmap "$WT"
+has "reassess-roadmap: drift report printed" "$OUT" "spec drift:"
+pre verification-before-completion "$WT"
+has "verification-before-completion: no Runs line -> the default is stated" "$OUT" "RUNS_LINE: Runs: once. Environment: local checkout."
+has "verification-before-completion: the commit is printed" "$OUT" "HEAD: $(git -C "$WT" rev-parse --short HEAD)"
+cp "$TMP/tp.spec.bak" "$WT/.ytstack/M999-S01-T01-PLAN.md"
+( cd "$WT" && git rm -rq .ytstack/spec && git commit -qm "chore: remove fixture spec" ) >/dev/null 2>&1
+rm -f "$WT/.ytstack/spec/core.md"; rmdir "$WT/.ytstack/spec" 2>/dev/null
 
 # Fallback path: CLAUDE_SKILL_DIR left unsubstituted (foreign host) -> still resolves project scope
 echo "# fallback without lib"
