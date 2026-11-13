@@ -137,15 +137,34 @@ Invariants touched: <none | area: the invariant or decision, in its own words>
 
 "Invariants touched" is answered by reading the change against "Invariants and security boundaries" and "Decisions that apply now" of every area the change touches. A change that shifts such a rule in code without editing the document is still named here, and its class is `high`.
 
-A record is **valid for a head** when it names that head, or when no file it covered changed between its head and that head (for a lens: the paths under `applies`).
+The script reads a record line tolerantly. After ` -- ` comes the verdict, then `key: value` fields separated by `;`. A round line without `risk`, `invariants` and `by` (the form `code-review` wrote before) is a round that states none of them. The newest line counts: the last round line under `## Review`.
+
+A round line is **valid for a head** when it names that head, or when nothing but process records changed between its head and that head. The plan that carries the line, a summary and `STATE.md` move the head without touching the change; a file of the change that came after the review does not. A lens line is valid for a head when it names that head, or when no path under its `applies` changed since.
 
 ## The route
 
-`bin/ytstack-risk route --plan <plan file> --base <sha> --head <sha> [--author <worker>]` prints `route: unattended` or `route: person`, and one `reason:` line per condition that failed. The route is `unattended` only when all of this holds:
+`bin/ytstack-risk route --plan <plan file> --base <sha> --head <sha> [--author <worker>]` decides between `unattended` and `person`:
+
+```
+route: unattended | person
+class: low | normal | high | person | unstated
+ceiling: none | low | normal
+floor: low | normal | person
+areas: <comma list or none>
+reason: <path or subject> -- <what failed>
+```
+
+There is one `reason:` line per condition that failed, and none when the route is `unattended`. The subject of a reason is a path of the change, `size`, `review`, `class` or `lens <name>`. `class` is `person` when the floor is, and `unstated` when the newest round line states no risk.
+
+The exit code is 0 for `unattended` and 10 for `person`. 64 is a usage error, also a plan file that does not exist; 65 means git cannot answer. A caller treats everything but 0 as "not unattended".
+
+`--author` is the worker that made the change. The script compares it with `by:` of each record. Without `--author` it cannot tell the reviewer from the author, says so in a reason and routes to a person.
+
+The route is `unattended` only when all of this holds:
 
 1. The floor is not `person`.
-2. The plan has an approving round line that is valid for the head, with `risk` stated, `invariants: none`, and a reviewer other than the author.
-3. The class (the higher of floor and stated risk) is not above the ceiling of the touched areas.
+2. The newest round line of the plan approves, is valid for the head, states `risk` and `invariants: none`, and names a reviewer other than the author.
+3. The class (the higher of floor and stated risk) is not above the ceiling of the touched areas. A change that touches no area has the ceiling `none`.
 4. Every required lens has a line with `pass` that is valid for the head, from a reviewer other than the author; for `evidence: visual` the manifest exists and its hashes match the images.
 
 The route says nothing about the host. `finish-lane` reads the host's gates (checks, review threads, mergeability, the reviewed commit) as before, and merges on its own only when both hold and `merge_by` is `risk`.

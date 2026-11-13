@@ -3,9 +3,11 @@
 # Format: docs/ux/review-policy-format.md.
 #
 #   ytstack-risk [-C DIR] floor --base SHA --head SHA
+#   ytstack-risk [-C DIR] route --plan FILE --base SHA --head SHA [--author WORKER]
 #   ytstack-risk [-C DIR] check
 #
-# DIR is a directory of the repository (default: $PWD).
+# DIR is a directory of the repository (default: $PWD). A relative --plan is
+# read from where the command was started.
 #
 # floor   reads the tree difference between two commits and prints
 #           floor: low | normal | person
@@ -17,11 +19,27 @@
 #         to one of them is itself "person", so a change cannot relax the
 #         route it takes. Globs are git pathspec globs, matched by git over
 #         the diff. A rule names at most five paths; the rest is counted.
+# route   computes the floor, reads the newest "- Round N:" line under
+#         "## Review" of the plan and prints
+#           route: unattended | person
+#           class: low | normal | high | person | unstated
+#           ceiling: none | low | normal
+#           floor: low | normal | person
+#           areas: <comma list or none>
+#           reason: <path or subject> -- <what failed>   one per failed condition
+#         "unattended" needs all of: a floor that is not "person"; a newest
+#         round line that approves, states risk and "invariants: none", is by
+#         somebody other than --author and is valid for --head; a class (the
+#         higher of floor and stated risk) that is not above the ceiling.
+#         Without --author the route is "person". A round is valid for a head
+#         when it names it, or when nothing but process records changed since.
 # check   validates .ytstack/spec/REVIEW.md of the working tree.
 #
 # Exit codes
 #   floor   0 a result was printed; 64 usage; 65 git (no repository, a commit
 #           that does not exist)
+#   route   0 unattended; 10 person; 64 usage, also a plan file that does not
+#           exist; 65 git
 #   check   0 clean, or no REVIEW.md; 1 one line per problem; 64 usage
 
 set -uo pipefail
@@ -103,8 +121,8 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '5,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
-case "$CMD" in floor|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+usage() { sed -n '5,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+case "$CMD" in floor|route|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 # The resolver falls back to $PWD for a missing directory: refuse it here.
 [ -d "$DIR" ] || { echo "ytstack-risk: -C '$DIR' is not a directory" >&2; exit 64; }
 
@@ -238,14 +256,18 @@ EOF
 }
 
 # ---- the change ----------------------------------------------------------------
-# read_range <args>: sets BASE and HEADC to full commit ids.
+# read_range <args>: sets BASE and HEADC to full commit ids, and for route
+# PLAN and AUTHOR.
+PLAN=""; AUTHOR=""
 read_range() {
   local b="" h=""
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || { echo "ytstack-risk: $1 needs a value" >&2; return 64; }
-    case "$1" in
-      --base) b="$2" ;;
-      --head) h="$2" ;;
+    case "$CMD $1" in
+      *" --base") b="$2" ;;
+      *" --head") h="$2" ;;
+      "route --plan") PLAN="$2" ;;
+      "route --author") AUTHOR="$2" ;;
       *) echo "ytstack-risk: unknown argument $1" >&2; return 64 ;;
     esac
     shift 2
@@ -271,9 +293,11 @@ match_list() {
 # normal or route.
 note() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$W/reasons"; }
 
-# print_reasons: grouped by rule in the order they came up.
+# print_reasons [classes]: grouped by rule in the order they came up. With
+# classes (an ERE) only the reasons of those classes.
 print_reasons() {
-  awk -F'\t' -v shown="$SHOWN" '
+  awk -F'\t' -v shown="$SHOWN" -v keep="${1:-.}" '
+    $1 !~ keep { next }
     { r = $3; if (!(r in n)) order[++k] = r; n[r]++; if (n[r] <= shown) line[r, n[r]] = $2 }
     END {
       for (i = 1; i <= k; i++) {
@@ -456,7 +480,109 @@ cmd_floor() {
   echo "ceiling: $CEILING"
 }
 
+# ---- route ---------------------------------------------------------------------
+# review_records: the list lines under "## Review" of the plan.
+review_records() {
+  awk '
+    /^```/ { fence = !fence }
+    !fence && /^## / { on = ($0 ~ /^## Review[ \t]*$/); next }
+    on && !fence && /^- / { print }
+  ' "$PLAN"
+}
+
+# record_fields: one "- Round N: <base>..<head> -- <verdict>; key: value; ..."
+# line on stdin, as five lines: head, verdict, risk, invariants, by. A field
+# the line does not have is an empty line. Text after a ";" that starts with
+# no known key belongs to the field before it.
+record_fields() {
+  awk '
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
+    NR == 1 {
+      line = $0; sub(/^- [A-Za-z]+ [^:]*:[ \t]*/, "", line)
+      i = index(line, " -- ")
+      if (i == 0) { range = line; rest = "" } else { range = substr(line, 1, i - 1); rest = substr(line, i + 4) }
+      range = trim(range); sub(/^.*\.\./, "", range)
+      n = split(rest, f, ";"); verdict = trim(f[1]); key = ""
+      for (j = 2; j <= n; j++) {
+        p = trim(f[j]); k = p; sub(/:.*/, "", k)
+        if (k == "blocking" || k == "follow-ups" || k == "risk" || k == "invariants" || k == "by") {
+          key = k; val[k] = trim(substr(p, length(k) + 2))
+        } else if (key != "") val[key] = val[key] "; " p
+      }
+    }
+    END { print range; print verdict; print val["risk"]; print val["invariants"]; print val["by"] }
+  '
+}
+
+# moved_since <commit>: the paths that differ between that commit and the
+# head and are no process records. Nothing: a record of that commit is valid
+# for the head.
+moved_since() {
+  local p
+  g diff --name-only --no-renames "$1" "$HEADC" | while IFS= read -r p; do
+    is_record "$p" || printf '%s\n' "$p"
+  done
+}
+
+cmd_route() {
+  local round rhead verdict risk inv by rh moved missing="" class
+  read_range "$@" || return $?
+  [ -n "$PLAN" ] || { usage >&2; return 64; }
+  [ -f "$PLAN" ] || { echo "ytstack-risk: plan file '$PLAN' not found" >&2; return 64; }
+  compute || return $?
+
+  # The review: the newest round line approves this head, states the risk and
+  # no touched invariant, and comes from somebody other than the author.
+  [ -n "$AUTHOR" ] || note route review "no --author given: that the reviewer is not the author cannot be checked"
+  round=$(review_records | grep -E '^- Round [0-9]+:' | tail -1)
+  { IFS= read -r rhead; IFS= read -r verdict; IFS= read -r risk; IFS= read -r inv; IFS= read -r by; } <<EOF
+$(printf '%s\n' "$round" | record_fields)
+EOF
+  if [ -z "$round" ]; then
+    note route review "the plan has no round line under \"## Review\""
+  else
+    [ "$verdict" = approved ] || note route review "the newest round line says '$verdict', not approved"
+    [ -n "$risk" ] || missing="risk"
+    [ -n "$inv" ] || missing="${missing:+$missing, }invariants"
+    [ -n "$by" ] || missing="${missing:+$missing, }by"
+    [ -z "$missing" ] || note route review "the newest round line does not state: $missing"
+    case "$risk" in ""|low|normal|high) ;; *)
+      note route review "the newest round line states the risk '$risk', which is not low, normal or high" ;; esac
+    case "$inv" in ""|none) ;; *)
+      note route review "the reviewer named an invariant or decision the change touches: $inv" ;; esac
+    [ -z "$AUTHOR" ] || [ "$by" != "$AUTHOR" ] || note route review "the reviewer '$by' is the author of the change"
+    if ! rh=$(resolve "$rhead"); then
+      note route review "the newest round line names '$rhead', which is no commit here"
+    elif [ "$rh" != "$HEADC" ]; then
+      moved=$(moved_since "$rh")
+      [ -z "$moved" ] || note route review "the newest round reviewed $(short "$rh") and $(printf '%s\n' "$moved" | grep -c .) path(s) changed since, first $(printf '%s\n' "$moved" | sed -n 1p): it is not valid for $(short "$HEADC")"
+    fi
+  fi
+
+  # The class is the higher of floor and stated risk; it stays within the
+  # ceiling of the touched areas.
+  case "$FLOOR $risk" in
+    "person "*) class=person ;;
+    *" low"|*" normal"|*" high")
+      class=$risk; [ "$(rank "$FLOOR")" -le "$(rank "$risk")" ] || class=$FLOOR
+      [ "$(rank "$class")" -le "$(rank "$CEILING")" ] \
+        || note route class "$class is above the ceiling $CEILING of the touched areas (${TOUCHED:-none})" ;;
+    *) class=unstated ;;
+  esac
+
+  if cut -f1 "$W/reasons" | grep -xE 'person|route' >/dev/null; then echo "route: person"; else echo "route: unattended"; fi
+  echo "class: $class"
+  echo "ceiling: $CEILING"
+  echo "floor: $FLOOR"
+  echo "areas: ${TOUCHED:-none}"
+  # A never-low reason raised the floor and failed nothing: it is not printed.
+  print_reasons '^(person|route)$'
+  ! cut -f1 "$W/reasons" | grep -xE 'person|route' >/dev/null || return 10
+  return 0
+}
+
 case "$CMD" in
   floor) cmd_floor "$@" ;;
+  route) cmd_route "$@" ;;
   check) cmd_check "$@" ;;
 esac

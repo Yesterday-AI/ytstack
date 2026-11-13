@@ -11,6 +11,12 @@
 #           and a change over the size limit. The ceiling is the lowest
 #           auto_merge of the touched areas. The policy is read at the base.
 #   check   a well-formed REVIEW.md passes; each format rule fails on its own
+#   route   "unattended" (exit 0) only with a floor that is not person, a
+#           newest round line that approves, states risk and "invariants:
+#           none", is by somebody other than --author and is valid for the
+#           head, and a class within the ceiling. Each condition fails on its
+#           own with one reason (exit 10). A round stays valid when only
+#           process records changed after it.
 #
 # Run: /bin/bash tests/ytstack-risk.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -258,6 +264,113 @@ run "$C" check;               eq "all four sections and a lens with a skill pass
 rm -f "$C/.ytstack/spec/REVIEW.md"
 run "$C" check;               eq "no REVIEW.md: exit 0" 0 "$EC"
 eq "and says so" "no review policy" "$OUT"
+
+# ---- 7. route ------------------------------------------------------------------
+echo "# route"
+P="$TMP/plan.md"
+# plan_with <line...>: a plan with those lines under "## Review"
+plan_with() {
+  { printf -- '---\ntask: T01\n---\n\n# plan\n\n## Files\n\n- Round 9: not a record\n\n## Review\n\n'
+    [ $# -eq 0 ] || printf '%s\n' "$@"
+    printf '\n## Verification\n\nx\n'; } > "$P"
+}
+s7() { git -C "$R" rev-parse "$1" | cut -c1-7; }
+# round <verdict and fields> [head]: one round line for base..H (or another head)
+round() { printf -- '- Round 1: %s..%s -- %s' "$(s7 base)" "$(s7 "${2:-$H}")" "$1"; }
+GOOD="approved; blocking: 0; follow-ups: 1; risk: low; invariants: none; by: review-1"
+rt() { run "$R" route --plan "$P" --base "$FROM" --head "$H" "$@"; }
+# only_reason <label> <text>: person, exit 10, exactly one reason, with the text
+only_reason() {
+  if [ "$EC" = 10 ] && [ "$(line route)" = "route: person" ] && [ "$(printf '%s\n' "$OUT" | grep -c '^reason: ')" = 1 ]; then
+    has "$1" "$2" "$OUT"
+  else bad "$1" "exit $EC: $OUT"; fi
+}
+unattended() { if [ "$EC" = 0 ] && [ "$(line route)" = "route: unattended" ]; then ok "$1"; else bad "$1" "exit $EC: $OUT"; fi; }
+
+change "$R" ordinary 'echo b >> src/auth/login.sh'
+plan_with "$(round "$GOOD")"; rt --author worker-1
+eq "every condition holds: exit 0" 0 "$EC"
+eq "and the whole output" "route: unattended
+class: low
+ceiling: low
+floor: low
+areas: auth" "$OUT"
+
+# condition 1: the floor
+change "$R" uncovered 'mkdir -p tools && echo x > tools/x.sh'
+plan_with "$(round "$GOOD")"; rt --author worker-1
+only_reason "a floor of person" "reason: tools/x.sh -- always a person: no area covers this path"
+eq "the class is then person" "class: person" "$(line class)"
+
+# condition 2: the review
+change "$R" ordinary 'echo b >> src/auth/login.sh'
+plan_with; rt --author worker-1
+only_reason "no round line" 'reason: review -- the plan has no round line under "## Review"'
+eq "the class is then unstated" "class: unstated" "$(line class)"
+plan_with "$(round "changes requested; blocking: 2; follow-ups: 0; risk: low; invariants: none; by: review-1")"; rt --author worker-1
+only_reason "a round that does not approve" "reason: review -- the newest round line says 'changes requested', not approved"
+plan_with "$(round "approved; blocking: 0; follow-ups: 1")"; rt --author worker-1
+only_reason "a round line without the three new fields" "reason: review -- the newest round line does not state: risk, invariants, by"
+plan_with "$(round "approved; blocking: 0; follow-ups: 0; risk: tiny; invariants: none; by: review-1")"; rt --author worker-1
+only_reason "a risk outside the three classes" "the risk 'tiny', which is not low, normal or high"
+plan_with "$(round "approved; blocking: 0; follow-ups: 0; risk: low; invariants: auth: tokens expire; sessions too; by: review-1")"; rt --author worker-1
+only_reason "a touched invariant" "reason: review -- the reviewer named an invariant or decision the change touches: auth: tokens expire; sessions too"
+plan_with "$(round "$GOOD")"; rt --author review-1
+only_reason "the reviewer is the author" "reason: review -- the reviewer 'review-1' is the author of the change"
+rt
+only_reason "no --author" "reason: review -- no --author given: that the reviewer is not the author cannot be checked"
+plan_with "$(round "$GOOD" base | sed 's/\.\.[0-9a-f]*/..0000000/')"; rt --author worker-1
+only_reason "a round that names no commit" "reason: review -- the newest round line names '0000000', which is no commit here"
+plan_with "- Round 1: $(s7 base)..$(s7 "$H") -- changes requested; blocking: 1; follow-ups: 0; risk: low; invariants: none; by: review-1" \
+  "- Round 2: $(s7 "$H")..$(s7 "$H") -- $GOOD"; rt --author worker-1
+unattended "the newest round counts: changes requested, then approved"
+plan_with "- Round 1: $(s7 base)..$(s7 "$H") -- $GOOD" \
+  "- Round 2: $(s7 "$H")..$(s7 "$H") -- changes requested; blocking: 1; follow-ups: 0; risk: low; invariants: none; by: review-1"; rt --author worker-1
+only_reason "the newest round counts: approved, then changes requested" "not approved"
+
+# valid for a head
+REVIEWED=$H
+FROM=$REVIEWED
+change "$R" records-after 'echo x > .ytstack/M001-S01-T01-SUMMARY.md; echo x >> .ytstack/STATE.md'
+FROM=base
+plan_with "$(round "$GOOD" "$REVIEWED")"; rt --author worker-1
+unattended "a round stays valid when only process records changed since"
+FROM=$REVIEWED
+change "$R" code-after 'echo x > src/auth/later.sh'
+FROM=base
+plan_with "$(round "$GOOD" "$REVIEWED")"; rt --author worker-1
+only_reason "a round is not valid when a file of the change came after it" "reason: review -- the newest round reviewed $(s7 "$REVIEWED") and 1 path(s) changed since, first src/auth/later.sh: it is not valid for $(s7 "$H")"
+
+# condition 3: the class and the ceiling
+change "$R" ordinary 'echo b >> src/auth/login.sh'
+plan_with "$(round "approved; blocking: 0; follow-ups: 0; risk: normal; invariants: none; by: review-1")"; rt --author worker-1
+only_reason "a stated risk above the ceiling" "reason: class -- normal is above the ceiling low of the touched areas (auth)"
+change "$R" token 'mkdir -p src/auth/token && echo x > src/auth/token/t.sh'
+plan_with "$(round "$GOOD")"; rt --author worker-1
+only_reason "a floor above the ceiling, whatever the reviewer states" "reason: class -- normal is above the ceiling low of the touched areas (auth)"
+eq "the class is the higher of floor and stated risk" "class: normal" "$(line class)"
+change "$R" billing 'echo b >> src/billing/invoice.sh'
+plan_with "$(round "approved; blocking: 0; follow-ups: 0; risk: high; invariants: none; by: review-1")"; rt --author worker-1
+only_reason "high is above every ceiling" "reason: class -- high is above the ceiling normal of the touched areas (billing)"
+change "$R" sql 'echo x > src/billing/q.sql'
+plan_with "$(round "approved; blocking: 0; follow-ups: 0; risk: normal; invariants: none; by: review-1")"; rt --author worker-1
+eq "a normal change within a normal ceiling: the whole output, without the never-low reason" "route: unattended
+class: normal
+ceiling: normal
+floor: normal
+areas: billing" "$OUT"
+change "$R" pkg 'echo b >> pkg/readme.txt'
+plan_with "$(round "$GOOD")"; rt --author worker-1
+only_reason "an area that declares no auto_merge" "reason: class -- low is above the ceiling none of the touched areas (pkg)"
+change "$R" recordsonly 'echo x >> .ytstack/STATE.md'
+plan_with "$(round "$GOOD")"; rt --author worker-1
+only_reason "a change that touches no area" "reason: class -- low is above the ceiling none of the touched areas (none)"
+
+# usage
+run "$R" route --base base --head "$H";                      eq "route without --plan: usage" 64 "$EC"
+run "$R" route --plan "$TMP/none.md" --base base --head "$H"; eq "a plan file that does not exist: usage" 64 "$EC"
+run "$R" route --plan "$P" --base nowhere --head "$H";       eq "route with a base that names no commit: 65" 65 "$EC"
+run "$R" floor --plan "$P" --base base --head "$H";          eq "floor takes no --plan" 64 "$EC"
 
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
