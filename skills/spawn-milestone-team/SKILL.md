@@ -3,7 +3,7 @@ name: spawn-milestone-team
 description: "Dispatches the current milestone's slices to parallel workers: by default one worktree-isolated implementer subagent per slice plus a fresh verifier per slice, orchestrated from the main session which never edits source; with PREFERENCES team on, a Claude Code Agent Team instead. Use after slice-milestone and plan-eng-review when the slices are independent, or when the user says spawn the team, run the slices in parallel, dispatch the milestone. Not for a single slice or sequential work (plan-task)."
 metadata:
   tier: task
-  version: 0.2.0
+  version: 0.3.0
   triggers:
     - spawn team
     - dispatch milestone
@@ -38,10 +38,11 @@ You MUST create a TodoWrite task for each of these items:
 2. **HARD-GATE** -- `.ytstack`, milestone, slice plans, clean working tree
 3. **Check slice independence** -- stop or accept the risk when slices overlap
 4. **Confirm the dispatch plan** -- one question: workers, branches, verifier, merge policy
-5. **Dispatch implementers** -- one `Agent` call per slice, `isolation: worktree`, run in parallel
-6. **Verify each finished slice** -- one `Agent` call per slice branch, fresh verifier
-7. **Merge accepted slices** -- slice branch into the working branch, `STATE.md` from the orchestrator's side
-8. **Report + return** -- per slice: branch, verdict, merge result; next step `reassess-roadmap`
+5. **Dispatch implementers** -- one rendered brief (`bin/ytstack-brief render`) and one `Agent` call per slice, `isolation: worktree`, independent slices in parallel
+6. **Check each report** -- `bin/ytstack-brief check` on the worker's report; an incomplete report goes back once
+7. **Verify each finished slice** -- one `Agent` call per slice branch, fresh verifier
+8. **Merge accepted slices** -- slice branch into the working branch, `STATE.md` from the orchestrator's side
+9. **Report + return** -- per slice: branch, verdict, merge result; next step `reassess-roadmap`
 
 ## Preamble
 
@@ -159,7 +160,20 @@ Remember as `_MERGE_POLICY` (A = orchestrator merges, B = branches only) and `_W
 
 ### Step 5: Dispatch implementers (EXECUTION=subagents)
 
-For every open slice, in one message so they run concurrently, call the Agent tool:
+Render the brief of every open slice; do not write it by hand. The script builds it from the slice plan and its task plans (outcome, files, verification, spec impact, gates, the checkout command) and adds the work contract (the body of `ytstack:minimal-code`) and the report shape:
+
+```bash
+"${CLAUDE_SKILL_DIR}/../../bin/ytstack-brief" render --slice {CURRENT_MILESTONE}-S## --branch ytstack/{CURRENT_MILESTONE}-S## --base {BRANCH}
+```
+
+The output is the Agent prompt. Append only what the plans do not hold:
+
+```
+STATE.md in your worktree is your copy; update it as the skills do.
+Do not run ytstack:reassess-roadmap.
+```
+
+and, on a re-dispatch, the checker's lines (Step 6) or the verifier's output (Step 7).
 
 ```
 Agent(
@@ -167,28 +181,35 @@ Agent(
   isolation: "worktree",
   name: "impl-{CURRENT_MILESTONE}-S##",
   description: "Implement slice S## of {CURRENT_MILESTONE}",
-  prompt: <the implementer brief below>
+  prompt: <the rendered brief plus the appended lines>
 )
 ```
 
-The implementer brief (fill the placeholders; the agent definition carries the rules, the brief carries the facts):
+Dispatch by actual dependency. Slices that need nothing from each other go out in one message, so they run concurrently. A slice that needs another slice's result waits until that slice is verified, and is rendered then with that result as `--base` (`{BRANCH}` after the merge, the other slice's branch under merge policy B).
 
-```
-Milestone {CURRENT_MILESTONE}, slice S## of project {PROJECT_NAME}.
-Checkout: your worktree is a fresh copy branched from the default branch. First run
-  git checkout -B ytstack/{CURRENT_MILESTONE}-S## {BRANCH}
-so you work on top of the orchestrator's branch ({BRANCH}, commit {HEAD_SHA}).
-Slice plan: .ytstack/{CURRENT_MILESTONE}-S##-PLAN.md (tasks T##..). Read .ytstack/PROJECT.md, DECISIONS.md, KNOWLEDGE.md first.
-Per task: ytstack:plan-task (if no T##-PLAN exists) -> ytstack:test-driven-development -> ytstack:verification-before-completion -> ytstack:summarize-task. Commit each task with the prefix "{CURRENT_MILESTONE}-S##-T##:".
-STATE.md in your worktree is your copy; update it as the skills do. Do not touch files outside your task plans' Files sections; do not run reassess-roadmap; do not merge or push.
-When every task of the slice has a summary, stop and report: branch name, commits (git log --oneline {BRANCH}..HEAD), the verification commands you ran with their exit codes, anything the plan got wrong.
-```
+The same rendered text works for any worker that takes a prompt: a `general-purpose` Agent, or the command-line agent of another host that reads a prompt from stdin, started in a worktree of its own (the brief's Git section switches the branch of the checkout it runs in). The host's adapter document names the command. The brief does not depend on the worker loading a skill.
+
+If the script is not reachable: fill `brief-template.md` (next to this file) by hand from the plans and paste the body of `skills/minimal-code/SKILL.md` under "Work contract". Never dispatch a brief without the contract.
 
 Do not wait idle: while implementers run, the orchestrator may plan the next milestone's context or answer the user, but it does not edit source files.
 
-### Step 6: Verify each finished slice
+### Step 6: Check each report
 
-When an implementer reports, dispatch a verifier for that slice:
+When a worker reports, validate the report before anything is done with it:
+
+```bash
+"${CLAUDE_SKILL_DIR}/../../bin/ytstack-brief" check <<'REPORT'
+<the worker's final message>
+REPORT
+```
+
+`report ok`: go to Step 7. Otherwise the checker prints one line per problem (`missing: Not checked`, `Checks run: no exit code in "..."`). Send the report back to the worker once, with exactly those lines. Do not reconstruct the missing facts yourself: a commit list or an exit code the orchestrator looked up is not the worker's statement. A second incomplete report: stop that slice and tell the user.
+
+Keep from each worker only the report's facts (outcome, commits, check lines, blockers), not its transcript. A `Blockers:` value other than `none` goes to the user once, with what is needed to resolve it; the slice is neither verified nor merged until then.
+
+### Step 7: Verify each finished slice
+
+When a report passed the check and names no blocker, dispatch a verifier for that slice:
 
 ```
 Agent(
@@ -196,13 +217,15 @@ Agent(
   isolation: "worktree",
   name: "verify-{CURRENT_MILESTONE}-S##",
   description: "Verify slice S## on its branch",
-  prompt: "Branch ytstack/{CURRENT_MILESTONE}-S##. Run `git checkout ytstack/{CURRENT_MILESTONE}-S##` in your worktree, then for every .ytstack/{CURRENT_MILESTONE}-S##-T##-PLAN.md run its Verification command from a cold context and compare with the T##-SUMMARY.md claims. Report pass / pass-with-caveats / fail per task with the raw output. Do not edit anything."
+  prompt: "Branch ytstack/{CURRENT_MILESTONE}-S##. Run `git checkout ytstack/{CURRENT_MILESTONE}-S##` in your worktree, then for every .ytstack/{CURRENT_MILESTONE}-S##-T##-PLAN.md run its Verification command from a cold context, as often as its Runs line says, and compare with the T##-SUMMARY.md claims (no summary: with the worker's report below). Report pass / pass-with-caveats / fail per task with the raw output and the commit you ran on. Do not edit anything. Worker's report: <the eight report lines>"
 )
 ```
 
-A `fail` sends the slice back: re-dispatch the implementer on the same branch with the verifier's output in the brief. Two consecutive fails: stop and report to the user.
+A `fail` sends the slice back: re-dispatch the implementer on the same branch with the verifier's output appended to the rendered brief. Two consecutive fails: stop and report to the user.
 
-### Step 7: Merge accepted slices
+After a fix, the next verifier gets the earlier verdict in its prompt (task, commit, result). It runs again only the checks of tasks whose files changed since that commit, and cites the earlier verdict for the rest: evidence for the same commit, environment and check stands (`ytstack:minimal-code`, "Evidence").
+
+### Step 8: Merge accepted slices
 
 `_MERGE_POLICY = A`: for each verified slice, from the main checkout on `{BRANCH}`:
 
@@ -216,13 +239,13 @@ If `.ytstack/STATE.md` conflicts, resolve it from the orchestrator's side (`git 
 
 Never push, never open a PR here (`ytstack:ship` / `ytstack:finish-branch` do that on request).
 
-### Step 5-7 under EXECUTION=team
+### Step 5-8 under EXECUTION=team
 
 With `team: on` and Agent Teams enabled, skip the subagent calls and emit the team instruction instead (unchanged from 0.1.x): one teammate per slice using the `ytstack:implementer` definition, an optional architect-lead, the shared task list from the roadmap, teammates with `YTSTACK_NON_INTERACTIVE=1`, the lead coordinating and running `reassess-roadmap` at the end. Present the instruction and wait for "go"; Claude Code creates the team from the next prompt. Teams cannot be resumed after `/resume`; say so once.
 
-### Step 8: Report + return
+### Step 9: Report + return
 
-> Dispatched {CURRENT_MILESTONE}: {per slice: branch, implementer result, verifier verdict, merge result}.
+> Dispatched {CURRENT_MILESTONE}: {per slice: branch, the outcome from the implementer's report, verifier verdict, merge result}.
 > Next: `ytstack:reassess-roadmap` (slice boundaries), then `ytstack:finish-branch` or `ytstack:ship` for `{BRANCH}`.
 
 ## Terminal State
@@ -231,6 +254,6 @@ Return after the merge step (policy A) or after listing the slice branches (poli
 
 ## Limitations
 
-- Worktree subagents fork from the default branch, so the brief's first command re-bases them onto the orchestrator's branch; a dirty orchestrator tree is refused for that reason.
+- Worktree subagents fork from the default branch, so the brief's Git section re-bases them onto the orchestrator's branch; a dirty orchestrator tree is refused for that reason.
 - The verifier checks out the slice branch inside its own worktree; it never sees the orchestrator's uncommitted state (there is none).
 - Agent Teams (opt-in): experimental, no resume, one team per session, `skills` preload ignored for teammates, lead fixed for the team's lifetime.

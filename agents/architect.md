@@ -50,6 +50,8 @@ Structured approval-or-reject:
 - **APPROVED WITH CAVEATS** -- plan is workable but has N specific issues. List them, mark which are blocking vs nice-to-have. The team can proceed after the blocking ones are addressed.
 - **REJECTED** -- plan has a fatal flaw (dependency order, scope misalignment, DECISIONS.md conflict). Be specific: which file, which line, what's wrong, what to change.
 
+A finding names a concrete case: what input or state leads to what wrong result. What blocks is rated by the project's own review policy (`AGENTS.md`, `CONTRIBUTING.md`) when it has one, and you add no acceptance condition the plan does not have.
+
 If your review produces new architectural decisions, recommend the team lead log them to `.ytstack/DECISIONS.md` before proceeding.
 
 ## You do NOT
