@@ -5,15 +5,17 @@
 #   ytstack-risk [-C DIR] floor --base SHA --head SHA
 #   ytstack-risk [-C DIR] route --plan FILE --base SHA --head SHA [--author WORKER]
 #   ytstack-risk [-C DIR] check
+#   ytstack-risk manifest EVIDENCE_DIR
 #
-# DIR is a directory of the repository (default: $PWD). A relative --plan is
-# read from where the command was started.
+# DIR is a directory of the repository (default: $PWD). A relative --plan and
+# a relative EVIDENCE_DIR are read from where the command was started.
 #
 # floor   reads the tree difference between two commits and prints
 #           floor: low | normal | person
 #           reason: <path or subject> -- <rule>   one per rule that raised it
 #           areas: <comma list or none>           the areas the change touches
 #           ceiling: none | low | normal          the lowest auto_merge of them
+#           lenses: <comma list or none>          the lenses the change requires
 #         The policy is read at --base, never from the working tree: the paths
 #         and auto_merge of the area files, REVIEW.md, evidence_dir. A change
 #         to one of them is itself "person", so a change cannot relax the
@@ -26,14 +28,24 @@
 #           ceiling: none | low | normal
 #           floor: low | normal | person
 #           areas: <comma list or none>
+#           lenses: <comma list or none>
 #           reason: <path or subject> -- <what failed>   one per failed condition
 #         "unattended" needs all of: a floor that is not "person"; a newest
 #         round line that approves, states risk and "invariants: none", is by
 #         somebody other than --author and is valid for --head; a class (the
-#         higher of floor and stated risk) that is not above the ceiling.
+#         higher of floor and stated risk) that is not above the ceiling; for
+#         every required lens a newest "- Lens <name>:" line that says pass,
+#         is by somebody other than --author and is valid for --head, and for
+#         "evidence: visual" a MANIFEST whose hashes match the images.
 #         Without --author the route is "person". A round is valid for a head
-#         when it names it, or when nothing but process records changed since.
+#         when it names it, or when nothing but process records changed since;
+#         a lens line when no path under its "applies" changed since. A
+#         relative evidence directory is read from the root of the repository.
 # check   validates .ytstack/spec/REVIEW.md of the working tree.
+# manifest  writes EVIDENCE_DIR/MANIFEST: one line per image (png, jpg, jpeg,
+#         webp, gif) with its SHA-256 and its name. What a line already said
+#         about an image is kept. The reviewer fills in url, viewport, shows:
+#           <sha256>  <file name> | url: <url> | viewport: <w>x<h> | shows: <text>
 #
 # Exit codes
 #   floor   0 a result was printed; 64 usage; 65 git (no repository, a commit
@@ -41,6 +53,8 @@
 #   route   0 unattended; 10 person; 64 usage, also a plan file that does not
 #           exist; 65 git
 #   check   0 clean, or no REVIEW.md; 1 one line per problem; 64 usage
+#   manifest  0 written; 1 no directory, no image in it, or no sha256 tool;
+#           64 usage
 
 set -uo pipefail
 
@@ -121,8 +135,8 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '5,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
-case "$CMD" in floor|route|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+usage() { sed -n '5,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+case "$CMD" in floor|route|check|manifest) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 # The resolver falls back to $PWD for a missing directory: refuse it here.
 [ -d "$DIR" ] || { echo "ytstack-risk: -C '$DIR' is not a directory" >&2; exit 64; }
 
@@ -134,6 +148,12 @@ g() { git -C "$TOP" -c core.quotepath=off "$@"; }
 resolve() { g rev-parse --verify --quiet --end-of-options "$1^{commit}" 2>/dev/null; }
 short() { printf '%.7s' "$1"; }
 rank() { case "$1" in none) echo 0 ;; low) echo 1 ;; normal) echo 2 ;; high) echo 3 ;; *) echo 9 ;; esac; }
+# sha256_of <file>: sha256sum (Linux, newer macOS) or shasum (macOS).
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1" | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 < "$1" | cut -d' ' -f1
+  else return 1; fi
+}
 
 # ---- readers -------------------------------------------------------------------
 # fm <file>: frontmatter as "key<TAB>value" lines; list items repeat the key.
@@ -357,7 +377,7 @@ never_low_group() {
 # compute: the floor of BASE..HEADC. Sets FLOOR, TOUCHED, CEILING and fills
 # $W/reasons.
 compute() {
-  local p name a am kind x rest glob out n=0 line label="" add del lines=0 files=0
+  local p name a am kind x rest glob out n=0 line label="" add del lines=0 files=0 applies reads ev
   local lim_l=$SIZE_LINES lim_f=$SIZE_FILES
   W=$(mktemp -d "${TMPDIR:-/tmp}/ytrisk.XXXXXX") || return 65
   trap 'rm -rf "$W"' EXIT
@@ -468,6 +488,16 @@ EOF
     if [ -z "$CEILING" ] || [ "$(rank "$am")" -lt "$(rank "$CEILING")" ]; then CEILING=$am; fi
   done
   CEILING=${CEILING:-none}
+
+  # The lenses the change requires: a changed path matches one of "applies".
+  # $W/lenses keeps name|applies|reads|evidence for route.
+  : > "$W/lenses"
+  while IFS='|' read -r kind x applies reads ev rest; do
+    [ "$kind" = lens ] || continue
+    [ -z "$(printf '%s\n' "$applies" | tr ',' '\n' | match_list "$BASE" "$HEADC")" ] \
+      || printf '%s|%s|%s|%s\n' "$x" "$applies" "$reads" "$ev" >> "$W/lenses"
+  done < "$W/review"
+  LENSES=$(cut -d'|' -f1 "$W/lenses" | tr '\n' ',' | sed 's/,$//')
   return 0
 }
 
@@ -478,6 +508,7 @@ cmd_floor() {
   print_reasons
   echo "areas: ${TOUCHED:-none}"
   echo "ceiling: $CEILING"
+  echo "lenses: ${LENSES:-none}"
 }
 
 # ---- route ---------------------------------------------------------------------
@@ -491,9 +522,10 @@ review_records() {
 }
 
 # record_fields: one "- Round N: <base>..<head> -- <verdict>; key: value; ..."
-# line on stdin, as five lines: head, verdict, risk, invariants, by. A field
-# the line does not have is an empty line. Text after a ";" that starts with
-# no known key belongs to the field before it.
+# or "- Lens <name>: <head> -- <verdict>; key: value; ..." line on stdin, as
+# six lines: head, verdict, risk, invariants, by, evidence. A field the line
+# does not have is an empty line. Text after a ";" that starts with no known
+# key belongs to the field before it.
 record_fields() {
   awk '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
@@ -505,13 +537,95 @@ record_fields() {
       n = split(rest, f, ";"); verdict = trim(f[1]); key = ""
       for (j = 2; j <= n; j++) {
         p = trim(f[j]); k = p; sub(/:.*/, "", k)
-        if (k == "blocking" || k == "follow-ups" || k == "risk" || k == "invariants" || k == "by") {
+        if (k == "blocking" || k == "follow-ups" || k == "risk" || k == "invariants" || k == "by" || k == "evidence") {
           key = k; val[k] = trim(substr(p, length(k) + 2))
         } else if (key != "") val[key] = val[key] "; " p
       }
     }
-    END { print range; print verdict; print val["risk"]; print val["invariants"]; print val["by"] }
+    END { print range; print verdict; print val["risk"]; print val["invariants"]; print val["by"]; print val["evidence"] }
   '
+}
+
+# manifest_lines: a MANIFEST on stdin as "<sha256>|<file name>|<what the line
+# lacks>", or "bad||<the line>" for a line that is not
+#   <sha256>  <file name> | url: <url> | viewport: <w>x<h> | shows: <text>
+# Blank lines and "#" lines are skipped.
+manifest_lines() {
+  awk '
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
+    /^[ \t]*$/ || /^#/ { next }
+    {
+      n = split($0, part, / \| /); head = part[1]; sum = substr(head, 1, 64); name = trim(substr(head, 67))
+      if (length(sum) != 64 || sum ~ /[^0-9a-f]/ || substr(head, 65, 2) != "  " || name == "") { print "bad||" $0; next }
+      url = ""; view = ""; shows = ""
+      for (i = 2; i <= n; i++) {
+        p = trim(part[i]); k = p; sub(/:.*/, "", k); v = trim(substr(p, length(k) + 2))
+        if (k == "url") url = v; else if (k == "viewport") view = v; else if (k == "shows") shows = v
+      }
+      lacks = ""
+      if (url == "") lacks = "no url"
+      if (view !~ /^[0-9]+x[0-9]+$/) lacks = lacks (lacks == "" ? "" : ", ") "no viewport <w>x<h>"
+      if (shows == "") lacks = lacks (lacks == "" ? "" : ", ") "no shows"
+      print sum "|" name "|" lacks
+    }
+  '
+}
+
+# evidence_check <lens> <evidence field of its line>: the MANIFEST of a visual
+# lens lists at least one image, and every listed image is in the directory
+# with the listed SHA-256 and a complete line.
+evidence_check() {
+  local subject="lens $1" shown="${2% (*}" dir sum name lacks have n=0
+  case "$shown" in ""|none) note route "$subject" "its evidence is visual and its line names no evidence directory"; return 0 ;; esac
+  case "$shown" in /*) dir="$shown" ;; *) dir="$TOP/$shown" ;; esac
+  [ -d "$dir" ] || { note route "$subject" "the evidence directory $shown does not exist"; return 0; }
+  [ -f "$dir/MANIFEST" ] || { note route "$subject" "the evidence directory $shown has no MANIFEST"; return 0; }
+  while IFS='|' read -r sum name lacks; do
+    [ -n "$sum" ] || continue
+    n=$((n + 1))
+    if [ "$sum" = bad ]; then
+      note route "$subject" "a line of $shown/MANIFEST is not '<sha256>  <file name> | url: <url> | viewport: <w>x<h> | shows: <text>': $lacks"; continue
+    fi
+    case "$name" in */*) note route "$shown/$name" "$subject: the MANIFEST names a file outside the evidence directory"; continue ;; esac
+    [ -f "$dir/$name" ] || { note route "$shown/$name" "$subject: the MANIFEST lists an image that is not there"; continue; }
+    have=$(sha256_of "$dir/$name") || { note route "$subject" "no sha256sum and no shasum to check the images with"; return 0; }
+    [ "$have" = "$sum" ] || note route "$shown/$name" "$subject: the image does not have the SHA-256 the MANIFEST lists"
+    [ -z "$lacks" ] || note route "$shown/$name" "$subject: the MANIFEST line has $lacks"
+  done <<EOF
+$(manifest_lines < "$dir/MANIFEST")
+EOF
+  [ "$n" -gt 0 ] || note route "$subject" "$shown/MANIFEST lists no image"
+}
+
+# lens_check <name> <applies> <reads> <evidence>: the newest line of a
+# required lens says pass, is by somebody other than the author, is valid for
+# the head and carries the evidence the lens asks for.
+lens_check() {
+  local name="$1" applies="$2" reads="$3" ev="$4" subject="lens $1"
+  local doc line lhead verdict x1 x2 by evid lh moved
+  while IFS= read -r doc; do
+    [ -z "$doc" ] || g cat-file -e "$HEADC:$doc" 2>/dev/null \
+      || note route "$subject" "it reads $doc, which does not exist at $(short "$HEADC"): the lens cannot run"
+  done <<EOF
+$(printf '%s\n' "$reads" | tr ',' '\n')
+EOF
+  line=$(review_records | awk -v p="- Lens $name: " 'index($0, p) == 1' | tail -1)
+  if [ -z "$line" ]; then
+    note route "$subject" "the plan has no line for this lens under \"## Review\""; return 0
+  fi
+  { IFS= read -r lhead; IFS= read -r verdict; IFS= read -r x1; IFS= read -r x2; IFS= read -r by; IFS= read -r evid; } <<EOF
+$(printf '%s\n' "$line" | record_fields)
+EOF
+  [ "$verdict" = pass ] || note route "$subject" "its verdict is '$verdict', not pass"
+  if [ -z "$by" ]; then note route "$subject" "its line names no reviewer (by:)"
+  elif [ "$by" = "$AUTHOR" ]; then note route "$subject" "its reviewer '$by' is the author of the change"; fi
+  if ! lh=$(resolve "$lhead"); then
+    note route "$subject" "its line names '$lhead', which is no commit here"
+  elif [ "$lh" != "$HEADC" ]; then
+    moved=$(printf '%s\n' "$applies" | tr ',' '\n' | match_list "$lh" "$HEADC")
+    [ -z "$moved" ] || note route "$subject" "it looked at $(short "$lh") and $(printf '%s\n' "$moved" | grep -c .) path(s) under its applies changed since, first $(printf '%s\n' "$moved" | sed -n 1p): it is not valid for $(short "$HEADC")"
+  fi
+  [ "$ev" != visual ] || evidence_check "$name" "$evid"
 }
 
 # moved_since <commit>: the paths that differ between that commit and the
@@ -525,7 +639,7 @@ moved_since() {
 }
 
 cmd_route() {
-  local round rhead verdict risk inv by rh moved missing="" class
+  local round rhead verdict risk inv by rh moved missing="" class name applies reads ev
   read_range "$@" || return $?
   [ -n "$PLAN" ] || { usage >&2; return 64; }
   [ -f "$PLAN" ] || { echo "ytstack-risk: plan file '$PLAN' not found" >&2; return 64; }
@@ -570,19 +684,49 @@ EOF
     *) class=unstated ;;
   esac
 
+  # The lenses the change requires.
+  while IFS='|' read -r name applies reads ev; do
+    [ -z "$name" ] || lens_check "$name" "$applies" "$reads" "$ev"
+  done < "$W/lenses"
+
   if cut -f1 "$W/reasons" | grep -xE 'person|route' >/dev/null; then echo "route: person"; else echo "route: unattended"; fi
   echo "class: $class"
   echo "ceiling: $CEILING"
   echo "floor: $FLOOR"
   echo "areas: ${TOUCHED:-none}"
+  echo "lenses: ${LENSES:-none}"
   # A never-low reason raised the floor and failed nothing: it is not printed.
   print_reasons '^(person|route)$'
   ! cut -f1 "$W/reasons" | grep -xE 'person|route' >/dev/null || return 10
   return 0
 }
 
+# ---- manifest ------------------------------------------------------------------
+cmd_manifest() {
+  local dir="${1:-}" f name sum rest out="" n=0
+  [ $# -eq 1 ] || { usage >&2; return 64; }
+  [ -d "$dir" ] || { echo "ytstack-risk: '$dir' is not a directory" >&2; return 1; }
+  for f in "$dir"/*; do
+    [ -f "$f" ] || continue
+    name=${f##*/}
+    case "$name" in *.png|*.jpg|*.jpeg|*.webp|*.gif) ;; *) continue ;; esac
+    sum=$(sha256_of "$f") || { echo "ytstack-risk: no sha256sum and no shasum to hash the images with" >&2; return 1; }
+    # What the line of this image already said after the name is kept.
+    rest=""
+    [ ! -f "$dir/MANIFEST" ] || rest=$(awk -v n="$name" '
+      { i = index($0, " | "); if (i && substr($0, 67, i - 67) == n) { print substr($0, i); exit } }' "$dir/MANIFEST")
+    out="$out$sum  $name${rest:- | url:  | viewport:  | shows: }
+"
+    n=$((n + 1))
+  done
+  [ "$n" -gt 0 ] || { echo "ytstack-risk: no image (png, jpg, jpeg, webp, gif) in $dir" >&2; return 1; }
+  printf '%s' "$out" > "$dir/MANIFEST" || return 1
+  echo "$dir/MANIFEST: $n image(s); every line needs url, viewport and shows"
+}
+
 case "$CMD" in
-  floor) cmd_floor "$@" ;;
-  route) cmd_route "$@" ;;
-  check) cmd_check "$@" ;;
+  floor)    cmd_floor "$@" ;;
+  route)    cmd_route "$@" ;;
+  check)    cmd_check "$@" ;;
+  manifest) cmd_manifest "$@" ;;
 esac

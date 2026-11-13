@@ -25,9 +25,10 @@ floor: low | normal | person
 reason: <path or subject> -- <rule>
 areas: <comma list or none>
 ceiling: none | low | normal
+lenses: <comma list or none>
 ```
 
-There is one `reason:` line per path and rule that raised the floor. A rule names at most five paths and counts the rest in one more line. `areas` are the areas the change touches, `ceiling` is the lowest `auto_merge` among them (see "Ceilings"). The exit code is 0 when a result was printed, 64 for a usage error and 65 when git cannot answer: no repository, or a commit that does not exist.
+There is one `reason:` line per path and rule that raised the floor. A rule names at most five paths and counts the rest in one more line. `areas` are the areas the change touches, `ceiling` is the lowest `auto_merge` among them (see "Ceilings"), `lenses` are the lenses the change requires (see "Lenses"). The exit code is 0 when a result was printed, 64 for a usage error and 65 when git cannot answer: no repository, or a commit that does not exist.
 
 **Always a person** (`person`):
 
@@ -113,6 +114,14 @@ Rules for every lens:
 - It stores them under `<evidence dir>/<lane>/<short sha>/<lens>/` with a `MANIFEST` file: one line per image with its SHA-256, the URL, the viewport and what it shows. The evidence directory is `evidence_dir:` in `PREFERENCES.md`, default `.ytstack/evidence`; whether a project commits it is the project's choice.
 - No way to start the product, or no browser tool: the verdict is `not run`.
 
+A `MANIFEST` line:
+
+```
+<sha256>  <file name> | url: <url> | viewport: <w>x<h> | shows: <text>
+```
+
+The hash and the name are separated by two spaces, the way `sha256sum` prints them. The name is a file in the same directory. Blank lines and lines that start with `#` do not count. `bin/ytstack-risk manifest <dir>` writes the hash and the name for every image in the directory (`png`, `jpg`, `jpeg`, `webp`, `gif`) and keeps what a line already said; the reviewer fills in `url`, `viewport` and `shows`. `route` reads the evidence directory a lens line names in the working tree; a relative path starts at the root of the repository.
+
 The procedure is the skill `visual-review`.
 
 ## Records
@@ -124,6 +133,12 @@ A review leaves lines in the plan of what it reviewed (the slice plan for a slic
 
 - Round 1: a1b2c3d..e4f5a6b -- approved; blocking: 0; follow-ups: 1; risk: low; invariants: none; by: review-M004-S02
 - Lens ui: e4f5a6b -- pass; by: ui-M004-S02; evidence: .ytstack/evidence/M004-S02/e4f5a6b/ui (5 images)
+```
+
+A lens line has this form, with `none` as evidence for a lens that asks for none:
+
+```
+- Lens <name>: <head> -- pass | fail | not run; by: <reviewer>; evidence: <dir> (<n> images) | none
 ```
 
 The round line is the one `code-review` already writes, with three more fields. The reviewer's report states them with these labels:
@@ -151,6 +166,7 @@ class: low | normal | high | person | unstated
 ceiling: none | low | normal
 floor: low | normal | person
 areas: <comma list or none>
+lenses: <comma list or none>
 reason: <path or subject> -- <what failed>
 ```
 
@@ -165,7 +181,7 @@ The route is `unattended` only when all of this holds:
 1. The floor is not `person`.
 2. The newest round line of the plan approves, is valid for the head, states `risk` and `invariants: none`, and names a reviewer other than the author.
 3. The class (the higher of floor and stated risk) is not above the ceiling of the touched areas. A change that touches no area has the ceiling `none`.
-4. Every required lens has a line with `pass` that is valid for the head, from a reviewer other than the author; for `evidence: visual` the manifest exists and its hashes match the images.
+4. Every required lens has a newest line with `pass` that is valid for the head, from a reviewer other than the author, and its `reads` documents exist at the head. For `evidence: visual` the directory the line names holds a `MANIFEST` with at least one image; every listed image is there with the listed SHA-256, and its line states `url`, `viewport` and `shows`.
 
 The route says nothing about the host. `finish-lane` reads the host's gates (checks, review threads, mergeability, the reviewed commit) as before, and merges on its own only when both hold and `merge_by` is `risk`.
 

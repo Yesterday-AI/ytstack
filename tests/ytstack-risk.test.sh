@@ -17,6 +17,13 @@
 #           head, and a class within the ceiling. Each condition fails on its
 #           own with one reason (exit 10). A round stays valid when only
 #           process records changed after it.
+#   lenses  floor and route name the lenses whose applies match a changed
+#           path. route needs for each a newest lens line that says pass, is
+#           by somebody other than --author and is valid for the head (no
+#           path under applies changed since); "not run" is no pass; a reads
+#           document that is gone means the lens cannot run. A visual lens
+#           needs a MANIFEST whose lines are complete and whose hashes match.
+#   manifest  one line per image with its SHA-256; a line keeps what it said
 #
 # Run: /bin/bash tests/ytstack-risk.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -103,7 +110,8 @@ change "$R" ordinary 'echo b >> src/auth/login.sh'; fl
 eq "a computed result exits 0" 0 "$EC"
 eq "an ordinary change in one area: low, its area, its ceiling, no reason" "floor: low
 areas: auth
-ceiling: low" "$OUT"
+ceiling: low
+lenses: none" "$OUT"
 change "$R" two 'echo b >> src/auth/login.sh; echo b >> src/billing/invoice.sh'; fl
 eq "two areas are both named" "areas: auth,billing" "$(line areas)"
 eq "two areas: the lowest ceiling" "ceiling: low" "$(line ceiling)"
@@ -142,7 +150,8 @@ person "the decisions section of an area file" 'always a person: section "Decisi
 change "$R" behavior 'edit "s/old behaviour/new behaviour/" .ytstack/spec/auth.md'; fl
 eq "another edit of an area file is ordinary and touches its area" "floor: low
 areas: auth
-ceiling: low" "$OUT"
+ceiling: low
+lenses: none" "$OUT"
 change "$R" newarea 'mkdir -p src/search && echo x > src/search/s.sh && area . search normal "src/search/**"'
 person "a new area file" "reason: .ytstack/spec/search.md -- always a person: a file of the technical spec was added or deleted"
 has "paths only the new area names are not covered yet" "reason: src/search/s.sh -- always a person: no area covers this path" "$OUT"
@@ -153,7 +162,8 @@ person "the invariants section of SPEC.md" 'reason: .ytstack/spec/SPEC.md -- alw
 change "$R" specother 'edit "s/^updated: .*/updated: 2026-02-02/" .ytstack/spec/SPEC.md'; fl
 eq "another edit of SPEC.md is ordinary" "floor: low
 areas: none
-ceiling: none" "$OUT"
+ceiling: none
+lenses: none" "$OUT"
 
 change "$R" uncovered 'mkdir -p tools && echo x > tools/x.sh'
 person "a path no area covers" "reason: tools/x.sh -- always a person: no area covers this path"
@@ -165,7 +175,8 @@ change "$R" records 'echo b >> src/auth/login.sh
   echo x > .ytstack/quick/Q001-PLAN.md; echo x > .ytstack/questions/Q001-x.md; echo x > .ytstack/evidence/lane/abc1234/ui/a.png'; fl
 eq "process records are exempt from the coverage rule" "floor: low
 areas: auth
-ceiling: low" "$OUT"
+ceiling: low
+lenses: none" "$OUT"
 change "$R" listed 'echo x >> src/billing/ledger/book.sh'
 person "the project's own list" "reason: src/billing/ledger/book.sh -- always a person: listed in REVIEW.md (src/billing/ledger/**)"
 change "$R" listed-del 'git rm -q src/billing/ledger/book.sh'
@@ -225,8 +236,9 @@ N=$(new_repo nospec nospec)
 run "$N" floor --base base --head HEAD
 eq "no technical spec: person" "floor: person" "$(line floor)"
 eq "with one reason for all paths" "reason: 3 path(s) -- always a person: no area covers them, .ytstack/spec/ has no area file at $(git -C "$N" rev-parse base | cut -c1-7)" "$(printf '%s\n' "$OUT" | grep '^reason: ')"
-eq "and no area, no ceiling" "areas: none
-ceiling: none" "$(printf '%s\n' "$OUT" | tail -2)"
+eq "and no area, no ceiling, no lens" "areas: none
+ceiling: none
+lenses: none" "$(printf '%s\n' "$OUT" | tail -3)"
 
 # ---- 5. floor: usage and git errors --------------------------------------------
 echo "# floor: usage and git errors"
@@ -294,7 +306,8 @@ eq "and the whole output" "route: unattended
 class: low
 ceiling: low
 floor: low
-areas: auth" "$OUT"
+areas: auth
+lenses: none" "$OUT"
 
 # condition 1: the floor
 change "$R" uncovered 'mkdir -p tools && echo x > tools/x.sh'
@@ -358,7 +371,8 @@ eq "a normal change within a normal ceiling: the whole output, without the never
 class: normal
 ceiling: normal
 floor: normal
-areas: billing" "$OUT"
+areas: billing
+lenses: none" "$OUT"
 change "$R" pkg 'echo b >> pkg/readme.txt'
 plan_with "$(round "$GOOD")"; rt --author worker-1
 only_reason "an area that declares no auto_merge" "reason: class -- low is above the ceiling none of the touched areas (pkg)"
@@ -371,6 +385,102 @@ run "$R" route --base base --head "$H";                      eq "route without -
 run "$R" route --plan "$TMP/none.md" --base base --head "$H"; eq "a plan file that does not exist: usage" 64 "$EC"
 run "$R" route --plan "$P" --base nowhere --head "$H";       eq "route with a base that names no commit: 65" 65 "$EC"
 run "$R" floor --plan "$P" --base base --head "$H";          eq "floor takes no --plan" 64 "$EC"
+
+# ---- 8. lenses -----------------------------------------------------------------
+echo "# lenses"
+change "$R" ui 'echo x >> src/ui/button.css'; fl
+eq "a changed path under applies requires the lens" "lenses: ui" "$(line lenses)"
+change "$R" css 'echo x > src/auth/login.css'; fl
+eq "every glob of applies counts" "lenses: ui" "$(line lenses)"
+change "$R" both 'echo x >> src/ui/button.css; mkdir -p src/billing/api && echo x > src/billing/api/a.sh'; fl
+eq "two lenses, in the order of REVIEW.md" "lenses: ui,api" "$(line lenses)"
+
+# a lens without evidence
+lens() { printf -- '- Lens %s: %s -- %s' "$1" "$(s7 "${3:-$H}")" "$2"; }   # lens <name> <verdict and fields> [head]
+change "$R" api 'mkdir -p src/billing/api && echo x > src/billing/api/a.sh'
+plan_with "$(round "$GOOD")" "$(lens api "pass; by: api-review; evidence: none")"; rt --author worker-1
+eq "a passing lens line: the whole output" "route: unattended
+class: low
+ceiling: normal
+floor: low
+areas: billing
+lenses: api" "$OUT"
+plan_with "$(round "$GOOD")"; rt --author worker-1
+only_reason "a required lens without a line" 'reason: lens api -- the plan has no line for this lens under "## Review"'
+plan_with "$(round "$GOOD")" "$(lens api "fail; by: api-review; evidence: none")"; rt --author worker-1
+only_reason "a lens that failed" "reason: lens api -- its verdict is 'fail', not pass"
+plan_with "$(round "$GOOD")" "$(lens api "not run; by: api-review; evidence: none")"; rt --author worker-1
+only_reason "not run never counts as pass" "reason: lens api -- its verdict is 'not run', not pass"
+plan_with "$(round "$GOOD")" "$(lens api "pass; by: worker-1; evidence: none")"; rt --author worker-1
+only_reason "a lens reviewed by the author" "reason: lens api -- its reviewer 'worker-1' is the author of the change"
+plan_with "$(round "$GOOD")" "$(lens api "pass; evidence: none")"; rt --author worker-1
+only_reason "a lens line without a reviewer" "reason: lens api -- its line names no reviewer (by:)"
+plan_with "$(round "$GOOD")" "$(lens api "fail; by: api-review; evidence: none")" "$(lens api "pass; by: api-review; evidence: none")"; rt --author worker-1
+unattended "the newest line of a lens counts"
+plan_with "$(round "$GOOD")" "$(lens ui "pass; by: ui-review; evidence: none")"; rt --author worker-1
+only_reason "the line of another lens does not count" "reason: lens api -- the plan has no line"
+
+# valid for a head: only paths under applies matter to a lens
+LENSED=$H
+FROM=$LENSED
+change "$R" api-unrelated 'echo b >> src/billing/invoice.sh'
+FROM=base
+plan_with "$(round "$GOOD")" "$(lens api "pass; by: api-review; evidence: none" "$LENSED")"; rt --author worker-1
+unattended "a lens line stays valid after a commit outside its applies"
+FROM=$LENSED
+change "$R" api-related 'echo x >> src/billing/api/a.sh'
+FROM=base
+plan_with "$(round "$GOOD")" "$(lens api "pass; by: api-review; evidence: none" "$LENSED")"; rt --author worker-1
+only_reason "and loses it with a commit under its applies" "reason: lens api -- it looked at $(s7 "$LENSED") and 1 path(s) under its applies changed since, first src/billing/api/a.sh: it is not valid for $(s7 "$H")"
+
+change "$R" api-noreads 'mkdir -p src/billing/api && echo x > src/billing/api/a.sh && git rm -q docs/api.md'
+plan_with "$(round "$GOOD")" "$(lens api "pass; by: api-review; evidence: none")"; rt --author worker-1
+eq "a reads document that is gone at the head: person" 10 "$EC"
+has "with the reason that the lens cannot run" "reason: lens api -- it reads docs/api.md, which does not exist at $(s7 "$H"): the lens cannot run" "$OUT"
+
+# a visual lens and its manifest
+change "$R" ui 'echo x >> src/ui/button.css'
+EV=".ytstack/evidence/lane-1/$(s7 "$H")/ui"; mkdir -p "$R/$EV"
+printf 'png-one' > "$R/$EV/button-wide.png"; printf 'png-two' > "$R/$EV/button-narrow.png"; echo note > "$R/$EV/notes.txt"
+OUT=$(bash "$BIN" manifest "$R/$EV" 2>&1); EC=$?
+eq "manifest writes the file" 0 "$EC"
+eq "one line per image, nothing for another file" 2 "$(grep -c . "$R/$EV/MANIFEST")"
+has "a line is the hash, two spaces, the name and the three empty fields" "  button-narrow.png | url:  | viewport:  | shows: " "$(cat "$R/$EV/MANIFEST")"
+UI="pass; by: ui-review; evidence: $EV (2 images)"
+plan_with "$(round "$GOOD")" "$(lens ui "$UI")"; rt --author worker-1
+eq "a manifest nobody filled in: person" 10 "$EC"
+has "each line says what it lacks" "reason: $EV/button-narrow.png -- lens ui: the MANIFEST line has no url, no viewport <w>x<h>, no shows" "$OUT"
+fill() { awk '{ sub(/ \| url:.*$/, ""); print $0 " | url: http://localhost:3000/ | viewport: 1280x800 | shows: the button" }' "$R/$EV/MANIFEST" > "$R/$EV/M.tmp" && mv "$R/$EV/M.tmp" "$R/$EV/MANIFEST"; }
+fill; rt --author worker-1
+eq "a complete manifest whose hashes match: the whole output" "route: unattended
+class: low
+ceiling: normal
+floor: low
+areas: web
+lenses: ui" "$OUT"
+BEFORE=$(cat "$R/$EV/MANIFEST"); bash "$BIN" manifest "$R/$EV" >/dev/null 2>&1
+eq "manifest keeps what a line already said" "$BEFORE" "$(cat "$R/$EV/MANIFEST")"
+printf 'png-one-retouched' > "$R/$EV/button-wide.png"; rt --author worker-1
+only_reason "an image that changed after the manifest" "reason: $EV/button-wide.png -- lens ui: the image does not have the SHA-256 the MANIFEST lists"
+rm -f "$R/$EV/button-wide.png"; rt --author worker-1
+only_reason "a listed image that is gone" "reason: $EV/button-wide.png -- lens ui: the MANIFEST lists an image that is not there"
+printf '# nothing\n' > "$R/$EV/MANIFEST"; rt --author worker-1
+only_reason "a manifest without an image" "reason: lens ui -- $EV/MANIFEST lists no image"
+printf 'not a manifest line\n' > "$R/$EV/MANIFEST"; rt --author worker-1
+only_reason "a line that is no manifest line" "reason: lens ui -- a line of $EV/MANIFEST is not '<sha256>  <file name>"
+rm -f "$R/$EV/MANIFEST"; rt --author worker-1
+only_reason "no MANIFEST" "reason: lens ui -- the evidence directory $EV has no MANIFEST"
+plan_with "$(round "$GOOD")" "$(lens ui "pass; by: ui-review; evidence: .ytstack/evidence/nowhere (2 images)")"; rt --author worker-1
+only_reason "no evidence directory" "reason: lens ui -- the evidence directory .ytstack/evidence/nowhere does not exist"
+plan_with "$(round "$GOOD")" "$(lens ui "pass; by: ui-review; evidence: none")"; rt --author worker-1
+only_reason "a visual lens without evidence" "reason: lens ui -- its evidence is visual and its line names no evidence directory"
+mkdir -p "$TMP/noimage"; echo note > "$TMP/noimage/notes.txt"
+OUT=$(bash "$BIN" manifest "$TMP/noimage" 2>&1); EC=$?
+eq "manifest in a directory without an image: exit 1" 1 "$EC"
+OUT=$(bash "$BIN" manifest "$TMP/nowhere" 2>&1); EC=$?
+eq "manifest without the directory: exit 1" 1 "$EC"
+OUT=$(bash "$BIN" manifest 2>&1); EC=$?
+eq "manifest without an argument: usage" 64 "$EC"
 
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
