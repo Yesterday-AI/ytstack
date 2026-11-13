@@ -1,0 +1,152 @@
+# Review policy format
+
+Whether a person has to look at a change is decided per change, from its risk and its kind. This document fixes the pieces of that decision: the risk classes, the mechanical floor, the ceiling each area of the technical spec sets, the lenses a kind of change requires, the records a review leaves, and the route that follows.
+
+The script is `bin/ytstack-risk`. The skills that use it are `code-review`, `finish-lane`, `visual-review` and `coordinate`. The preference is `merge_by: risk` in `PREFERENCES.md`.
+
+The principle: **the route without a person has conditions, and everything that is not declared goes to a person.** A project that declares nothing behaves as before.
+
+## Risk classes
+
+| Class | A change is this when |
+|---|---|
+| `low` | A mistake in it is contained and cheap to take back, and nothing a user or another part relies on changes: documentation, tests, comments, copy, an internal rename or refactoring that leaves every contract alone. |
+| `normal` | Behaviour changes inside the contract of one area, and a revert takes it back. |
+| `high` | It touches an invariant or a decision that applies now, a security boundary, stored data or its shape, an interface another part or a user relies on, or it cannot be taken back by a revert. |
+
+The class of a change is the higher of two values: the **floor** a script computes from the diff, and the **class the reviewer states**. Nobody can state a class below the floor. The author of a change never classifies it.
+
+## The floor
+
+`bin/ytstack-risk floor --base <sha> --head <sha>` reads the diff and prints the lowest class the change can have, or `person` when no class is low enough for the route without a person.
+
+**Always a person** (`person`):
+
+- a change to `.ytstack/spec/REVIEW.md`, `.ytstack/DECISIONS.md`, `.ytstack/STANDING.md`, `.ytstack/PREFERENCES.md`, or to an instruction file of the repository (`AGENTS.md`, `CLAUDE.md`, at any depth)
+- a change to the frontmatter of an area file, or to the text of its sections "Invariants and security boundaries" and "Decisions that apply now"; the same sections of `SPEC.md` ("Invariants that hold everywhere"). Other edits of an area file are ordinary: a task that changes behaviour updates "Behavior" in the same commits
+- a change to the checks themselves: `.github/workflows/**`, `.gitlab-ci.yml`, and whatever the project lists
+- a changed path that no area covers (see "Ceilings"), other than the process records of the work itself
+- every path the project lists under "Always a person"
+
+**Never low** (at least `normal`):
+
+- dependency manifests and lock files, migrations and schema files, container and infrastructure definitions; the built-in patterns are the list `NEVER_LOW` at the top of the script
+- more than 400 changed lines or more than 20 changed files (`size:` in `REVIEW.md` changes the two numbers)
+- every path the project lists under "Never low"
+
+The built-in lists cannot be shortened by the project, only extended. `REVIEW.md` is itself under "Always a person", so the policy cannot be relaxed on the route it governs.
+
+**Process records** are exempt from the coverage rule: the plan, summary and context files of milestones, slices and tasks, `STATE.md`, `LANES.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `quick/`, `questions/`, `evidence/`.
+
+## Ceilings: what an area allows
+
+An area file of the technical spec (`docs/ux/spec-format.md`) may carry one more frontmatter field:
+
+```yaml
+auto_merge: none | low | normal
+```
+
+It is the highest class that may merge into this area without a person. No field means `none`. `high` is not a value: a high change always goes to a person. A change that touches several areas gets the lowest of their ceilings.
+
+## `REVIEW.md` -- the project's policy
+
+`.ytstack/spec/REVIEW.md`, linked from `SPEC.md`. Optional; without it only the built-in floor applies and no lens is required.
+
+```markdown
+# Review policy
+
+## Always a person
+
+- infra/terraform/**
+- src/billing/ledger/**
+
+## Never low
+
+- src/auth/**
+- **/*.sql
+
+## Lenses
+
+- ui | applies: src/components/**, src/app/**/*.tsx, **/*.css | reads: docs/design-guidelines.md, docs/product-guidelines.md | evidence: visual
+- security | applies: src/auth/**, src/api/middleware/** | reads: .ytstack/spec/auth.md | evidence: none
+
+## Size
+
+- size: 400 lines, 20 files
+```
+
+Paths are git pathspec globs relative to the repository root, one per line. Every section is optional.
+
+## Lenses: what a kind of change requires
+
+A lens is a second, independent review with one question and the documents that answer it. It is defined by what it reads, not by a role description.
+
+| Field | Required | Holds |
+|---|---|---|
+| name | yes | Lowercase slug, unique. |
+| `applies` | yes | Globs, comma-separated. The lens is required for a change when a changed path matches one. |
+| `reads` | yes | The documents the lens reviews against: the project's guidelines, a design guide, an area file. They exist in the repository. |
+| `evidence` | yes | `visual` or `none` (below). |
+| `skill` | no | A skill the reviewer loads for this lens, when the project has one. |
+
+Rules for every lens:
+
+- The reviewer is not the author of the change and starts with a fresh context. It gets the lens line, the `reads` documents and the pinned commit range, nothing of the author's reasoning.
+- The verdict is `pass`, `fail` or `not run`. A reviewer that could not do what the lens asks records `not run` and says why. `not run` never counts as `pass`.
+- A missing `reads` document means the lens cannot run.
+
+**`evidence: visual`** means the reviewer looks at the product, not at its code:
+
+- It starts the product itself, in its own worktree at the reviewed commit, through `bin/ytstack-runtime up` (`docs/ux/runtime-format.md`, "Run"), and operates it in a browser.
+- It takes its own screenshots of the views, states and widths the change affects. Images supplied by the author do not count. Reading code or the DOM does not count as this lens.
+- It stores them under `<evidence dir>/<lane>/<short sha>/<lens>/` with a `MANIFEST` file: one line per image with its SHA-256, the URL, the viewport and what it shows. The evidence directory is `evidence_dir:` in `PREFERENCES.md`, default `.ytstack/evidence`; whether a project commits it is the project's choice.
+- No way to start the product, or no browser tool: the verdict is `not run`.
+
+The procedure is the skill `visual-review`.
+
+## Records
+
+A review leaves lines in the plan of what it reviewed (the slice plan for a slice lane, the task plan for a task) under `## Review`:
+
+```markdown
+## Review
+
+- Round 1: a1b2c3d..e4f5a6b -- approved; blocking: 0; follow-ups: 1; risk: low; invariants: none; by: review-M004-S02
+- Lens ui: e4f5a6b -- pass; by: ui-M004-S02; evidence: .ytstack/evidence/M004-S02/e4f5a6b/ui (5 images)
+```
+
+The round line is the one `code-review` already writes, with three more fields. The reviewer's report states them with these labels:
+
+```
+Risk: <low | normal | high>
+Severity: <what the worst plausible mistake in this change costs>
+Reach: <what it can affect: these files, one area, several areas, stored data, users>
+Invariants touched: <none | area: the invariant or decision, in its own words>
+```
+
+"Invariants touched" is answered by reading the change against "Invariants and security boundaries" and "Decisions that apply now" of every area the change touches. A change that shifts such a rule in code without editing the document is still named here, and its class is `high`.
+
+A record is **valid for a head** when it names that head, or when no file it covered changed between its head and that head (for a lens: the paths under `applies`).
+
+## The route
+
+`bin/ytstack-risk route --plan <plan file> --base <sha> --head <sha> [--author <worker>]` prints `route: unattended` or `route: person`, and one `reason:` line per condition that failed. The route is `unattended` only when all of this holds:
+
+1. The floor is not `person`.
+2. The plan has an approving round line that is valid for the head, with `risk` stated, `invariants: none`, and a reviewer other than the author.
+3. The class (the higher of floor and stated risk) is not above the ceiling of the touched areas.
+4. Every required lens has a line with `pass` that is valid for the head, from a reviewer other than the author; for `evidence: visual` the manifest exists and its hashes match the images.
+
+The route says nothing about the host. `finish-lane` reads the host's gates (checks, review threads, mergeability, the reviewed commit) as before, and merges on its own only when both hold and `merge_by` is `risk`.
+
+| `merge_by` | Who merges |
+|---|---|
+| `risk` (default) | The coordinator when the route is `unattended` and the host's gates hold; otherwise a person. The person gets one line in the report either way: what merged unattended, at which class and why. |
+| `human` | Always a person. |
+| `coordinator` | Always the coordinator, when the host's gates hold. The route is printed and not applied. |
+
+## Checked mechanically
+
+`bin/ytstack-risk check` fails on a `REVIEW.md` with a section outside the four, a lens without `applies`, `reads` or `evidence`, an `evidence` outside the two values, a `reads` document that does not exist, a lens name used twice, and a `size` line that is not two numbers. `bin/ytstack-spec lint` fails on an `auto_merge` outside the three values.
+
+What stays a judgment: the class the reviewer states, and the verdict of a lens. The script makes sure the judgment was made by somebody else, on this commit, with the evidence the lens asks for.
