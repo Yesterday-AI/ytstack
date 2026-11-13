@@ -3,7 +3,7 @@ name: summarize-task
 description: "Closes the active task: writes M###-S##-T##-SUMMARY.md with commits, outcome, deviations, follow-ups and the verification result, flips the slice-plan checkbox and advances STATE. Use when a task's verification passed, or when the user says task done, close the task, summarize. Not before verification passed and not for quick-lane changes (quick-task writes its own summary)."
 metadata:
   tier: core
-  version: 0.1.1
+  version: 0.2.0
   triggers:
     - summarize task
     - task done
@@ -36,11 +36,12 @@ You MUST create a TodoWrite task for each of these items:
 5. **Ask deviations** -- what differed from plan (if anything)
 6. **Ask follow-ups** -- new tasks / decisions surfaced during execution
 7. **Ask verification result** -- did the verification command pass?
-8. **Write `M###-S##-T##-SUMMARY.md`**
-9. **Flip slice-plan checkbox** `[ ]` → `[x]`
-10. **Update STATE.md** -- clear `active_task`, bump counts (including a `progress:` block when present), update status line
-11. **Offer git stage** -- ask if user wants git-add of touched files
-12. **Report + return** -- suggest next task or slice-close
+8. **Check the spec impact** -- the plan's `## Spec impact` against what the task changed; an unmet impact stops the closure
+9. **Write `M###-S##-T##-SUMMARY.md`**
+10. **Flip slice-plan checkbox** `[ ]` → `[x]`
+11. **Update STATE.md** -- clear `active_task`, bump counts (including a `progress:` block when present), update status line
+12. **Offer git stage** -- ask if user wants git-add of touched files
+13. **Report + return** -- suggest next task or slice-close
 
 ## Preamble
 
@@ -127,6 +128,24 @@ echo "TASK_COMMITS_BASE: ${_TASK_COMMITS_BASE:-none}"
 echo "TASK_COMMITS_BEGIN"
 echo "${_TASK_COMMITS:-(none found: no subject matched $_COMMIT_PATTERN and no commits on this branch past its base)}"
 echo "TASK_COMMITS_END"
+
+# Spec impact (M022): the plan's "## Spec impact" against what the task changed
+# (its commits plus the working tree). Decided from the files, not from prose.
+_SPEC_TOOL="${CLAUDE_SKILL_DIR}/../../bin/ytstack-spec"
+_HAS_SPEC=$([ -f "$_YT_DIR/spec/SPEC.md" ] && echo yes || echo no)
+_SPEC_IMPACT_EXIT=not-run; _SPEC_IMPACT_OUT=""
+if [ "$_HAS_SPEC" = yes ] && [ -f "$_PLAN_FILE" ] && [ -f "$_SPEC_TOOL" ]; then
+  if [ -n "$_TASK_COMMITS_BASE" ]; then
+    _SPEC_IMPACT_OUT=$(bash "$_SPEC_TOOL" impact --plan "$_PLAN_FILE" --grep "$_COMMIT_PATTERN" --base "$_TASK_COMMITS_BASE" 2>&1); _SPEC_IMPACT_EXIT=$?
+  else
+    _SPEC_IMPACT_OUT=$(bash "$_SPEC_TOOL" impact --plan "$_PLAN_FILE" --grep "$_COMMIT_PATTERN" 2>&1); _SPEC_IMPACT_EXIT=$?
+  fi
+fi
+echo "HAS_SPEC: $_HAS_SPEC"
+echo "SPEC_IMPACT_EXIT: $_SPEC_IMPACT_EXIT"
+echo "SPEC_IMPACT_BEGIN"
+echo "${_SPEC_IMPACT_OUT:-(not run)}"
+echo "SPEC_IMPACT_END"
 ```
 
 ## Procedure
@@ -207,7 +226,26 @@ If C: STOP. Do not write the summary.
 
 Remember as `_VERIFICATION_RESULT` (value: `passed` / `passed_with_caveats`).
 
-### Step 8: Write `M###-S##-T##-SUMMARY.md`
+### Step 8: Check the spec impact
+
+The technical spec under `.ytstack/spec/` says what applies now (format: `docs/ux/spec-format.md`). A task that changed what an area file describes is not closed until that description is true again. The preamble already ran the check; read `SPEC_IMPACT_EXIT` and the lines between `SPEC_IMPACT_BEGIN` and `SPEC_IMPACT_END`.
+
+| `SPEC_IMPACT_EXIT` | Meaning | What to do |
+|---|---|---|
+| `0` | The plan says `none`, or every area it names was updated: the area file **or a source it names** changed with the task. | Keep the printed lines as `_SPEC_RECORD`. Continue. |
+| `1` | The plan names an area, and neither its area file nor its sources changed. | STOP. Do not write the summary. See below. |
+| `3` | The plan has no `## Spec impact` section (it was written before the field existed). | Decide now with the rule of `ytstack:plan-task` Step 7. An area changed: update it first, then continue. Otherwise `_SPEC_RECORD` is `none -- <reason>`. |
+| `not-run` with `HAS_SPEC=no` | The project has no technical spec. | `_SPEC_RECORD` is `none -- the project has no technical spec`. Continue. |
+| `not-run` with `HAS_SPEC=yes` | The script was not reachable on this host. | Do the check by hand: for each area in the plan's `## Spec impact`, the task's commits (`git log --name-only` for the commits listed above) or the working tree must contain a change to `.ytstack/spec/<area>.md` or to a path under its `sources`. Then treat the result like `0` or `1`. |
+
+On `1` there are two honest ways forward, and no third:
+
+- **The task did change that contract.** Update the area file, or the authoritative source it names, in the task's commits. Then re-run this skill. Updating the source is enough; a pointer that is still correct is not edited.
+- **The plan was wrong and the contract did not change.** Correct the plan's `## Spec impact` to `none -- <reason>` and record the correction under Deviations in Step 5's answer. Then re-run this skill.
+
+A sentence in the summary does not satisfy the check, and neither does an edit that changes no statement. A task whose plan says `none` closes without any spec edit: a bug fix that restores the described behaviour, a refactoring and a trivial change need none.
+
+### Step 9: Write `M###-S##-T##-SUMMARY.md`
 
 ```markdown
 ---
@@ -241,12 +279,16 @@ This section replaces the throwaway hook draft; it is the durable commit-to-task
 
 {FOLLOWUPS}
 
+## Spec
+
+{SPEC_RECORD: one line per area as `<area>: <file that changed> -- <section>`, or `none -- <reason>`. Taken from Step 8, never rephrased into a claim the check did not make.}
+
 ## Verification
 
 Command: `{VERIFICATION_CMD}` -- {VERIFICATION_RESULT}.
 ```
 
-### Step 9: Flip slice-plan checkbox
+### Step 10: Flip slice-plan checkbox
 
 Edit `{SLICE_PLAN}`. Replace:
 
@@ -262,7 +304,7 @@ with:
 
 Also bump `completed_tasks` in the slice-plan's frontmatter by 1.
 
-### Step 10: Update STATE.md
+### Step 11: Update STATE.md
 
 If `YTSTACK_NON_INTERACTIVE` is `false` (i.e. `CLAUDE_AGENT_TEAM_MEMBER` is unset), edit STATE.md frontmatter:
 - `active_task: {ACTIVE_TASK}` → `active_task: none`
@@ -275,11 +317,11 @@ Regardless of teammate mode:
 - `last_updated: ...` → bump to current
 - Status line → `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} -- {N}/{TOTAL} tasks done in slice. Next task: pick from slice-plan or run `/ytstack:plan-task`.`
 
-**Progress block (M021):** if the `STATE.md` frontmatter has a `progress:` block, update it in the same edit. Add 1 to `done` when the closed task is an item the block counts. Tasks are the default unit; a project that counts something else says so in a comment line inside the block, and `done` / `total` then follow that ledger. If the closed task was added after `total` was set, raise `total` as well. Never write `done` above `total`. Then run `yt_state_lint "$_YT_DIR"`: a warning that starts with `progress:` means the edit is wrong; fix it before Step 11. As a swarm teammate skip the block with the other frontmatter writes and note the pending increment under Follow-ups in the summary. No block: do nothing and do not add one. `bin/ytstack-status` shows these numbers in the status line (`docs/statusline.md`).
+**Progress block (M021):** if the `STATE.md` frontmatter has a `progress:` block, update it in the same edit. Add 1 to `done` when the closed task is an item the block counts. Tasks are the default unit; a project that counts something else says so in a comment line inside the block, and `done` / `total` then follow that ledger. If the closed task was added after `total` was set, raise `total` as well. Never write `done` above `total`. Then run `yt_state_lint "$_YT_DIR"`: a warning that starts with `progress:` means the edit is wrong; fix it before Step 12. As a swarm teammate skip the block with the other frontmatter writes and note the pending increment under Follow-ups in the summary. No block: do nothing and do not add one. `bin/ytstack-status` shows these numbers in the status line (`docs/statusline.md`).
 
 If the slice is now fully complete (all tasks `[x]`): update status to recommend `/ytstack:reassess-roadmap`, flip the slice's `status:` to `done` in `{SLICE_PLAN}` frontmatter, and when every slice in `{CURRENT_MILESTONE}-ROADMAP.md` is checked flip the milestone's `status:` to `done` there and mirror the global `ROADMAP.md` row (M018 artifact states).
 
-### Step 11: Offer git stage
+### Step 12: Offer git stage
 
 If `IS_GIT=yes`, use AskUserQuestion:
 
@@ -297,13 +339,14 @@ If A: run `git add {FILE_LIST}` and report `git status` output.
 If B: skip.
 If C: confirm once more (destructive-flavored), then `git add -A` + `git status`.
 
-### Step 12: Report + return
+### Step 13: Report + return
 
 Report:
 
 > Task **{ACTIVE_TASK}** closed.
 >
 > Summary at: `{YT_DIR}/{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{ACTIVE_TASK}-SUMMARY.md`
+> Spec: {SPEC_RECORD}
 > Slice-plan checkbox flipped.
 > STATE.md: `active_task` cleared.
 >
@@ -318,6 +361,7 @@ Valid terminal states:
 - Return after summary file + slice-plan update + STATE.md update + optional git stage
 - Abort on HARD-GATE failure (no active task / missing plan file)
 - Abort on verification failure (C in Step 7) -- task stays open
+- Abort on an unmet spec impact (Step 8) -- task stays open until the area file or its source is updated, or the plan's impact is corrected
 
 Do NOT invoke `plan-task`, `reassess-roadmap`, or `plan-milestone` automatically -- except under `AUTONOMY: loop` (PREFERENCES default, M018): when the slice still has unplanned or open tasks, continue with `ytstack:plan-task` for the next one without asking; when this summary closed the slice's last task, stop and recommend `ytstack:reassess-roadmap` (slice boundary). With `AUTONOMY: step` return control after the report.
 
