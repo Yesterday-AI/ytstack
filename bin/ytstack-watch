@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# ytstack watch: polls pull requests on the host, outside the model.
+#
+#   ytstack-watch [-C DIR] --pr N[,N...] [--interval SECONDS] [--once]
+#
+# Reads through `gh`, for each pull request of the repository in DIR
+# (default: $PWD):
+#   state    open | merged | closed
+#   head     the head commit, seven characters
+#   checks   pending | green | red | none   the checks on the head, combined:
+#            one failed check makes it red, else one unfinished makes it pending
+#   review   <state>@<commit> of the newest submitted review, or none
+#   merge    mergeable | conflict | unknown
+#
+# --once   one line per pull request, then exit:
+#            #12 state=open head=a1b2c3d checks=green review=approved@a1b2c3d merge=mergeable read 2026-11-13T10:42:07Z
+# without  the first poll prints every pull request; after that a line appears
+#          only when one of the five values changed. Each line starts with the
+#          UTC time of the read:
+#            2026-11-13T10:42:07Z #12 state=open head=a1b2c3d checks=pending review=none merge=mergeable
+#          Sleeps --interval seconds between polls (default 60, minimum 20) and
+#          ends when every watched pull request is merged or closed. A finished
+#          pull request is not read again.
+#
+# Output is plain text, one write per line, meant for a process that forwards
+# new lines to the model (a background shell, a monitor tool). The values are
+# host facts with their read time: act on them, do not store them in .ytstack/
+# as current (docs/ux/coordinator-format.md). Nothing is written into the
+# repository; the last values live in this process only.
+#
+# A `gh` error prints one line ("<time> #12 error: <first line>") and the loop
+# goes on. Three polls in a row with an error end it.
+#
+# Exit codes
+#   0   --once: every pull request was read; loop: all are merged or closed
+#   1   gh is missing; --once: a read failed; loop: three failed polls in a row
+#   64  usage (no --pr, a value that is no number, --interval below 20)
+#
+# Test only: YTSTACK_WATCH_SLEEP names a command that runs instead of `sleep`
+# (it gets the interval as its argument). tests/ytstack-watch.test.sh sets it
+# to move its fixtures on between polls. Nothing else sets it.
+
+set -uo pipefail
+
+MIN_INTERVAL=20
+DIR="$PWD"; PRS=""; INTERVAL=60; ONCE=no
+
+usage() { sed -n '4p' "${BASH_SOURCE[0]}" | sed 's/^# *//'; }
+bad_usage() { [ $# -eq 0 ] || echo "ytstack-watch: $*" >&2; usage >&2; exit 64; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --once) ONCE=yes; shift; continue ;;
+    -h|--help|help) usage; exit 0 ;;
+    -C|--pr|--interval) [ $# -ge 2 ] || bad_usage "$1 needs a value" ;;
+    *) bad_usage "unknown argument '$1'" ;;
+  esac
+  case "$1" in
+    -C) DIR=$2 ;;
+    --pr) PRS=$2 ;;
+    --interval) INTERVAL=$2 ;;
+  esac
+  shift 2
+done
+
+case ",$PRS," in
+  ",,") bad_usage "--pr is required" ;;
+  *[!0-9,]*|*,,*) bad_usage "--pr takes pull request numbers separated by commas, got '$PRS'" ;;
+esac
+case "$INTERVAL" in ''|*[!0-9]*) bad_usage "--interval takes whole seconds, got '$INTERVAL'" ;; esac
+[ "$INTERVAL" -ge "$MIN_INTERVAL" ] 2>/dev/null \
+  || bad_usage "--interval $INTERVAL is below the minimum of $MIN_INTERVAL seconds"
+[ -d "$DIR" ] || bad_usage "-C '$DIR' is not a directory"
+cd "$DIR" || exit 64
+command -v gh >/dev/null 2>&1 || { echo "ytstack-watch: gh is not on PATH" >&2; exit 1; }
+
+# One line per pull request: "<state> <head> <checks> <review> <merge>".
+# gh evaluates the expression itself (--jq), so no jq is needed here.
+# shortcut: a second review with the same state on the same commit changes no
+# value and prints no line; add the review's time to the line if that is needed.
+JQ='
+def one:
+  if has("status") then
+    if .status != "COMPLETED" then "pending"
+    elif (.conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED") then "green"
+    else "red" end
+  elif .state == "SUCCESS" then "green"
+  elif (.state == "FAILURE" or .state == "ERROR") then "red"
+  else "pending" end;
+((.statusCheckRollup // []) | map(one)) as $c
+| ((.reviews // []) | map(select(.submittedAt != null)) | sort_by(.submittedAt) | last) as $r
+| [ (.state | ascii_downcase),
+    .headRefOid[0:7],
+    (if ($c | length) == 0 then "none"
+     elif ($c | any(. == "red")) then "red"
+     elif ($c | any(. == "pending")) then "pending"
+     else "green" end),
+    (if $r == null then "none"
+     else ($r.state | ascii_downcase) + "@" + (($r.commit.oid // "unknown")[0:7]) end),
+    (if .mergeable == "MERGEABLE" then "mergeable"
+     elif .mergeable == "CONFLICTING" then "conflict"
+     else "unknown" end)
+  ] | join(" ")'
+
+ERRF=$(mktemp "${TMPDIR:-/tmp}/ytwatch.XXXXXX") || exit 1
+trap 'rm -f "$ERRF"' EXIT
+
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# read_pr <n>: sets ST HEAD CHECKS REVIEW MERGE; on failure returns 1 with the
+# reason in ERR. An answer that is not the five expected words is a failure.
+read_pr() {
+  local out extra
+  if ! out=$(gh pr view "$1" --json state,headRefOid,statusCheckRollup,reviews,mergeable --jq "$JQ" 2>"$ERRF"); then
+    ERR=$(head -1 "$ERRF"); ERR=${ERR:-gh exited with an error and no message}
+    return 1
+  fi
+  read -r ST HEAD CHECKS REVIEW MERGE extra <<EOF
+$out
+EOF
+  case "$ST" in open|merged|closed) ;; *) ERR="unexpected answer from gh: '$out'"; return 1 ;; esac
+  [ -n "$MERGE" ] && [ -z "$extra" ] || { ERR="unexpected answer from gh: '$out'"; return 1; }
+}
+
+# Indexed by pull request number (bash 3.2 has no associative arrays).
+LAST=(); MERGE_SEEN=(); FINISHED=()
+fails=0
+while :; do
+  failed=no; left=0
+  for n in $(printf '%s' "$PRS" | tr ',' ' '); do
+    [ -z "${FINISHED[$n]:-}" ] || continue
+    if ! read_pr "$n"; then
+      failed=yes; left=$((left + 1))
+      if [ "$ONCE" = yes ]; then echo "#$n error: $ERR read $(now)"; else echo "$(now) #$n error: $ERR"; fi
+      continue
+    fi
+    # The host answers "unknown" while it recomputes mergeability, for every
+    # open pull request after each merge into the base. That is no change.
+    if [ "$MERGE" = unknown ] && [ "$ONCE" = no ] && [ -n "${MERGE_SEEN[$n]:-}" ]; then
+      MERGE=${MERGE_SEEN[$n]}
+    fi
+    MERGE_SEEN[$n]=$MERGE
+    cur="state=$ST head=$HEAD checks=$CHECKS review=$REVIEW merge=$MERGE"
+    if [ "$ONCE" = yes ]; then
+      echo "#$n $cur read $(now)"
+    elif [ "$cur" != "${LAST[$n]:-}" ]; then
+      echo "$(now) #$n $cur"
+    fi
+    LAST[$n]=$cur
+    if [ "$ST" = open ]; then left=$((left + 1)); else FINISHED[$n]=1; fi
+  done
+  if [ "$ONCE" = yes ]; then [ "$failed" = no ]; exit $?; fi
+  if [ "$failed" = yes ]; then
+    fails=$((fails + 1))
+    if [ "$fails" -ge 3 ]; then
+      echo "$(now) ytstack-watch: three polls in a row failed, stopping"
+      exit 1
+    fi
+  else
+    fails=0
+  fi
+  [ "$left" -gt 0 ] || exit 0
+  "${YTSTACK_WATCH_SLEEP:-sleep}" "$INTERVAL"
+done
