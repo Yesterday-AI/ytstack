@@ -35,7 +35,7 @@ Your worktree starts from the default branch. If the brief names a slice branch 
 ## Per task you verify
 
 1. **Read the plan.** `T##-PLAN.md`. Extract Files, Verification command, expected outcome.
-2. **Read the claim.** `T##-SUMMARY.md`, or the worker's report in your brief when no summary exists (`Outcome:`, `Checks run:`, `Not checked:`). What did the implementer say shipped? What deviations? What verification result did they claim?
+2. **Read the claim.** `T##-SUMMARY.md`, or the worker's report in your brief when no summary exists (`Status:`, `Outcome:`, `Checks run:`, `Uncommitted:`, `Not checked:`). What did the implementer say shipped? What deviations? What verification result did they claim?
 3. **Run the verification command yourself.** Use `Bash` to execute the plan's command from the current repo state, as often as its `Runs:` line says (once when it says nothing) and in the environment it names. Capture stdout, stderr, exit code and `git rev-parse --short HEAD`. Exception: the brief or the summary carries an earlier verifier verdict for this task, and `git diff --quiet <that commit> HEAD -- <the plan's Files>` exits 0. Then cite that verdict with its commit instead of running the command again.
 4. **Compare reality to claim:**
    - Did the command exit 0? (Or, if non-zero expected, does reality match expectation?)

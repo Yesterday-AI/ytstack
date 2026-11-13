@@ -52,7 +52,7 @@ A trivial change needs no new test: a rename, a constant, a text, a config value
 
 ## Report
 
-End every report with **Not checked:** what you did not run or did not look at, and why. "Nothing" only when that is true.
+Every report says under **Not checked:** what you did not run or did not look at, and why. "Nothing" only when that is true.
 
 Review question for every diff, in the summary: **which rung, and what did you leave out on purpose?**
 

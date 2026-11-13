@@ -10,10 +10,16 @@
 #                   the plan has some; Git only with --branch
 #   render --slice  goal and task list; per planned task its parts; a task
 #                   without a plan is named as not planned
+#   render --kind   "## Kind" says what the worker may do: implement (the
+#                   default) commits with the prefix; review is read only, pins
+#                   the range from --head (a commit hash, required) and --base,
+#                   and has no Git section; prepare commits nothing
 #   failures        no plan, no Files section, no contract: exit 1, no brief;
 #                   usage errors: exit 64
-#   check           a complete report passes; a missing or empty label and a
-#                   "Checks run:" without an exit code are named, exit 1
+#   check           a complete report passes; a missing or empty label, a
+#                   "Checks run:" without an exit code, a "Status:" outside the
+#                   three values and one that contradicts "Blockers:" are
+#                   named, exit 1
 #
 # Run: /bin/bash tests/ytstack-brief.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -76,8 +82,11 @@ run "$R" render --task M001-S01-T01 --branch ytstack/M001-S01
 eq "a planned task renders" 0 "$EC"
 eq "title with ref and project name" "# Brief: M001-S01-T01 (acme)" "$(printf '%s\n' "$OUT" | head -1)"
 eq "one first-level heading" 1 "$(printf '%s\n' "$OUT" | grep -c '^# ')"
-eq "every section, in order" "Outcome,Scope,Read for context,Verification,Spec impact,Gates,Git,Work contract,Report," \
+eq "every section, in order" "Outcome,Kind,Scope,Read for context,Verification,Spec impact,Gates,Git,Work contract,Report," \
   "$(printf '%s\n' "$OUT" | sed -n 's/^## //p' | tr '\n' ',')"
+K=$(part Kind)
+has "Kind: implement unless --kind says otherwise" "Implement: change the files named under Scope and no others." "$K"
+has "Kind: the commit prefix" 'Commit each task with the prefix `M001-S01-T01:`.' "$K"
 eq "Outcome: summary and what the task does" "Login accepts a token
 
 The login reads the token and compares it." "$(part Outcome | sed '1{/^$/d;}' | sed '$d')"
@@ -102,7 +111,7 @@ G=$(part Git)
 has "Git: checkout, base defaults to the current branch" "git checkout -B ytstack/M001-S01 main" "$G"
 has "Git: commit prefix" 'prefix `M001-S01-T01:`' "$G"
 has "Git: no merge, no push" "Do not merge or push." "$G"
-has "Report: the eight labels" "Not checked: <" "$(part Report)"
+has "Report: the shape, down to its last label" "Next: <" "$(part Report)"
 hasnt "template comments stay out" "<!--" "$OUT"
 
 # The contract in the brief, headings moved back up, is the body of the real file.
@@ -181,7 +190,53 @@ run "$R" render --slice M002-S01
 hasnt "a slice plan with its own Files has no unplanned tasks" "not planned yet" "$OUT"
 has "and its own files are the scope" '- Create: `tests/login.test.sh`' "$(part Scope)"
 
-# ---- 3. failures --------------------------------------------------------------
+# ---- 3. render --kind ---------------------------------------------------------
+echo "# render --kind"
+R=$(new_repo kind); plan "$R/.ytstack/M001-S01-T01-PLAN.md" "Login accepts a token"
+run "$R" render --task M001-S01-T01 --branch work; DEFAULT=$OUT
+run "$R" render --task M001-S01-T01 --branch work --kind implement
+eq "--kind implement renders" 0 "$EC"
+eq "and is the brief without --kind" "$DEFAULT" "$OUT"
+
+run "$R" render --task M001-S01-T01 --kind review --head abc1234 --base def5678 --branch work
+eq "--kind review renders" 0 "$EC"
+K=$(part Kind)
+has "review: the pinned range" 'review exactly the range `def5678..abc1234`' "$K"
+has "review: read only" "Change nothing: no file, no commit, no branch." "$K"
+has "review: how findings are reported" "per finding a concrete case and what happens if it is skipped" "$K"
+has "review: the verdict goes into Outcome" '`Outcome:` carries the verdict (`approved` or `changes requested`) and the reviewed commit.' "$K"
+hasnt "review: no commit rule" "Commit each task" "$OUT"
+hasnt "review: no Git section, even with --branch" "## Git" "$OUT"
+has "review: the work contract is included" "## Work contract" "$OUT"
+has "review: the report shape is included" "Status: <complete | partial | blocked>" "$(part Report)"
+run "$R" render --task M001-S01-T01 --kind review --head abc1234
+has "review without --base: the one commit" 'review exactly the commit `abc1234`' "$(part Kind)"
+run "$R" render --task M001-S01-T01 --kind review
+eq "review without --head: exit 64" 64 "$EC"
+run "$R" render --task M001-S01-T01 --kind review --head main
+eq "review with a branch name as --head: exit 64" 64 "$EC"
+has "and says that a name pins nothing" "--head 'main' is not a commit hash" "$OUT"
+run "$R" render --task M001-S01-T01 --kind review --head abc1234 --base main
+eq "review with a branch name as --base: exit 64" 64 "$EC"
+run "$R" render --task M001-S01-T01 --head abc1234
+eq "--head without --kind review: exit 64" 64 "$EC"
+run "$R" render --task M001-S01-T01 --kind audit
+eq "an unknown kind: exit 64" 64 "$EC"
+
+run "$R" render --task M001-S01-T01 --kind prepare
+eq "--kind prepare renders" 0 "$EC"
+K=$(part Kind)
+has "prepare: writes inside Scope" "Prepare: write the files named under Scope and no others." "$K"
+has "prepare: commits nothing" "Commit nothing." "$K"
+has "prepare: every file goes under Uncommitted" 'List every file you wrote under `Uncommitted:` in the report.' "$K"
+hasnt "prepare without --branch: no Git section" "## Git" "$OUT"
+run "$R" render --task M001-S01-T01 --kind prepare --branch work
+G=$(part Git)
+has "prepare with --branch: the checkout stays" "git checkout -B work main" "$G"
+has "prepare with --branch: the commit sentence is replaced" "Commit nothing. Do not merge or push." "$G"
+hasnt "prepare: no commit prefix anywhere" "Commit each task" "$OUT"
+
+# ---- 4. failures --------------------------------------------------------------
 echo "# failures"
 run "$R" render --task M001-S01-T09
 eq "no plan: exit 1" 1 "$EC"
@@ -207,17 +262,26 @@ OUT=$(bash "$T/bin/ytstack-brief" -C "$R" render --task M001-S01-T01 2>&1); EC=$
 eq "no contract file: exit 1" 1 "$EC"
 has "says why" "a brief without it must not be produced" "$OUT"
 eq "and prints no brief" "" "$(bash "$T/bin/ytstack-brief" -C "$R" render --task M001-S01-T01 2>/dev/null)"
+# The same copy with the contract, and a template that lost the sentences of one kind.
+mkdir -p "$T/skills/minimal-code"; cp "$ROOT/skills/minimal-code/SKILL.md" "$T/skills/minimal-code/"
+grep -v '^<!-- kind-review: ' "$ROOT/skills/spawn-milestone-team/brief-template.md" > "$T/skills/spawn-milestone-team/brief-template.md"
+OUT=$(bash "$T/bin/ytstack-brief" -C "$R" render --task M001-S01-T01 --kind review --head abc1234 2>&1); EC=$?
+eq "a template without the kind's sentences: exit 1" 1 "$EC"
+has "names the kind" "no 'kind-review' sentences" "$OUT"
 
-# ---- 4. check -----------------------------------------------------------------
+# ---- 5. check -----------------------------------------------------------------
 echo "# check"
 GOOD='Task: M001-S01-T01
+Status: complete
 Outcome: Login accepted a token in the test.
 Commits: abc1234 M001-S01-T01: accept a token
+Uncommitted: none
 Checks run: bash tests/login.test.sh -- exit 0 at abc1234 in local checkout
 Spec: auth: .ytstack/spec/auth.md
 Deviations: none
 Blockers: none
-Not checked: the CI run, it starts after the push'
+Not checked: the CI run, it starts after the push
+Next: dispatch the verifier on abc1234'
 # chk <report text>: sets OUT and EC
 chk() { OUT=$(printf '%s\n' "$1" | bash "$BIN" check 2>&1); EC=$?; }
 
@@ -227,10 +291,24 @@ eq "and says so" "report ok" "$OUT"
 printf '%s\n' "$GOOD" > "$TMP/report.txt"
 OUT=$(bash "$BIN" check "$TMP/report.txt" 2>&1); eq "a report file is read like stdin" "report ok" "$OUT"
 
-for L in "Task" "Outcome" "Commits" "Checks run" "Spec" "Deviations" "Blockers" "Not checked"; do
+for L in "Task" "Status" "Outcome" "Commits" "Uncommitted" "Checks run" "Spec" "Deviations" "Blockers" "Not checked" "Next"; do
   chk "$(printf '%s\n' "$GOOD" | grep -v "^$L:")"
   if [ "$EC" = 1 ]; then eq "without '$L:' the label is named" "missing: $L" "$OUT"; else bad "without '$L:' the report fails" "exit $EC"; fi
 done
+
+chk "$(printf '%s\n' "$GOOD" | sed 's/^Status:.*/Status: mostly done/')"
+eq "a Status outside the three values fails" 1 "$EC"
+eq "and is quoted" 'Status: "mostly done" is not complete, partial or blocked' "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed 's/^Status:.*/Status: blocked/')"
+eq "Status: blocked with Blockers: none fails" 1 "$EC"
+eq "and says what is missing" 'Status: blocked needs a Blockers: value other than "none"' "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed 's/^Blockers:.*/Blockers: the staging database is down/')"
+eq "Status: complete with a blocker fails" 1 "$EC"
+eq "and says what it needs" 'Status: complete needs "Blockers: none"' "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed -e 's/^Status:.*/Status: blocked/' -e 's/^Blockers:.*/Blockers: none of the fixtures load/')"
+eq "Status: blocked with a blocker passes, also one that starts with 'none'" "report ok" "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed -e 's/^Status:.*/Status: partial/' -e 's/^Blockers:.*/Blockers: None./')"
+eq "Status: partial passes with or without a blocker" "report ok" "$OUT"
 
 chk "$(printf '%s\n' "$GOOD" | sed 's/^Not checked:.*/Not checked:   /')"
 eq "an empty Not checked fails" 1 "$EC"
@@ -262,14 +340,19 @@ eq "a value on the lines after its label counts" "report ok" "$OUT"
 chk "$(printf '%s\n' "$GOOD" | sed 's/^Task:/- **Task:**/')"
 eq "a label that does not start its line is missing" "missing: Task" "$OUT"
 
-# The report shape in the brief and the checker know the same eight labels.
+# The report shape in the brief and the checker know the same eleven labels:
+# the checker misses none in the shape, and the shape has no twelfth.
 R=$(new_repo shape); plan "$R/.ytstack/M001-S01-T01-PLAN.md" "x"
 run "$R" render --task M001-S01-T01
 SHAPE=$(part Report)
+eq "the shape names the eleven labels, in the order of the format document" \
+  "Task,Status,Outcome,Commits,Uncommitted,Checks run,Spec,Deviations,Blockers,Not checked,Next," \
+  "$(printf '%s\n' "$SHAPE" | sed -n 's/^\([A-Z][A-Za-z ]*\): <.*/\1/p' | tr '\n' ',')"
 chk "$SHAPE"
-eq "the unfilled report shape does not pass" 'Checks run: no exit code in "<command> -- exit <n> at <short sha> in <environment>"' "$OUT"
-chk "$(printf '%s\n' "$SHAPE" | sed 's/exit <n>/exit 0/')"
-eq "with an exit code filled in, its labels are complete" "report ok" "$OUT"
+eq "the unfilled report shape does not pass" 'Checks run: no exit code in "<command> -- exit <n> at <short sha> in <environment>"
+Status: "<complete | partial | blocked>" is not complete, partial or blocked' "$OUT"
+chk "$(printf '%s\n' "$SHAPE" | sed -e 's/exit <n>/exit 0/' -e 's/^Status:.*/Status: partial/')"
+eq "with an exit code and a status filled in, its labels are complete" "report ok" "$OUT"
 OUT=$(bash "$BIN" check "$TMP/none.txt" 2>&1); eq "an unreadable report file: exit 64" 64 "$?"
 
 echo "$PASS passed, $FAIL failed"

@@ -1,17 +1,31 @@
 #!/usr/bin/env bash
 # ytstack brief: the prompt a dispatched worker gets, and the check of its report.
 #
-#   ytstack-brief [-C DIR] render --task M###-S##-T## [--branch NAME] [--base NAME]
-#   ytstack-brief [-C DIR] render --slice M###-S##   [--branch NAME] [--base NAME]
+#   ytstack-brief [-C DIR] render --task M###-S##-T## [--kind KIND] [--branch NAME] [--base NAME]
+#   ytstack-brief [-C DIR] render --slice M###-S##   [--kind KIND] [--branch NAME] [--base NAME]
+#   ytstack-brief [-C DIR] render --task|--slice REF --kind review --head SHA [--base SHA]
 #   ytstack-brief check [FILE]             validate a worker's report (FILE or stdin)
 #
 # render prints one Markdown brief on stdout, built from the plan files under
-# the .ytstack directory of DIR (default: $PWD): outcome, scope, what to read,
-# verification, spec impact, gates, the Git instructions (only with --branch;
-# --base defaults to the current branch of DIR), the work contract and the
-# report shape. The work contract is the body of skills/minimal-code/SKILL.md,
-# read at render time; its text lives nowhere else. Skeleton, fixed sentences
-# and the report shape: skills/spawn-milestone-team/brief-template.md.
+# the .ytstack directory of DIR (default: $PWD): outcome, kind, scope, what to
+# read, verification, spec impact, gates, the Git instructions (only with
+# --branch; --base defaults to the current branch of DIR), the work contract
+# and the report shape. The work contract is the body of
+# skills/minimal-code/SKILL.md, read at render time; its text lives nowhere
+# else. Skeleton, fixed sentences and the report shape:
+# skills/spawn-milestone-team/brief-template.md.
+#
+# KIND says what the worker may do (docs/ux/coordinator-format.md, "Lane kinds"):
+#   implement  (default) change files inside the scope, commit with the prefix
+#   review     read only: review the range --base..--head, or the commit --head
+#              without --base. Both are commit hashes, a name would pin
+#              nothing. No Git section, --branch is ignored.
+#   prepare    write files inside the scope, commit nothing
+#
+# check validates the eleven labels of the template's "Report" section: each
+# present at the start of a line and with a value, an exit code in every
+# "Checks run:" line, "Status:" one of complete, partial, blocked, and
+# consistent with "Blockers:" (blocked names one, complete has none).
 #
 # Exit codes
 #   render  0 brief printed; 1 no plan, no scope, no contract or no template
@@ -30,7 +44,7 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "ytstack-brief: $*" >&2; exit 1; }
 
 # section <file> <heading>: body of "## <heading>" without the blank lines
@@ -44,8 +58,11 @@ section() {
 }
 # field <file> <label>: the text after the first "**<label>:**"
 field() { sed -n "s/^\*\*$2:\*\*[ ]*//p" "$1" | head -1; }
-# snip <name>: a fixed sentence from the template ("<!-- name: text -->")
-snip() { sed -n "s/^<!-- $1: \(.*\) -->\$/\1/p" "$TPL" | head -1; }
+# snip <name>: the fixed sentences of that name from the template
+# ("<!-- name: text -->"), one per line
+snip() { sed -n "s/^<!-- $1: \(.*\) -->\$/\1/p" "$TPL"; }
+# is_sha <text>: seven or more hex digits
+is_sha() { case "$1" in *[!0-9a-fA-F]*) return 1 ;; esac; [ ${#1} -ge 7 ]; }
 # para <a> <b>: both, with a blank line between them when both have text
 para() { printf '%s' "$1${1:+${2:+$NL$NL}}$2"; }
 rel() { case "$1" in "$TOP"/*) printf '%s' "${1#"$TOP"/}" ;; *) printf '%s' "$1" ;; esac; }
@@ -66,19 +83,32 @@ add() {
 
 # ---- render --------------------------------------------------------------------
 cmd_render() {
-  local kind="" ref="" branch="" base="" plan ids t tp x
+  local kind="" ref="" branch="" base="" lane=implement head="" plan ids t tp x m
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || { usage >&2; return 64; }
     case "$1" in
       --task|--slice) kind=${1#--}; ref=$2 ;;
+      --kind) lane=$2 ;;
       --branch) branch=$2 ;;
       --base) base=$2 ;;
+      --head) head=$2 ;;
       *) usage >&2; return 64 ;;
     esac
     shift 2
   done
   case "$kind:$ref" in
     task:M[0-9][0-9][0-9]-S[0-9][0-9]-T[0-9][0-9]|slice:M[0-9][0-9][0-9]-S[0-9][0-9]) ;;
+    *) usage >&2; return 64 ;;
+  esac
+  case "$lane" in
+    implement|prepare)
+      # --head without "--kind review" would hand a reviewer a brief that lets it change files.
+      [ -z "$head" ] || { usage >&2; return 64; } ;;
+    review)
+      [ -n "$head" ] || { usage >&2; return 64; }
+      for x in "--head:$head" ${base:+"--base:$base"}; do
+        is_sha "${x#*:}" || { echo "ytstack-brief: ${x%%:*} '${x#*:}' is not a commit hash (seven or more hex digits); a branch or tag name pins nothing" >&2; return 64; }
+      done ;;
     *) usage >&2; return 64 ;;
   esac
   # The resolver falls back to $PWD for a missing directory: refuse it here.
@@ -96,6 +126,7 @@ cmd_render() {
   PLANS="$plan"; ALL_FILES=""
   B_REF="$ref"; B_COMMIT_PREFIX="$ref"
   B_OUTCOME=""; B_FILES=""; B_VERIFICATION=""; B_SPEC_IMPACT=""; B_GATES=""; B_BRANCH=""; B_BASE=""
+  B_KIND=""; B_COMMIT_RULE=""
 
   if [ "$kind" = task ]; then
     B_OUTCOME=$(para "$(field "$plan" Summary)" "$(section "$plan" "What this does")")
@@ -149,7 +180,18 @@ EOF
     B_CONTEXT="$B_CONTEXT$NL- \`$(rel "$YT_DIR/KNOWLEDGE.md")\`"
   fi
 
-  if [ -n "$branch" ]; then
+  # What the worker may do: the kind's fixed sentences, then its commit rule,
+  # which the Git section repeats. The inserted values are a validated
+  # reference and hex digits, so no character of them is special to the
+  # substitution.
+  m='{{COMMIT_PREFIX}}'; x=$(snip "commit-$lane"); B_COMMIT_RULE=${x//"$m"/$B_COMMIT_PREFIX}
+  if [ -n "$base" ]; then x="the range \`$base..$head\`"; else x="the commit \`$head\`"; fi
+  m='{{RANGE}}'; B_KIND=$(snip "kind-$lane"); B_KIND=${B_KIND//"$m"/$x}
+  [ -n "$B_KIND" ] || die "the brief template $TPL has no 'kind-$lane' sentences; a brief that does not say what the worker may do must not be produced"
+  B_KIND="$B_KIND${B_COMMIT_RULE:+$NL$B_COMMIT_RULE}"
+
+  # A review changes nothing: it gets no Git section, and --base is the start of its range.
+  if [ -n "$branch" ] && [ "$lane" != review ]; then
     [ -n "$base" ] || base=$(git -C "$TOP" branch --show-current 2>/dev/null)
     [ -n "$base" ] || die "--base is needed: $TOP has no current branch"
     B_BRANCH="$branch"; B_BASE="$base"
@@ -172,7 +214,7 @@ EOF
   # shortcut: values travel through the environment, so one value is limited to
   # what the OS allows per variable (about 128 KB on Linux); upgrade to
   # temporary files if a plan section ever gets that long.
-  export B_REF B_PROJECT B_OUTCOME B_FILES B_CONTEXT B_VERIFICATION B_SPEC_IMPACT B_GATES B_BRANCH B_BASE B_COMMIT_PREFIX B_CONTRACT
+  export B_REF B_PROJECT B_OUTCOME B_KIND B_FILES B_CONTEXT B_VERIFICATION B_SPEC_IMPACT B_GATES B_BRANCH B_BASE B_COMMIT_RULE B_CONTRACT
   awk '
     function flush() { if (!drop) printf "%s", buf; buf = ""; drop = 0 }
     /^<!--/ { next }
@@ -202,10 +244,11 @@ cmd_check() {
     exec < "$1"
   fi
   awk '
-    BEGIN { n = split("Task|Outcome|Commits|Checks run|Spec|Deviations|Blockers|Not checked", L, "|") }
+    BEGIN { n = split("Task|Status|Outcome|Commits|Uncommitted|Checks run|Spec|Deviations|Blockers|Not checked|Next", L, "|") }
     function done(   v) {
       if (!cur) return
       v = val; gsub(/^[ \t]+|[ \t]+$/, "", v)
+      V[L[cur]] = v
       if (v == "") empty[cur] = 1
       else if (L[cur] == "Checks run" && v !~ /exit [0-9]+/ && v !~ /^none/) nocode[++nc] = v
       cur = 0
@@ -224,6 +267,13 @@ cmd_check() {
         else if (empty[i]) { print "empty: " L[i]; bad = 1 }
       }
       for (i = 1; i <= nc; i++) { print "Checks run: no exit code in \"" nocode[i] "\""; bad = 1 }
+      s = V["Status"]; b = V["Blockers"]
+      if (s != "" && s !~ /^(complete|partial|blocked)$/) { print "Status: \"" s "\" is not complete, partial or blocked"; bad = 1 }
+      if (b != "") {
+        none = (b ~ /^[Nn]one[.]?$/)
+        if (s == "blocked" && none) { print "Status: blocked needs a Blockers: value other than \"none\""; bad = 1 }
+        if (s == "complete" && !none) { print "Status: complete needs \"Blockers: none\""; bad = 1 }
+      }
       if (bad) exit 1
       print "report ok"
     }

@@ -103,7 +103,7 @@ STOP.
 **Step 3 -- Read handoffs, then synthesize.** Read each of:
 - `STATE.md` (frontmatter + Status + Next action sections)
 - The automatic handoff at `LATEST_AUTO_HANDOFF` if not `none` -- the freshest breadcrumb of *this* worktree, written out of tree by the pre-compact hook (position, Next action excerpt, reading list)
-- `HANDOFF.md` if present (`MANUAL_HANDOFF_EVENT` / `MANUAL_HANDOFF_TS`; In-flight, Next action, Open decisions, Warnings). When the manual handoff is newer than the automatic one, lean on the manual one; it was written on purpose.
+- `HANDOFF.md` if present (`MANUAL_HANDOFF_EVENT` / `MANUAL_HANDOFF_TS`; In-flight, Next action, Open decisions, Warnings, Suggested skills). When the manual handoff is newer than the automatic one, lean on the manual one; it was written on purpose.
 - Each file in `_RECENT_SUMMARIES` (Outcome first lines)
 - `spec/SPEC.md` when `HAS_SPEC=yes`: the "Areas" table only. Do not read the area files here and do not restate them in the briefing; name the area file of the work that is next.
 
