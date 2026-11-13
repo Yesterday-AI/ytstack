@@ -3,7 +3,7 @@ name: quick-task
 description: "Quick lane for a change the user can describe in one sentence (fix, tweak, rename, bump, small refactor) in a project with .ytstack/ and PREFERENCES quick_lane on: Q###-PLAN and Q###-SUMMARY under .ytstack/quick/, a verification command, no pitch, no review, no milestone bookkeeping. Not for new features, migrations, unknown root causes or more than about three files (plan-task, systematic-debugging)."
 metadata:
   tier: core
-  version: 0.1.1
+  version: 0.1.2
 allowed-tools:
   - Bash
   - Read
@@ -133,6 +133,8 @@ branch: {BRANCH}
 ### Step 5: Execute
 
 Invoke `ytstack:test-driven-development` with this plan as the task (RED on the verification command or a focused test, GREEN with the minimal change), then `ytstack:verification-before-completion`. Commit subjects start with `{NEXT_Q}: `.
+
+**Spec (M022):** a quick change usually leaves the technical spec alone (a fix that restores the described behaviour, a rename, a bump). If it makes a statement in `.ytstack/spec/<area>.md` false, or in the source that file names, correct that statement in the same commits and name the file in the summary's Outcome. Nothing else of the spec is read or edited here.
 
 ### Step 6: Write `Q###-SUMMARY.md`
 
