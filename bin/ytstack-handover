@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# ytstack handover: the staged script of a step only a human may perform.
+# Skill: skills/handover-step/SKILL.md. Skeleton: skills/handover-step/template.sh.
+#
+#   ytstack-handover new <path> --title TITLE   copy the template to <path>, executable
+#   ytstack-handover check <script>             verify a script without running it
+#
+# check is what the preparing agent does instead of running the script:
+#   1. `bash -n` passes
+#   2. the helpers (the block between the two marker comments) are the template's, byte for byte
+#   3. outside that block every line is one call of stage, check, confirm, mutate
+#      or manual, a plain assignment, or a comment: no raw command, no pipe,
+#      redirection, chain or group, no command substitution, no line continuation
+#   4. every mutate has a confirm earlier in the same stage
+#   5. there is at least one stage
+#   6. no sudo unless the stage line says so, no pipe into a shell, no `rm -rf`,
+#      no eval, no token-looking string in an assignment
+#   7. the header fields are filled: Handover, Purpose, Prepared by, Prepared at, Changes, Undo
+#
+# Exit codes
+#   new    0 the path is printed; 1 the path exists or cannot be written; 64 usage
+#   check  0 "handover ok: N stages, M mutations, K manual steps"; 1 one line per
+#          problem; 64 usage or an unreadable script
+
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TPL="$ROOT/skills/handover-step/template.sh"
+
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+
+usage() { sed -n '5,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+die() { echo "ytstack-handover: $*" >&2; exit 1; }
+
+# block <file>: the helper block, from the first begin marker to the first end marker.
+block() {
+  awk '
+    !on && /^# >>> ytstack-handover helpers/ { on = 1 }
+    on { print }
+    on && /^# <<< ytstack-handover helpers/ { exit }
+  ' "$1"
+}
+
+# ---- new -----------------------------------------------------------------------
+cmd_new() {
+  local path="" title=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --title) [ $# -ge 2 ] || { usage >&2; return 64; }; title="$2"; shift 2 ;;
+      -*) usage >&2; return 64 ;;
+      *) [ -z "$path" ] || { usage >&2; return 64; }; path="$1"; shift ;;
+    esac
+  done
+  # The title lands in a comment line: one line, or it would become code.
+  title=$(printf '%s' "$title" | tr '\n\r' '  ' | sed 's/^ *//; s/ *$//')
+  [ -n "$path" ] && [ -n "$title" ] || { usage >&2; return 64; }
+  [ -f "$TPL" ] || die "the template $TPL is missing"
+  if [ -e "$path" ] || [ -L "$path" ]; then
+    echo "ytstack-handover: $path exists; it is not overwritten" >&2; return 1
+  fi
+  mkdir -p "$(dirname "$path")" || return 1
+  # Markers are filled as literal text, and only in the header: the helper block stays the template's.
+  HO_TITLE="$title" HO_NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)" awk '
+    function fill(marker, value,   i) {
+      i = index($0, marker)
+      if (i) $0 = substr($0, 1, i - 1) value substr($0, i + length(marker))
+    }
+    /^# >>> ytstack-handover helpers/ { helpers = 1 }
+    !helpers { fill("{{TITLE}}", ENVIRON["HO_TITLE"]); fill("{{NOW}}", ENVIRON["HO_NOW"]) }
+    { print }
+  ' "$TPL" > "$path" || return 1
+  chmod +x "$path" || return 1
+  printf '%s\n' "$path"
+}
+
+# ---- check ---------------------------------------------------------------------
+cmd_check() {
+  [ $# -eq 1 ] || { usage >&2; return 64; }
+  local f="$1" out problems
+  { [ -f "$f" ] && [ -r "$f" ]; } || { echo "ytstack-handover: cannot read script '$f'" >&2; return 64; }
+  [ -f "$TPL" ] || die "the template $TPL is missing; there is nothing to compare the helpers with"
+
+  out=$(
+    err=$(bash -n "$f" 2>&1) || printf 'syntax: %s\n' "$(printf '%s\n' "$err" | sed -n 1p)"
+    [ "$(block "$f")" = "$(block "$TPL")" ] \
+      || echo "helpers: the block between the two marker comments is missing or differs from skills/handover-step/template.sh"
+    LC_ALL=C awk '
+      BEGIN {
+        SQ = sprintf("%c", 39)
+        SUDO = "(^|[^A-Za-z0-9_.-])sudo([^A-Za-z0-9_-]|$)"
+        nf = split("Handover|Purpose|Prepared by|Prepared at|Changes|Undo", F, "|")
+      }
+      # scan(line): the words of one shell line. Sets NW (number of words),
+      # FIRST (the unquoted text of the first word), META (the first unquoted
+      # control character), SUBST (a command substitution that the shell would
+      # run) and OPEN (a quote or a backslash runs past the end of the line).
+      function scan(s,   i, c, n, q, inword) {
+        NW = 0; FIRST = ""; META = ""; SUBST = 0; OPEN = 0; q = ""; inword = 0; n = length(s)
+        for (i = 1; i <= n; i++) {
+          c = substr(s, i, 1)
+          if (q == SQ) { if (c == SQ) q = ""; continue }
+          if (c == "\\") {
+            if (i == n) OPEN = 1
+            i++
+            if (q == "" && !inword) { inword = 1; NW++ }
+            continue
+          }
+          if (c == "`" || (c == "$" && substr(s, i + 1, 1) == "(")) SUBST = 1
+          if (q == "\"") { if (c == "\"") q = ""; continue }
+          if (c == "\"" || c == SQ) { q = c; if (!inword) { inword = 1; NW++ }; continue }
+          if (c == " " || c == "\t") { inword = 0; continue }
+          if (c == "#" && !inword) break
+          if (index(";&|<>()", c) && META == "") META = c
+          if (!inword) { inword = 1; NW++ }
+          if (NW == 1) FIRST = FIRST c
+        }
+        if (q != "") OPEN = 1
+      }
+      # token(value): a run of 32 or more hex digits, or of 40 or more characters
+      # from [A-Za-z0-9+_=-] that mixes upper case, lower case and digits.
+      # shortcut: "/" ends a run, so a path is never flagged and a base64 secret
+      # with a slash every few characters is missed; upgrade to an entropy
+      # measure if such a secret ever gets through.
+      function token(v,   i, c, run) {
+        v = v " "; run = ""
+        for (i = 1; i <= length(v); i++) {
+          c = substr(v, i, 1)
+          if (c ~ /[A-Za-z0-9+_=-]/) { run = run c; continue }
+          if (length(run) >= 32 && run !~ /[^0-9A-Fa-f]/) return 1
+          if (length(run) >= 40 && run ~ /[A-Z]/ && run ~ /[a-z]/ && run ~ /[0-9]/) return 1
+          run = ""
+        }
+        return 0
+      }
+
+      !began && /^# >>> ytstack-handover helpers/ { began = 1; inblock = 1; next }
+      inblock { if ($0 ~ /^# <<< ytstack-handover helpers/) inblock = 0; next }
+      /^[ \t]*$/ { field = ""; next }
+      /^[ \t]*#/ {
+        if (began) next
+        # The header: "# <Field>: text", continued on lines indented under it.
+        if (match($0, /^# (Handover|Purpose|Prepared by|Prepared at|Changes|Undo):/)) {
+          field = substr($0, 3, RLENGTH - 3); H[field] = H[field] substr($0, RLENGTH + 1)
+        } else if (field != "" && $0 ~ /^#[ \t][ \t]+[^ \t]/) H[field] = H[field] substr($0, 2)
+        else field = ""
+        next
+      }
+      {
+        scan($0); at = "line " NR ": "
+        if (OPEN) print at "a quote or a backslash runs past the end of the line; write each call on one line"
+        if (SUBST) print at "command substitution runs before the helper sees it; move it into the command (bash -c " SQ "..." SQ ")"
+        if (META != "") print at "unquoted " META " at top level: no pipe, redirection, chain or group outside a helper call (wrap it: bash -c " SQ "..." SQ ")"
+        if (FIRST ~ /^[A-Za-z_][A-Za-z0-9_]*=/) {
+          if (NW > 1) print at "raw command at top level (a variable in front of a command): " $0
+          else if (FIRST ~ /^(HO_|_ho_)/) print at "assignment to a variable of the helpers"
+          else if (token(substr($0, index($0, "=") + 1)))
+            print at "token-looking string in an assignment; a secret comes from the environment of the person who runs the script, never from the file"
+        } else if (FIRST == "stage") {
+          stages++; confirmed = 0; sudo_ok = ($0 ~ SUDO)
+          if (NW != 3) print at "stage takes a title and a one-sentence description"
+        } else if (FIRST == "check" || FIRST == "confirm" || FIRST == "mutate" || FIRST == "manual") {
+          if (!stages) print at FIRST " before the first stage"
+          if (FIRST == "confirm") {
+            confirmed = 1
+            if (NW != 2) print at "confirm takes one text: exactly what will be changed, and where"
+          } else if (FIRST == "manual") {
+            manuals++
+            if (NW != 2) print at "manual takes one text: what to do by hand"
+          } else {
+            if (NW < 3) print at FIRST " takes a label and a command"
+            if (FIRST == "mutate") {
+              mutations++
+              if (!confirmed) print at "mutate without a confirm earlier in the same stage"
+            }
+          }
+        } else print at "raw command at top level; only stage, check, confirm, mutate, manual, an assignment or a comment may stand there: " $0
+
+        if ($0 ~ SUDO && !sudo_ok) print at "sudo, and the line of its stage does not say so"
+        if ($0 ~ /\|[ \t]*(sudo[ \t]+)?(ba|da|z|k|a)?sh([^A-Za-z0-9_.-]|$)/) print at "pipe into a shell"
+        if ($0 ~ /(^|[^A-Za-z0-9_.-])rm[ \t]+(-[A-Za-z]+[ \t]+)*-[A-Za-z]*([rR][A-Za-z]*f|f[A-Za-z]*[rR])/) print at "rm -rf"
+        if ($0 ~ /(^|[^A-Za-z0-9_.-])eval([ \t]|$)/) print at "eval"
+      }
+      END {
+        if (!stages) print "no stage: a handover script has at least one"
+        for (i = 1; i <= nf; i++) {
+          v = H[F[i]]; gsub(/^[ \t]+|[ \t]+$/, "", v)
+          if (v == "" || index(v, "{{")) print "header: " SQ F[i] ":" SQ " is empty"
+        }
+        printf "=counts %d %d %d\n", stages, mutations, manuals
+      }
+    ' "$f"
+  )
+  problems=$(printf '%s\n' "$out" | sed '/^=counts /d')
+  if [ -n "$problems" ]; then printf '%s\n' "$problems"; return 1; fi
+  # shellcheck disable=SC2046
+  set -- $(printf '%s\n' "$out" | sed -n 's/^=counts //p')
+  echo "handover ok: $1 stages, $2 mutations, $3 manual steps"
+}
+
+case "$CMD" in
+  new)   cmd_new "$@" ;;
+  check) cmd_check "$@" ;;
+  -h|--help|help) usage ;;
+  *) usage >&2; exit 64 ;;
+esac
