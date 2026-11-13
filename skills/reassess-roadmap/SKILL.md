@@ -40,7 +40,7 @@ Run it anyway. It takes 2 minutes and either confirms the plan (good -- more con
 6. **Update `M###-ROADMAP.md`** with agreed changes
 7. **Append decision to `M###-CONTEXT.md`** if the change is non-trivial
 8. **Update STATE.md** -- flip completed slice, set next `active_slice` (guarded)
-9. **Backlog sweep** (only if this was the last slice of the milestone) -- per-item prompt from `M###-CONTEXT.md` scope
+9. **Fold + backlog sweep** (only if this was the last slice of the milestone) -- fold what still holds into the area files of `.ytstack/spec/` and offer the archive through `reconcile` (Step 8a); then the backlog sweep -- per-item prompt from `M###-CONTEXT.md` scope
 10. **Stale milestones** (M018) -- for each `STALE_MILESTONES` entry ask `dropped` / `shipped-informally` / `keep` and write the state
 
 ## Preamble
@@ -256,6 +256,22 @@ Regardless of teammate mode:
 - Status line: `**Status:** {CURRENT_MILESTONE} -- slice {OLD_SLICE} complete. Next slice: {NEW_ACTIVE_SLICE}.` When the two numbers of Step 3b differ, append `Closed by work {W}/{T}, accepted {A}/{T}; waiting on: {open gate ids}.`
 
 Also flip `- [ ] {OLD_SLICE}` → `- [x] {OLD_SLICE}` in `{CURRENT_MILESTONE}-ROADMAP.md` and bump `completed_slices`.
+
+**Step 8a. Fold the milestone into the spec** (only if this was the last slice of the milestone -- no remaining `- [ ] S##` in ROADMAP -- and the project has `.ytstack/spec/`).
+
+A finished milestone leaves its knowledge in plans, summaries and its context file. What still holds belongs where the next session looks for it: in the area files. Fold once, now, so that nobody has to read this milestone's history to work on its result.
+
+1. **Which areas.** The areas named under `## Spec` in this milestone's summaries, plus the ones the drift report listed in Step 3a.
+2. **Per area, read the area file against the milestone's outcome** (summaries: Outcome, Deviations, Follow-ups; `{CURRENT_MILESTONE}-CONTEXT.md`: "Decisions locked"). Bring over only what applies from now on:
+   - a behaviour or contract the milestone changed and the area file does not state yet: correct the section;
+   - a decision that is in force and exists only in the milestone context: add an entry to `DECISIONS.md` and link it under "Decisions that apply now"; remove a link the milestone superseded;
+   - a shortcut or limit that still holds (a `shortcut:` comment, an open follow-up): one line under "Known limits";
+   - `status`: raise `planned` or `partial` only for what you read in the code now, and set `verified_at` to that commit.
+   Do not copy narrative, dates or task refs into an area file. What happened stays in the summaries.
+3. **Say what you folded** in the report: per area the sections you changed, or "nothing to fold".
+4. **Offer the archive, do not perform it.** After the fold the milestone's slice and task files are history. Tell the user that `ytstack:reconcile` moves them to `.ytstack/archive/` on request (its "closed milestones" class) and leaves `{CURRENT_MILESTONE}-CONTEXT.md` and `{CURRENT_MILESTONE}-ROADMAP.md` in place. Nothing moves from inside this skill, and nothing moves without that answer.
+
+No technical spec: skip this step and say in the report that `ytstack:adopt-brownfield` adds one.
 
 **Step 9. Backlog sweep** (only if this was the last slice of the milestone -- no remaining `- [ ] S##` in ROADMAP).
 
