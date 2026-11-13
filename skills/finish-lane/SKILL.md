@@ -17,7 +17,7 @@ allowed-tools:
 A lane is finished when its pull request is merged at the commit an independent review looked at. Between the worker's report and that merge lie a handful of steps. Each is one call of `bin/ytstack-finish-lane`, which prints what it did or what it read and refuses instead of assuming. This skill is for the session that dispatched the lane, not for the worker.
 
 <HARD-GATE>
-Do NOT commission a review before `wait-head` passed. Do NOT call a lane ready on anything but a `gates` read made in this run. Do NOT merge unless `MERGE_BY` is `coordinator` and no standing instruction reserves the merge.
+Do NOT commission a review before `wait-head` passed. Do NOT call a lane ready on anything but a `gates` read made in this run. Do NOT merge unless `MERGE_BY` is `coordinator`, or it is `risk` and a `route` call of this run printed `route: unattended` for the reviewed commit. Do NOT merge at all when a standing instruction reserves the merge.
 This applies to EVERY lane regardless of how small the diff is.
 </HARD-GATE>
 
@@ -34,15 +34,16 @@ A file outside the lane's scope is somebody's work or somebody's mistake, and fr
 You MUST create a TodoWrite task for each of these items and complete them in order:
 
 1. **Run preamble** -- host, the script, `merge_by`, standing instructions, the lanes table
-2. **HARD-GATE** -- `.ytstack`, git, the script; on a host other than GitHub stop after Step 3
+2. **HARD-GATE** -- `.ytstack`, git, the script; on a host other than GitHub only the steps that need no host (3, 6, 7 without the posting, 8), then stop
 3. **Read the report, commit leftovers** -- `leftovers`, then `commit` with the brief's scope (only for a `prepare` lane or `Uncommitted:` other than `none`)
 4. **Push and open the pull request** -- `push`, a body file, `open-pr`
 5. **Wait for the head, check the body** -- `wait-head`, `body-check`, one read of the body against the diff
 6. **Commission the review** -- a `review` lane pinned to that commit, in a fresh context; at most two rounds
 7. **Post the review, record head and round** -- on the pull request, then `ytstack-frontier set`, then the round line with the reviewer's class in the lane's plan
-8. **Read the gates** -- `gates`; a failing gate is handled by what it is
-9. **Merge or hand over** -- `MERGE_BY: human`: stop with the command; `coordinator`: `merge`
-10. **Report + return** -- one line per step, the read time of the gates, what was not checked
+8. **Read the route** -- `route`: `unattended`, or `person` with its reasons
+9. **Read the gates** -- `gates`; a failing gate is handled by what it is
+10. **Merge or hand over** -- `MERGE_BY: risk` with route `unattended`, or `coordinator`: `merge`; every other case: stop with the command and the reasons
+11. **Report + return** -- one line per step, the route, the read time of the gates, what was not checked
 
 ## Process Flow
 
@@ -53,30 +54,32 @@ digraph finish_lane {
     "Junk or out of scope?" [shape=diamond];
     "Back to worker or user" [shape=doublecircle];
     "GitHub?" [shape=diamond];
-    "Stop: host not supported" [shape=doublecircle];
+    "Review and route at the local head, then stop: the host is the user's" [shape=doublecircle];
     "Push, open PR, wait-head, body-check" [shape=box];
     "Third round?" [shape=diamond];
     "Diagnosis to the human" [shape=doublecircle];
     "Review at the pinned head, post, record" [shape=box];
+    "Read the route" [shape=box];
     "Gates hold?" [shape=diamond];
-    "merge_by?" [shape=diamond];
-    "Ready: the human merges" [shape=doublecircle];
+    "Who merges?" [shape=diamond];
+    "Ready: a person merges, with the reasons" [shape=doublecircle];
     "Merged at the reviewed commit" [shape=doublecircle];
 
     "Run preamble" -> "Commit leftovers" -> "Junk or out of scope?";
     "Junk or out of scope?" -> "Back to worker or user" [label="yes"];
     "Junk or out of scope?" -> "GitHub?" [label="no"];
-    "GitHub?" -> "Stop: host not supported" [label="no"];
+    "GitHub?" -> "Review and route at the local head, then stop: the host is the user's" [label="no"];
     "GitHub?" -> "Push, open PR, wait-head, body-check" [label="yes"];
     "Push, open PR, wait-head, body-check" -> "Third round?";
     "Third round?" -> "Diagnosis to the human" [label="yes"];
     "Third round?" -> "Review at the pinned head, post, record" [label="no"];
     "Review at the pinned head, post, record" -> "Back to worker or user" [label="changes requested"];
-    "Review at the pinned head, post, record" -> "Gates hold?" [label="approved"];
+    "Review at the pinned head, post, record" -> "Read the route" [label="approved"];
+    "Read the route" -> "Gates hold?";
     "Gates hold?" -> "Back to worker or user" [label="no"];
-    "Gates hold?" -> "merge_by?" [label="yes"];
-    "merge_by?" -> "Ready: the human merges" [label="human"];
-    "merge_by?" -> "Merged at the reviewed commit" [label="coordinator"];
+    "Gates hold?" -> "Who merges?" [label="yes"];
+    "Who merges?" -> "Ready: a person merges, with the reasons" [label="human; risk and route person; standing instruction"];
+    "Who merges?" -> "Merged at the reviewed commit" [label="coordinator; risk and route unattended"];
 }
 ```
 
@@ -99,12 +102,13 @@ cd "$_PROJECT_DIR" 2>/dev/null || true
 _PROJECT_SLUG=$(basename "$_PROJECT_DIR")
 _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 
-# Who merges (M024): PREFERENCES merge_by human (default) | coordinator.
+# Who merges (M025): PREFERENCES merge_by risk (default) | human | coordinator.
+# A value outside the three reads as human: a typo never merges without a person.
 _MERGE_BY=human; _MERGE_BY_NOTE=""
-if command -v yt_pref >/dev/null 2>&1; then _MERGE_BY=$(yt_pref "$_YT_DIR" merge_by human)
+if command -v yt_prefs >/dev/null 2>&1; then
+  yt_prefs "$_YT_DIR" >/dev/null; _MERGE_BY="$YT_PREF_MERGE_BY"
+  _MERGE_BY_NOTE=$(printf '%s\n' "$YT_PREF_WARNINGS" | grep '^merge_by:' | head -1)
 else _MERGE_BY_NOTE="the resolver library is not reachable, merge_by was not read (using human)"; fi
-case "$_MERGE_BY" in human|coordinator) ;; *)
-  _MERGE_BY_NOTE="merge_by: '$_MERGE_BY' is not human|coordinator (using human)"; _MERGE_BY=human ;; esac
 
 # The host of origin, without credentials. The script reaches GitHub only.
 _ORIGIN_HOST=$(git remote get-url origin 2>/dev/null | sed -E 's|^[a-z+]+://||; s|^[^@/]*@||; s|[:/].*$||')
@@ -142,15 +146,17 @@ exit 0
 
 ## Procedure
 
-In the calls below `{WT}` is the lane's worktree: the `Worktree` cell of its row between `LANES_BEGIN` and `LANES_END`, or the path the worker's report names. `{REF}` is the lane, `{N}` the pull request, `{SHA}` the commit under review. The script works in a checkout of the lane's branch. If the worktree is gone and the branch exists, add one (`git worktree add <path> <branch>`); do not switch the branch of this checkout.
+In the calls below `{WT}` is the lane's worktree: the `Worktree` cell of its row between `LANES_BEGIN` and `LANES_END`, or the path the worker's report names. `{REF}` is the lane, `{N}` the pull request, `{SHA}` the commit under review, `{BASE}` the branch the pull request goes into and `{BASE_SHA}` the commit the lane started from (`git merge-base origin/{BASE} {SHA}`; without a remote, `git merge-base {BASE} {SHA}`). The script works in a checkout of the lane's branch. If the worktree is gone and the branch exists, add one (`git worktree add <path> <branch>`); do not switch the branch of this checkout.
 
 ### Step 2: HARD-GATE
 
 - `IS_GIT: no`: abort "not a git checkout".
 - `HAS_YTSTACK: no`: abort "no `.ytstack/` here; a lane comes from a ytstack plan".
 - `FINISH_TOOL: missing`: abort "`bin/ytstack-finish-lane` is not reachable". Do not replay its steps by hand: the refusals are the point.
-- `HOST` is not `github`, or `GH_CLI: no`: the script reaches GitHub through `gh` and supports no other host. Do Step 3, which needs only git. Then stop and tell the user the branch and the commit, and that push, pull request, review gates and merge are theirs on this host. A GitHub Enterprise host counts as GitHub once `GH_HOST` names it.
+- `HOST` is not `github`, or `GH_CLI: no`: the script reaches GitHub through `gh` and supports no other host. Do the steps that need only git: Step 3, then Step 6 with the local head of the lane's branch as `{SHA}`, Step 7 without the posting (the row and the round line are still recorded), and Step 8. Then stop and tell the user the branch, the commit, the review's verdict and the route with its reasons, and that push, pull request, the host's gates and the merge are theirs on this host. A GitHub Enterprise host counts as GitHub once `GH_HOST` names it.
 - `MERGE_BY_NOTE` present: show it to the user once. The value in use is `human`.
+
+`MERGE_BY` is the project's `merge_by:` in `PREFERENCES.md`: `risk` (the default), `human` or `coordinator`. Step 10 says what each means.
 
 If `STANDING` names a file, read it in full now, before anything is pushed. Its lines are what the human asked for once and for all; they override the defaults of this skill: who merges, when a status is due, a cap on open pull requests.
 
@@ -175,7 +181,7 @@ What a refusal of `commit` means:
 
 A lane whose `Commits:` is `none` and that has nothing to commit has nothing to land. Stop and say so.
 
-On a host other than GitHub the skill ends here (Step 2).
+On a host other than GitHub go on with Step 6 at the local head (Step 2).
 
 ### Step 4: Push and open the pull request
 
@@ -265,11 +271,25 @@ Then append the round to the lane's plan in this checkout: the slice plan `{REF}
 - Round {n}: {base}..{SHA} -- {approved | changes requested}; blocking: {n}; follow-ups: {n}; risk: {low | normal | high}; invariants: {none | area: the rule}; by: review-{REF}
 ```
 
-`{base}` is where the lane left its base in round 1 (`git merge-base origin/{BASE} {SHA}`) and the reviewed head of round 1 afterwards. `risk` and `invariants` are the reviewer's `Risk:` and `Invariants touched:` values, unchanged, on this one line: no `;` inside a value, several rules joined with commas. You state no class and you correct none. A lane without a plan file has no place for the line: say so in the report.
+`{base}` is `{BASE_SHA}` in round 1 and the reviewed head of round 1 afterwards. `risk` and `invariants` are the reviewer's `Risk:` and `Invariants touched:` values, unchanged, on this one line: no `;` inside a value, several rules joined with commas. You state no class and you correct none. A lane without a plan file has no place for the line: say so in the report.
 
-`changes requested`: the findings go to the worker through whoever dispatches (same branch, same pull request). When the fix is reported, start again at Step 3; that is round 2. Do not read the gates on a head with open findings.
+`changes requested`: the findings go to the worker through whoever dispatches (same branch, same pull request). When the fix is reported, start again at Step 3; that is round 2. Do not read the route or the gates on a head with open findings.
 
-### Step 8: Read the gates
+### Step 8: Read the route
+
+Whether a person has to look at this change is decided per change, from its risk (`docs/ux/review-policy-format.md`, "The route"). Run this in the checkout of this session, without `-C {WT}`: it reads `LANES.md` and the lane's plan here.
+
+```bash
+"${CLAUDE_SKILL_DIR}/../../bin/ytstack-finish-lane" route --lane {REF} --base {BASE_SHA} --head {SHA}
+```
+
+The first line says what it read: the lane, the worker of its row as the author, the plan. Then come the lines of `bin/ytstack-risk route`: `route: unattended` or `route: person`, `class:`, `ceiling:`, `floor:`, `areas:`, `lenses:`, and one `reason:` per condition that failed. Exit 0 means `unattended`. Everything else, an error included, means "not unattended". Keep the lines for the report.
+
+`unattended` needs all of this: a floor from the diff that is not `person`; a newest round line that approves, is valid for `{SHA}`, states `risk` and `invariants: none`, and names a reviewer other than the lane's worker; a class within the ceiling (`auto_merge`) of every area the change touches. A project that declared nothing gets `person` for every change, which is what `merge_by: human` does.
+
+The route speaks about the change, not about the host: the checks, the threads and the head are Step 9. Do not turn a `person` into an `unattended` by editing the plan, the policy or the lanes table. The reasons go to the person who merges. One reason is yours to repair: "the plan has no round line" means Step 7 did not record the round.
+
+### Step 9: Read the gates
 
 ```bash
 "${CLAUDE_SKILL_DIR}/../../bin/ytstack-finish-lane" -C {WT} gates --pr {N} --reviewed-head {SHA} --verdict-pattern '^Verdict: approved'
@@ -288,37 +308,49 @@ All hold: `ytstack-frontier set {REF} --status ready --next "merge at {SHA}"`. O
 | `mergeable` | a conflict with the base, or the host has not decided | Conflict: the worker integrates the base; the head moves, so the fix round follows. Undecided: read again. |
 | `open-prs` | more pull requests are open than the cap | Finish others first. The lane stays where it is. |
 
-### Step 9: Merge or hand over
+### Step 10: Merge or hand over
 
-Who merges is the project's decision, not this session's.
+Who merges is the project's decision, not this session's. It is read from `MERGE_BY` and from the route of Step 8, once the gates of Step 9 hold:
 
-**`MERGE_BY: human`** (the default), or a standing instruction that reserves the merge: stop. Tell the user that the lane is ready, with the gate lines, their read time and the command:
+| `MERGE_BY` | Route | What happens |
+|---|---|---|
+| `risk` (the default) | `unattended` | You merge at `{SHA}`. The person gets one line in the report: what merged without them, at which class, under which ceiling. |
+| `risk` | `person`, or no answer | Stop. A person merges; they get the command and the `reason:` lines. |
+| `human` | any | Stop. A person merges; the route lines go along for information. |
+| `coordinator` | any | You merge at `{SHA}`. The route is printed in the report and not applied. |
+
+A standing instruction that reserves the merge wins over every row: a person merges.
+
+**A person merges.** Stop. Tell the user that the lane is ready, with the gate lines and their read time, the `reason:` lines of the route, and the command:
 
 ```
 {FINISH_TOOL} -C {WT} merge --pr {N} --at {SHA} --verdict-pattern '^Verdict: approved'
 ```
 
-Never merge under `human`, also not on a second request to hurry: the preference changes in `PREFERENCES.md`, not in a conversation.
+Never merge in these cases, also not on a second request to hurry. The preference changes in `PREFERENCES.md` and the ceiling in the area file of the technical spec, not in a conversation.
 
-**`MERGE_BY: coordinator`**:
+**You merge.**
 
 ```bash
 "${CLAUDE_SKILL_DIR}/../../bin/ytstack-finish-lane" -C {WT} merge --pr {N} --at {SHA} --verdict-pattern '^Verdict: approved'
 ```
 
-with the gate options of Step 8. It reads the gates again and merges pinned to `{SHA}`. `merged #{N} at <sha>`: `ytstack-frontier set {REF} --status merged`. A gate line with `FAIL`: Step 8. "gh pr merge failed": the head moved in that moment, or the host's own rules refuse; report `gh`'s message. "not merged yet": the host queued it; the lane stays `ready` and is read again later.
+with the gate options of Step 9. It reads the gates again and merges pinned to `{SHA}`. `merged #{N} at <sha>`: `ytstack-frontier set {REF} --status merged`. A gate line with `FAIL`: Step 9. "gh pr merge failed": the head moved in that moment, or the host's own rules refuse; report `gh`'s message. "not merged yet": the host queued it; the lane stays `ready` and is read again later.
 
-In both cases the merge happens at the reviewed commit or not at all. No `gh pr merge` by hand, no other commit than the recorded reviewed head.
+Under `risk` the route you act on is one you read in this run for `{SHA}`. A head that moved needs a new review and a new route.
 
-### Step 10: Report + return
+In every case the merge happens at the reviewed commit or not at all. No `gh pr merge` by hand, no other commit than the recorded reviewed head.
+
+### Step 11: Report + return
 
 > Lane {REF}, pull request #{N}
 > - leftovers: {committed <sha>, n files | none}
 > - pushed: {branch} at {SHA}; host head confirmed
 > - body: {body ok, n paths | corrected: what}
-> - review: round {n}, {verdict}, at {SHA}
+> - review: round {n}, {verdict}, at {SHA}; risk {the reviewer's class}, invariants {none | what it named}
+> - route: {unattended | person}, class {class}, ceiling {ceiling}; {the `reason:` lines, or "no reason"}
 > - gates: {the gate lines}, read {UTC time}
-> - merge: {merged at <sha> | ready, the human merges: <command> | not ready: <gate>}
+> - merge: {merged unattended at <sha>: class <class>, ceiling <ceiling> | merged at <sha> (merge_by: coordinator, the route said <route>) | ready, a person merges: <command>; because: <reasons> | not ready: <gate>}
 >
 > Not checked: {what this run did not read or run, and the reviewer's own `Not checked:` value}
 
@@ -330,9 +362,9 @@ In both cases the merge happens at the reviewed commit or not at all. No `gh pr 
 
 The terminal state is one of:
 
-- Returning control with the lane merged at the reviewed commit and its row `merged` (`MERGE_BY: coordinator`)
-- Returning control with the lane `ready` and the one-line merge command for the human
+- Returning control with the lane merged at the reviewed commit and its row `merged` (`MERGE_BY: risk` with route `unattended`, or `MERGE_BY: coordinator`), and the line that says what merged without a person
+- Returning control with the lane `ready`, the one-line merge command for the person and the reasons of the route
 - Returning control with the lane back at the worker or the user: leftovers, findings, a failing gate, a third round; the row's next action says what it waits for
-- Exiting after Step 3 on a host other than GitHub
+- Exiting after Step 8 on a host other than GitHub, with the review's verdict and the route
 
 Do NOT invoke `ytstack:finish-branch`, `ytstack:ship`, `ytstack:code-review` or `ytstack:summarize-task`. This skill invokes no other skill: control returns to the session that called it (`ytstack:coordinate`, when it runs the plan).

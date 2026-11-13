@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: risk-route
+tags: [lifecycle, review, risk, coordinator]
+context:
+  scaffold_script: fixture.sh

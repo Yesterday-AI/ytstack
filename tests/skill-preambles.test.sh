@@ -218,6 +218,14 @@ for s in $SKILLS; do
       run_pre "$P" "$WT"
       has "$s: task-ref commit -> COMMITS_SOURCE task-ref" "$OUT" "COMMITS_SOURCE: task-ref"
       case "$OUT" in *"BASE_SHA: none"*) bad "$s: task-ref commit -> BASE_SHA resolved";; *) ok "$s: task-ref commit -> BASE_SHA resolved";; esac ;;
+    finish-lane)
+      # who merges (M025): risk unless PREFERENCES says otherwise; a typo reads as human
+      has "$s: no merge_by in PREFERENCES -> risk" "$OUT" "MERGE_BY: risk"
+      printf 'merge_by: coordinater\n' > "$WT/.ytstack/PREFERENCES.md"
+      run_pre "$P" "$WT"
+      has "$s: a merge_by outside the three values reads as human" "$OUT" "MERGE_BY: human"
+      has "$s: and the note names the value" "$OUT" "MERGE_BY_NOTE: merge_by: 'coordinater' is not human|coordinator|risk (using human)"
+      rm -f "$WT/.ytstack/PREFERENCES.md" ;;
     finish-branch)
       has "$s: worktree -> IS_LINKED_WORKTREE yes" "$OUT" "IS_LINKED_WORKTREE: yes"
       case "$OUT" in *"OPEN_TASKS:"*T01*) ok "$s: worktree -> open tasks listed (T01 has no summary)";; *) bad "$s: worktree -> open tasks listed (T01 has no summary)" "$(printf '%s' "$OUT" | grep OPEN_TASKS)";; esac ;;

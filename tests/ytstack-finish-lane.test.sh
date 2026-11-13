@@ -15,11 +15,16 @@
 #               head; commands, branches and fenced blocks are not paths
 #   gates       each gate fails alone; all hold: exit 0 and the time of the read
 #   merge       only when the gates hold, pinned to the reviewed commit
+#   route       the lines of `ytstack-risk route` for the lane's plan, with the
+#               worker of the lane's row as the author: exit 0 for
+#               "unattended", 10 for "person"; a reviewer who is the worker, a
+#               lane without a row and a lane without a plan are "person"; no
+#               host is read
 #   usage       exit 64
 #
 # The host is a fake `gh` first in PATH that answers from fixture files and
 # logs its arguments; origin is a local bare repository. Nothing leaves the
-# machine.
+# machine. route runs the real bin/ytstack-risk on a fixture repository.
 #
 # Run: /bin/bash tests/ytstack-finish-lane.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -385,7 +390,58 @@ host; touch "$GH_FIX/merge.queue"; run "$G" merge --pr 7 --at "$SHA"
 eq "accepted but not merged (a queue): fail" 1 "$EC"
 has "the host's state is named" "the host reports OPEN" "$OUT"
 
-# ---- 9. usage -----------------------------------------------------------------
+# ---- 9. route -----------------------------------------------------------------
+echo "# route"
+# A project with one area (src/**, auto_merge: low) and a lane whose worker
+# changed one file under it. The checkout of the coordinating session holds
+# LANES.md with the worker and the lane's plan with the review record.
+RT="$TMP/route"; mkdir -p "$RT/src" "$RT/.ytstack/spec"
+( cd "$RT" || exit 1
+  git init -q -b main && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false || exit 1
+  echo a > src/a.sh
+  printf -- '---\narea: core\nstatus: implemented\npaths:\n  - src/**\nauto_merge: low\n---\n\n# core\n\n## Invariants and security boundaries\n\n- x\n\n## Decisions that apply now\n\n- none\n' > .ytstack/spec/core.md
+  git add -A && git commit -qm base && git checkout -q -b lane && echo b >> src/a.sh && git commit -qam "M001-S01-T01: change a" && git checkout -q main ) >/dev/null 2>&1
+RB=$(git -C "$RT" rev-parse main); RH=$(git -C "$RT" rev-parse lane)
+# lanes <claimed by>: the lanes table with one row for M001-S01
+lanes() {
+  printf -- '---\nupdated: 2026-11-13T10:00:00Z\n---\n\n# Lanes\n\n| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |\n|---|---|---|---|---|---|---|---|---|---|\n| M001-S01 | implement | in-review | %s | lane | - | 7 | - | 1 | - |\n' "$1" > "$RT/.ytstack/LANES.md"
+}
+# rplan <reviewer>: the lane's plan with one approving round by that reviewer
+rplan() {
+  printf -- '---\nstatus: in-progress\n---\n\n# Slice Plan\n\n## Review\n\n- Round 1: %s..%s -- approved; blocking: 0; follow-ups: 0; risk: low; invariants: none; by: %s\n' \
+    "${RB:0:7}" "${RH:0:7}" "$1" > "$RT/.ytstack/M001-S01-PLAN.md"
+}
+route() { quiet; run "$RT" route --lane M001-S01 --base "$RB" --head "${RH:0:12}"; }
+
+lanes "impl-M001-S01 2026-11-13T09:00Z"; rplan review-M001-S01; route
+eq "an approved low change in an area that allows low: exit 0" 0 "$EC"
+eq "the first line says what was read" "lane: M001-S01; author: impl-M001-S01; plan: .ytstack/M001-S01-PLAN.md" "$(printf '%s\n' "$OUT" | sed -n 1p)"
+has "then the lines of ytstack-risk route" "route: unattended
+class: low
+ceiling: low" "$OUT"
+eq "no host was read" "" "$(calls)"
+rplan impl-M001-S01; route
+eq "the reviewer is the lane's worker: exit 10" 10 "$EC"
+has "the route is person" "route: person" "$OUT"
+has "and says why" "reason: review -- the reviewer 'impl-M001-S01' is the author of the change" "$OUT"
+rplan review-M001-S01; lanes "-"; route
+eq "nobody holds the lane's row: exit 10" 10 "$EC"
+has "the author is unknown" "lane: M001-S01; author: unknown; plan:" "$OUT"
+has "so the reviewer cannot be told from the author" "reason: review -- no --author given" "$OUT"
+rm -f "$RT/.ytstack/LANES.md"; route
+eq "no lanes table at all: exit 10" 10 "$EC"
+lanes "impl-M001-S01 2026-11-13T09:00Z"; rm -f "$RT/.ytstack/M001-S01-PLAN.md"; route
+eq "a lane without a plan: exit 10" 10 "$EC"
+eq "it is person, with the one reason" "lane: M001-S01; author: impl-M001-S01; plan: none
+route: person
+reason: review -- lane M001-S01 has no plan file (M001-S01-PLAN.md under $RT/.ytstack): there is no review record to read" "$OUT"
+rplan review-M001-S01
+quiet; run "$RT" route --lane M001-S01 --base "$RB" --head 0123456789abcdef
+eq "a head that is no commit of the repository: exit 65, not unattended" 65 "$EC"
+quiet; run "$TMP/plain-route" route --lane M001-S01 --base "$RB" --head "$RH"
+eq "-C to a missing directory: exit 64" 64 "$EC"
+
+# ---- 10. usage ----------------------------------------------------------------
 echo "# usage"
 host
 run "$G";                                              eq "no command: exit 64" 64 "$EC"
@@ -405,6 +461,9 @@ run "$G" gates --pr 7 --reviewed-head "$SHA" --verdict-pattern '(';  eq "an inva
 run "$G" gates --pr 7 --at "$SHA";                     eq "--at belongs to merge: exit 64" 64 "$EC"
 run "$G" merge --pr 7 --at "$SHA" --method fast;       eq "an unknown merge method: exit 64" 64 "$EC"
 run "$G" merge --pr 7 --at;                            eq "an option without its value: exit 64" 64 "$EC"
+run "$G" route --base "$SHA" --head "$SHA";            eq "route without a lane: exit 64" 64 "$EC"
+run "$G" route --lane M001-S01 --base main --head "$SHA"; eq "route with a branch name as the base: exit 64" 64 "$EC"
+run "$G" route --lane 'M001 S01' --base "$SHA" --head "$SHA"; eq "a lane reference with a space: exit 64" 64 "$EC"
 eq "no usage error reached the host" "" "$(calls)"
 run "$TMP/nowhere" leftovers;                          eq "-C to a missing directory: exit 64" 64 "$EC"
 mkdir -p "$TMP/plain"; run "$TMP/plain" leftovers
