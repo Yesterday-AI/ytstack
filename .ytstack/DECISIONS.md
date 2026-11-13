@@ -868,3 +868,47 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - Checks the project requires for every change (CI on the current head, a required review, a deployment check) stay required.
 
 **Supersedes:** None. Narrows two older rules to the commit being claimed: the verifier's "run it again, now" (`agents/verifier.md`) and the vendored "run it fresh" in `verification-before-completion`. Extends 2026-11-07 "Ceremony scales with the change" from code to evidence and review.
+
+---
+
+## 2026-11-13: `STATE.md` is a pointer with a size bound; history leaves it through `reconcile`, a closed milestone is folded into the spec (M022-S03)
+
+**Context:** `STATE.md` collected status paragraphs and, in consumer projects, whole ledgers. ytstack's own file had 29 KB and thirteen earlier status paragraphs; one consumer's had 412 KB. The SessionStart injection then dropped the "Next action" excerpt to stay under the host's cap, which is the one line a new session needs.
+
+**Chose:**
+- The STATE lint reports a file above `YT_STATE_MAX_BYTES` (12,000) and status paragraphs beside the current one (W8, W9). Both are prompts; no skill stops on them, and the frontmatter that other tools read is unchanged.
+- The injection cuts the "Next action" excerpt to what fits instead of dropping it.
+- `reconcile` gets two classes, each with its own question: move the history paragraphs of `STATE.md` verbatim into `.ytstack/archive/`, and archive the slice and task files of closed milestones (only when a technical spec exists).
+- At the last slice of a milestone `reassess-roadmap` folds what still holds into the area files and then names the archive offer. It moves nothing itself.
+
+**Reason:** A size bound without a way to get under it only produces a permanent warning. The way has to keep the user's text intact, so it is a move with consent, never a rewrite. The fold comes before the archive offer because an archived plan that still holds the only statement of a rule would lose it.
+
+**How to apply:** New things that need a table per item (lanes, questions) get their own file and a link from `STATE.md`. A skill that writes into `STATE.md` writes one status paragraph and replaces the previous one only through `reconcile`'s consent path.
+
+**Supersedes:** None. The slice was planned to wait for M020 (Kimi adapter) because both edit `hooks/session-start` and `STATE.md`; it was built before M020 landed on the operator's instruction, so the two changes meet at merge time.
+
+---
+
+## 2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)
+
+**Context:** One session coordinated a migration with more than a hundred work packages. ytstack had nothing for the coordination itself, so the session kept its ledger in scratch files, rebuilt who owned what after every compaction, reported host state from memory, asked the same question several times and answered mechanical mistakes with more instruction text.
+
+**Chose:** Formats in `docs/ux/coordinator-format.md` and one tool per mechanical step:
+- `.ytstack/LANES.md` with one row per delegated lane, written through `bin/ytstack-frontier`; `**Blocked by:**` in slice plans; the frontier is what is open, unblocked and unclaimed; a claim precedes every dispatch.
+- Lane kinds (`implement`, `review`, `prepare`) in the rendered brief; the report gains `Status:`, `Uncommitted:` and `Next:`.
+- `bin/ytstack-finish-lane` and the skill `finish-lane`: commit what a lane left, push, open the pull request, wait for the host to show the head, review pinned to that commit, gates read from the host, merge at the reviewed commit.
+- `handover-step`: a step only the human may perform is one staged script that the agent checks statically and never runs.
+- `.ytstack/questions/`: one file per question with the states open, asked, answered.
+- `.ytstack/STANDING.md` for instructions that hold beyond the task.
+- `coordinate` for the owning session, `bin/ytstack-watch` for polling outside the model, `lane-retro` for sampling lanes into checks.
+
+**Reason:** Everything a coordinator needs after a context loss has to be a file, and everything that changes on a host has to be read, not remembered. A claim is the cheapest answer to "what stops two runs doing the same work". A merge is the one step that cannot be undone, so the default leaves it to the human.
+
+**How to apply:**
+- The lanes table is not part of `STATE.md`.
+- A status that names a pull request state, a check result or a deployed build says when it was read.
+- `merge_by:` in `PREFERENCES.md` decides who merges (`human` by default).
+- A mechanical mistake is answered with a check that replaces an instruction line, not with another line.
+- GitHub through `gh` is the only host the pipeline and the watcher support.
+
+**Supersedes:** None. Uses the brief, the report, the gates and the review rounds of M023 and the pointer rule of M022-S03.
