@@ -312,7 +312,7 @@ If `.ytstack/STATE.md` conflicts, resolve it from the orchestrator's side (`git 
 
 Never push, never open a PR here (`ytstack:ship` / `ytstack:finish-branch` do that on request).
 
-This merge is a local one into `{BRANCH}`, under the policy of Step 4. It is not the risk gate: `merge_by` and the route of a change (`bin/ytstack-risk route`, `docs/ux/review-policy-format.md`) decide about a pull request, in `ytstack:finish-lane`. A milestone whose lanes should each get a review with a stated class, a route and a pull request of their own runs through `ytstack:coordinate`.
+This merge is a local one into `{BRANCH}`, under the policy of Step 4. It is not the risk gate: `merge_by` and the route of a change (`bin/ytstack-risk route`, `docs/ux/review-policy-format.md`) decide about a pull request, in `ytstack:finish-lane`. The verifier of Step 7 runs commands; it is no review and no lens. A milestone whose lanes should each get a review with a stated class, the lenses its kind of change requires (each lens reviewer a lane of kind `review`), a route and a pull request of their own runs through `ytstack:coordinate`.
 
 After each merge (policy A) or each verified slice (policy B): back to Step 5 and look at the frontier again. Go on to Step 9 only when Step 5 says the run is over.
 

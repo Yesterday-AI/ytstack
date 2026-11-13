@@ -28,10 +28,13 @@
 #             anything under node_modules/, an untracked file above 1 MB. A
 #             --scope PATH is a file, a directory or a shell
 #             pattern, relative to the worktree's root; without --scope nothing
-#             is out of scope.
+#             is out of scope. The evidence directory of a visual review
+#             (evidence_dir of PREFERENCES.md, default .ytstack/evidence) is a
+#             record of the review and no leftover: it is not listed.
 # commit      stages the in-scope files by name and commits them. Refuses while
 #             junk, out-of-scope files or unmerged paths exist; nothing is
-#             staged then. The repository's signing settings apply unchanged.
+#             staged then. The evidence directory is left where it is. The
+#             repository's signing settings apply unchanged.
 # push        the current branch to origin, with upstream. A rejected push
 #             stays rejected: the script has no way to overwrite the remote.
 # open-pr     opens the pull request for the current branch; prints its number.
@@ -134,9 +137,25 @@ junk_reason() { # <path> <untracked: yes|no>
   esac
   if [ "$2" = yes ] && [ -f "$1" ] && [ "$(wc -c < "$1" | tr -d ' ')" -gt 1048576 ]; then echo "untracked, above 1 MB"; fi
 }
+# evidence_rel: sets EVIDENCE, the evidence directory of a visual review
+# (evidence_dir of PREFERENCES.md, default .ytstack/evidence) as a path under
+# the worktree's root. What lies in it is a record of the review, not work of
+# the lane: it is no leftover and is never staged here.
+EVIDENCE=.ytstack/evidence
+evidence_rel() {
+  local lib="$SELF_DIR/../hooks/lib/git-ctx.sh"
+  [ -f "$lib" ] || return 0
+  . "$lib"
+  yt_git_ctx "$TOP"; yt_resolve_yt_dir >/dev/null; yt_prefs "$YT_DIR"
+  EVIDENCE=${YT_PREF_EVIDENCE_DIR#./}; EVIDENCE=${EVIDENCE%/}
+  case "$EVIDENCE" in "$TOP"/*) EVIDENCE=${EVIDENCE#"$TOP"/} ;; esac
+  case "$EVIDENCE" in ""|/*|*..*) EVIDENCE="" ;; esac
+}
 # classify <path> <untracked: yes|no> <needs staging: yes|no>
 classify() {
-  local r; r=$(junk_reason "$1" "$2")
+  local r
+  [ -z "$EVIDENCE" ] || case "$1" in "$EVIDENCE"/*) return 0 ;; esac
+  r=$(junk_reason "$1" "$2")
   if [ -n "$r" ]; then JUNK[${#JUNK[@]}]="$1 ($r)"
   elif in_scope "$1"; then
     IN[${#IN[@]}]="$1"
@@ -172,7 +191,7 @@ cmd_leftovers() {
       *) bad_usage "leftovers: unknown argument '$1'" ;;
     esac
   done
-  enter; scan
+  enter; evidence_rel; scan
   group "in scope" ${IN[@]+"${IN[@]}"}
   group "out of scope" ${OUT[@]+"${OUT[@]}"}
   group "junk" ${JUNK[@]+"${JUNK[@]}"}
@@ -190,7 +209,7 @@ cmd_commit() {
   [ -n "$msg" ] || bad_usage "commit needs --message"
   enter
   [ -z "$(git ls-files -u)" ] || die "unmerged paths in $TOP (an unfinished merge or rebase); nothing was staged"
-  scan
+  evidence_rel; scan
   if [ ${#JUNK[@]} -gt 0 ] || [ ${#OUT[@]} -gt 0 ]; then
     group "out of scope" ${OUT[@]+"${OUT[@]}"}
     group "junk" ${JUNK[@]+"${JUNK[@]}"}

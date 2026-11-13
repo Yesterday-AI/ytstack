@@ -157,6 +157,27 @@ Invariants touched: <none | area: the invariant or decision, in its own words>
 
 `risk` and `invariants` are the reviewer's `Risk:` and `Invariants touched:` values, unchanged, on this one line: no `;` inside a value, several rules joined with commas. You do not raise or lower them; `bin/ytstack-risk` takes the higher of the stated class and the floor. `by` is the reviewer's name, or `self`. A reviewer that left a label out is asked for it once. A line without `risk`, `invariants` or `by` reads as a round that states none of them, and the change goes to a person.
 
+**Lenses.** `lenses:` between `RISK_FLOOR_BEGIN` and `RISK_FLOOR_END` names the second reviews this kind of change requires. A lens has one question and the documents that answer it; the project defines it in `.ytstack/spec/REVIEW.md` (`${CLAUDE_SKILL_DIR}/../../docs/ux/review-policy-format.md`, "Lenses"). `lenses: none`: skip this paragraph. Otherwise, once the round is approved:
+
+1. Render one brief per lens. Never write it by hand:
+
+   ```bash
+   "${CLAUDE_SKILL_DIR}/../../bin/ytstack-brief" render --task {ACTIVE_TASK} --kind review --lens {lens} --base {BASE_SHA} --head {HEAD_SHA}
+   ```
+
+   Exit 1 means the lens cannot run (the policy at that commit does not define it, or one of its documents is missing): record `not run` with the script's message and dispatch nobody.
+2. Dispatch each brief as one Agent call of its own, in a fresh context, named `{lens}-{ACTIVE_TASK}`. A lens reviewer is never the author and gets nothing of the author's reasoning: no summary of yours, no screenshots from this session, only the brief. A lens with visual evidence loads `ytstack:visual-review` and looks at the running product itself.
+3. Its report carries `Lens: {lens} -- pass | fail | not run` and `Evidence:`. Check it with `bin/ytstack-brief check`.
+4. Record one line per lens under `## Review`, with the seven-character commit and the report's values unchanged:
+
+   ```
+   - Lens {lens}: {HEAD_SHA} -- {pass | fail | not run}; by: {lens}-{ACTIVE_TASK}; evidence: {directory} ({n} images)
+   ```
+
+   `evidence: none` for a lens that stored none.
+
+`fail`: its findings are handled like blocking findings of the round. `not run` is recorded as it is and never as a pass; the change then goes to a person, who is told why. A lens is no round and does not count towards the two. After a fix a lens runs again only when the fix touched a path under its `applies`; a lens that fails a second time is diagnosed like a third round.
+
 **Third round.** Two rounds are recorded and the change is still not accepted. A third review would find a third thing. Stop and diagnose instead, from the round lines, the findings and the fix commits:
 
 - **Scope:** is the disputed point something the plan never decided? Then it is a question for the human, not for a reviewer.
