@@ -39,7 +39,7 @@ You MUST create a TodoWrite task for each of these items. Items 4 to 13 are one 
 4. **Read host facts fresh** -- `ytstack-watch --once`, every fact with its read time
 5. **Delegate what is ready** -- claim, render the brief, dispatch, check the report
 6. **Finish reported lanes** -- `ytstack:finish-lane`, one lane at a time per pull request
-7. **Keep the watcher running** -- `ytstack-watch` in the background for the open pull requests
+7. **Keep the watcher running** -- `ytstack-watch` in the background for the open pull requests, and `ytstack-watch release` for a commit that merged
 8. **Queue and ask questions** -- look up, write the file, ask one, late
 9. **Record standing instructions** -- into `STANDING.md` when they are given
 10. **Stop loops that do not converge** -- a diagnosis to the human instead of another dispatch
@@ -182,7 +182,7 @@ A lane named in the `blocks:` of an open or asked question is not ready, whateve
 ytstack-watch --pr <the open numbers> --interval 60
 ```
 
-Start it as a background process; on a host with a monitor tool, through that tool, so that each new line reaches you as an event. It prints a line only when a head moved, the checks changed, a review arrived, mergeability changed or a pull request closed, and it ends when all are merged or closed. Act on the line: red checks go back to the lane's worker with the name of the check; a review on a commit that is not the head is no review of the head. Start it again with the new list when a pull request opens. Never read status in a loop from the conversation, with or without a sleep. The single read of Step 4 before an action is not polling.
+Start it as a background process; on a host with a monitor tool, through that tool, so that each new line reaches you as an event. It prints a line only when a head moved, the checks changed, a review arrived, mergeability changed or a pull request closed, and it ends when all are merged or closed. Act on the line: red checks go back to the lane's worker with the name of the check; a review on a commit that is not the head is no review of the head. A pull request that merged, also when a person merged it: set its lane to `merged` and watch the release of its merge commit as `ytstack:finish-lane` describes ("Watch the release"), with `ytstack-watch release --commit <merge commit>` in the background. Its receipt goes into the next status; `not arrived` or `unhealthy` is a status at once. You deploy nothing and roll nothing back: a countermeasure on the target is a step for the human (`ytstack:handover-step`). Start the watcher again with the new list when a pull request opens. Never read status in a loop from the conversation, with or without a sleep. The single read of Step 4 before an action is not polling.
 
 **Step 8 -- Queue and ask questions.** First look the question up: the plan, `DECISIONS.md`, the answered files in `questions/`. What they answer is not asked. Otherwise `ytstack-questions new --question "<text>" --decides "<who>" --blocks "<lane or gate>"` and fill Context, Options and Recommendation until the human can answer from the file alone. The state is `open` and the lanes that do not depend on it go on. Ask as late as the work allows: when nothing ready is left that is independent of it, or at a boundary from `STANDING.md`. Ask one (`ytstack-questions next`), mark it (`ytstack-questions ask <id>`), and use AskUserQuestion:
 

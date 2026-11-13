@@ -14,10 +14,10 @@ allowed-tools:
 
 # finish-lane
 
-A lane is finished when its pull request is merged at the commit an independent review looked at. Between the worker's report and that merge lie a handful of steps. Each is one call of `bin/ytstack-finish-lane`, which prints what it did or what it read and refuses instead of assuming. This skill is for the session that dispatched the lane, not for the worker.
+A lane is finished when its pull request is merged at the commit an independent review looked at. Between the worker's report and that merge lie a handful of steps. Each is one call of `bin/ytstack-finish-lane`, which prints what it did or what it read and refuses instead of assuming. Whether a person has to make the merge is decided per change, from the class its reviewer stated and from what the project declared (`docs/ux/review-policy-format.md`). After the merge the release is watched. This skill is for the session that dispatched the lane, not for the worker.
 
 <HARD-GATE>
-Do NOT commission a review before `wait-head` passed. Do NOT call a lane ready on anything but a `gates` read made in this run. Do NOT merge unless `MERGE_BY` is `coordinator`, or it is `risk` and a `route` call of this run printed `route: unattended` for the reviewed commit. Do NOT merge at all when a standing instruction reserves the merge. Do NOT record a class or a lens verdict that its reviewer did not report.
+Do NOT commission a review before `wait-head` passed. Do NOT call a lane ready on anything but a `gates` read made in this run. Do NOT merge unless `MERGE_BY` is `coordinator`, or it is `risk` and a `route` call of this run printed `route: unattended` for the reviewed commit. Do NOT merge at all when a standing instruction reserves the merge. Do NOT record a class or a lens verdict that its reviewer did not report. Do NOT deploy, restart, revert or roll back anything on the target.
 This applies to EVERY lane regardless of how small the diff is.
 </HARD-GATE>
 
@@ -44,7 +44,8 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 9. **Read the route** -- `route`: `unattended`, or `person` with its reasons
 10. **Read the gates** -- `gates`; a failing gate is handled by what it is
 11. **Merge or hand over** -- `MERGE_BY: risk` with route `unattended`, or `coordinator`: `merge`; every other case: stop with the command and the reasons
-12. **Report + return** -- one line per step, the lenses, the route, the read time of the gates, what was not checked
+12. **Watch the release** (only after a merge, by anyone) -- `ytstack-watch release --commit <merge commit>`; the receipt goes into the report; `not arrived` and `unhealthy` go to the person at once
+13. **Report + return** -- one line per step, the lenses, the route, the read time of the gates, the release receipt, what was not checked
 
 ## Process Flow
 
@@ -64,7 +65,7 @@ digraph finish_lane {
     "Gates hold?" [shape=diamond];
     "Who merges?" [shape=diamond];
     "Ready: a person merges, with the reasons" [shape=doublecircle];
-    "Merged at the reviewed commit" [shape=doublecircle];
+    "Merged at the reviewed commit, release watched" [shape=doublecircle];
 
     "Run preamble" -> "Commit leftovers" -> "Junk or out of scope?";
     "Junk or out of scope?" -> "Back to worker or user" [label="yes"];
@@ -81,7 +82,7 @@ digraph finish_lane {
     "Gates hold?" -> "Back to worker or user" [label="no"];
     "Gates hold?" -> "Who merges?" [label="yes"];
     "Who merges?" -> "Ready: a person merges, with the reasons" [label="human; risk and route person; standing instruction"];
-    "Who merges?" -> "Merged at the reviewed commit" [label="coordinator; risk and route unattended"];
+    "Who merges?" -> "Merged at the reviewed commit, release watched" [label="coordinator; risk and route unattended"];
 }
 ```
 
@@ -377,7 +378,33 @@ Under `risk` the route you act on is one you read in this run for `{SHA}`. A hea
 
 In every case the merge happens at the reviewed commit or not at all. No `gh pr merge` by hand, no other commit than the recorded reviewed head.
 
-### Step 12: Report + return
+### Step 12: Watch the release
+
+Only after a merge, by anyone: yours in Step 11, or a person's, when you are called again for a lane whose pull request has merged. A merge is not the end of a lane. The target has to serve the commit and stay healthy, and somebody watches that who is not the person.
+
+The commit to watch is the merge commit on the base branch. After a squash it is not `{SHA}`:
+
+```bash
+gh pr view {N} --json mergeCommit --jq .mergeCommit.oid
+"${CLAUDE_SKILL_DIR}/../../bin/ytstack-watch" release --commit {MERGE_SHA}
+```
+
+The watch reads the "Release" section of `RUNTIME.md` (`docs/ux/runtime-format.md`). It asks the `deployed` command until the target names the commit, for at most 15 minutes, then the `healthy` command for the settle time, and ends with a receipt of five lines: `Target:`, `Commit:`, `Arrived:`, `Health:`, `Result:`. A full run takes up to 17 minutes with the defaults: start it in the background, or with a tool timeout that covers it. It only reads.
+
+| Exit | `Result:` | What happens |
+|---|---|---|
+| 0 | `released` | The five lines go into the report as they are. |
+| 0 | `no health command` | The same; the report says that the commit arrived and that nobody asked whether the target is healthy. |
+| 2 | `not arrived` | Tell the person at once, with the receipt: the merge is in, the target does not serve it. |
+| 3 | `unhealthy` | Tell the person at once, with the receipt and the lines of the failed health calls. |
+| 4 | none | Nothing was watched: `RUNTIME.md` has no "Release" section with a `deployed` command. One line in the report says so, and you go on. |
+| 1 | none | Nothing was watched: `RUNTIME.md` does not pass `bin/ytstack-runtime check`. One line in the report, with the problems the script printed. |
+
+You deploy nothing, restart nothing, revert nothing and roll nothing back, whatever the result. A countermeasure on the target is a step for a person; say that `ytstack:handover-step` prepares it, and leave it there.
+
+If other lanes wait for this session, do not sit on the watch: write the report with `release: watching {MERGE_SHA} since <UTC>`, set the row's next action (`ytstack-frontier set {REF} --next "read the release receipt of {MERGE_SHA}"`), and add the receipt when it is there.
+
+### Step 13: Report + return
 
 > Lane {REF}, pull request #{N}
 > - leftovers: {committed <sha>, n files | none}
@@ -388,6 +415,7 @@ In every case the merge happens at the reviewed commit or not at all. No `gh pr 
 > - route: {unattended | person}, class {class}, ceiling {ceiling}; {the `reason:` lines, or "no reason"}
 > - gates: {the gate lines}, read {UTC time}
 > - merge: {merged unattended at <sha>: class <class>, ceiling <ceiling>, lenses <lenses> | merged at <sha> (merge_by: coordinator, the route said <route>) | ready, a person merges: <command>; because: <reasons> | not ready: <gate>}
+> - release: {the five receipt lines | watching <merge commit> since <UTC> | not watched: <why> | nothing merged}
 >
 > Not checked: {what this run did not read or run, and the reviewer's own `Not checked:` value}
 
@@ -399,7 +427,7 @@ In every case the merge happens at the reviewed commit or not at all. No `gh pr 
 
 The terminal state is one of:
 
-- Returning control with the lane merged at the reviewed commit and its row `merged` (`MERGE_BY: risk` with route `unattended`, or `MERGE_BY: coordinator`), and the line that says what merged without a person
+- Returning control with the lane merged at the reviewed commit and its row `merged` (`MERGE_BY: risk` with route `unattended`, or `MERGE_BY: coordinator`), the line that says what merged without a person, and the release receipt or the line that says why the release was not watched
 - Returning control with the lane `ready`, the one-line merge command for the person and the reasons of the route
 - Returning control with the lane back at the worker or the user: leftovers, findings, a failing gate, a third round; the row's next action says what it waits for
 - Exiting after Step 9 on a host other than GitHub, with the review's verdict, the lens verdicts and the route
