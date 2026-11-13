@@ -3,7 +3,7 @@ name: plan-task
 description: "Turns the next task of the current slice into M###-S##-T##-PLAN.md with exact files and a verification command, and sets STATE active_task. Use after slice-milestone, before executing a task, or when the user says plan the task, next task, detail the task. Not for one-sentence changes (quick-task) and not for closing a task (summarize-task)."
 metadata:
   tier: core
-  version: 0.2.0
+  version: 0.3.0
   triggers:
     - plan task
     - detail next task
@@ -42,7 +42,7 @@ You MUST create a TodoWrite task for each of these items:
 3. **Confirm task selection** -- show the task line from slice-plan, confirm it's next
 4. **Ask file list** -- exact paths to create / modify / delete
 5. **Ask task body** -- what the code does, in prose + pseudocode
-6. **Ask verification** -- 1-2 commands that prove done
+6. **Ask verification** -- 1-2 commands that prove done, how often and where they run; what work cannot produce is a gate
 7. **Determine spec impact** -- which area of `.ytstack/spec/` the task changes, or `none`
 8. **Ask fits-one-context-window check** -- sanity-check or split
 9. **Write `M###-S##-T##-PLAN.md`**
@@ -176,8 +176,20 @@ Use AskUserQuestion (open-ended):
 > Good: `bun test test/auth/signup.test.ts` or `curl -X POST localhost:3000/api/signup -d '{"email":"a@b.c","password":"test1234"}'`
 >
 > Bad: "manual test" or "check it works" -- those aren't falsifiable.
+>
+> One pass in the local checkout is the default. If the check needs several passes, a sample, or another environment (CI, a preview, a device), say how many, where, and why.
 
-Remember as `_VERIFICATION`.
+Remember as `_VERIFICATION`, plus `_RUNS` (default `once`), `_ENVIRONMENT` (default `local checkout`) and, only when the check covers a sample, `_SAMPLE` (`<n> of <m>, because <reason>`). A number above one, and a sample, carry their reason in the plan.
+
+What this section says is all the evidence the task owes. Execution does not add passes, scenarios, suites or environments, and it does not drop any (`ytstack:minimal-code`, "Evidence").
+
+**Not a verification step: a gate.** Something that work in this task cannot produce is not written as a verification command: a person's verdict, an approval, a measurement on a system this task does not control. If the task has one, remember it as `_GATES`, one line each:
+
+```
+- [ ] G01 -- <what must hold or be given> | decides: <who> | how: <how the verdict is obtained> | lapses: <when it stops holding the row>
+```
+
+Fill all three fields from what the user and the slice plan say; write `unknown` for a field nobody stated, do not invent it. A gate does not hold the task open: the task closes on its verification, and `ytstack:reassess-roadmap` takes every open gate to the human in one question. Most tasks have none.
 
 ### Step 7: Determine spec impact
 
@@ -249,7 +261,14 @@ status: planned
 {VERIFICATION}
 ```
 
+Runs: {RUNS}. Environment: {ENVIRONMENT}.{ Sample: {SAMPLE}. -- only when set}
+
 Success: command exits 0 and shows expected output. Failure: re-read plan, check if spec drifted.
+
+{Only when the task has gates:}
+## Gates
+
+{GATES}
 
 ## Done signal
 

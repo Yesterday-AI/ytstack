@@ -3,7 +3,7 @@ name: slice-milestone
 description: "Breaks the current milestone into slices of one to seven tasks and writes M###-S##-PLAN.md per slice. Use after plan-milestone (and plan-ceo-review when it ran), or when the user says slice the milestone, plan the slices, break it down. Not for task-level detail (plan-task)."
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.2.0
   triggers:
     - slice milestone
     - plan slices
@@ -192,12 +192,19 @@ completed_tasks: 0
 
 All tasks marked `[x]` and verified via `ytstack:summarize-task`.
 
+{Only when the slice has gates:}
+## Gates
+
+- [ ] G01 -- {what must hold or be given} | decides: {who} | how: {how the verdict is obtained} | lapses: {when it stops holding the row}
+
 ## Notes
 
 (Add observations during slice execution. Issues that surface become entries in `DECISIONS.md` or `KNOWLEDGE.md`.)
 ```
 
 Task numbering: T01, T02, T03, ... in order provided. Zero-pad to 2 digits.
+
+**Done by work, accepted by a gate.** "Done when" holds only what work in this slice can establish. If the slice goal or the milestone's exit criteria in `{CURRENT_MILESTONE}-CONTEXT.md` name something work cannot produce (a person's acceptance, an approval, a measurement that has to hold before or after a step outside this slice), write it under `## Gates`, one line each, with who decides, how the verdict is obtained and when the gate lapses (the point after which it can no longer be met or no longer matters, for example "when the cutover has been made"). A field nobody stated is `unknown`; do not invent it and do not ask for it here. No gate: leave the section out. A slice is closed by work when its tasks are done and accepted when its gates are given or lapsed; `ytstack:reassess-roadmap` reports both numbers and takes the open gates to the human in one question. An expensive verification (several passes, a sample, another environment) is not a gate: it belongs in the task plan's Verification section with its reason.
 
 ### Step 4: Update `M###-ROADMAP.md`
 
