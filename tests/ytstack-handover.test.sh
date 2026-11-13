@@ -7,14 +7,16 @@
 #            an existing path is not overwritten
 #   check    a well-formed script passes with its counts; each rule fails on
 #            its own: syntax, the helper block, a raw command at top level,
-#            mutate before confirm, a confirm of an earlier stage, no stage,
+#            mutate before confirm, a confirm of an earlier stage, a second
+#            mutate behind one confirm, no stage,
 #            sudo unannounced, a pipe into a shell, rm -rf, eval, a
 #            token-looking assignment, an empty header field
 #   runtime  without a terminal confirm stops the script, mutate does not run
 #            and the receipt names what did not run; a failed check stops; a
 #            mutate without a confirm is refused. With a pseudo terminal (when
 #            python3 is there): yes runs the change, anything else stops,
-#            done and skip are recorded.
+#            done and skip are recorded, a second mutate behind one confirm
+#            is refused.
 #
 # Run: /bin/bash tests/ytstack-handover.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -184,6 +186,22 @@ confirm "Create /tmp/x"
 stage "Change" "Creates one file."
 mutate "create" touch /tmp/x
 EOF
+rejects "one confirm does not carry two mutates" "line $((L + 4)): a second mutate behind one confirm; every mutate takes a confirm of its own" <<'EOF'
+stage "Change" "Creates two files."
+confirm "Create /tmp/x"
+mutate "create" touch /tmp/x
+mutate "create another" touch /tmp/y
+EOF
+mk <<'EOF'
+stage "Change" "Creates two files."
+confirm "Create /tmp/x"
+mutate "create" touch /tmp/x
+check "it is there" test -f /tmp/x
+confirm "Create /tmp/y"
+mutate "create another" touch /tmp/y
+EOF
+chk "$P"
+eq "two mutates, each behind its own confirm, pass" "handover ok: 1 stages, 2 mutations, 0 manual steps" "$OUT"
 rejects "no stage" "no stage: a handover script has at least one" <<'EOF'
 NS="shop-prod"
 EOF
@@ -377,6 +395,7 @@ EOF
 stage "Change" "Fails on purpose."
 confirm "Run a command that fails"
 mutate "fails" false
+confirm "Create $MARK"
 mutate "create the file" touch "$MARK"
 EOF
   tty_run "$P" "yes
@@ -385,6 +404,23 @@ EOF
   receipt "$P"
   has "receipt: the failed mutate with its exit code" "mutate   FAILED exit 1" "$REC"
   has "receipt: the mutate after it did not run" 'mutate "create the file"' "$DNR"
+
+  # One yes carries one change. The file is not passed through `check` here:
+  # the helpers have to refuse on their own when a script was never verified.
+  mk <<EOF
+stage "Change" "Creates two files."
+confirm "Create $MARK"
+mutate "create the file" touch "$MARK"
+mutate "create a second file" touch "$MARK.2"
+EOF
+  tty_run "$P" "yes
+"
+  eq "a second mutate behind one confirm stops the script" 1 "$EC"
+  if [ -f "$MARK" ] && [ ! -e "$MARK.2" ]; then ok "the first change ran, the second did not"; else bad "the first change ran, the second did not"; fi
+  receipt "$P"
+  has "receipt: the second mutate was refused" "mutate   refused        line $((L + 4)): mutate \"create a second file\"" "$REC"
+  has "receipt: why it stopped" "a change without a confirm of its own in its stage is not run" "$REC"
+  rm -f "$MARK" "$MARK.2"
 else
   echo "  skip - python3 with the pty module is not available: the confirming path was not run"
 fi

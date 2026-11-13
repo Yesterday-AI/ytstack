@@ -203,7 +203,7 @@ manual "Open https://shop.example.com, put one article into the basket, and type
 ```
 
 - **Read-only checks first.** The first stage proves the target: the right account, cluster or project, the object exists, the precondition holds. A check that cannot fail proves nothing. A failing check stops the script.
-- **The smallest change per stage.** One `mutate` that can stand alone, behind one `confirm` whose text names with real values what changes and where. A `confirm` counts for its own stage only. After the `mutate`, a `check` that proves the effect.
+- **The smallest change per stage.** One `mutate` that can stand alone, behind one `confirm` whose text names with real values what changes and where. A `confirm` counts for its own stage only and for one `mutate`: a second change in the same stage takes a second `confirm`, the script refuses it otherwise and so does the check. After the `mutate`, a `check` that proves the effect.
 - **Names at the top, no secret in the file.** Namespaces, versions and hosts are plain assignments. Credentials come from the tools the human is logged in to, or from their environment. A commit or an image digest is written on the call that uses it.
 - **A pipe, a redirection or a command substitution goes inside the command**, as `bash -c '...'` with the values passed as arguments. At top level the check rejects them, because they would run outside the helpers and outside the receipt.
 - **`sudo` is announced**: the line of its stage says so.

@@ -96,11 +96,13 @@ confirm() {
   if [ "$HO_REPLY" != yes ]; then _ho_log confirm "declined"; _ho_stop "not confirmed"; fi
   HO_CONFIRMED=1; _ho_log confirm "yes"
 }
-# mutate "<label>" <changing command...>: runs only after a confirm in this stage.
+# mutate "<label>" <changing command...>: runs only after a confirm of its own
+# in this stage. One yes carries one change: the next mutate needs the next confirm.
 mutate() {
   local label="$1" rc; shift
   HO_LINE=${BASH_LINENO[0]}
-  if [ "$HO_CONFIRMED" -ne 1 ]; then _ho_log mutate "refused"; _ho_stop "a change without a confirm in its stage is not run"; fi
+  if [ "$HO_CONFIRMED" -ne 1 ]; then _ho_log mutate "refused"; _ho_stop "a change without a confirm of its own in its stage is not run"; fi
+  HO_CONFIRMED=0
   printf -- '-- change: %s\n' "$label"
   ( "$@" ); rc=$?
   HO_CHANGED=$((HO_CHANGED + 1))

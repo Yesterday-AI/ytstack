@@ -11,7 +11,8 @@
 #   3. outside that block every line is one call of stage, check, confirm, mutate
 #      or manual, a plain assignment, or a comment: no raw command, no pipe,
 #      redirection, chain or group, no command substitution, no line continuation
-#   4. every mutate has a confirm earlier in the same stage
+#   4. every mutate has a confirm of its own earlier in the same stage: one
+#      confirm carries one mutate
 #   5. there is at least one stage
 #   6. no sudo unless the stage line says so, no pipe into a shell, no `rm -rf`,
 #      no eval, no token-looking string in an assignment
@@ -170,7 +171,9 @@ cmd_check() {
             if (NW < 3) print at FIRST " takes a label and a command"
             if (FIRST == "mutate") {
               mutations++
-              if (!confirmed) print at "mutate without a confirm earlier in the same stage"
+              if (confirmed == 2) print at "a second mutate behind one confirm; every mutate takes a confirm of its own"
+              else if (!confirmed) print at "mutate without a confirm earlier in the same stage"
+              confirmed = (confirmed ? 2 : 0)
             }
           }
         } else print at "raw command at top level; only stage, check, confirm, mutate, manual, an assignment or a comment may stand there: " $0
