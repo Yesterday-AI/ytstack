@@ -38,7 +38,7 @@ updated: 2026-11-13T10:42:00Z
 | Round | The number of review rounds on this lane (`code-review` rules: round 1 complete, round 2 the fix, round 3 a diagnosis). |
 | Next action | One line: what the coordinator does next for this lane, or what it waits for. For `blocked`: on what. |
 
-A lane that was never claimed has no row. `bin/ytstack-frontier` is the only writer besides a human: it changes one row per call, takes a lock for the write (`LANES.md.lock`, so that claims sent together do not lose a row) and rewrites `updated`. Cells contain no `|`. A held lane is released before it can be claimed again.
+A lane that was never claimed has no row. `bin/ytstack-frontier` is the only writer besides a human: it changes one row per call, takes a lock for the write (the file `LANES.md.lock`, so that claims sent together do not lose a row) and rewrites `updated`. Cells contain no `|`. A held lane is released before it can be claimed again.
 
 ## Blocking edges and the frontier
 

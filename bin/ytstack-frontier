@@ -111,18 +111,22 @@ table_ok() {
 }
 # lock: one writer at a time. Two claims sent in the same moment would otherwise
 # both read the file without the other's row, and one row would be lost.
+# The lock is a file the shell creates itself: under noclobber bash opens it
+# with O_EXCL, so exactly one caller gets it. Not `mkdir`: the mkdir of Ubuntu
+# 26.04 (uutils coreutils) reports success to several callers that create the
+# same directory in the same moment.
 # shortcut: a lock left behind by a killed process is not recognised as stale,
-# the message names the directory to remove; upgrade to a pid check if that
-# ever happens in practice.
+# the message names the file to remove; upgrade to a pid check if that ever
+# happens in practice.
 lock() {
   local n=0
   [ -w "$YT_DIR" ] || die "cannot write in $YT_DIR"
-  until mkdir "$LANES.lock" 2>/dev/null; do
+  until ( set -o noclobber; : > "$LANES.lock" ) 2>/dev/null; do
     n=$((n + 1))
-    [ "$n" -le 50 ] || die "$LANES.lock exists: another ytstack-frontier is writing. Remove the directory if none is."
+    [ "$n" -le 50 ] || die "$LANES.lock exists: another ytstack-frontier is writing. Remove the file if none is."
     sleep 0.1 2>/dev/null || sleep 1
   done
-  trap 'rm -f "$LANES.tmp"; rmdir "$LANES.lock" 2>/dev/null' EXIT
+  trap 'rm -f "$LANES.tmp" "$LANES.lock"' EXIT
 }
 # write <lane> <add|change>: the lane's row from YTF_C1..YTF_C10 (an empty value
 # keeps the cell) and the "updated:" line. Every other line is copied as it is.

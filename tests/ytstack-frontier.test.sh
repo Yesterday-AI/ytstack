@@ -230,12 +230,23 @@ R=$(new_repo parallel M004)
 for N in 1 2 3 4 5 6; do ( bash "$BIN" -C "$R" claim "lane-$N" --by "w-$N" > "$TMP/par-$N.out" 2>&1; echo "exit $?" >> "$TMP/par-$N.out" ) & done
 wait
 PROWS=$(grep -c '^| lane-' "$R/.ytstack/LANES.md")
+PEXIT=$(cat "$TMP"/par-[1-6].out | grep -c '^exit 0$')
 eq "six claims at the same time: six rows" 6 "$PROWS"
-if [ "$PROWS" != 6 ]; then
-  # what each claim said, and the table: a lost row is not reproducible on demand
+eq "and all six succeeded" 6 "$PEXIT"
+if [ "$PROWS" != 6 ] || [ "$PEXIT" != 6 ]; then
+  # what each claim said, and the table: two writers at once show as a failed mv
+  # in one claim and a missing row of another
   for N in 1 2 3 4 5 6; do echo "  FAIL   claim lane-$N: $(tr '\n' ' ' < "$TMP/par-$N.out")"; done
-  echo "  FAIL   table: $(grep '^| lane-' "$R/.ytstack/LANES.md" | cut -d'|' -f2 | tr '\n' ' ') lock left: $([ -d "$R/.ytstack/LANES.md.lock" ] && echo yes || echo no)"
+  echo "  FAIL   table: $(grep '^| lane-' "$R/.ytstack/LANES.md" | cut -d'|' -f2 | tr '\n' ' ') lock left: $([ -e "$R/.ytstack/LANES.md.lock" ] && echo yes || echo no)"
 fi
+# a held lock is waited for, not written past
+: > "$R/.ytstack/LANES.md.lock"
+bash "$BIN" -C "$R" claim lane-7 --by w-7 > "$TMP/par-7.out" 2>&1 &
+sleep 1
+eq "while the lock is held, nothing is written" 6 "$(grep -c '^| lane-' "$R/.ytstack/LANES.md")"
+rm -f "$R/.ytstack/LANES.md.lock"
+wait
+eq "once it is free, the waiting claim writes its row" 7 "$(grep -c '^| lane-' "$R/.ytstack/LANES.md")"
 run "$R" check
 eq "and a well-formed file" "lanes ok" "$OUT"
 if [ -e "$R/.ytstack/LANES.md.lock" ] || [ -e "$R/.ytstack/LANES.md.tmp" ]; then bad "no lock and no temporary file left behind"; else ok "no lock and no temporary file left behind"; fi
