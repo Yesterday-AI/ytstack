@@ -342,8 +342,8 @@ is_record() {
 }
 
 # spec_file <path>: SPEC.md or an area file is among the changed paths. Its
-# frontmatter and its rule sections are "person"; any other edit is ordinary
-# and, for an area file, touches that area.
+# frontmatter (but for verified_at) and its rule sections are "person"; any
+# other edit is ordinary and, for an area file, touches that area.
 spec_file() {
   local p="$1" name sec
   name=${p#.ytstack/spec/}; name=${name%.md}
@@ -355,7 +355,9 @@ spec_file() {
     set -- "Invariants that hold everywhere"
   else
     set -- "Invariants and security boundaries" "Decisions that apply now"
-    [ "$(g show "$BASE:$p" | frontmatter)" = "$(g show "$HEADC:$p" | frontmatter)" ] \
+    # verified_at is left out: the stamp answers a drift report and changes no
+    # policy (docs/ux/spec-format.md, "Drift").
+    [ "$(g show "$BASE:$p" | frontmatter | sed '/^verified_at:/d')" = "$(g show "$HEADC:$p" | frontmatter | sed '/^verified_at:/d')" ] \
       || note person "$p" "always a person: frontmatter of an area file"
     echo "$name" >> "$W/touched"
   fi

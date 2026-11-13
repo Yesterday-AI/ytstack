@@ -33,7 +33,7 @@ There is one `reason:` line per path and rule that raised the floor. A rule name
 **Always a person** (`person`):
 
 - a change to `.ytstack/spec/REVIEW.md`, `.ytstack/DECISIONS.md`, `.ytstack/STANDING.md`, `.ytstack/PREFERENCES.md`, or to an instruction file of the repository (`AGENTS.md`, `CLAUDE.md`, at any depth)
-- a change to the frontmatter of an area file, or to the text of its sections "Invariants and security boundaries" and "Decisions that apply now"; the same section of `SPEC.md` ("Invariants that hold everywhere"); an area file or a `SPEC.md` that the change adds or deletes. Other edits of an area file are ordinary: a task that changes behaviour updates "Behavior" in the same commits
+- a change to the frontmatter of an area file, or to the text of its sections "Invariants and security boundaries" and "Decisions that apply now"; the same section of `SPEC.md` ("Invariants that hold everywhere"); an area file or a `SPEC.md` that the change adds or deletes. Other edits of an area file are ordinary: a task that changes behaviour updates "Behavior" in the same commits. So is a `verified_at` stamp on its own: it answers a drift report (`docs/ux/spec-format.md`, "Drift") and changes no policy. `area`, `status`, `paths`, `sources` and `auto_merge` stay `person`
 - a change to the checks themselves: `.github/workflows/**`, `.gitlab-ci.yml`, and whatever the project lists
 - a changed path that no area covers (see "Ceilings"), other than the process records of the work itself. An area file counts as covered by its own area and touches it; `SPEC.md` needs no area. A renamed or deleted file counts with its old and its new path
 - every path the project lists under "Always a person"
