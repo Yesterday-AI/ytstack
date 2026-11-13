@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# ytstack watch: polls pull requests on the host, outside the model.
+# ytstack watch: polls pull requests on the host, and a release on its target,
+# outside the model.
 #
 #   ytstack-watch [-C DIR] --pr N[,N...] [--interval SECONDS] [--once]
+#   ytstack-watch release --commit SHA [--timeout SECONDS] [--interval SECONDS] [-C DIR]
+#     release only reads: it runs the "deployed" and "healthy" commands of
+#     RUNTIME.md. It deploys nothing and rolls nothing back.
 #
+# ---- pull requests ----
 # Reads through `gh`, for each pull request of the repository in DIR
 # (default: $PWD):
 #   state    open | merged | closed
@@ -36,17 +41,196 @@
 #   1   gh is missing; --once: a read failed; loop: three failed polls in a row
 #   64  usage (no --pr, a value that is no number, --interval below 20)
 #
+# ---- release ----
+# Follows one commit after a merge, from the "Release" section of RUNTIME.md in
+# the .ytstack directory of DIR (default: $PWD), read through
+# `ytstack-runtime get` (format: docs/ux/runtime-format.md):
+#   1. runs `deployed` every --interval seconds (default 15) until its output
+#      names the commit, for at most --timeout seconds (default 900). The
+#      commit is named by a run of hex digits that starts with SHA, or that SHA
+#      starts with and that is seven characters or longer: the target may print
+#      a short SHA while the caller passes the full one, and the other way round.
+#   2. runs `healthy`, when there is one, every --interval seconds for the
+#      `settle` time (default 120 seconds) and counts the calls that failed.
+# Both commands run in the root of the checkout. A call that still runs after
+# 30 seconds is stopped and counts as failed.
+#
+# While it waits a line appears only when something changed, with the UTC time
+# of the read:
+#   2026-11-13T19:01:40Z deployed: {"commit":"0123456"}
+#   2026-11-13T19:02:11Z arrived: a1b2c3d4 (the target printed a1b2c3d)
+#   2026-11-13T19:02:11Z healthy: ok
+#   2026-11-13T19:02:41Z healthy: failed (exit 22)
+# At the end one receipt, five lines with fixed labels:
+#   Target: production (https://app.example.com)
+#   Commit: a1b2c3d4
+#   Arrived: yes, the target printed a1b2c3d, read 2026-11-13T19:02:11Z
+#   Health: asked 9, failed 0, last read 2026-11-13T19:04:12Z
+#   Result: released
+# Arrived is "no, not within <n> seconds; the target printed last: <first
+# line>, read <time>" when the commit never came. Health is "not asked" then,
+# "not asked: the "Release" section names no healthy command" without one, and
+# carries "first failure read <time>" before "last read" when a call failed.
+# Result is released, not arrived, unhealthy or no health command.
+#
+# Exit codes of release
+#   0   released, or the commit arrived and there is no health command
+#   1   RUNTIME.md does not pass `ytstack-runtime check`; nothing was run
+#   2   not arrived
+#   3   unhealthy: one health call or more failed during the settle time
+#   4   no "Release" section with a `deployed` line; one line, nothing was run
+#   64  usage (no --commit, a SHA under seven hex digits, --interval below 1)
+#
 # Test only: YTSTACK_WATCH_SLEEP names a command that runs instead of `sleep`
 # (it gets the interval as its argument). tests/ytstack-watch.test.sh sets it
-# to move its fixtures on between polls. Nothing else sets it.
+# to move its fixtures on between polls. YTSTACK_WATCH_ATTEMPT_MAX replaces the
+# 30 seconds a call of release may take. Nothing else sets them.
 
 set -uo pipefail
 
 MIN_INTERVAL=20
 DIR="$PWD"; PRS=""; INTERVAL=60; ONCE=no
 
-usage() { sed -n '4p' "${BASH_SOURCE[0]}" | sed 's/^# *//'; }
+usage() { sed -n '5,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 bad_usage() { [ $# -eq 0 ] || echo "ytstack-watch: $*" >&2; usage >&2; exit 64; }
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# ---- release ---------------------------------------------------------------------
+# attempt <command>: one call of a RUNTIME.md command, in the root of the
+# checkout and in a process group of its own, so that a call that hangs can be
+# stopped with its children. Leaves the output in $OUTF; sets A_RC and A_WHY.
+attempt() {
+  local limit=$((SECONDS + ATTEMPT_MAX)) i=0
+  set -m
+  ( cd "$TOP" && exec bash -c "$1" ) > "$OUTF" 2>&1 < /dev/null &
+  APID=$!
+  set +m
+  while kill -0 "$APID"; do
+    if [ "$SECONDS" -ge "$limit" ]; then
+      kill -TERM -- "-$APID"
+      while kill -0 -- "-$APID" && [ "$i" -lt 20 ]; do sleep 0.1; i=$((i + 1)); done
+      kill -KILL -- "-$APID"
+      wait "$APID"; APID=""
+      A_RC=124; A_WHY="stopped after $ATTEMPT_MAX seconds"
+      return 0
+    fi
+    sleep 0.1
+  done
+  wait "$APID"; A_RC=$?; APID=""; A_WHY="exit $A_RC"
+} 2>/dev/null
+# names <sha>: the run of hex digits in the output that names the commit.
+names() {
+  awk -v c="$1" '
+    { s = tolower($0)
+      while (match(s, /[0-9a-f]+/)) {
+        t = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+        if (length(t) >= 7 && (index(t, c) == 1 || index(c, t) == 1)) { print t; found = 1; exit }
+      }
+    }
+    END { exit !found }
+  ' "$OUTF"
+}
+# nap <seconds left>: the interval, or what is left of the time when that is less.
+nap() { "${YTSTACK_WATCH_SLEEP:-sleep}" "$(( $1 < INTERVAL ? $1 : INTERVAL ))"; }
+# receipt <arrived> <health> <result>
+receipt() { printf 'Target: %s\nCommit: %s\nArrived: %s\nHealth: %s\nResult: %s\n' "$TARGET" "$COMMIT" "$1" "$2" "$3"; }
+
+release() {
+  local root rt deployed healthy settle problems t tok said last="" left
+  local arrived asked=0 failed=0 first="" state="" s health
+  COMMIT=""; TIMEOUT=900; INTERVAL=15
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -h|--help|help) usage; exit 0 ;;
+      -C|--commit|--timeout|--interval) [ $# -ge 2 ] || bad_usage "$1 needs a value" ;;
+      *) bad_usage "unknown argument '$1'" ;;
+    esac
+    case "$1" in
+      -C) DIR=$2 ;;
+      --commit) COMMIT=$(printf '%s' "$2" | tr 'A-F' 'a-f') ;;
+      --timeout) TIMEOUT=$2 ;;
+      --interval) INTERVAL=$2 ;;
+    esac
+    shift 2
+  done
+  [ -n "$COMMIT" ] || bad_usage "--commit is required"
+  case "$COMMIT" in *[!0-9a-f]*) COMMIT="" ;; esac
+  [ "${#COMMIT}" -ge 7 ] && [ "${#COMMIT}" -le 64 ] || bad_usage "--commit takes a SHA of seven to 64 hex digits"
+  case "$TIMEOUT" in ''|*[!0-9]*) bad_usage "--timeout takes whole seconds, got '$TIMEOUT'" ;; esac
+  case "$INTERVAL" in ''|*[!0-9]*) bad_usage "--interval takes whole seconds, got '$INTERVAL'" ;; esac
+  TIMEOUT=$((10#$TIMEOUT)); INTERVAL=$((10#$INTERVAL))
+  [ "$INTERVAL" -ge 1 ] || bad_usage "--interval $INTERVAL is below the minimum of 1 second"
+  [ -d "$DIR" ] || bad_usage "-C '$DIR' is not a directory"
+
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  rt="$root/bin/ytstack-runtime"
+  [ -f "$rt" ] || { echo "ytstack-watch: $rt is missing" >&2; exit 1; }
+  if ! deployed=$("$BASH" "$rt" -C "$DIR" get release deployed 2>/dev/null); then
+    echo "ytstack-watch: RUNTIME.md has no \"Release\" section with a deployed command; nothing was watched. Format: docs/ux/runtime-format.md"
+    exit 4
+  fi
+  # As `ytstack-runtime up`: a file that fails check is not run.
+  if ! problems=$("$BASH" "$rt" -C "$DIR" check 2>&1); then
+    printf '%s\n' "$problems" >&2
+    echo "ytstack-watch: RUNTIME.md does not pass 'ytstack-runtime check'; nothing was run" >&2
+    exit 1
+  fi
+  healthy=$("$BASH" "$rt" -C "$DIR" get release healthy 2>/dev/null) || healthy=""
+  settle=$("$BASH" "$rt" -C "$DIR" get release settle 2>/dev/null) || settle=120
+  TARGET=$("$BASH" "$rt" -C "$DIR" get release target 2>/dev/null) || TARGET="(not named)"
+  . "$root/hooks/lib/git-ctx.sh"
+  yt_git_ctx "$DIR"
+  TOP="$YT_TOPLEVEL"
+  ATTEMPT_MAX=${YTSTACK_WATCH_ATTEMPT_MAX:-30}
+  APID=""
+  OUTF=$(mktemp "${TMPDIR:-/tmp}/ytwatch.XXXXXX") || exit 1
+  trap 'rm -f "$OUTF"; [ -z "$APID" ] || kill -KILL -- "-$APID" 2>/dev/null' EXIT
+
+  # 1. until the target names the commit
+  left=$TIMEOUT; SECONDS=0
+  while :; do
+    attempt "$deployed"; t=$(now)
+    if tok=$(names "$COMMIT"); then
+      arrived="yes, the target printed $tok, read $t"
+      echo "$t arrived: $COMMIT (the target printed $tok)"
+      break
+    fi
+    said=$(awk 'NF { print substr($0, 1, 160); exit }' "$OUTF")
+    said=${said:-(no output)}
+    [ "$A_RC" -eq 0 ] || said="$said ($A_WHY)"
+    [ "$said" = "$last" ] || echo "$t deployed: $said"
+    last=$said
+    left=$((TIMEOUT - SECONDS))
+    if [ "$left" -le 0 ]; then
+      receipt "no, not within $TIMEOUT seconds; the target printed last: $said, read $t" "not asked" "not arrived"
+      exit 2
+    fi
+    nap "$left"
+  done
+
+  # 2. healthy for the settle time
+  if [ -z "$healthy" ]; then
+    receipt "$arrived" 'not asked: the "Release" section names no healthy command' "no health command"
+    exit 0
+  fi
+  settle=$((10#$settle)); SECONDS=0
+  while :; do
+    attempt "$healthy"; t=$(now); asked=$((asked + 1))
+    if [ "$A_RC" -eq 0 ]; then s=ok; else s="failed ($A_WHY)"; failed=$((failed + 1)); first=${first:-$t}; fi
+    [ "$s" = "$state" ] || echo "$t healthy: $s"
+    state=$s
+    left=$((settle - SECONDS))
+    [ "$left" -gt 0 ] || break
+    nap "$left"
+  done
+  health="asked $asked, failed $failed,${first:+ first failure read $first,} last read $t"
+  if [ "$failed" -gt 0 ]; then receipt "$arrived" "$health" unhealthy; exit 3; fi
+  receipt "$arrived" "$health" released
+  exit 0
+}
+
+if [ "${1:-}" = release ]; then shift; release "$@"; fi
+if [ "${1:-}" = -C ] && [ "${3:-}" = release ]; then DIR=$2; shift 3; release "$@"; fi
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -104,8 +288,6 @@ def one:
 
 ERRF=$(mktemp "${TMPDIR:-/tmp}/ytwatch.XXXXXX") || exit 1
 trap 'rm -f "$ERRF"' EXIT
-
-now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 # read_pr <n>: sets ST HEAD CHECKS REVIEW MERGE; on failure returns 1 with the
 # reason in ERR. An answer that is not the five expected words is a failure.
