@@ -227,9 +227,15 @@ eq "still one row per lane" 1 "$(grep -c '^| M004-S02 |' "$L")"
 
 # several claims sent at once: every row arrives
 R=$(new_repo parallel M004)
-for N in 1 2 3 4 5 6; do bash "$BIN" -C "$R" claim "lane-$N" --by "w-$N" >/dev/null 2>&1 & done
+for N in 1 2 3 4 5 6; do ( bash "$BIN" -C "$R" claim "lane-$N" --by "w-$N" > "$TMP/par-$N.out" 2>&1; echo "exit $?" >> "$TMP/par-$N.out" ) & done
 wait
-eq "six claims at the same time: six rows" 6 "$(grep -c '^| lane-' "$R/.ytstack/LANES.md")"
+PROWS=$(grep -c '^| lane-' "$R/.ytstack/LANES.md")
+eq "six claims at the same time: six rows" 6 "$PROWS"
+if [ "$PROWS" != 6 ]; then
+  # what each claim said, and the table: a lost row is not reproducible on demand
+  for N in 1 2 3 4 5 6; do echo "  FAIL   claim lane-$N: $(tr '\n' ' ' < "$TMP/par-$N.out")"; done
+  echo "  FAIL   table: $(grep '^| lane-' "$R/.ytstack/LANES.md" | cut -d'|' -f2 | tr '\n' ' ') lock left: $([ -d "$R/.ytstack/LANES.md.lock" ] && echo yes || echo no)"
+fi
 run "$R" check
 eq "and a well-formed file" "lanes ok" "$OUT"
 if [ -e "$R/.ytstack/LANES.md.lock" ] || [ -e "$R/.ytstack/LANES.md.tmp" ]; then bad "no lock and no temporary file left behind"; else ok "no lock and no temporary file left behind"; fi
