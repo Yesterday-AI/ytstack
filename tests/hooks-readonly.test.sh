@@ -107,6 +107,16 @@ lacks "ss-main: minimal_code off -> no pointer" "$CTX" "Minimal-code guard is on
 lacks "ss-main: clean STATE -> no lint block"   "$CTX" "STATE lint ("
 if [ "${#CTX}" -lt 9500 ]; then ok "ss-main: injection still under the guard (${#CTX})"; else bad "ss-main: injection under guard" "${#CTX}"; fi
 rm -f "$MAIN/.ytstack/PREFERENCES.md"
+# A long "Next action" is cut to what fits, not dropped (M022-S03)
+{ printf 'project: fixture\nlast_updated: %s\ncurrent_milestone: M999\nactive_slice: S01\nactive_task: T01\n\n# State\n\n## Next action\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  awk 'BEGIN { for (i = 0; i < 5; i++) { s = "NEXTLINE" i " "; for (j = 0; j < 590; j++) s = s "x"; print s } }'; } > "$MAIN/.ytstack/STATE.md"
+run session-start "{\"session_id\":\"s1cut\",\"cwd\":$(jstr "$MAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has   "ss-main: long next action -> its start is kept"   "$CTX" "NEXTLINE0 xxx"
+has   "ss-main: long next action -> the cut is marked"   "$CTX" "(cut: rest in STATE.md)"
+lacks "ss-main: long next action -> not dropped"          "$CTX" "(omitted: see STATE.md"
+if [ "${#CTX}" -le 9500 ]; then ok "ss-main: cut injection fits the guard (${#CTX})"; else bad "ss-main: cut injection fits the guard" "${#CTX}"; fi
+cp "$TMP/state.good" "$MAIN/.ytstack/STATE.md"
 
 # ---- 1f. session-start: no roadmap in progress -> clean count, no stderr noise
 run session-start "{\"session_id\":\"s1j\",\"cwd\":$(jstr "$MAIN")}"

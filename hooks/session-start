@@ -154,7 +154,7 @@ LINT_LINES=""
 if [ "${YT_STATE_WARN_COUNT:-0}" -gt 0 ]; then
   LINT_LINES="STATE lint ($YT_STATE_WARN_COUNT):
 $(printf '%s\n' "$YT_STATE_WARNINGS" | head -5 | sed 's/^/- /')
-Fix STATE.md (or run ytstack:reconcile) before planning; plan-task and summarize-task refuse a malformed pointer."
+A malformed pointer stops plan-task and summarize-task: fix STATE.md first. Size and history findings do not block; ytstack:reconcile moves history out with your consent."
 fi
 yt_prefs "$YT_DIR" >/dev/null
 MINIMAL_CODE_LINES=""
@@ -247,7 +247,17 @@ $STATE_CONTEXT"
 # is not counted; that host's own limit lives in its hooks config.
 _HOST="${YTSTACK_HOST_CONTEXT:-}"; _HOST_LEN=${#_HOST}
 if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ]; then
-  STATE_CONTEXT=$(build_state_context "(omitted: see STATE.md -- injection near the 10,000-char cap)")
+  # Cut the excerpt to what still fits instead of dropping it: the next action
+  # is the one line a session needs most. Below 200 characters it says nothing
+  # useful, so then it is left out as before.
+  _OVER=$(( ${#FULL_CONTEXT} - _HOST_LEN - 9500 ))
+  _KEEP=$(( ${#NEXT_ACTION} - _OVER - 40 ))
+  if [ "$_KEEP" -ge 200 ]; then
+    _NEXT_SHORT="${NEXT_ACTION:0:$_KEEP} ... (cut: rest in STATE.md)"
+  else
+    _NEXT_SHORT="(omitted: see STATE.md -- injection near the 10,000-char cap)"
+  fi
+  STATE_CONTEXT=$(build_state_context "$_NEXT_SHORT")
   FULL_CONTEXT="$DIRECTIVE
 
 ---
