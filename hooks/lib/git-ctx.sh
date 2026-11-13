@@ -377,11 +377,14 @@ yt_prefs() {
 }
 
 # yt_epoch <YYYY-MM-DDTHH:MM:SSZ> -> seconds since epoch ("" when unparsable).
-# macOS: date -j -f; GNU: date -d.
+# macOS: date -j -f; GNU: date -d; BusyBox (alpine without coreutils): date -d
+# takes "YYYY-MM-DD HH:MM:SS" and not the ISO form.
 yt_epoch() {
-  local iso="$1" e=""
+  local iso="$1" e="" plain
   case "$iso" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) ;; *) printf ''; return 0 ;; esac
-  e=$(TZ=UTC date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$iso" +%s 2>/dev/null) || e=$(date -u -d "$iso" +%s 2>/dev/null) || e=""
+  plain="${iso%Z}"; plain="${plain%T*} ${plain#*T}"
+  e=$(TZ=UTC date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$iso" +%s 2>/dev/null) || e=$(date -u -d "$iso" +%s 2>/dev/null) \
+    || e=$(date -u -d "$plain" +%s 2>/dev/null) || e=""
   printf '%s' "$e"
 }
 
