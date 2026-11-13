@@ -36,7 +36,7 @@ MAIN="$TMP/main"; mkdir -p "$MAIN/.ytstack"
   echo seed > f.txt; git add -A; git commit -qm "M999-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL fixture; exit 2; }
 WT="$TMP/wt"; git -C "$MAIN" worktree add -q -b wt-branch "$WT" >/dev/null 2>&1 || { echo FATAL worktree; exit 2; }
 
-SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill"
+SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill coordinate finish-lane handover-step lane-retro"
 
 # Brownfield fixture (M010, issue #18): existing docs, no .ytstack -> >= 2 signals
 BF="$TMP/brown"; mkdir -p "$BF/docs/adr"
@@ -115,6 +115,17 @@ for s in $SKILLS; do
       grep -q 'vendor/gstack' "$ROOT/skills/$s/SKILL.md" && bad "$s: no vendor/gstack reference left" || ok "$s: no vendor/gstack reference left" ;;
     reconcile)
       has "$s: clean fixture -> no draft stubs" "$OUT" "DRAFT_STUBS: 0"
+      has "$s: clean fixture -> STATE.md is a pointer" "$OUT" "STATE_HISTORY: no (0 earlier status paragraph(s)"
+      has "$s: no spec -> closed milestones not offered" "$OUT" "CLOSED_MILESTONES: 0"
+      cp "$WT/.ytstack/STATE.md" "$TMP/state.rec.bak"
+      printf '\n**Status:** now.\n\n**Previous status:** then.\n\n**Status (2026-01-01):** before.\n' >> "$WT/.ytstack/STATE.md"
+      mkdir -p "$WT/.ytstack/spec"; printf '# spec\n' > "$WT/.ytstack/spec/SPEC.md"
+      printf -- '---\nmilestone: M555\nstatus: done\n---\n' > "$WT/.ytstack/M555-ROADMAP.md"; printf -- '---\nslice: S01\n---\n' > "$WT/.ytstack/M555-S01-PLAN.md"
+      run_pre "$P" "$WT"
+      has "$s: earlier status paragraphs -> history class" "$OUT" "STATE_HISTORY: yes (2 earlier status paragraph(s)"
+      has "$s: done milestone with slice files and a spec -> offered" "$OUT" "M555 (1 slice and task files)"
+      cp "$TMP/state.rec.bak" "$WT/.ytstack/STATE.md"
+      rm -f "$WT/.ytstack/spec/SPEC.md" "$WT/.ytstack/M555-ROADMAP.md" "$WT/.ytstack/M555-S01-PLAN.md"; rmdir "$WT/.ytstack/spec"
       printf -- '---\nclosed: draft\n---\n' > "$WT/.ytstack/M999-S01-T09-SUMMARY.md"
       printf -- '---\nmilestone: M777\nstatus: planned\n---\n' > "$WT/.ytstack/M777-ROADMAP.md"
       echo junk > "$WT/.ytstack/stray.md"
@@ -188,7 +199,18 @@ for s in $SKILLS; do
       run_pre "$P" "$WT"
       has "$s: team: on -> EXECUTION team"                 "$OUT" "EXECUTION: team"
       has "$s: two slices naming a.ts -> OVERLAP"          "$OUT" "a.ts: S01 S02"
-      rm -f "$WT/.ytstack/PREFERENCES.md" "$WT/.ytstack/M999-S02-PLAN.md" ;;
+      rm -f "$WT/.ytstack/PREFERENCES.md" "$WT/.ytstack/M999-S02-PLAN.md"
+      # the lanes file is written by the orchestrator during a run: it must not make the tree "dirty" (M024)
+      run_pre "$P" "$WT"; _d0=$(printf '%s\n' "$OUT" | sed -n 's/^DIRTY: //p')
+      printf '# Lanes\n' > "$WT/.ytstack/LANES.md"
+      run_pre "$P" "$WT"
+      has "$s: LANES.md alone does not change DIRTY" "$OUT" "DIRTY: $_d0"
+      if [ "$_d0" = no ]; then
+        echo x > "$WT/zz-stray.txt"; run_pre "$P" "$WT"
+        has "$s: another changed file -> DIRTY yes" "$OUT" "DIRTY: yes"
+        rm -f "$WT/zz-stray.txt"
+      fi
+      rm -f "$WT/.ytstack/LANES.md" ;;
     code-review)
       has "$s: worktree -> task plan found" "$OUT" "TASK_PLAN_EXISTS: yes"
       has "$s: worktree -> COMMITS_SOURCE echoed" "$OUT" "COMMITS_SOURCE: "

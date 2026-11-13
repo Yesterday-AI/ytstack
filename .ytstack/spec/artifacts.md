@@ -14,6 +14,7 @@ paths:
 sources:
   - docs/ux/skill-structure.md
   - docs/ux/spec-format.md
+  - docs/ux/coordinator-format.md
   - docs/statusline.md
 verified_at: f4f54ab
 ---
@@ -53,6 +54,11 @@ The `.ytstack/` artifact model: the Markdown files that hold a project's memory 
 | `codebase/{stack,architecture,conventions,concerns}.md`, `backlog/README.md` | `adopt-brownfield` | refreshed by deleting the file and running the skill again |
 | `spec/SPEC.md`, `spec/<area>.md` | `init-project` (every area `planned`), `adopt-brownfield` (pointer-only over existing documents; also for a project that has `.ytstack/` and no spec) | the task that changes the area, in its own commits; `reassess-roadmap` sets `verified_at` when it answers the drift report |
 | `HANDOFF.md` | `handoff-session` | the user; no hook writes it |
+| `LANES.md` | `bin/ytstack-frontier claim` (first claim) | `bin/ytstack-frontier` (`set`, `release`), one row per call; called by `spawn-milestone-team`, `coordinate`, `finish-lane` |
+| `questions/Q###-<slug>.md` | `bin/ytstack-questions new` (from `coordinate`, `reassess-roadmap`) | the agent fills Context, Options, Recommendation; `ask` and `answer` change the state; the answer text is the human's |
+| `STANDING.md` | `coordinate`, when the human gives an instruction that holds beyond the task | appended; an overtaken line is struck through and dated, not removed |
+| `handover/<date>-<slug>.sh` and its receipt | `handover-step` through `bin/ytstack-handover new`; the receipt by the script when the human runs it | a script that ran is not edited |
+| `retro/LANES-<date>.md` | `lane-retro` | appended on a second run of the same day |
 | `archive/<date>/`, `archive/INDEX.md`, `RECONCILE-<date>.md` | `reconcile` | -- |
 | `ROADMAP.md` (all milestones), `REVIEW-NOTES.md` | no skill and no hook creates them | skills edit the milestone rows of `ROADMAP.md` when a `status` changes |
 
@@ -87,6 +93,7 @@ The frontmatter and section template of each file is in the `SKILL.md` of the sk
 - A task plan has a `## Spec impact` section: one line per area the task changes, or `none` with a reason. `plan-task` works it out from the area files; it does not ask.
 - A task plan's `## Verification` section holds the command and a line `Runs: <n>. Environment: <where>.`, with `Sample:` and a reason when the check covers a sample. A summary's Verification line records the check, the commit it ran on and the environment, and is followed by `Not checked:`.
 - `## Gates` in a slice plan or task plan holds one line per gate: `- [ ] G## -- <what> | decides: <who> | how: <how> | lapses: <when>`. `- [x]` with `| given: <date> <who>` is a gate a person gave, `- [-]` with `| lapsed: <date> <reason>` one that lapsed. Only `reassess-roadmap` changes the box, and only to what the human answered.
+- `**Blocked by:**` under a slice plan's goal (and optionally under a task plan's summary) names what has to be finished first; `bin/ytstack-frontier` reads it.
 - `## Review` in a task plan holds one line per review round: `- Round <n>: <base>..<head> -- <verdict>; blocking: <n>; follow-ups: <n>`. `code-review` appends it and counts the lines.
 - `summarize-task` runs `bin/ytstack-spec impact` in its preamble. A named area is satisfied when its area file or one of its `sources` changed in the task's commits or the working tree. Otherwise the task is not closed. The summary records the result under `## Spec`. A plan that says `none` closes without a spec edit.
 
@@ -101,10 +108,17 @@ The frontmatter and section template of each file is in the `SKILL.md` of the sk
 
 Automatic handoffs and the session journal are not artifacts. `hooks/pre-compact` writes `HANDOFF.auto.md` and refreshes a `latest-handoff` link per worktree; `hooks/session-end` appends to `session.jsonl`. Both live under `yt_state_base`, per repository, worktree and session. When that base is not writable they fall back to `.ytstack/.local/`, which `yt_ensure_gitignore` ignores (`init-project`, `adopt-brownfield`, `reconcile`). `hooks/session-start` and `resume-session` read `HANDOFF.md` and the latest automatic handoff.
 
+### STATE.md is a pointer; host facts are not stored
+
+- `yt_state_lint` reports a `STATE.md` above `YT_STATE_MAX_BYTES` and status paragraphs beside the current one. Both are prompts; no skill stops on them. What needs a row per item (lanes, questions) has its own file.
+- The files of coordinator mode record what the coordinator did and identifiers (a branch, a pull request number, the reviewed commit). The state of a pull request, of its checks or of a deployed build is read from the host when it is needed and is not written into `.ytstack/` as current (`docs/ux/coordinator-format.md`).
+
 ### Ownership and cleanup
 
 - Every file under `.ytstack/` is user-owned. Skills, agents and hooks do not delete, move, truncate or revert it.
-- `reconcile` is the only path that moves artifacts. It lists the leftovers by class (draft stubs, unfilled hook drafts, milestones planned and never sliced, untracked files, a `.local` directory that is not ignored) and asks per class: close, archive or keep.
+- `reconcile` is the only path that moves artifacts. It lists the leftovers by class (draft stubs, unfilled hook drafts, milestones planned and never sliced, untracked files, a `.local` directory that is not ignored, history inside `STATE.md`, slice and task files of closed milestones) and asks per class: close, archive or keep.
+- The history class moves earlier status paragraphs of `STATE.md` verbatim to `archive/<date>/STATE-history.md` and leaves the frontmatter, the current status, "Next action" and "Open decisions". It is the only edit to the body of `STATE.md` that `reconcile` makes, and only after its question was answered with yes. The closed-milestone class exists only in a project with a technical spec and keeps each milestone's `CONTEXT` and `ROADMAP` in place.
+- At the last slice of a milestone `reassess-roadmap` folds what still holds into the area files (changed behaviour, decisions in force, limits) and names the archive offer; it moves nothing.
 - Archiving moves files to `archive/<date>/` inside `.ytstack/` (`git mv` when tracked) and adds a line to `archive/INDEX.md`. `reconcile` edits only `status:` and `closed:` fields and `ROADMAP.md` rows, never runs `rm`, never edits the `STATE.md` pointer, and logs to `RECONCILE-<date>.md`.
 - `init-project` stops when `.ytstack/` exists. `adopt-brownfield` stops when `.ytstack/` and `spec/SPEC.md` exist; with `.ytstack/` and no spec it writes only `spec/` and the codebase map files that are missing. It does not overwrite a file under `.ytstack/`.
 - An area file is rewritten when its area changes; it carries no history. The other artifacts are appended to or advanced.
@@ -158,6 +172,8 @@ Automatic handoffs and the session journal are not artifacts. `hooks/pre-compact
 
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)"
 - DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)" (the `Runs:` line, `## Gates`, `## Review`, the evidence fields of a summary)
+- DECISIONS.md -- "2026-11-13: `STATE.md` is a pointer with a size bound; history leaves it through `reconcile`, a closed milestone is folded into the spec (M022-S03)"
+- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)" (the lanes table is not part of `STATE.md`, which narrows the proposal in issue #34)
 - DECISIONS.md -- "2026-04-23: `.ytstack/` location is user-chosen (project vs user vs both)"
 - DECISIONS.md -- "2026-05-31: active_slice is plan-task-owned and team-member-guarded (M012 / issue #21-RC1)"
 - DECISIONS.md -- "2026-05-31: post-tool-use-bash is stub-once; summarize-task owns commit-to-task linking (M015 / issue #22)"

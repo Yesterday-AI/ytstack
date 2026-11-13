@@ -196,6 +196,22 @@ minimal_code: on         # on | off
 - Leftovers (draft stubs, stray files): say "reconcile .ytstack" -> `ytstack:reconcile` asks per class and archives; nothing is deleted.
 - The minimal-code guard is a work contract, not only a code rule: a task's Verification section says which command runs, how often and where, and the agent does not add passes or scenarios on its own. A review is complete in round one, covers the fix in round two and becomes a diagnosis in round three. What only you can decide is a gate in the plan (`## Gates`: what, who decides, how, when it lapses); at the slice boundary `reassess-roadmap` brings all open gates in one question and tells you two numbers: closed by work, and accepted.
 
+## Coordinating many lanes
+
+A plan with dozens of packages, one session that delegates all of it. Say:
+
+> "You are the coordinator. Run the plan."
+
+Agent fires `ytstack:coordinate`. It writes no product code. What it keeps, it keeps in files, so that a compaction or a fresh session loses nothing:
+
+- `.ytstack/LANES.md` -- one row per delegated lane (who holds it, branch, pull request, reviewed commit, round, next action). `bin/ytstack-frontier` lists what may start: open, unblocked (`**Blocked by:**` in the slice plans) and unclaimed. A lane is claimed before it is dispatched.
+- `.ytstack/questions/` -- one file per question for you, with context, options and a recommendation. You get one at a time, as late as the work allows, and never the same one twice.
+- `.ytstack/STANDING.md` -- what you ask for once and for all ("status only at slice boundaries") is written down when you say it.
+- A finished lane goes through `ytstack:finish-lane`: commit, push, pull request, review pinned to the commit the host shows, gates read from the host, merge at the reviewed commit. You merge unless `merge_by: coordinator` stands in `PREFERENCES.md`.
+- A step only you may perform (a production action, a check in a GUI) arrives as one script: `bash .ytstack/handover/<date>-<step>.sh`. It checks first, asks before every change and leaves a receipt.
+
+A status from the coordinator names when it read the pull request state. GitHub through `gh` is the only host the pipeline supports.
+
 ## Reading the state
 
 Open a new Claude Code session on the project. Before your first message, the `SessionStart` hook has already injected the `STATE.md` snapshot (current milestone / slice / task, recent summaries, next action). You can just say:

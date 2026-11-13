@@ -5,12 +5,18 @@ paths:
   - bin/ytstack-check
   - bin/ytstack-spec
   - bin/ytstack-brief
+  - bin/ytstack-frontier
+  - bin/ytstack-questions
+  - bin/ytstack-finish-lane
+  - bin/ytstack-handover
+  - bin/ytstack-watch
   - tests/**
   - evals/**
   - .github/workflows/**
 sources:
   - evals/README.md
   - docs/ux/spec-format.md
+  - docs/ux/coordinator-format.md
 verified_at: f4f54ab
 ---
 
@@ -41,7 +47,16 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **`bin/ytstack-brief`: the brief of a dispatched worker and its report**
 
 - A bash script on awk. `render --task <ref>` or `--slice <ref>` prints a brief built from the plan files and `skills/spawn-milestone-team/brief-template.md`, and includes the body of `skills/minimal-code/SKILL.md` as the work contract, read at render time. It prints no brief when the plan, its `## Files` section, the template or the contract is missing (exit 1).
-- `check` validates a worker's report from a file or stdin: the eight labels of the template's "Report" section, each with a value, and an exit code in every `Checks run:` line. It prints one line per problem and exits 1, or `report ok`.
+- `render --kind implement|review|prepare` adds what the worker may do; a review brief pins the commit range it reviews (`--head`, optionally `--base`) and has no Git section.
+- `check` validates a worker's report from a file or stdin: the labels of the template's "Report" section, each with a value, an exit code in every `Checks run:` line, one of the three `Status:` values and its consistency with `Blockers:`. It prints one line per problem and exits 1, or `report ok`.
+
+**The coordinator scripts** (formats and rules: `docs/ux/coordinator-format.md`; each has a suite of the same name under `tests/`)
+
+- `bin/ytstack-frontier`: `list` prints lane, state and detail per slice (done, claimed, blocked, ready); `claim` refuses a held lane and names the holder; `set` and `release` change one row of `LANES.md` under a lock; `check` validates the file.
+- `bin/ytstack-questions`: `new`, `list`, `next`, `ask` (once), `answer` (refused without text under "Answer"), `check`.
+- `bin/ytstack-finish-lane`: one step per call (`leftovers`, `commit`, `push`, `open-pr`, `wait-head`, `body-check`, `gates`, `merge`); every gate is read from GitHub through `gh` at the moment of the call, and `merge` passes the reviewed commit to the host so that a moved head cannot be merged. Its suite uses a stand-in for `gh` and a local bare remote.
+- `bin/ytstack-handover`: `new` copies `skills/handover-step/template.sh`; `check` is the static verification of a staged script (syntax, unchanged helper block, no raw command, a confirmation before every mutation, no pipe into a shell).
+- `bin/ytstack-watch`: polls pull requests through `gh` and prints a line only when head, checks, review or mergeability changed; `--once` prints the snapshot with its read time.
 
 **Shell suites: `tests/*.test.sh`**
 
@@ -103,6 +118,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 - The checker does not read `AskUserQuestion` bodies, sentinel-file names or `allowed-tools`. Those parts of `docs/ux/` are enforced by review.
 - An em-dash is a warning, and only `skills/*/SKILL.md` bodies are scanned. Both workflows accept warnings, so an em-dash does not turn CI red. Docs, agents and hooks are not scanned.
+- `bin/ytstack-finish-lane` and `bin/ytstack-watch` have run only against a stand-in for `gh`. Unknown -- their behaviour against GitHub (the JSON shapes, the built-in `--jq`, a merge queue).
 - No workflow runs `claude plugin validate .`, `claude plugin eval`, `tests/run-all.sh --linux`, the checker with `--strict`, or `tests/gstack-live.test.sh` against a real install.
 - The Python Codex tests run on ubuntu only.
 - `.claude/skills/check-consistency/SKILL.md` is a manual audit of README against docs and plugin content. No workflow runs it and the checker does not scan `.claude/skills/`.
@@ -112,6 +128,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 - `bin/ytstack-check` -- the checker; its docstring names the flags and exit codes.
 - `bin/ytstack-spec` -- the spec tool; `tests/ytstack-spec.test.sh` pins it.
 - `bin/ytstack-brief` -- brief renderer and report check; `tests/ytstack-brief.test.sh` pins it.
+- `bin/ytstack-frontier`, `bin/ytstack-questions`, `bin/ytstack-finish-lane`, `bin/ytstack-handover`, `bin/ytstack-watch` -- the coordinator scripts, each with `tests/<name>.test.sh`.
 - `tests/run-all.sh` -- the suite runner. `tests/*.test.sh` -- the suites. `tests/codex_plugin_test.py` -- the Python tests.
 - `evals/<case>/` -- the eval cases. `evals/README.md` -- how to run them.
 - `.github/workflows/ci.yml`, `plugin-check.yml`, `secret-scan.yml`.
@@ -133,6 +150,7 @@ Not covered by these four: `claude plugin eval` (costs money) and `bash tests/ru
 
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)". Source of `bin/ytstack-spec` and the two spec checks.
 - DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)". Source of `bin/ytstack-brief`.
+- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)". Source of the five coordinator scripts; the pipeline and the watcher support GitHub through `gh` only.
 - DECISIONS.md -- "2026-04-23: UX contracts enforced by CI, not convention"
 - DECISIONS.md -- "2026-05-31: Add `kind: reference` skill class (exempt from procedure-section contract)"
 - DECISIONS.md -- "2026-11-07: Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree". Source of the banned shell patterns and the shared-resolver rule in the checker.

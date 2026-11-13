@@ -23,7 +23,7 @@ The skill tree (`skills/*/SKILL.md`) and the agent definitions (`agents/*.md`): 
 
 | Class | Mark in the file | Members |
 |---|---|---|
-| Native procedure | no `metadata.kind`; own `## Preamble` with a `bash` block, `## Checklist`, `## Terminal State` | `adopt-brownfield`, `handoff-session`, `init-project`, `plan-milestone`, `plan-task`, `quick-task`, `reassess-roadmap`, `reconcile`, `resume-session`, `slice-milestone`, `spawn-milestone-team`, `summarize-task` |
+| Native procedure | no `metadata.kind`; own `## Preamble` with a `bash` block, `## Checklist`, `## Terminal State` | `adopt-brownfield`, `handoff-session`, `init-project`, `plan-milestone`, `plan-task`, `quick-task`, `reassess-roadmap`, `reconcile`, `resume-session`, `slice-milestone`, `spawn-milestone-team`, `summarize-task`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro` |
 | superpowers wrapper | a render-time block that prints `vendor/superpowers/skills/<src>/SKILL.md`, plus `## ytstack invocation notes` and `## Namespace note` | `code-review` (two vendored skills), `finish-branch`, `grill`, `systematic-debugging`, `test-driven-development`, `verification-before-completion` |
 | gstack wrapper | `yt_gstack_ctx` precheck, `## HARD-GATE: gstack installed?`, the sentence "Invoke the Skill tool with `<name>`" | `office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release` |
 | Directive | `metadata.kind: directive`, `user-invocable: false` | `using-ytstack`, `minimal-code` |
@@ -77,7 +77,7 @@ No other skill reads the flag.
 | `implementer` | own worktree, branch `ytstack/M###-S##` | one slice: per task `plan-task`, `test-driven-development`, `verification-before-completion`, `summarize-task`, commits with the task ref, then reports | merges, pushes, edits outside the plan's Files section |
 | `verifier` | fresh worktree on the slice branch | runs every task plan's verification command and compares it with the summary; checks the plan's spec impact against the area file of the touched code; verdict pass, pass with caveats or fail per task | edits anything, re-runs until green, reads areas the task did not touch |
 
-`spawn-milestone-team` runs in the main session as orchestrator and does not edit source files. It refuses a dirty tree and a linked worktree, asks before dispatching slices that name the same file, dispatches one implementer per open slice, then one verifier per finished slice. A fail sends the slice back to an implementer on the same branch; two fails in a row stop the run. Depending on the answer to its dispatch question it merges accepted branches with `git merge --no-ff` or leaves them. It never pushes.
+`spawn-milestone-team` runs in the main session as orchestrator and does not edit source files. It refuses a dirty tree (the lanes file it writes itself does not count) and a linked worktree, asks before dispatching slices that name the same file, claims and dispatches one implementer per ready slice, then one verifier per finished slice. A fail sends the slice back to an implementer on the same branch; two fails in a row stop the run. Depending on the answer to its dispatch question it merges accepted branches with `git merge --no-ff` or leaves them. It never pushes.
 
 ### The technical spec in the loop
 
@@ -90,12 +90,24 @@ No other skill reads the flag.
 
 `skills/minimal-code/SKILL.md` is the one text that says how much work is enough: the smallest complete change and the smallest sufficient evidence. The other skills apply it at their decision point and do not restate it.
 
-- **Dispatch.** `bin/ytstack-brief render` builds a worker's brief from the plan files and includes the body of `minimal-code` verbatim. `spawn-milestone-team` dispatches with that text and checks the worker's report with `bin/ytstack-brief check` before a verifier runs. The report has eight fixed labels and ends with "Not checked:".
+- **Dispatch.** `bin/ytstack-brief render` builds a worker's brief from the plan files and includes the body of `minimal-code` verbatim. `spawn-milestone-team` dispatches with that text and checks the worker's report with `bin/ytstack-brief check` before a verifier runs. A brief has a kind (`implement`, `review`, `prepare`) that says what the worker may do. The report has the fixed labels of `docs/ux/coordinator-format.md` ("The report"), among them `Status:` (complete, partial, blocked), "Not checked:" and `Next:`.
 - **Plan.** A task plan's Verification section names the command, `Runs:` and `Environment:`. What work cannot produce is a gate line under `## Gates` (what, who decides, how, when it lapses). A gate never holds a task open.
 - **Slice boundary.** `reassess-roadmap` collects the open gates of the milestone and work that repeats without advancing (three or more review rounds on a task), puts them to the human in one question, records only what was answered, and reports two numbers: slices closed by work and slices accepted. In non-interactive mode it asks nothing and records nothing.
 - **Review.** `code-review` counts rounds from the `## Review` lines in the task plan. Round 1 reviews the whole change, round 2 the fix, and from round 3 no reviewer is dispatched: the skill diagnoses scope, conflicting rules or solution and asks the human. The reviewer states the assumed load, gives a concrete case and "If skipped" per finding and follows the project's severity policy.
 - **Evidence.** A result is a check on a commit in an environment. `verification-before-completion` runs the plan's command as often as the plan says and notes the commit. The verifier makes one independent run per commit and cites an earlier verdict when the task's files are unchanged since. `summarize-task` records check, commit and environment and does not run the check again.
-- **Tests.** The TDD wrapper writes a failing test first for logic and bug fixes; a trivial change gets none.
+- **Tests.** The TDD wrapper writes a failing test first for logic and bug fixes; a trivial change gets none. `systematic-debugging` treats a test that fails only sometimes as a question of whose defect it is: reproduced on the base commit it becomes a tracked follow-up, otherwise it is the change's defect; the required check still has to turn green.
+- **Handoff.** `handoff-session` points instead of copying and names under "Suggested skills" the one or two skills the next session should start with.
+
+### Coordinating many lanes
+
+Formats: `docs/ux/coordinator-format.md`. The four skills below are for the session that owns a plan and delegates all of it; none of them writes product code.
+
+- `coordinate` is a loop with a fixed order: start from `STANDING.md`, `LANES.md`, the frontier and the questions (never from a conversation summary), read host facts fresh and stamp them with their read time, claim a lane before dispatching it, finish lanes through `finish-lane`, poll through `bin/ytstack-watch`, ask one question at a time from a question file, write a standing instruction down when it is given, stop a lane that failed verification twice or needs a third review, and rotate through a handoff after the first compaction.
+- `spawn-milestone-team` claims each lane with `bin/ytstack-frontier` before it dispatches, keeps the lane's row current, and looks at the frontier again whenever a lane is verified or merged.
+- `finish-lane` takes a reported lane to a merged pull request with `bin/ytstack-finish-lane`. Who merges is `merge_by:` in `PREFERENCES.md`: `human` (the default; the skill stops and hands over the command) or `coordinator`. The pipeline supports GitHub through `gh` only.
+- `handover-step` writes a step only the human may perform as one staged script from `skills/handover-step/template.sh`, checks it with `bin/ytstack-handover check` and never runs it. The place is `handover_dir:` in `PREFERENCES.md`.
+- `lane-retro` samples finished lanes in six fixed categories and proposes, per candidate, a check that replaces an instruction line or a pointer that replaces a search. It implements nothing itself.
+- `reassess-roadmap` carries a gate that needs a person's verdict as a question file when the project keeps `questions/`, folds a closed milestone into the area files, and names the archive offer of `reconcile`.
 
 ## Interfaces and contracts
 
@@ -171,3 +183,5 @@ No other skill reads the flag.
 - DECISIONS.md -- "2026-10-13: Remove generated Codex copies; load the existing skills directly" (one skill tree for both hosts)
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)" (the spec steps in the loop)
 - DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)" (the work contract; extends the ceremony entry of 2026-11-07 from code to evidence and review)
+- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)"
+- DECISIONS.md -- "2026-11-13: `STATE.md` is a pointer with a size bound; history leaves it through `reconcile`, a closed milestone is folded into the spec (M022-S03)"

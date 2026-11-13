@@ -42,7 +42,7 @@ What ytstack takes from other projects and by which mechanism: superpowers as a 
 **Methodology and attribution**
 
 - Third-party methodology material contributes concepts only. Prose, definitions, catalogs and graphics are not copied, and the source is not named.
-- `NOTICE` holds the attribution per source: superpowers (vendored, license file in the subtree), gstack (required install, nothing redistributed), a concept credit, the external methodology, Claude Code, and GSD as a reference that is not a dependency.
+- `NOTICE` holds the attribution per source: superpowers (vendored, license file in the subtree), gstack (required install, nothing redistributed), two concept credits (ponytail for the work contract and the review rules, mattpocock/skills for coordinator mode; no text of either is included), the external methodology, Claude Code, and GSD as a reference that is not a dependency.
 
 ## Interfaces and contracts
 

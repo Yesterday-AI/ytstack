@@ -62,6 +62,19 @@ these ideas to verification, review rounds and dispatched agents is ytstack's
 own extension. No ponytail text, code or assets are included; the prose is
 ytstack's own.
 
+## mattpocock/skills (concept credit)
+
+Coordinator mode (skills/coordinate/, skills/finish-lane/,
+skills/handover-step/, skills/lane-retro/, bin/ytstack-frontier,
+bin/ytstack-questions and docs/ux/coordinator-format.md) adapts concepts from
+the skill collection at <https://github.com/mattpocock/skills> (MIT, reviewed
+at 4ae2317): a coordinating session whose memory outlives it and is written as
+history, blocking edges and a frontier of ready work, a claim before any work,
+a brief with checkable completion criteria, a staged script for steps only the
+human may perform, a queue of decision-ready questions, and retros that end in
+checks. No text, template or code from that collection is included; every
+skill, script and template here is ytstack's own.
+
 ## External AI-first methodology
 
 Conceptual influence (not vendored, not attributed by name per ytstack

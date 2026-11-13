@@ -1,9 +1,9 @@
 ---
 project: ytstack
-last_updated: 2026-11-13T16:10:00Z
-total_milestones: 23
-completed_milestones: 18
-current_milestone: M022 (S01 and S02 done, S03 waits for M020; M023 done; M020 planned, M014 reserved, M011 and M013 absorbed into M019)
+last_updated: 2026-11-13T16:50:00Z
+total_milestones: 24
+completed_milestones: 20
+current_milestone: none (M022, M023 and M024 done 2026-11-13; M020 planned, M014 reserved, M011 and M013 absorbed into M019)
 ---
 
 # ytstack Roadmap
@@ -39,9 +39,9 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M019 | Skill quality, evals, execution model (report point 7 + developer-skills research; absorbs M013) -- trigger-only descriptions within the 1,536-char budget (mattpocock/Anthropic criteria, superpowers' "never summarise the workflow"), `tier`/`version` -> `metadata`, `disable-model-invocation`/`user-invocable` instead of `tier`, `claude plugin eval` suite + CI gate, new skills `code-review` (standards + spec reviewers), `pr`, `retro`, `grilling`, `writing-for-agents` wrapper; orchestrator + `Agent(isolation: worktree)` slices with `worktree.baseRef: head`, verifier Stop-hook; listing on skills.sh; version bump discipline. Released 0.4.0 -> 0.4.1 (Codex merge, PR #23) -> 0.4.2 (Linux `stat` fix), all pushed with green CI 2026-11-07. Shipped: `metadata:` + trigger-only descriptions + checker rules (S01), `evals/` 13 cases + CI (S02), `code-review` / `finish-branch` / `grill` / `retro` / `ship` / `document-release` (S03, absorbs M011), `spawn-milestone-team` 0.2.0 orchestrator + worktree subagents with Agent Teams opt-in, agents to the subagent contract, Stop hook (S04), release 0.4.0 (S05). Not done: `writing-for-agents` wrapper (no consumer asked), skills.sh listing (operator action). | **done** | 18 | 18 |
 | M020 | Kimi Code CLI host support (issue #30) -- planned 2026-11-09 in the main checkout; its `M020-*` files are not committed yet. The earlier candidates stay unscheduled: (a) dogfood `spawn-milestone-team` 0.2.0 on a real multi-slice milestone (orchestrator + worktree subagents, merge step, STATE resolution) and fix what the live run shows; (b) Codex host: verify the SessionStart `additionalContextLimit` (REVIEW-NOTES 2026-11-07) and the hook-free flow on a real Codex install; (c) PowerShell hook variants when a Windows consumer appears; (d) per-worktree STATE pointer if (a) needs it; (e) re-run the consumer audit (`docs/research/2026-11-07-notes/local-consumer-repos-audit.md`) after the 17 repos update to 0.4.x. | planned | TBD | 0 |
 | M021 | Status line segment (issue #31) -- `bin/ytstack-status`, optional `progress` block in the `STATE.md` frontmatter, `yt_progress_parse` + STATE lint W7, upkeep in `summarize-task` / `quick-task`, `docs/statusline.md`. Done 2026-11-11 (2 slices, 5 tasks); unreleased. Numbered M021 because M020 is taken by the Kimi adapter planning (issue #30). | **done** | 5 | 5 |
-| M022 | Technical spec (issue #36) -- new artifacts `.ytstack/spec/SPEC.md` and `.ytstack/spec/<area>.md` that state what applies now; `bin/ytstack-spec` (lint, drift, impact); the loop keeps them true; ytstack's own spec. S01 and S02 built 2026-11-13; S03 (STATE as a pointer, milestone fold, fresh-session cases) waits for M020. Section "Planned 2026-11-13" below. | **in-progress** | 11 | 11 |
+| M022 | Technical spec (issue #36) -- new artifacts `.ytstack/spec/SPEC.md` and `.ytstack/spec/<area>.md` that state what applies now; `bin/ytstack-spec` (lint, drift, impact); the loop keeps them true; ytstack's own spec. S01 to S03 built 2026-11-13 (S03: `STATE.md` as a pointer with lint W8/W9, "Next action" cut to fit, history out through `reconcile`, milestone fold, fresh-session cases). Section "Planned 2026-11-13" below. | **done** | 15 | 15 |
 | M023 | Bounded work (issue #35) -- `minimal-code` as the one work contract for code, evidence and reports; `bin/ytstack-brief` (rendered brief with the contract, report check); runs and environment in the plan; gates with one question and two progress numbers in `reassess-roadmap`; review rounds, assumed load and evidence identity. Built 2026-11-13. Section "Planned 2026-11-13" below. | **done** | 8 | 8 |
-| later | Coordinator mode (issue #34) -- what remains of its seven items after M022 and M023. Section "Planned 2026-11-13" below. | candidate | TBD | 0 |
+| M024 | Coordinator mode (issue #34) -- formats in `docs/ux/coordinator-format.md`; `LANES.md` with `bin/ytstack-frontier` (blocking edges, claims, the frontier); lane kinds and three more report labels; `bin/ytstack-finish-lane` + `finish-lane`; `handover-step` + `bin/ytstack-handover`; `questions/` + `bin/ytstack-questions`; `STANDING.md`; `coordinate` + `bin/ytstack-watch`; `lane-retro`. Built 2026-11-13; not yet run against a real pull request host (gate G01 in `M024-S02-PLAN.md`). | **done** | 12 | 12 |
 
 **Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 done (6/6, 2026-11-07); M011 task count pending milestone planning.
 

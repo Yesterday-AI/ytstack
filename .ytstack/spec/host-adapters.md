@@ -47,7 +47,7 @@ How one `skills/` tree and one set of hook scripts serve two hosts, Claude Code 
 - `ytstack-codex hook <name>` accepts only the three registered names and no further arguments. For `session-start` it exports `YTSTACK_HOST_CONTEXT`: one line with the plugin root, then the text of `codex/adapter.md`. It then replaces itself with the shared hook script.
 - `ytstack-codex skill <name>` accepts a lowercase slug whose `skills/<name>/SKILL.md` exists. It exports `CLAUDE_SKILL_DIR` and runs `bash` with the remaining arguments; the shell block arrives on stdin. The exit code of the block is the exit code of the helper.
 - `codex/adapter.md` tells the agent to run each shell block of a skill through `ytstack-codex skill`, maps the Claude tool names to Codex tools, and stops `spawn-milestone-team` before its capability probe.
-- A prompt that starts with `# Brief:` is a rendered brief (`bin/ytstack-brief render`): `codex/adapter.md` tells a Codex worker to follow it without loading a skill and to end with the eight report lines. An orchestrator on another host starts such a worker with `codex exec` in a worktree of its own. Unknown -- no live run has exercised this.
+- A prompt that starts with `# Brief:` is a rendered brief (`bin/ytstack-brief render`): `codex/adapter.md` tells a Codex worker to follow it without loading a skill, to do only what its Kind section allows and to end with the report lines it asks for. An orchestrator on another host starts such a worker with `codex exec` in a worktree of its own. Unknown -- no live run has exercised this.
 - Volatile state goes under `PLUGIN_DATA` when it is set, else under the remaining bases of `yt_state_base` in `hooks/lib/git-ctx.sh`.
 
 ### What a host loses
@@ -135,3 +135,5 @@ The first prints `OK` after the test count and exits 0. It copies the package in
 - DECISIONS.md -- "2026-11-07: No hard plugin dependencies". It narrows the catalog entry: no `dependencies` in the manifest, no `allowCrossMarketplaceDependenciesOn` in the marketplace.
 - DECISIONS.md -- "2026-04-24: Marketplace name equals plugin name". The name rule holds; the catalog entry replaces its install command as the primary path.
 - DECISIONS.md -- "2026-11-07: Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree" (state base order, including `PLUGIN_DATA`)
+- DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)" (a rendered brief is the same text for a worker on any host)
+- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)" (lane kinds in the brief; the pipeline and the watcher support GitHub only)

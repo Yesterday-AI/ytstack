@@ -15,12 +15,12 @@ This spec says what applies now. `STATE.md` says where the work stands, `DECISIO
 
 | Area | Covers | Status | File |
 |---|---|---|---|
-| skills | Skill classes, the shared preamble, ceremony preferences, non-interactive mode, the three agents | implemented | [skills.md](skills.md) |
-| artifacts | The files under `.ytstack/`, who writes each, the technical spec itself, what is user-owned | implemented | [artifacts.md](artifacts.md) |
+| skills | Skill classes, the shared preamble, ceremony preferences, the work contract, the spec in the loop, coordinating many lanes, the three agents | implemented | [skills.md](skills.md) |
+| artifacts | The files under `.ytstack/`, who writes each: plans and summaries, the technical spec, lanes, questions, standing instructions; what is user-owned | implemented | [artifacts.md](artifacts.md) |
 | hooks-and-state | The lifecycle hooks, the resolver library, state outside the tree, the SessionStart injection, the status segment | implemented | [hooks-and-state.md](hooks-and-state.md) |
 | host-adapters | Manifests, marketplace entries and hook registration for Claude Code and Codex, the Codex helper | implemented | [host-adapters.md](host-adapters.md) |
 | dependencies | superpowers as a read-only subtree, gstack as a pinned installed prerequisite, concepts-only sources | implemented | [dependencies.md](dependencies.md) |
-| checks-and-evals | The contract checker, the test suites, the spec tool, the behavioural evals, the CI workflows | implemented | [checks-and-evals.md](checks-and-evals.md) |
+| checks-and-evals | The contract checker, the test suites, the spec tool, the brief tool, the coordinator scripts, the behavioural evals, the CI workflows | implemented | [checks-and-evals.md](checks-and-evals.md) |
 
 ## Invariants that hold everywhere
 

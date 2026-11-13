@@ -47,6 +47,10 @@ The lifecycle hooks under `hooks/` and the shared library `hooks/lib/git-ctx.sh`
 | W5 | `last_updated` is older than the newest commit touching the `.ytstack` directory, beyond a slack set in the function |
 | W6 | the current milestone's roadmap has `status: done` while a slice is still active |
 | W7 | the `progress` block is malformed, one finding per problem |
+| W8 | `STATE.md` is larger than `YT_STATE_MAX_BYTES` (set beside the function): it is a pointer, not a ledger |
+| W9 | `STATE.md` carries status paragraphs beside the current one (`**Previous ...**`, `**Prior ...**`, a second `**Status ...**`) |
+
+W8 and W9 are prompts for `ytstack:reconcile`, which moves history out with consent. No skill stops on them.
 
 `yt_progress_parse` is the only parser of the optional `progress` block in the `STATE.md` frontmatter. It reports `none`, `ok` or `bad`. The lint and `bin/ytstack-status` both call it, so they agree on what is malformed.
 
@@ -79,7 +83,7 @@ Every hook sources the library and resolves from the payload `cwd`. Every hook e
 - No `.ytstack`: a greenfield block that routes build intent to `office-hours`. With two or more brownfield signals it routes to `adopt-brownfield` and names the signals.
 - `.ytstack` without `STATE.md`: a one-line repair notice.
 - Otherwise a state block, in this order: scope, project, pointer, last update, working tree with the linked-worktree flag, `.ytstack` path, a Next action excerpt, the three newest summary names, a notice when more than one milestone roadmap is `in-progress`, the manual and the latest automatic handoff, a lifecycle hint for a finished slice or a finished milestone without retro, up to five STATE lint findings, the minimal-code line when `minimal_code` is on, and a closing line that names the files as the source of truth. When `spec/SPEC.md` exists, the closing line names it as the place for what applies now.
-- Cap: the hook measures the injection without the host context. Above the guard threshold in the script, which sits just under the host's 10,000-character limit, it replaces the Next action excerpt with a one-line note. If the text is still above the threshold, it warns on stderr and emits the text anyway. Nothing else is dropped.
+- Cap: the hook measures the injection without the host context. Above the guard threshold in the script, which sits just under the host's 10,000-character limit, it cuts the Next action excerpt to what still fits and marks the cut; when less than a useful rest would remain, it replaces the excerpt with a one-line note. If the text is still above the threshold, it warns on stderr and emits the text anyway. Nothing else is dropped.
 
 ### Status line segment
 
@@ -161,4 +165,6 @@ bash tests/ytstack-status.test.sh
 - DECISIONS.md -- "2026-11-07: Ceremony scales with the change -- granularity, autonomy, quick lane and minimal-code guard are project preferences with loud defaults"
 - DECISIONS.md -- "2026-11-07: Brownfield adoption is a reference-first distillation, never a pitch"
 - DECISIONS.md -- "2026-11-11: Status line progress is one optional `progress` block in STATE.md, read by a plugin script (M021, issue #31)"
+- DECISIONS.md -- "2026-11-13: `STATE.md` is a pointer with a size bound; history leaves it through `reconcile`, a closed milestone is folded into the spec (M022-S03)" (lint W8 and W9, the cut excerpt in the injection)
+- DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)" (the closing line of the injection names `spec/SPEC.md`)
 - DECISIONS.md -- "2026-11-07: Vendor strategy -- superpowers stays a subtree tracked at upstream tags; gstack is de-vendored into an installed, tag-pinned dependency" (for `yt_gstack_ctx` and its pin)

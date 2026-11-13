@@ -1,7 +1,7 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-13T16:05:00Z
+last_updated: 2026-11-13T16:50:00Z
 current_milestone: none
 active_slice: none
 active_task: none
@@ -9,7 +9,7 @@ active_task: none
 
 # State
 
-**Status (2026-11-13):** M022 (technical spec, issue #36) S01 and S02 built, S03 waits for M020. M023 (bounded work, issue #35) built. Both on the branch `spec-and-bounded-work` (worktree `.claude/worktrees/spec-and-bounded-work`, on top of `f4f54ab`), not pushed. What exists: `.ytstack/spec/SPEC.md` plus six area files for ytstack itself, the format `docs/ux/spec-format.md`, `bin/ytstack-spec` (lint, drift, impact, areas), spec scaffolds in `init-project` and `adopt-brownfield` (also for an initialized project without a spec), "Spec impact" in `plan-task`, the closure check in `summarize-task`; `minimal-code` as the one work contract, `bin/ytstack-brief` (rendered brief with the contract, report check), runs and environment in the plan, gates with one question and two progress numbers in `reassess-roadmap`, review rounds and assumed load in `code-review`, evidence identity in the verifier. Checked: 15 suites `ALL SUITES PASSED` (macOS bash 3.2, and `--linux` from an export of the tree), checker 27 warnings as on `main`, 13 Codex tests OK, `claude plugin validate .` passed, eval run 17/17 against 5/7 for the current instructions on the 7 comparable cases (`KNOWLEDGE.md`, "Eval runs"). Not run: a live dispatch with a rendered brief, a live session on Codex. No milestone is in flight: the pointer is `none` until M022-S03 starts. What applies now is in `spec/SPEC.md`; this file only says where the work stands.
+**Status (2026-11-13):** M022 (technical spec, issue #36), M023 (bounded work, issue #35) and M024 (coordinator mode, issue #34) are built on the branch `spec-and-bounded-work` (worktree `.claude/worktrees/spec-and-bounded-work`, on top of `f4f54ab`), not pushed. What each milestone built: its `M###-CONTEXT.md` and `ROADMAP.md`; what applies now: `spec/SPEC.md`. Checked: 20 suites `ALL SUITES PASSED` on macOS bash 3.2 and in the Linux container, checker 27 warnings as on `main`, 13 Codex tests OK, `claude plugin validate .` passed, eval run 20 of 21 on the final tree (`KNOWLEDGE.md`, "Eval runs"). Not run: anything of coordinator mode against a real pull request host or in a real multi-lane run (gate G01 in `M024-S02-PLAN.md`), a live dispatch with a rendered brief, a live session on Codex. No milestone is in flight. This file is over its own size bound (lint W8, W9): its history moves out when the operator answers `ytstack:reconcile`.
 
 **Status (2026-11-11):** M021 DONE and merged as `b9daa42` (PR #32, issue #31 closed; review follow-up for ref selection and the `set -e` snippet in the next PR): `bin/ytstack-status` status line segment, optional `progress` block in the STATE frontmatter, `yt_progress_parse` + lint W7, upkeep in `summarize-task` / `quick-task`, `docs/statusline.md`. 13 suites green on macOS, checker 27 warnings as on `main`, `claude plugin validate .` passed. CI green on `main` (macOS and ubuntu). Released as 0.5.0 (manifests, badge and CHANGELOG in the follow-up PR; tag `v0.5.0` on its merge commit). M020 (Kimi adapter, issue #30) is planned in the main checkout and uncommitted there; it is the next pointer once both lines meet.
 
@@ -87,7 +87,7 @@ M009 Docs & Community            [####]   4/4  DONE
 
 ## Next action
 
-**Operator actions for M022 / M023:** review the branch `spec-and-bounded-work` and merge it (pull request or fast-forward); release; `/plugin update`. In each consumer project run `/ytstack:adopt-brownfield` once: it adds only `.ytstack/spec/`. Merging meets the uncommitted M020 planning in the main checkout in `STATE.md`, `DECISIONS.md` and `ROADMAP.md`: keep both sides. **Then:** M022-S03 after M020 has landed (STATE size bound, "Next action" back in the SessionStart injection, milestone fold, fresh-session cases); coordinator mode (#34) via `ytstack:plan-milestone`.
+**Operator actions for M022 / M023 / M024:** review the branch `spec-and-bounded-work` and merge it (pull request or fast-forward); release; `/plugin update`. In each consumer project run `/ytstack:adopt-brownfield` once: it adds only `.ytstack/spec/`. Run `/ytstack:reconcile` here to move this file's history out. Merging meets the uncommitted M020 planning in the main checkout in `STATE.md`, `DECISIONS.md`, `ROADMAP.md` and `hooks/session-start`: keep both sides. **Then:** the first lane of a consumer project finished with `finish-lane` against GitHub closes gate G01 of M024-S02; M020 (Kimi adapter) continues in the main checkout.
 
 **Previous operator actions (M021):** `/plugin update` to 0.5.0, wire the snippet from `docs/statusline.md` into the status line script. Pulling `main` into the main checkout meets the uncommitted M020 planning in `STATE.md` and `DECISIONS.md`: keep both DECISIONS entries and the M020 pointer.
 

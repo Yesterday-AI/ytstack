@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bin/ytstack-brief`: `render` builds the brief for a dispatched worker from
   the plan files and includes the contract verbatim (the same text for a
   Claude subagent and for `codex exec`); `check` validates the worker's
-  report (eight fixed labels). `spawn-milestone-team` dispatches with the
+  report (fixed labels, among them "Not checked:"). `spawn-milestone-team` dispatches with the
   rendered brief and checks the report before the verifier runs. Suite
   `tests/ytstack-brief.test.sh`.
 - Gates: a slice plan or task plan can carry `## Gates` (what, who decides,
@@ -62,12 +62,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "if skipped" per finding, treats a `shortcut:` comment that names its limit
   as a decision, and follows the project's severity policy.
 - Eval cases `bounded-evidence`, `gates-one-question`, `review-round-three`.
+- **`STATE.md` as a pointer**: the STATE lint reports a file above 12,000
+  bytes (W8) and status paragraphs beside the current one (W9). Both are
+  prompts and stop no skill. `reconcile` offers to move that history verbatim
+  into `.ytstack/archive/` and, in a project with a technical spec, to
+  archive the slice and task files of closed milestones.
+- At the last slice of a milestone `reassess-roadmap` folds what still holds
+  (changed behaviour, decisions in force, limits) into the area files of the
+  spec before it names the archive offer.
+- Eval cases `fresh-resume`, `fresh-bugfix`, `fresh-requirement`: three
+  fresh-session tasks on one project snapshot whose history contradicts its
+  present.
+- **Coordinator mode** (issue #34), formats in
+  `docs/ux/coordinator-format.md`:
+  - `.ytstack/LANES.md`, one row per delegated lane, written through
+    `bin/ytstack-frontier` (`list`, `claim`, `set`, `release`, `check`).
+    Slice plans carry `**Blocked by:**`; the frontier is what is open,
+    unblocked and unclaimed. `spawn-milestone-team` claims a lane before it
+    dispatches and dispatches again when the frontier changes. Claiming a
+    held lane is refused.
+  - `bin/ytstack-brief render --kind implement|review|prepare`; the report
+    gains `Status:` (complete, partial, blocked), `Uncommitted:` and `Next:`.
+  - `bin/ytstack-finish-lane` and the skill `finish-lane`: commit what a lane
+    left (junk and out-of-scope files are refused), push, open the pull
+    request, wait until the host shows the head, review pinned to that
+    commit, gates read from the host, merge at the reviewed commit. GitHub
+    through `gh`. Who merges is `merge_by:` in `PREFERENCES.md`, `human` by
+    default.
+  - The skill `handover-step` with `bin/ytstack-handover`: a step only the
+    human may perform becomes one staged script with read-only checks, a
+    confirmation before every change and a receipt. The agent checks it
+    statically and never runs it.
+  - `.ytstack/questions/` with `bin/ytstack-questions`: one file per question
+    for the human, states open, asked, answered. A question is asked once.
+    `reassess-roadmap` carries a gate that needs a verdict as a question
+    file.
+  - `.ytstack/STANDING.md` for instructions that hold beyond the task at
+    hand.
+  - The skill `coordinate` for the session that owns a plan and delegates all
+    of it: start from files after every context loss, host facts read fresh
+    and stamped with their read time, questions one at a time, bounded loops,
+    rotation through a handoff. `bin/ytstack-watch` polls pull requests
+    outside the model and prints a line only when something changed.
+  - The skill `lane-retro`: a sample of finished lanes in six fixed
+    categories; an accepted candidate becomes a check or a pointer, never
+    only new prose.
+  - `systematic-debugging` gets a flake disposition; the handoff gets a
+    "Suggested skills" section.
+  - Eval case `coordinator-resume`.
+  - Not exercised yet: nothing of coordinator mode has run against a real
+    pull request host or in a real multi-lane run; the suites use a stand-in
+    for `gh`.
 
 ### Changed
 
 - `resume-session`, `handoff-session` and the closing line of the
   SessionStart injection name `spec/SPEC.md` instead of restating how the
   system behaves.
+- The SessionStart injection cuts the "Next action" excerpt to what fits
+  under the host's cap instead of replacing it with "omitted".
 - Evidence is a check on a commit in an environment. The verifier still makes
   the independent run, once per commit; neither it nor
   `verification-before-completion` repeats a check for the same commit and
