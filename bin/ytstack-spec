@@ -1,0 +1,359 @@
+#!/usr/bin/env bash
+# ytstack technical spec tool (M022, issue #36). Format: docs/ux/spec-format.md.
+#
+#   ytstack-spec lint                      format of .ytstack/spec/ (SPEC.md + area files)
+#   ytstack-spec drift [--exit-code]       areas whose paths changed after their description
+#   ytstack-spec impact --plan FILE [--grep ERE] [--base SHA]
+#                                          a task's "## Spec impact" against what it changed
+#   ytstack-spec areas [--names] PATH...   which area describes a path (--names: the area names only)
+#
+# All commands take -C DIR first (default: $PWD).
+#
+# Exit codes
+#   lint    0 clean, 2 warnings only, 1 failures (or no spec)
+#   drift   0 always; with --exit-code 2 when an area is listed
+#   impact  0 satisfied or "none", 1 not satisfied, 3 the plan states no impact
+#   areas   0 when every path has an area, 1 otherwise
+#
+# drift reports a POSSIBLE documentation impact: paths changed, the description
+# and its sources did not. Whether the contract changed is a judgment the tool
+# does not make. Local refs only: no network.
+
+set -uo pipefail
+
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hooks/lib/git-ctx.sh"
+
+SECTIONS='Purpose
+Behavior
+Interfaces and contracts
+Data flow
+Invariants and security boundaries
+Error behavior
+Runtime and deployment assumptions
+Known limits
+Where implemented
+How to verify
+Decisions that apply now'
+REQUIRED='Purpose
+Where implemented
+How to verify
+Decisions that apply now'
+AREA_MAX=200
+SPEC_MAX=80
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+
+usage() { sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+case "$CMD" in lint|drift|impact|areas) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+
+yt_git_ctx "$DIR"
+yt_resolve_yt_dir >/dev/null
+TOP="$YT_TOPLEVEL"
+SPEC_DIR="${YT_DIR:+$YT_DIR/spec}"
+
+# fm <file>: frontmatter as "key<TAB>value" lines; list items repeat the key.
+fm() {
+  awk '
+    NR == 1 { if ($0 != "---") exit; next }
+    $0 == "---" { exit }
+    /^[ \t]*#/ { next }
+    /^[A-Za-z_][A-Za-z0-9_]*:/ {
+      key = $0; sub(/:.*/, "", key)
+      val = $0; sub(/^[^:]*:[ \t]*/, "", val); sub(/[ \t]+$/, "", val)
+      if (val == "" || val == "[]") next
+      gsub(/^["'\'']|["'\'']$/, "", val)
+      print key "\t" val; next
+    }
+    /^[ \t]+-[ \t]+/ {
+      val = $0; sub(/^[ \t]+-[ \t]+/, "", val); sub(/[ \t]+$/, "", val)
+      gsub(/^["'\'']|["'\'']$/, "", val)
+      if (key != "" && val != "") print key "\t" val
+    }
+  ' "$1"
+}
+fm_get()  { fm "$1" | awk -F'\t' -v k="$2" '$1 == k { print $2; exit }'; }
+fm_list() { fm "$1" | awk -F'\t' -v k="$2" '$1 == k { print $2 }'; }
+
+# headings <file>: "## " headings outside the frontmatter and outside code fences.
+headings() {
+  awk '
+    NR == 1 && $0 == "---" { infm = 1; next }
+    infm { if ($0 == "---") infm = 0; next }
+    /^```/ { fence = !fence; next }
+    !fence && /^## / { sub(/^## /, ""); sub(/[ \t]+$/, ""); print }
+  ' "$1"
+}
+
+area_files() {
+  [ -d "$SPEC_DIR" ] || return 0
+  for f in "$SPEC_DIR"/*.md; do
+    [ -f "$f" ] || continue
+    [ "$(basename "$f")" = SPEC.md ] || printf '%s\n' "$f"
+  done
+}
+
+rel() { case "$1" in "$TOP"/*) printf '%s' "${1#"$TOP"/}" ;; *) printf '%s' "$1" ;; esac; }
+
+is_commit() { git -C "$TOP" rev-parse --verify --quiet "$1^{commit}" >/dev/null 2>&1; }
+
+# ---- lint ----------------------------------------------------------------------
+cmd_lint() {
+  local fails=0 warns=0 f name area status ver n h last idx p s
+  fail() { fails=$((fails + 1)); echo "FAIL $1"; }
+  warn() { warns=$((warns + 1)); echo "warn $1"; }
+
+  if [ -z "$SPEC_DIR" ] || [ ! -f "$SPEC_DIR/SPEC.md" ]; then
+    echo "FAIL no technical spec: ${SPEC_DIR:-<no .ytstack>}/SPEC.md does not exist"
+    return 1
+  fi
+
+  for h in "Areas" "Keeping this true"; do
+    # No `grep -q` at the end of a pipeline in this script: it exits on the
+    # first match, the writer gets SIGPIPE, and pipefail turns the match into
+    # a failure (seen with BusyBox awk, which writes line by line).
+    headings "$SPEC_DIR/SPEC.md" | grep -xF "$h" >/dev/null || fail "SPEC.md: section '## $h' is missing"
+  done
+  n=$(wc -l < "$SPEC_DIR/SPEC.md" | tr -d ' ')
+  [ "$n" -le "$SPEC_MAX" ] || warn "SPEC.md: $n lines, the entry point stays under $SPEC_MAX"
+  # every area link in SPEC.md resolves
+  while IFS= read -r name; do
+    [ -z "$name" ] || [ -f "$SPEC_DIR/$name" ] || fail "SPEC.md: links $name, which does not exist"
+  done <<EOF
+$(grep -oE '\]\([a-z0-9][a-z0-9-]*\.md\)' "$SPEC_DIR/SPEC.md" | sed 's/^](//; s/)$//' | sort -u)
+EOF
+
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    name=$(basename "$f" .md)
+    grep -qF "]($name.md)" "$SPEC_DIR/SPEC.md" || fail "$name.md: not listed in SPEC.md"
+    if [ "$(head -1 "$f")" != "---" ]; then fail "$name.md: no frontmatter"; continue; fi
+    area=$(fm_get "$f" area); status=$(fm_get "$f" status); ver=$(fm_get "$f" verified_at)
+    [ "$area" = "$name" ] || fail "$name.md: area '$area' differs from the file name"
+    case "$status" in
+      planned) ;;
+      partial|implemented)
+        if [ -z "$ver" ] || [ "$ver" = none ]; then
+          fail "$name.md: status $status needs verified_at (the commit it was checked against)"
+        elif [ "$YT_IS_GIT" = yes ] && ! is_commit "$ver" \
+          && [ "$(git -C "$TOP" rev-parse --is-shallow-repository 2>/dev/null)" != true ]; then
+          # A warning, not a failure: a squash merge drops the branch commit a stamp named.
+          warn "$name.md: verified_at '$ver' is not a commit in this repository; set it to the commit you check against"
+        fi
+        [ -n "$(fm_list "$f" paths)" ] || fail "$name.md: status $status needs paths"
+        if [ "$YT_IS_GIT" = yes ]; then
+          while IFS= read -r p; do
+            [ -n "$p" ] || continue
+            # tracked, or new and not ignored (a path added by the change under way)
+            [ -n "$(git -C "$TOP" ls-files --cached --others --exclude-standard -- ":(glob)$p" 2>/dev/null | head -1)" ] \
+              || fail "$name.md: paths entry '$p' matches no file in the repository"
+          done <<EOF
+$(fm_list "$f" paths)
+EOF
+        fi ;;
+      *) fail "$name.md: status '$status' is not planned, partial or implemented" ;;
+    esac
+    while IFS= read -r s; do
+      [ -n "$s" ] || continue
+      [ -e "$TOP/$s" ] || fail "$name.md: sources entry '$s' does not exist"
+    done <<EOF
+$(fm_list "$f" sources)
+EOF
+    last=0
+    while IFS= read -r h; do
+      [ -n "$h" ] || continue
+      idx=$(printf '%s\n' "$SECTIONS" | grep -nxF "$h" | cut -d: -f1)
+      if [ -z "$idx" ]; then fail "$name.md: section '## $h' is not one of the fixed sections"; continue; fi
+      [ "$idx" -gt "$last" ] || fail "$name.md: section '## $h' is out of order or repeated"
+      last=$idx
+    done <<EOF
+$(headings "$f")
+EOF
+    while IFS= read -r h; do
+      headings "$f" | grep -xF "$h" >/dev/null || fail "$name.md: required section '## $h' is missing"
+    done <<EOF
+$REQUIRED
+EOF
+    n=$(wc -l < "$f" | tr -d ' ')
+    [ "$n" -le "$AREA_MAX" ] || warn "$name.md: $n lines, an area file stays under $AREA_MAX"
+  done <<EOF
+$(area_files)
+EOF
+
+  echo "spec lint: $(area_files | grep -c .) area file(s), $fails failure(s), $warns warning(s)"
+  [ "$fails" -eq 0 ] || return 1
+  [ "$warns" -eq 0 ] || return 2
+  return 0
+}
+
+# ---- drift ---------------------------------------------------------------------
+cmd_drift() {
+  local strict=no listed=0 f name status last code n newest
+  [ "${1:-}" != "--exit-code" ] || strict=yes
+  if [ -z "$SPEC_DIR" ] || [ ! -d "$SPEC_DIR" ]; then echo "spec drift: no technical spec"; return 0; fi
+  if [ "$YT_IS_GIT" != yes ] || [ "$YT_SCOPE" != project ]; then
+    echo "spec drift: needs the spec under version control in the repository it describes"; return 0
+  fi
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    name=$(basename "$f" .md)
+    status=$(fm_get "$f" status)
+    [ "$status" != planned ] || continue
+    set --
+    while IFS= read -r p; do [ -z "$p" ] || set -- "$@" ":(glob)$p"; done <<EOF
+$(fm_list "$f" paths)
+EOF
+    [ $# -gt 0 ] || continue
+    # The last commit that touched the description or one of its sources. A
+    # re-stamped verified_at is such a touch, so the stamp itself is not read
+    # here (and a stamp a squash merge orphaned cannot break the report).
+    # An area file that is new or edited in the working tree is being touched
+    # right now: nothing to report until it is committed.
+    [ -n "$(git -C "$TOP" log -1 --format=%H -- "$(rel "$f")" 2>/dev/null)" ] || continue
+    last=$( { printf '%s\n' "$(rel "$f")"; fm_list "$f" sources; } | (
+      set --; while IFS= read -r s; do [ -z "$s" ] || set -- "$@" "$s"; done
+      [ -z "$(git -C "$TOP" status --porcelain -- "$@" 2>/dev/null)" ] || exit 0
+      git -C "$TOP" log -1 --format=%H -- "$@" 2>/dev/null ) )
+    [ -n "$last" ] || continue
+    code=$(git -C "$TOP" log --format='%h %s' "$last..HEAD" -- "$@" 2>/dev/null)
+    [ -n "$code" ] || continue
+    n=$(printf '%s\n' "$code" | grep -c .)
+    newest=$(printf '%s\n' "$code" | head -1)
+    listed=$((listed + 1))
+    echo "$name: possible documentation impact -- $n commit(s) changed its paths after $(git -C "$TOP" rev-parse --short "$last"), where the description was last touched; newest: $newest"
+  done <<EOF
+$(area_files)
+EOF
+  if [ "$listed" -eq 0 ]; then
+    echo "spec drift: no area to look at"
+  else
+    echo "spec drift: $listed area(s) to look at. Contract changed: update the area file or its source. Unchanged: set verified_at to the commit you checked."
+    [ "$strict" = no ] || return 2
+  fi
+  return 0
+}
+
+# ---- impact --------------------------------------------------------------------
+cmd_impact() {
+  local plan="" pat="" base="" body first line area f changed committed fails=0 hit how s
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { echo "impact: $1 needs a value" >&2; return 64; }
+    case "$1" in
+      --plan) plan="$2" ;;
+      --grep) pat="$2" ;;
+      --base) base="$2" ;;
+      *) echo "impact: unknown argument $1" >&2; return 64 ;;
+    esac
+    shift 2
+  done
+  [ -f "$plan" ] || { echo "impact: plan file '$plan' not found" >&2; return 64; }
+
+  body=$(awk '
+    /^```/ { fence = !fence }
+    !fence && /^## / { on = ($0 ~ /^## Spec impact[ \t]*$/); next }
+    on && NF { print }
+  ' "$plan")
+  if [ -z "$body" ]; then
+    echo "spec impact: not stated -- the plan has no '## Spec impact' section; state the impact in the summary"
+    return 3
+  fi
+  first=$(printf '%s\n' "$body" | head -1)
+  case "$first" in
+    [Nn]one*|"- "[Nn]one*) echo "spec impact: ${first#- }"; return 0 ;;
+  esac
+
+  # What the task changed: commits whose subject matches --grep, else
+  # --base..HEAD, plus the working tree (a summary is often written before the
+  # commit that carries it).
+  committed=""
+  if [ "$YT_IS_GIT" = yes ]; then
+    [ -z "$pat" ] || committed=$(git -C "$TOP" log --no-merges -E --grep "$pat" --name-only --pretty=format: 2>/dev/null)
+    if [ -z "$committed" ] && [ -n "$base" ]; then
+      committed=$(git -C "$TOP" diff --name-only "$base..HEAD" 2>/dev/null)
+    fi
+    changed=$(git -C "$TOP" status --porcelain --untracked-files=all 2>/dev/null | sed 's/^...//; s/.* -> //')
+  else
+    changed=""
+  fi
+
+  # touched <path>: "committed", "uncommitted" or nothing. A directory matches by prefix.
+  touched() {
+    local re; re="^$(printf '%s' "${1%/}" | sed 's/[][\.*^$+?(){}|]/\\&/g')(/|\$)"
+    if printf '%s\n' "$committed" | grep -E "$re" >/dev/null; then echo committed
+    elif printf '%s\n' "$changed" | grep -E "$re" >/dev/null; then echo uncommitted
+    fi
+  }
+
+  while IFS= read -r line; do
+    case "$line" in
+      "- "*:*) area=${line#- }; area=${area%%:*}; area=$(printf '%s' "$area" | tr -d ' `') ;;
+      *) echo "FAIL unreadable line (expected '- <area>: <section> -- <what changes>'): $line"; fails=$((fails + 1)); continue ;;
+    esac
+    f="$SPEC_DIR/$area.md"
+    if [ ! -f "$f" ]; then
+      echo "FAIL $area: the plan names this area, but $(rel "$f") does not exist"; fails=$((fails + 1)); continue
+    fi
+    hit=""; how=""
+    while IFS= read -r s; do
+      [ -n "$s" ] || continue
+      how=$(touched "$s")
+      if [ -n "$how" ]; then hit="$s"; break; fi
+    done <<EOS
+$(rel "$f")
+$(fm_list "$f" sources)
+EOS
+    if [ -n "$hit" ]; then
+      echo "ok   $area: $hit changed ($how)"
+    else
+      echo "FAIL $area: neither $(rel "$f") nor its sources ($(fm_list "$f" sources | tr '\n' ' ' | sed 's/ $//; s/^$/none/')) changed in this task"
+      fails=$((fails + 1))
+    fi
+  done <<EOF
+$body
+EOF
+  [ "$fails" -eq 0 ] || return 1
+  return 0
+}
+
+# ---- areas ---------------------------------------------------------------------
+cmd_areas() {
+  local path f name p pat found miss=0 names=no all=""
+  if [ "${1:-}" = "--names" ]; then names=yes; shift; fi
+  [ $# -gt 0 ] || { [ "$names" = yes ] && return 0; echo "areas: give at least one path" >&2; return 64; }
+  for path in "$@"; do
+    path=${path#./}; found=""
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      name=$(basename "$f" .md)
+      while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        # shortcut: a case pattern, where * also crosses "/". Wider than a git
+        # pathspec glob; upgrade to `git ls-files :(glob)` if a hint must be exact.
+        pat=${p//\*\*\//*}; pat=${pat//\*\*/*}
+        # shellcheck disable=SC2254
+        case "$path" in $pat) found="${found:+$found }$name"; break ;; esac
+      done <<EOF
+$(fm_list "$f" paths)
+EOF
+    done <<EOF
+$(area_files)
+EOF
+    if [ "$names" = yes ]; then all="$all $found"
+    elif [ -n "$found" ]; then echo "$path: $found"
+    else echo "$path: no area"; miss=1; fi
+  done
+  if [ "$names" = yes ]; then
+    # shellcheck disable=SC2086
+    printf '%s\n' $all | awk 'NF && !seen[$0]++'
+    return 0
+  fi
+  return $miss
+}
+
+case "$CMD" in
+  lint)   cmd_lint ;;
+  drift)  cmd_drift "$@" ;;
+  impact) cmd_impact "$@" ;;
+  areas)  cmd_areas "$@" ;;
+esac
