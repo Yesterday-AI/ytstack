@@ -175,16 +175,39 @@ class DurableWorkflow(unittest.TestCase):
 
     def ticked(self,budget=None,open_prs=()):
         """Watch numbers one tick reads, with the quota answer `budget` (None: unknown);
-        `open_prs` is what the open-PR list of a repository returns (calls in self.open_calls)."""
-        seen=[]; self.open_calls=0
-        def listing(repo):
+        `open_prs` is the repository's open-PR list, served in pages of 100
+        (every page request counted in self.open_calls)."""
+        seen=[]; self.open_calls=0; prs=list(open_prs)
+        def page(path):
             self.open_calls+=1
-            return list(open_prs)
+            n=int(path.rsplit('page=',1)[1])
+            return prs[(n-1)*100:n*100]
         with patch.object(worker,'discover'),patch.object(worker,'monitor',side_effect=lambda db,w:seen.append(w['number'])),\
              patch.object(worker,'deliver'),patch.object(worker,'spendable',return_value=budget),\
-             patch.object(github,'open_pulls',side_effect=listing):
+             patch.object(github,'api',side_effect=page):
             worker.tick(send=False,reconcile=False)
         return seen
+
+    def test_reopen_listing_pays_every_page_and_resumes_later(self):
+        self.close()
+        many=[{'number':n} for n in range(1000,1250)]+[{'number':1}]   # three pages
+        self.ticked(budget=2,open_prs=many)
+        self.assertEqual(self.open_calls,2)
+        self.assertEqual(self.watch()['status'],'closed')               # incomplete: not on the first two pages
+        self.assertIsNone(self.db.execute("SELECT value FROM meta WHERE key='reopen_check:o/r'").fetchone())
+        self.ticked(budget=3,open_prs=many)
+        self.assertEqual(self.open_calls,3)
+        self.assertEqual(self.watch()['status'],'registered')
+
+    def test_reopen_ignores_watches_outside_the_window(self):
+        self.close()
+        with self.db:
+            register(self.db,'o/r',2,'session-a','/tmp')
+            old=time.time()-worker.REOPEN_WINDOW-1
+            self.db.execute("UPDATE watches SET status='closed',detail='[]',closed_at=? WHERE number=2",(old,))
+        self.ticked(open_prs=[{'number':1},{'number':2}])
+        self.assertEqual(self.db.execute('SELECT status FROM watches WHERE number=1').fetchone()[0],'registered')
+        self.assertEqual(self.db.execute('SELECT status FROM watches WHERE number=2').fetchone()[0],'closed')
 
     def test_settled_prs_are_read_less_often(self):
         n=self.watch()['number']; now=time.time(); fresh=now-10; stale=now-worker.FAST_WINDOW-1

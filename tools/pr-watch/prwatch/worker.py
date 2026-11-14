@@ -266,28 +266,39 @@ def reopen_checks(db, now, budget):
     """A closed, unmerged PR can be reopened on GitHub. Instead of one snapshot
     per closed watch, read the open PRs once per repository (one call per 100
     open PRs) every REOPEN_CHECK, for watches closed within REOPEN_WINDOW, and
-    put a reopened one back to `registered`. Returns the budget left."""
-    repos = [r['repo'] for r in db.execute(
-        "SELECT DISTINCT repo FROM watches WHERE paused=0 AND status='closed' AND closed_at IS NOT NULL "
-        "AND closed_at > ? AND detail NOT LIKE '%\"merged\"%'", (now - REOPEN_WINDOW,))]
+    put a reopened one back to `registered`. Every page is one REST call paid
+    from `budget`; a listing the budget cannot finish is resumed on a later
+    tick. Returns the budget left."""
+    eligible = ("paused=0 AND status='closed' AND closed_at IS NOT NULL AND closed_at > ? "
+                "AND detail NOT LIKE '%\"merged\"%'")
+    window = now - REOPEN_WINDOW
+    repos = [r['repo'] for r in db.execute(f'SELECT DISTINCT repo FROM watches WHERE {eligible}', (window,))]
     for repo in repos:
         key = f'reopen_check:{repo}'
         last = db.execute('SELECT value FROM meta WHERE key=?', (key,)).fetchone()
         if last and now - float(last['value']) < REOPEN_CHECK:
             continue
-        if budget is not None:
-            if budget < 1:
-                break
-            budget -= 1
+        open_numbers, page, complete = set(), 1, False
         try:
-            open_numbers = {pr['number'] for pr in github.open_pulls(repo)}
+            while budget is None or budget >= 1:
+                if budget is not None:
+                    budget -= 1
+                batch = github.api(f'repos/{repo}/pulls?state=open&per_page=100&page={page}')
+                open_numbers.update(pr['number'] for pr in batch)
+                if len(batch) < 100:
+                    complete = True
+                    break
+                page += 1
         except (github.APIError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
             continue
         with db:
-            db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (key, str(now)))
+            if complete:
+                db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (key, str(now)))
             for number in open_numbers:
                 db.execute("UPDATE watches SET status='registered', updated=0, closed_at=NULL "
-                           "WHERE repo=? AND number=? AND status='closed'", (repo, number))
+                           f'WHERE repo=? AND number=? AND {eligible}', (repo, number, window))
+        if not complete:
+            break
     return budget
 
 
