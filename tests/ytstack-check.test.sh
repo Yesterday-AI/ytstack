@@ -328,6 +328,53 @@ OUT=$("$CHECK" "$ROOT" 2>&1)
 eq "a drifted copy of the maintenance block -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "init-project/SKILL.md: the 'Keeping this true' block differs")"
 cp "$TMP/init.bak" "$ROOT/skills/init-project/SKILL.md"
 
+# ---- standing instructions, one file per entry (issue #57) -------------------
+echo "# standing entries"
+PRJ="$TMP/project"; SD="$PRJ/.ytstack/standing"; mkdir -p "$PRJ/.ytstack"
+entry() { # entry <name> <given> <scope> <supersedes> [body]
+  printf -- '---\ngiven: %s\nscope: %s\nsupersedes: %s\n---\n\n%s\n' "$2" "$3" "$4" "${5-An instruction.}" > "$SD/$1.md"
+}
+OUT=$("$CHECK" --standing "$PRJ" 2>&1); EC=$?
+eq "--standing without a directory: exit 0 (STANDING.md alone is valid)" 0 "$EC"
+mkdir -p "$SD"
+entry 20261114T1225Z-at-most-ten 2026-11-14T12:25:00Z "every author" ""
+entry 20261114T1436Z-at-most-fifteen 2026-11-14T14:36:00Z "every lane" 20261114T1225Z-at-most-ten
+printf '# Standing\n' > "$SD/README.md"
+OUT=$("$CHECK" --standing "$PRJ" 2>&1); EC=$?
+eq "--standing: well-formed entries, README ignored -> exit 0" 0 "$EC"
+eq "--standing: counts the entries" 1 "$(printf '%s' "$OUT" | grep -c 'OK: 2 standing entries')"
+OUT=$("$CHECK" --standing "$PRJ/.ytstack" 2>&1); EC=$?
+eq "--standing: the .ytstack dir itself is accepted" 0 "$EC"
+entry 20261114T1500Z-gone 2026-11-14T15:00:00Z "x" 20261114T0900Z-never-written
+entry 20261114T1510Z-later 2026-11-14T15:10:00Z "x" 20261114T1600Z-future.md
+entry 20261114T1600Z-future 2026-11-14T16:00:00Z "x" ""
+entry 20261114T1520Z-bad-given 2026-11-14 "x" ""
+entry 20261114T1530Z-wrong-minute 2026-11-14T15:31:00Z "x" ""
+entry 20261114T1540Z-no-scope 2026-11-14T15:40:00Z "" ""
+entry 20261114T1550Z-no-body 2026-11-14T15:50:00Z "x" "" ""
+entry 20261114T1555Z-self 2026-11-14T15:55:00Z "x" 20261114T1555Z-self
+printf 'no frontmatter\n' > "$SD/20261114T1700Z-plain.md"
+printf -- '---\ngiven: 2026-11-14T17:00:00Z\nscope: x\n---\n\nx\n' > "$SD/Report-Results.md"
+OUT=$("$CHECK" --standing "$PRJ" 2>&1); EC=$?
+eq "--standing: broken entries -> exit 1" 1 "$EC"
+eq "supersedes naming no entry -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1500Z-gone.md: supersedes '20261114T0900Z-never-written' names no entry")"
+eq "supersedes naming a newer entry (.md suffix allowed) -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1510Z-later.md: supersedes '20261114T1600Z-future', which is newer")"
+eq "given not an ISO time -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1520Z-bad-given.md: given '2026-11-14' is not an ISO UTC time")"
+eq "given and the name differ -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1530Z-wrong-minute.md: given 2026-11-14T15:31:00Z and the time in the name differ")"
+eq "empty scope -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1540Z-no-scope.md: scope is empty")"
+eq "no body -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1550Z-no-body.md: no instruction below the frontmatter")"
+eq "supersedes itself -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1555Z-self.md: supersedes names the entry itself")"
+eq "no frontmatter -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1700Z-plain.md: no frontmatter")"
+eq "a name without the UTC prefix -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "Report-Results.md: name is not")"
+eq "the well-formed entries stay quiet" 0 "$(printf '%s' "$OUT" | grep -c "at-most-\(ten\|fifteen\)")"
+# the plugin's own .ytstack/standing/ is part of the full run
+mkdir -p "$ROOT/.ytstack/standing"
+cp "$SD/20261114T1500Z-gone.md" "$ROOT/.ytstack/standing/"
+OUT=$("$CHECK" "$ROOT" 2>&1); EC=$?
+eq "full run: a broken own standing entry -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "\[fail\] .ytstack/standing/20261114T1500Z-gone.md: supersedes")"
+eq "full run: exit 1" 1 "$EC"
+rm -rf "$ROOT/.ytstack"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -6,6 +6,8 @@ Run from the plugin root (or pass path):
     bin/ytstack-check /path/to/ytstack
     bin/ytstack-check --strict      # warnings become failures
     bin/ytstack-check --quiet       # only print on failure
+    bin/ytstack-check --standing [<project dir>]
+                                    # only .ytstack/standing/ of any project
 
 Exit codes: 0 = pass, 1 = fail, 2 = warnings only (non-strict).
 
@@ -750,6 +752,108 @@ def check_keeping_block(root):
     return fails, []
 
 
+# ---------- check: standing instructions, one file per entry (issue #57) ----------
+
+_STANDING_NAME = re.compile(r"^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?Z-[a-z0-9]+(?:-[a-z0-9]+)*\.md$")
+_STANDING_GIVEN = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?Z$")
+
+
+def _fm_scalar(fm, key):
+    """A one-line frontmatter value without quotes; "" when absent or empty,
+    None when the value is a list."""
+    v = fm.get(key, "")
+    if isinstance(v, list):
+        return "" if not v else None
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        v = v[1:-1].strip()
+    return v
+
+
+def check_standing(yt_dir):
+    """`.ytstack/standing/<YYYYMMDDTHHMMZ>-<slug>.md`, one standing instruction
+    per file (docs/ux/coordinator-format.md). Each entry has the frontmatter
+    `given` (UTC, the same minute as its name), `scope` and optionally
+    `supersedes` (the name of an earlier entry, `.md` optional) and the
+    instruction as its body. README.md is allowed as a note for people.
+    Skipped when the directory does not exist."""
+    fails = []
+    sdir = Path(yt_dir) / "standing"
+    if not sdir.is_dir():
+        return fails, []
+    entries = {}
+    for p in sorted(sdir.iterdir()):
+        if not p.is_file() or not p.name.endswith(".md") or p.name == "README.md":
+            continue
+        rel = f".ytstack/standing/{p.name}"
+        nm = _STANDING_NAME.match(p.name)
+        if not nm:
+            fails.append(f"{rel}: name is not <YYYYMMDDTHHMMZ>-<slug>.md (UTC time, lowercase slug)")
+            continue
+        fm, body = parse_frontmatter(p)
+        if fm is None:
+            fails.append(f"{rel}: no frontmatter (given, scope, supersedes)")
+            continue
+        entries[p.name[:-3]] = (rel, fm)
+        given = _fm_scalar(fm, "given") or ""
+        gm = _STANDING_GIVEN.match(given)
+        if not gm:
+            fails.append(f"{rel}: given '{given}' is not an ISO UTC time (YYYY-MM-DDTHH:MMZ or with seconds)")
+        elif gm.groups()[:5] != nm.groups()[:5]:
+            fails.append(f"{rel}: given {given} and the time in the name differ (newest first reads the name)")
+        if not _fm_scalar(fm, "scope"):
+            fails.append(f"{rel}: scope is empty (where the instruction applies)")
+        if not body.strip():
+            fails.append(f"{rel}: no instruction below the frontmatter")
+    for name, (rel, fm) in sorted(entries.items()):
+        sup = _fm_scalar(fm, "supersedes")
+        if sup is None:
+            fails.append(f"{rel}: supersedes names one entry, not a list")
+            continue
+        if sup in ("", "none", "None", "-"):
+            continue
+        if sup.endswith(".md"):
+            sup = sup[:-3]
+        if sup == name:
+            fails.append(f"{rel}: supersedes names the entry itself")
+        elif sup not in entries:
+            fails.append(f"{rel}: supersedes '{sup}' names no entry in .ytstack/standing/")
+        elif sup > name:
+            fails.append(f"{rel}: supersedes '{sup}', which is newer than this entry")
+    return fails, []
+
+
+def standing_main(args):
+    """`ytstack-check --standing [<project dir>]`: only the standing entries of
+    a project, for any repository that has `.ytstack/` (no plugin root
+    needed). Exit 0 = pass or no directory, 1 = fail."""
+    path_args = [a for a in args if not a.startswith("--")]
+    start = Path(path_args[0] if path_args else Path.cwd()).resolve()
+    yt = None
+    for p in [start, *start.parents]:
+        if p.name == ".ytstack" and p.is_dir():
+            yt = p
+            break
+        if (p / ".ytstack").is_dir():
+            yt = p / ".ytstack"
+            break
+    if yt is None:
+        print(f"no .ytstack/ found from {start}")
+        sys.exit(0)
+    fails, _ = check_standing(yt)
+    if fails:
+        print(f"FAIL: {len(fails)} error(s)")
+        for line in fails:
+            print(f"  [fail] {line}")
+        sys.exit(1)
+    if not (yt / "standing").is_dir():
+        print(f"OK: no {yt}/standing/ (STANDING.md alone is valid)")
+    else:
+        n = len([p for p in (yt / "standing").glob("*.md") if p.name != "README.md"])
+        print(f"OK: {n} standing entr{'y' if n == 1 else 'ies'} in {yt}/standing/")
+    sys.exit(0)
+
+
 # ---------- main ----------
 
 def main():
@@ -758,6 +862,9 @@ def main():
     quiet = "--quiet" in args
     path_args = [a for a in args if not a.startswith("--")]
     root_arg = path_args[0] if path_args else None
+
+    if "--standing" in args:
+        standing_main(args)
 
     root = find_plugin_root(root_arg)
 
@@ -808,6 +915,11 @@ def main():
     all_fails.extend(f)
     all_warns.extend(w)
     f, w = check_keeping_block(root)
+    all_fails.extend(f)
+    all_warns.extend(w)
+
+    # Standing instructions, one file per entry (issue #57)
+    f, w = check_standing(root / ".ytstack")
     all_fails.extend(f)
     all_warns.extend(w)
 
