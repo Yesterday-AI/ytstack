@@ -197,7 +197,7 @@ From a merge to a changed role file, end to end:
 
 ## Records
 
-A review leaves lines in the plan of what it reviewed (the slice plan for a slice lane, the task plan for a task) under `## Review`:
+A review leaves lines in the plan of what it reviewed (the slice plan for a slice lane, the task plan for a task) under `## Review`, and on a pull request the same lines in the body of its review on the host ("Records on the host" below):
 
 ```markdown
 ## Review
@@ -227,9 +227,33 @@ The script reads a record line tolerantly. After ` -- ` comes the verdict, then 
 
 A round line is **valid for a head** when it names that head, or when nothing but process records changed between its head and that head. The plan that carries the line, a summary and `STATE.md` move the head without touching the change; a file of the change that came after the review does not. A lens line is valid for a head when it names that head, or when no path under its `applies` changed since.
 
+### Records on the host
+
+A plan is a file somebody has to write and commit. Where agents may not write in the main checkout, the line has to be committed on the pull request's branch, and that moves the head: a host rule that counts only reviews on the current head no longer sees the review, and the plan in the main checkout still has no line. So the same lines also go into the body of the review on the pull request (`finish-lane`, Step 7 and 8; `code-review` when the branch has an open pull request), each at the start of a line:
+
+```
+Verdict: approved
+Reviewed commit: e4f5a6b...
+Round: 1
+
+<findings>
+
+- Round 1: a1b2c3d..e4f5a6b -- approved; blocking: 0; follow-ups: 1; risk: low; invariants: none; by: review-M004-S02
+```
+
+The host ties a review to the commit it was submitted on (`commit_id` in the GitHub reviews API) and names its author. `route --pr <n>` reads the reviews of the pull request once and takes the record lines from their bodies:
+
+- A review counts when it is submitted (not pending), not dismissed, and by somebody with write access (`author_association` `OWNER`, `MEMBER` or `COLLABORATOR`). Anybody can comment on a public pull request; their lines do not count.
+- The newest line counts, by the time its review was submitted. A line on the host wins over the plan; the plan's line counts only when no review carries one of that kind (the round, or the lens).
+- The line must name the commit the host tied its review to. A line that names another commit leaves open what was reviewed: `person`. Validity for the head is computed from the host's commit, with the rule above.
+- A review in the state `CHANGES_REQUESTED` does not approve, whatever its line says: `person`.
+- A read that fails routes to a person: a newer review on the host may say what the plan does not.
+
+The round number still comes from the lane's `Round` cell (`LANES.md`) or from the plan; the host carries the record of each round, not the count.
+
 ## The route
 
-`bin/ytstack-risk route --plan <plan file> --base <sha> --head <sha> [--author <worker>]` decides between `unattended` and `person`:
+`bin/ytstack-risk route [--plan <plan file>] [--pr <n> [--repo <owner/name>]] --base <sha> --head <sha> [--author <worker>]` decides between `unattended` and `person`. It needs `--plan`, `--pr` or both; with `--pr` the records come from the host first ("Records on the host"), and `--repo` names the repository when `gh` cannot tell it from the checkout:
 
 ```
 route: unattended | person
@@ -238,23 +262,24 @@ ceiling: none | low | normal
 floor: low | normal | person
 areas: <comma list or none>
 lenses: <comma list or none>
+round: host review <id> by <login> on <sha> | plan | none     (only with --pr)
 reason: <path or subject> -- <what failed>
 ```
 
-There is one `reason:` line per condition that failed, and none when the route is `unattended`. The subject of a reason is a path of the change, `size`, `review`, `class` or `lens <name>`. `class` is `person` when the floor is, and `unstated` when the newest round line states no risk.
+There is one `reason:` line per condition that failed, and none when the route is `unattended`. The subject of a reason is a path of the change, `size`, `review`, `class` or `lens <name>`. `class` is `person` when the floor is, and `unstated` when the newest round line states no risk. `round:` says where the round line came from.
 
-The exit code is 0 for `unattended` and 10 for `person`. 64 is a usage error, also a plan file that does not exist; 65 means git cannot answer. A caller treats everything but 0 as "not unattended".
+The exit code is 0 for `unattended` and 10 for `person`, also when the host cannot be read. 64 is a usage error, also a plan file that does not exist; 65 means git cannot answer. A caller treats everything but 0 as "not unattended".
 
 `--author` is the worker that made the change. The script compares it with `by:` of each record. Without `--author` it cannot tell the reviewer from the author, says so in a reason and routes to a person. `by: self` is what a session writes that reviewed its own change: it counts as the author in a round line and in a lens line, whatever `--author` names.
 
 The route is `unattended` only when all of this holds:
 
 1. The floor is not `person`.
-2. The newest round line of the plan approves, is valid for the head, states `risk` and `invariants: none`, and names a reviewer other than the author.
+2. The newest round line (from the host's reviews with `--pr`, else from the plan) approves, is valid for the head, states `risk` and `invariants: none`, and names a reviewer other than the author.
 3. The class (the higher of floor and stated risk) is not above the ceiling of the touched areas. A change that touches no area has the ceiling `none`.
 4. Every required lens has a newest line with `pass` that is valid for the head, from a reviewer other than the author, and its `reads` documents exist at the head. For `evidence: visual` the directory the line names holds a `MANIFEST` with at least one image; every listed image is there with the listed SHA-256, and its line states `url`, `viewport` and `shows`.
 
-The route says nothing about the host. `finish-lane` reads the host's gates (checks, review threads, mergeability, the reviewed commit) as before, and merges on its own only when both hold and `merge_by` is `risk`.
+The route reads the host only for the review records, and only with `--pr`; it says nothing about the host's gates. `finish-lane` reads the host's gates (checks, review threads, mergeability, the reviewed commit) as before, and merges on its own only when both hold and `merge_by` is `risk`.
 
 | `merge_by` | Who merges |
 |---|---|
