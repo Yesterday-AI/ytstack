@@ -1,15 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T17:30:00Z
-current_milestone: M030
+last_updated: 2026-11-14T19:10:00Z
+current_milestone: none
 active_slice: none
 active_task: none
 ---
 
 # State
 
-**Status (2026-11-14, M030):** Done on branch `m030-review-lessons`, unreleased: `bin/ytstack-review-escapes`, `## Own reviewers` in `REVIEW.md`, signals `kind: review` with per-PR caught/escaped tallies, skill `review-lessons`, triggers after every merge (upkeep by merge date, PR watch merge notice, `finish-lane`), escape rate per role in `retro`. Pilot read on 30 merged context-mcp PRs: 8 bot findings, 2 caught, 6 escaped (5 on bookkeeping files). Not covered: an eval case and a live run of the skill (pilot in Yesterday-AI/context-mcp#1650).
+**Status (2026-11-14, M030):** Done, merged (#51, `974888e`) and released as 0.9.0 together with Kimi Code support (M020, #49): `bin/ytstack-review-escapes`, `## Own reviewers` in `REVIEW.md`, signals `kind: review` with per-PR caught/escaped tallies, skill `review-lessons`, triggers after every merge (upkeep by merge date, PR watch merge notice, `finish-lane`), escape rate per role in `retro`. Pilot read on 30 merged context-mcp PRs: 8 bot findings, 2 caught, 6 escaped (5 on bookkeeping files). Not covered: an eval case and a live run of the skill (pilot in Yesterday-AI/context-mcp#1650).
 
 **Status (2026-11-14, M020):** M020 DONE (7/7) on `feat/kimi-code-support`, rebuilt directly on 0.8.0 (`41e5199`). The native Kimi manifest loads all 38 shared skills as `ytstack:<name>`; the helper provides static bootstrap plus pending startup/compaction context, shared handoff and supported-close journal behavior. The six gstack-derived skills stay self-contained; the earlier external-resolution design was removed. Verification: 26 macOS and 26 Linux suites, 16 Codex tests, two Kimi packaging and nine lifecycle tests, native Kimi 2.5.3 and official Linux 2.6.2 each 7/7, and Claude plugin validation. Headless SessionEnd #4380, web close, local macOS npm 2.6.2 and real-model selection limits are documented. Issue #30 remains open until its PR merges.
 
