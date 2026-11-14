@@ -15,7 +15,7 @@
     <img alt="version" src="https://img.shields.io/badge/version-0.7.0-FC4E14">
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
     <img alt="Codex" src="https://img.shields.io/badge/Codex-plugin-0A0A0A">
-    <img alt="skills" src="https://img.shields.io/badge/skills-31-FC4E14">
+    <img alt="skills" src="https://img.shields.io/badge/skills-38-FC4E14">
     <img alt="hooks" src="https://img.shields.io/badge/hooks-9-FC4E14">
   </p>
 
@@ -23,7 +23,7 @@
     <tr>
       <td align="center"><strong>1</strong><br/>install</td>
       <td align="center"><strong>0</strong><br/>separate runtimes</td>
-      <td align="center"><strong>21</strong><br/>curated skills</td>
+      <td align="center"><strong>38</strong><br/>curated skills</td>
       <td align="center"><strong>MIT</strong><br/>open source</td>
     </tr>
   </table>
@@ -37,15 +37,25 @@ Enterprise-capable. Equally useful for solo dev.
 
 ## What a session feels like
 
-Open a project that uses ytstack. Before your first message, a SessionStart hook has already injected two things into your agent's context: (1) a directive that tells the agent to reach for ytstack skills whenever your intent matches one, and (2) a state snapshot that tells it where you are:
+Open a project that uses ytstack. Before your first message, a SessionStart hook has already injected into your agent's context: (1) a directive that tells the agent to reach for ytstack skills whenever your intent matches one, (2) a state snapshot that tells it where you are, and (3) with `minimal_code: on`, the pointer to the work contract:
 
 ```
 [ytstack active -- scope: project]
+
 Project: csv-importer
 Current: M002 / S01 / T04
-Last updated: 2026-04-23T19:30:00Z
+Last updated: 2026-11-13T19:30:00Z
+Working tree: /home/you/csv-importer
+ytstack dir: /home/you/csv-importer/.ytstack
+
+Next action:
+Stream rows into the staging table in src/import/stage.ts
+
 Recent tasks: T01 (added CLI flag parsing), T02 (streaming CSV reader), T03 (row validation)
-Next action: finish argon2 integration in src/auth/signup.ts:47
+
+Minimal-code guard is on (PREFERENCES minimal_code): smallest complete change, smallest sufficient evidence. ...
+
+The files in .../.ytstack are the source of truth for this project's state. Read STATE.md for the full dashboard, spec/SPEC.md for what applies now, ...
 ```
 
 From there, you just talk to the agent. **You rarely type slash-commands.** The agent maps your natural-language requests to the right skill:
@@ -55,6 +65,7 @@ From there, you just talk to the agent. **You rarely type slash-commands.** The 
 - Say "something's broken, find it" → agent fires `ytstack:systematic-debugging` (root-cause required, no symptom patches)
 - Say "where were we" → agent fires `ytstack:resume-session`, produces a 3-paragraph briefing
 - Describe a feature you're not sure about → agent fires `ytstack:office-hours` for forcing questions
+- Say "production is down" → agent fires `ytstack:incident`: a record, every mitigation as a script you run, the cause afterwards
 
 **Slash-commands are for steering**, not driving. Type `/ytstack:<name>` when you want to override the skill the agent would have picked, skip a step, or trigger an unusual workflow (e.g. running `ytstack:plan-ceo-review` on a milestone you already sliced, to challenge the premise again). For the happy path, natural language is enough.
 
@@ -74,7 +85,7 @@ gstack and superpowers overlap heavily in scope -- both ship planning, both ship
 
 Install all three and you get friction: interactive prompts blocking each other, skill overlap, 50+ skills flooding every system prompt, a separate runtime to maintain. See the combining articles on [dev.to](https://dev.to/imaginex/a-claude-code-skills-stack-how-to-combine-superpowers-gstack-and-gsd-without-the-chaos-44b3) and [Medium](https://medium.com/@tentenco/superpowers-gsd-and-gstack-what-each-claude-code-framework-actually-constrains-12a1560960ad) for the full diagnosis.
 
-**ytstack is the curation.** One plugin. We cherry-pick the _non-overlapping best_: gstack's strategy-review skills (CEO / eng / office-hours), superpowers' discipline skills (TDD / systematic-debugging / verification). We skip the overlap: gstack's `investigate` duplicates superpowers' `systematic-debugging`, superpowers' `writing-plans` conflicts with our milestone / slice / task flow, etc. GSD's project-memory discipline is re-implemented natively as skills + hooks -- no separate runtime. Claude Code's native Agent Teams handle parallel execution.
+**ytstack is the curation.** One plugin. We cherry-pick the _non-overlapping best_: gstack's strategy-review skills (CEO / eng / office-hours), superpowers' discipline skills (TDD / systematic-debugging / verification). We skip the overlap: gstack's `investigate` duplicates superpowers' `systematic-debugging`, superpowers' `writing-plans` conflicts with our milestone / slice / task flow, etc. GSD's project-memory discipline is re-implemented natively as skills + hooks -- no separate runtime. Claude Code's native worktree subagents handle parallel execution (Agent Teams as an opt-in).
 
 ## What you get
 
@@ -217,7 +228,9 @@ Source: [`docs/ytstack-delivery-flow.excalidraw`](docs/ytstack-delivery-flow.exc
 ### Prerequisites
 
 - Claude Code >= 2.1.214.
-- bash, git and `gh` (for `ship` and `document-release`). Nothing else: the six skills adapted from gstack (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`) ship inside the plugin, so gstack and Bun are not needed and nothing is registered in `~/.claude/skills/`.
+- bash, git and `gh` (for `ship`, `document-release`, and the pull request steps of `finish-lane` and `bin/ytstack-watch`; GitHub is the only pull request host they support). `jq` or Python 3 for the hooks' JSON handling; Python 3 for `bin/ytstack-check`.
+- For `visual-review`: a browser tool in the session that renders a page and returns a screenshot (a Playwright-style browser server or command line, or the host's built-in browser). Without one a visual lens records `not run`.
+- Nothing else: the six skills adapted from gstack (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`) ship inside the plugin, so gstack and Bun are not needed and nothing is registered in `~/.claude/skills/`.
 
 ### Codex
 
@@ -230,7 +243,7 @@ Start a new session. With trusted hooks, ytstack supplies its runtime context
 automatically. Without hooks, first ask Codex to read the installed plugin's
 `codex/adapter.md`, then select `$ytstack:using-ytstack` in the skill picker.
 On local hosts with hook support, review and trust the plugin hooks for automatic
-startup context, compaction handoff, and session journaling. Both hosts load the same 31 skill files. Worktree subagents, Claude Agent Teams and edit/commit hooks remain
+startup context, compaction handoff, and session journaling. Both hosts load the same 38 skill files. Worktree subagents, Claude Agent Teams and edit/commit hooks remain
 Claude-only; Codex uses the sequential task flow and explicit verification.
 See [Codex setup and compatibility](docs/codex.md) for local development,
 hook-free usage, and validation.
@@ -289,7 +302,7 @@ Without `--permission-mode acceptEdits`, Write operations stall on permission di
 | "build me X" / "I have an idea for Z" | `ytstack:office-hours` | `OFFICE-HOURS.md` (pitch with `name:` + `one-liner:` frontmatter) |
 | (after pitch is written) | `ytstack:plan-ceo-review` (concept mode) | annotation block prepended to pitch |
 | (optional, if architecture needs sanity-check) | `ytstack:plan-eng-review` (concept mode) | annotation block prepended to pitch |
-| (once pitch is locked) | `ytstack:init-project` | `.ytstack/` with 6 core files, `PROJECT.md` populated from pitch frontmatter |
+| (once pitch is locked) | `ytstack:init-project` | `.ytstack/` with 6 core files, `PROJECT.md` populated from pitch frontmatter, `spec/SPEC.md` plus one `planned` file per area |
 | (after scaffolding) | `ytstack:plan-milestone` | `M001-CONTEXT.md` + `M001-ROADMAP.md` |
 | "break this into slices" | `ytstack:slice-milestone` | `M001-S##-PLAN.md` per slice |
 | (per task in the slice) | `plan-task` -> TDD -> verify -> `summarize-task` | `T##-PLAN.md` -> code + tests -> `T##-SUMMARY.md` |
@@ -372,7 +385,7 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 
 ## Status
 
-**v0.7.0 -- shipping, actively dogfooded.** 0.7.0 adds the technical spec (`.ytstack/spec/`, #36), bounded work (#35), coordinator mode (#34), the risk gate (whether a person looks at a change is decided per change, with a visual review for interface changes), the product per worktree, the release watch, signal intake and incidents. 0.6.0 ships the six gstack-derived skills as ytstack's own adaptations (no gstack install, nothing in `~/.claude/skills/`) and adds the upstream sync check `bin/ytstack-gstack-diff`. 0.5.0 added the status line segment (`bin/ytstack-status`, #31). 0.2.0 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); 0.3.0 pulled superpowers to v7.0.2 and turned gstack into an installed, tag-pinned dependency (#25); 0.4.0 adds brownfield import (`adopt-brownfield`, #18), ceremony scaling (quick lane, reconcile, minimal-code guard, STATE lint), the 2026 skill bar (`metadata:` frontmatter, trigger-only descriptions measured by `evals/`, CI), six lifecycle skills (`code-review`, `finish-branch`, `grill`, `retro`, `ship`, `document-release`) and the worktree-subagent execution model. ytstack tracks its own development in `.ytstack/`; see `.ytstack/ROADMAP.md` for what is next.
+**v0.7.0 -- shipping, actively dogfooded.** 0.7.0 adds the technical spec (`.ytstack/spec/`, #36), bounded work (#35), coordinator mode (#34), the risk gate (whether a person looks at a change is decided per change, with a visual review for interface changes), the product per worktree, the release watch, signal intake and incidents. Coordinator mode, the risk route and the release watch have run only against a stand-in for `gh` and fixture targets so far. 0.6.0 shipped the six gstack-derived skills as ytstack's own adaptations (no gstack install, nothing in `~/.claude/skills/`) and added the upstream sync check `bin/ytstack-gstack-diff`. 0.5.0 added the status line segment (`bin/ytstack-status`, #31). 0.2.0 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); 0.3.0 pulled superpowers to v7.0.2 and turned gstack into an installed, tag-pinned dependency (#25); 0.4.0 added brownfield import (`adopt-brownfield`, #18), ceremony scaling (quick lane, reconcile, minimal-code guard, STATE lint), the 2026 skill bar (`metadata:` frontmatter, trigger-only descriptions measured by `evals/`, CI), six lifecycle skills (`code-review`, `finish-branch`, `grill`, `retro`, `ship`, `document-release`) and the worktree-subagent execution model. ytstack tracks its own development in `.ytstack/`; see `.ytstack/ROADMAP.md` for what is next.
 
 Ships:
 
@@ -451,7 +464,7 @@ Read [AGENTS.md](./AGENTS.md) before modifying anything. See [CONTRIBUTING.md](.
 
 Key rules:
 
-- Never modify content in `vendor/**` (upstream superpowers / gstack trees -- wrap, don't edit)
+- Never modify content in `vendor/**` (the superpowers subtree -- wrap, don't edit)
 - Never copy third-party methodology prose verbatim (concepts only)
 - One logical change per commit
 - Follow the AskUserQuestion 4-part format for any user-facing question
@@ -463,8 +476,8 @@ See [`docs/references.md`](./docs/references.md) for the full list of sources co
 Three layers, cheapest first:
 
 - `bin/ytstack-check` -- static contracts (frontmatter, `metadata:`, description budget and trigger-only phrasing, resolver rules, vendor leaks). Free, runs in CI.
-- `bash tests/run-all.sh` -- the shell suites in `tests/` (hooks, lib, preambles, checker) on macOS bash 3.2 and Linux (`--linux` via Docker). Free, runs in CI on ubuntu and macOS (`.github/workflows/ci.yml`).
-- `claude plugin eval . --trust-plugin --scaffold --allow-tools Write Edit Bash --ablation none --no-publish --max-cost-usd 10` -- behavioural evals in [`evals/`](./evals/README.md): one case per lifecycle skill, each a user-phrased prompt plus a `skill-fired` grader and an outcome grader on the produced artifact. Real model calls on your account (about $0.30 per case); not in CI. The last recorded run is in `.ytstack/KNOWLEDGE.md`.
+- `bash tests/run-all.sh` -- the shell suites in `tests/` (hooks, lib, preambles, checker, and one suite per script under `bin/`) on macOS bash 3.2 and Linux (`--linux` via Docker; before a release also `ubuntu:26.04` and plain alpine, see [CONTRIBUTING.md](./CONTRIBUTING.md#testing)). Free, runs in CI on ubuntu and macOS (`.github/workflows/ci.yml`).
+- `claude plugin eval . --trust-plugin --scaffold --allow-tools Write Edit Bash --ablation none --no-publish --max-cost-usd 10` -- behavioural evals in [`evals/`](./evals/README.md): one case per lifecycle skill plus cases for rules that span skills, each a user-phrased prompt plus a `skill-fired` grader and an outcome grader on the produced artifact. Real model calls on your account (about $0.30 per case); not in CI, run for new and changed skills before a release. The last recorded run is in `.ytstack/KNOWLEDGE.md`.
 
 `/skill-doctor` in a session and `claude plugin details ytstack` show what the skill listing costs and which skills never fire.
 

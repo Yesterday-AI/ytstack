@@ -73,6 +73,30 @@ JSON object with a `cwd` field. See `docs/statusline.md`.
 | A Codex worker under an orchestrator on another host | `bin/ytstack-brief render --task <ref>` (or `--slice`) prints a brief that is complete in itself: scope, verification, the work contract (`skills/minimal-code/SKILL.md`) and the report shape. Pipe it into `codex exec -C <a worktree of its own> -`; `bin/ytstack-brief check` validates the worker's report. `--kind` sets what the worker may do: `implement` (the default), `review` (read only, one pinned commit range) or `prepare`, which without `--branch` asks a worker whose sandbox cannot commit for files only and has it list them under `Uncommitted:`. Not exercised in a live run yet. |
 | Claude marketplace dependencies | Not installed by Codex. Optional design tools must be available separately when needed. The six skills adapted from gstack ship with ytstack and need no gstack install. |
 
+### Skills and scripts added in 0.7.0
+
+The scripts under `bin/` are plain bash (macOS bash 3.2 and Linux, BSD and GNU
+tools, BusyBox) and run the same under either host. Run them from the project
+or pass `-C <dir>` as their first argument. `ytstack-handover` is the exception:
+it takes no `-C` and works on the script path you give it (`new <path>`,
+`check <script>`). A skill's own shell blocks go through `bin/ytstack-codex`
+as described above.
+
+| Script | In Codex |
+| --- | --- |
+| `ytstack-spec`, `ytstack-brief`, `ytstack-frontier`, `ytstack-questions`, `ytstack-handover`, `ytstack-risk`, `ytstack-runtime`, `ytstack-signals`, `ytstack-upkeep` | Works. They read and write files under `.ytstack/` and call git; none needs a model or a host feature. |
+| `ytstack-finish-lane`, `ytstack-watch` (pull request mode) | Works where `gh` is logged in and `origin` is on GitHub. Network access is the sandbox's decision; a blocked call fails with the script's message. |
+| `ytstack-watch release` | Works. It runs only the `deployed` and `healthy` commands of `RUNTIME.md`. A full watch takes up to 17 minutes with the defaults, so start it with a tool timeout that covers that. |
+
+| Skill | In Codex |
+| --- | --- |
+| `minimal-code` | Works when loaded. The SessionStart pointer to it needs trusted hooks; a rendered brief carries the contract verbatim either way. |
+| `handover-step`, `lane-retro` | Work. The agent writes and checks the staged script and never runs it, on either host. |
+| `signal-intake` | Works. Codex has no scheduler of its own; `docs/recipes/recurring-upkeep.md` shows a system schedule around `codex exec`, and the same shape fits an intake run. Untested, like every agent variant of that recipe. |
+| `incident` | Works. Its one question per mitigation goes to chat when no question tool exists; the person still runs every script. |
+| `coordinate`, `finish-lane` | The files, the frontier, the questions, the route and the host reads work. Every worker, every review and every lens has to run in a fresh context. There is no `Agent` call with worktree isolation here, so each one is a `codex exec -C <a worktree of its own> -` fed by `ytstack-brief render`, started from the shell and checked with `ytstack-brief check`. Not exercised in a live run on either host. |
+| `visual-review` | Needs a browser tool on the host that renders the page and returns a screenshot the model can look at (a Playwright-style browser server or command line), and a "Run" section in `RUNTIME.md`. Without either the lens records `not run`, never a pass. Shell fetches (`curl`) and the DOM as text do not count. |
+
 This is a repository/local plugin distribution. It is not a public OpenAI
 directory submission; packages with lifecycle hooks require manual local
 installation. Codex subagents are not presented as an equivalent to Claude's

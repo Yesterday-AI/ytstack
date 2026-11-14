@@ -105,6 +105,23 @@ human may perform, a queue of decision-ready questions, and retros that end in
 checks. No text, template or code from that collection is included; every
 skill, script and template here is ytstack's own.
 
+## Agentic software factory (concept credit)
+
+The risk gate and the delivery flow (bin/ytstack-risk, the auto_merge ceiling
+of an area, .ytstack/spec/REVIEW.md with its lenses, skills/visual-review/,
+merge_by: risk, bin/ytstack-runtime and the "Run", "Release" and "Signals"
+sections of RUNTIME.md, the release watch in bin/ytstack-watch,
+bin/ytstack-upkeep, skills/signal-intake/ and skills/incident/) are inspired
+by a published account of an agentic software factory, compared against
+ytstack in docs/research/2026-11-13-openai-software-factory.md: a risk class
+decided per change with a per-area permission to merge without a person,
+second reviews by kind of change, the product startable per worktree and
+inspected in a browser, a watched rollout, recurring upkeep runs, and an
+incident helper that proposes mitigations a person orders. The floor that no
+judgment can lower, the reviewer who is never the author, read-only access to
+production and every mitigation as a staged script a person runs are
+ytstack's own. No text, image or code from that account is included.
+
 ## External AI-first methodology
 
 Conceptual influence (not vendored, not attributed by name per ytstack
