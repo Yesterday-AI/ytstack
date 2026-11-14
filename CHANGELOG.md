@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Standing instructions as one file each** (issue #57): what you asked for
+  once and for all can live in `.ytstack/standing/`, one file per instruction
+  named `<YYYYMMDDTHHMMZ>-<slug>.md`, with `given`, `scope` and `supersedes`
+  in its frontmatter. Two pull requests that each add an instruction no
+  longer conflict over the end of `STANDING.md`. `coordinate` (0.3.0) writes
+  new instructions there and replaces one with a newer file that supersedes
+  it; `coordinate`, `finish-lane`, `signal-intake`, `handover-step` and
+  `review-lessons` read the entries newest first and skip superseded ones.
+  `STANDING.md` alone keeps working and is still read next to the directory,
+  also as a short index. `ytstack-risk` sends a change under
+  `.ytstack/standing/` to a person, and `ytstack-check --standing` checks the
+  names, the frontmatter and that every `supersedes` names an earlier entry.
+
 ## [0.9.2] - 2026-11-14
 
 ### Fixed
