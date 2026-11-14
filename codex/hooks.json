@@ -1,5 +1,5 @@
 {
-  "description": "Codex lifecycle hooks. Only the three supported lifecycle events are registered.",
+  "description": "Codex lifecycle hooks: SessionStart, PreCompact and SessionEnd run the shared lifecycle scripts. The pr-watch entries (SessionStart, PreToolUse and PostToolUse on Bash or create_pull_request, Stop) are the opt-in PR watch: they exit at once unless ~/.ytstack/config has pr_watch=on (docs/pr-watch.md).",
   "hooks": {
     "SessionStart": [
       {
@@ -10,6 +10,15 @@
             "command": "bash \"${PLUGIN_ROOT}/bin/ytstack-codex\" hook session-start",
             "timeout": 10,
             "additionalContextLimit": 5000
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${PLUGIN_ROOT}/bin/ytstack-codex\" hook pr-watch",
+            "timeout": 15
           }
         ]
       }
@@ -32,6 +41,41 @@
             "type": "command",
             "command": "bash \"${PLUGIN_ROOT}/bin/ytstack-codex\" hook session-end",
             "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|.*create_pull_request.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${PLUGIN_ROOT}/bin/ytstack-codex\" hook pr-watch",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|.*create_pull_request.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${PLUGIN_ROOT}/bin/ytstack-codex\" hook pr-watch",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${PLUGIN_ROOT}/bin/ytstack-codex\" hook pr-watch",
+            "timeout": 15
           }
         ]
       }

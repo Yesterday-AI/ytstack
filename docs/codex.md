@@ -2,7 +2,8 @@
 
 Both plugin manifests load the same `skills/` directory. Skills, references,
 templates, vendor files, and lifecycle scripts each have one source. Codex adds
-its manifest, a three-event hook configuration, and a small runtime adapter.
+its manifest, a hook configuration (three lifecycle events plus the opt-in PR
+watch), and a small runtime adapter.
 
 ## Install
 
@@ -65,6 +66,7 @@ JSON object with a `cwd` field. See `docs/statusline.md`.
 | --- | --- |
 | Planning, reviews, TDD, debugging, verification, project artifacts | Existing skills with the runtime adapter. |
 | SessionStart, PreCompact, SessionEnd | Registered in `codex/hooks.json`; require a local host with hook support and hook trust. |
+| PR watch (opt-in, [`docs/pr-watch.md`](pr-watch.md)) | SessionStart, PreToolUse, PostToolUse and Stop entries in `codex/hooks.json` run `bin/ytstack-codex hook pr-watch`; they exit at once unless `pr_watch=on` is set. Trust them in `/hooks` like the lifecycle hooks; the worker then starts a turn in the idle owning thread. |
 | Resume and handoff without hooks | Explicit `resume-session` and `handoff-session` skills. No automatic journal. |
 | Claude edit/commit quality hooks | Not registered. Follow task scope and verification explicitly; `summarize-task` owns task closure. |
 | Claude Agent Teams and `agents/*.md` roles | Claude-only. The runtime adapter stops this workflow before its capability probe and offers sequential execution. |

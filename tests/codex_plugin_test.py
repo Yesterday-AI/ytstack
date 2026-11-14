@@ -31,7 +31,7 @@ class CodexPluginTests(unittest.TestCase):
         cls.package_temp = tempfile.TemporaryDirectory(prefix="ytstack package ")
         cls.package = Path(cls.package_temp.name).resolve() / "installed plugin"
         cls.package.mkdir()
-        for name in (".codex-plugin", ".agents", "bin", "hooks", "skills", "codex"):
+        for name in (".codex-plugin", ".agents", "bin", "hooks", "skills", "codex", "tools"):
             shutil.copytree(ROOT / name, cls.package / name)
         # Copy exactly the vendor files that the shared wrappers import.
         for skill in (ROOT / "skills").glob("*/SKILL.md"):
@@ -124,8 +124,53 @@ class CodexPluginTests(unittest.TestCase):
                          sorted(p.parent.name for p in (ROOT / "skills").glob("*/SKILL.md")))
         self.assertEqual((self.package / manifest["skills"]).resolve(), self.package / "skills")
         hooks = json.loads((self.package / manifest["hooks"]).read_text())["hooks"]
-        self.assertEqual(set(hooks), {"SessionStart", "PreCompact", "SessionEnd"})
+        self.assertEqual(set(hooks), {"SessionStart", "PreCompact", "SessionEnd", "PreToolUse", "PostToolUse", "Stop"})
         self.assertLessEqual(hooks["SessionEnd"][0]["hooks"][0]["timeout"], 3)
+
+    def pr_watch_handlers(self):
+        """(event, matcher, handler) of every opt-in PR watch entry in codex/hooks.json."""
+        config = json.loads((self.package / "codex/hooks.json").read_text())["hooks"]
+        return [(event, entry.get("matcher"), handler)
+                for event, entries in config.items() for entry in entries
+                for handler in entry["hooks"] if handler["command"].endswith(" hook pr-watch")]
+
+    def fire_pr_watch(self, handler, payload):
+        return subprocess.run(
+            ["bash", "-c", handler["command"]], input=payload, cwd=self.project, env=self.env,
+            text=True, capture_output=True, timeout=handler["timeout"],
+        )
+
+    def test_pr_watch_entries_and_their_matchers(self):
+        found = {event: matcher for event, matcher, _ in self.pr_watch_handlers()}
+        self.assertEqual(found, {"SessionStart": None, "PreToolUse": "Bash|.*create_pull_request.*",
+                                 "PostToolUse": "Bash|.*create_pull_request.*", "Stop": None})
+
+    def test_pr_watch_is_silent_when_off(self):
+        """Without pr_watch=on every entry exits 0 with no output, also with a broken payload."""
+        for event, _, handler in self.pr_watch_handlers():
+            for payload in (json.dumps({"session_id": "t1", "cwd": str(self.project), "hook_event_name": event}), "not json"):
+                with self.subTest(event=event, payload=payload[:8]):
+                    result = self.fire_pr_watch(handler, payload)
+                    self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+        self.assertFalse((self.user_dir / ".ytstack/pr-watch").exists())
+
+    def test_pr_watch_runs_the_engine_when_on(self):
+        (self.user_dir / ".ytstack").mkdir()
+        (self.user_dir / ".ytstack/config").write_text("pr_watch=on\n")
+        handlers = {event: handler for event, _, handler in self.pr_watch_handlers()}
+        start = self.fire_pr_watch(handlers["SessionStart"], json.dumps(
+            {"session_id": "t1", "cwd": str(self.project), "hook_event_name": "SessionStart"}))
+        self.assertEqual(start.returncode, 0, start.stderr)
+        context = json.loads(start.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("This session is t1.", context)
+        self.assertIn(str(self.package / "bin/ytstack-pr-watch") + " create", context)
+        self.assertNotIn("never woken", context)
+        self.assertTrue((self.user_dir / ".ytstack/pr-watch/state/watch.sqlite3").exists())
+        stop = self.fire_pr_watch(handlers["Stop"], json.dumps({"session_id": "t1", "hook_event_name": "Stop"}))
+        self.assertEqual((stop.returncode, stop.stdout), (0, ""))
+        broken = self.fire_pr_watch(handlers["PreToolUse"], "not json")
+        self.assertEqual((broken.returncode, broken.stdout), (0, ""))
+        self.assertIn("ytstack pr-watch: hook failed", broken.stderr)
 
     def test_helper_uses_installed_skill_and_target_project(self):
         self.env.update(CLAUDE_PLUGIN_ROOT="/wrong-plugin", CLAUDE_PROJECT_DIR="/wrong-project",

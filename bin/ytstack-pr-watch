@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# ytstack PR watch: an opt-in watcher that tells the owning agent session about
+# red CI, unresolved bot review threads and merge conflicts of its pull requests.
+#
+#   ytstack-pr-watch enable | disable                 pr_watch=on in ~/.ytstack/config
+#   ytstack-pr-watch install-worker [--yes]           60-second background worker (macOS launchd)
+#   ytstack-pr-watch uninstall-worker [--yes]         remove the worker, keep state
+#   ytstack-pr-watch migrate --from DIR [--yes]       copy the state of an existing local install
+#   ytstack-pr-watch status | register | create | inspect | pause | resume | tick | hook
+#
+# Without --yes the setup commands print their plan and write nothing.
+# State: ${YTSTACK_PR_WATCH_HOME:-~/.ytstack/pr-watch}/state. Needs python3 (3.9+) and gh.
+# Reference: docs/pr-watch.md.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+PY="${YTSTACK_PYTHON:-$(command -v python3 || true)}"
+if [ -z "$PY" ]; then
+  echo "ytstack-pr-watch: python3 not found on PATH (set YTSTACK_PYTHON)" >&2
+  exit 127
+fi
+export YTSTACK_PR_WATCH_CLI="$ROOT/bin/ytstack-pr-watch"
+exec "$PY" "$ROOT/tools/pr-watch/pr-watch.py" "$@"

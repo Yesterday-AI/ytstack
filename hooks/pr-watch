@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# PR watch hook (opt-in). Registered for Claude Code (SessionStart,
+# UserPromptSubmit, PreToolUse, PostToolUse) and Codex (SessionStart,
+# PreToolUse, PostToolUse, Stop); the host is $1 (claude | codex).
+#
+# Off unless ~/.ytstack/config has a line `pr_watch=on`
+# (`bin/ytstack-pr-watch enable`). Off: exit 0 at once, no output, no Python,
+# stdin unread. On: the engine reads the payload from stdin and prints the
+# hook JSON. Fail open: an engine error prints one line on stderr, nothing on
+# stdout, and exits 0.
+#
+# Unlike the lifecycle hooks this one does not load the shared git resolver:
+# it resolves no checkout and writes nothing into a repository. The engine
+# reads the payload cwd itself (bin/ytstack-check exempts this file by name).
+# See docs/pr-watch.md.
+
+grep -Eq '^[[:space:]]*pr_watch[[:space:]]*=[[:space:]]*on[[:space:]]*$' "${HOME:-/nonexistent}/.ytstack/config" 2>/dev/null || exit 0
+
+case "${1:-claude}" in
+  claude|codex) HOST="${1:-claude}" ;;
+  *) echo "ytstack pr-watch: unknown host '${1}', hook skipped" >&2; exit 0 ;;
+esac
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)" || exit 0
+PY="${YTSTACK_PYTHON:-$(command -v python3 2>/dev/null)}"
+if [ -z "$PY" ]; then
+  echo "ytstack pr-watch: python3 not found, hook skipped" >&2
+  exit 0
+fi
+export YTSTACK_PR_WATCH_CLI="$ROOT/bin/ytstack-pr-watch"
+
+# stdout of the engine goes straight through (fd 3); stderr is captured so a
+# failure ends as one line.
+{ err=$("$PY" "$ROOT/tools/pr-watch/pr-watch.py" hook --host "$HOST" 2>&1 1>&3); rc=$?; } 3>&1
+if [ "$rc" -ne 0 ]; then
+  line=$(printf '%s\n' "$err" | sed '/^[[:space:]]*$/d' | tail -1)
+  echo "ytstack pr-watch: hook failed (exit $rc): ${line:-no message}" >&2
+fi
+exit 0

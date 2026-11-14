@@ -4,9 +4,12 @@ status: implemented
 paths:
   - hooks/**
   - bin/ytstack-status
+  - bin/ytstack-pr-watch
+  - tools/pr-watch/**
 sources:
   - docs/statusline.md
-verified_at: 1ae7f2c
+  - docs/pr-watch.md
+verified_at: 4ab539c
 ---
 
 # hooks-and-state
@@ -56,7 +59,9 @@ W8 and W9 are prompts for `ytstack:reconcile`, which moves history out with cons
 
 ### Hooks
 
-Every hook sources the library and resolves from the payload `cwd`. Every hook except `session-start` exits 0 silently when no `.ytstack` directory resolves.
+Every hook except `pr-watch` sources the library and resolves from the payload `cwd`. Every hook except `session-start` and `pr-watch` exits 0 silently when no `.ytstack` directory resolves.
+
+`pr-watch` (SessionStart, UserPromptSubmit, PreToolUse and PostToolUse on `Bash|mcp__.*create_pull_request.*`; for Codex also Stop, via `bin/ytstack-codex hook pr-watch`) is the opt-in PR watch: it exits 0 with no output and without starting Python unless `~/.ytstack/config` has `pr_watch=on`, then hands the payload to `tools/pr-watch/pr-watch.py hook`. It works for any repository, with or without `.ytstack`, and fails open (an engine error is one stderr line, exit 0). Engine, state (`~/.ytstack/pr-watch/`), worker and migration are described in `docs/pr-watch.md`; `bin/ytstack-check` exempts this hook from the resolver rule by name.
 
 | Hook | Event | Reads from the payload | Effect | Exit |
 |---|---|---|---|---|

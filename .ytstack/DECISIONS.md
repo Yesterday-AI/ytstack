@@ -1001,3 +1001,22 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** Do not add `disable-model-invocation` to a ytstack skill. Hold a decision for a person where it belongs (a gate, a question, a handover, the route), not by hiding the skill from the model.
 
 **Supersedes:** Recommendation 2 of `docs/research/2026-11-07-notes/developer-skills-landscape.md` (the `disable-model-invocation` half) and open question 1 of `docs/research/2026-11-14-mattpocock-skills.md`.
+
+---
+
+## 2026-11-14: PR watch ships inside ytstack as an optional, opt-in tool
+
+**Context:** The maintainer runs a local PR watcher (Python engine, SQLite outbox, a 60-second background worker, hooks for Claude Code and Codex) that reports red CI, unresolved bot review threads and merge conflicts to the owning agent session, so the agent does not have to monitor PRs itself, which it rarely does without gaps. `bin/ytstack-watch` (M026) polls PRs too, but only while an agent keeps it running as a background shell; it does not know bot threads or session ownership. The maintainer asked whether the watcher should ship with ytstack and decided: it is an optional tool for ytstack.
+
+**Options considered:**
+- A) A separate sibling plugin in the same marketplace (the 2026-04-25 lifecycle heuristic: a tool without `.ytstack/` state goes to a sibling).
+- B) Inside ytstack, off by default, enabled per user.
+- C) Leave it local.
+
+**Chose:** B. The engine lives in `tools/pr-watch/`, the CLI is `bin/ytstack-pr-watch`, state lives in `~/.ytstack/pr-watch/` (stable across plugin versions, shared by both hosts and the worker). The hooks are registered for Claude Code and Codex but exit at once unless `~/.ytstack/config` has `pr_watch=on`. The background worker is never installed by a hook: `bin/ytstack-pr-watch install-worker` sets it up on explicit request. `bin/ytstack-watch` stays for on-demand reads (`--once`, `release`).
+
+**Reason:** The maintainer's decision: the watcher serves ytstack's delivery loop (ship, finish-branch, coordinate) and is one more optional part of it, like the status line segment. Opt-in plus a shell-level early exit keeps the cost for users who do not want it to one `grep` per hook event.
+
+**How to apply:** `docs/pr-watch.md` is the reference. Nothing pr-watch does may run without the opt-in. The worker install, the migration of an existing local install and any change to `~/.claude/settings.json` stay explicit user steps. The 2026-04-25 lifecycle heuristic stays the default for other generic tools; this entry is the exception for PR watching.
+
+**Supersedes:** None. Narrows the 2026-04-25 "Lifecycle-phase as the curation heuristic" for this one tool.

@@ -1,0 +1,32 @@
+{
+  "defaults": {
+    "review_policy_configured": false,
+    "reviewers": [],
+    "rate_limit_reserve": 0.3
+  },
+  "repositories": {
+    "owner/repo": {
+      "review_policy_configured": true,
+      "reviewers": [
+        {
+          "login": "cursor",
+          "app": "cursor",
+          "check": "Cursor Bugbot"
+        },
+        {
+          "login": "greptile-apps",
+          "completion": "review"
+        }
+      ],
+      "optional_skipped_checks": [
+        "browser-tests"
+      ],
+      "label_required_checks": [
+        {
+          "label": "preview",
+          "name": "Build preview"
+        }
+      ]
+    }
+  }
+}

@@ -323,6 +323,17 @@ Agent fires `ytstack:incident`. Mitigation first, cause afterwards:
 
 Format of both records: `docs/ux/signal-format.md`.
 
+## Optional: PR watch
+
+Want to hear about a red check or an unresolved bot thread without the agent polling its PRs? Switch on the PR watch once per user:
+
+```bash
+bin/ytstack-pr-watch enable
+bin/ytstack-pr-watch install-worker --yes   # macOS; without --yes it only prints the plan
+```
+
+PRs a session opens with `gh pr create` are then watched. Claude Code gets the news with your next prompt; Codex is woken when the thread is idle. The worker keeps a reserve of your GitHub API quota for your agents. Off by default, and `bin/ytstack-pr-watch disable` turns it off again. Details, policy and limits: [`docs/pr-watch.md`](docs/pr-watch.md).
+
 ## Reading the state
 
 Open a new Claude Code session on the project. Before your first message, the `SessionStart` hook has already injected the `STATE.md` snapshot (current milestone / slice / task, recent summaries, next action). You can just say:
