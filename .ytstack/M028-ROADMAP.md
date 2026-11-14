@@ -3,9 +3,9 @@ milestone: M028
 project: ytstack
 size: M
 created: 2026-11-14T09:00:00Z
-status: in-progress
+status: done
 total_slices: 3
-completed_slices: 0
+completed_slices: 3
 ---
 
 # M028 Roadmap
@@ -16,9 +16,9 @@ completed_slices: 0
 
 ## Slices
 
-- [ ] S01 -- No gstack install anywhere: lib, checker, tests and docs describe and enforce self-contained skills, and `bin/ytstack-gstack-diff` reports upstream drift.
-- [ ] S02 -- The six skills are rewritten as self-contained ytstack skills from gstack v1.96.0.0.
-- [ ] S03 -- The six skills are synced to the newest gstack tag and the whole tree verifies.
+- [x] S01 -- No gstack install anywhere: lib, checker, tests and docs describe and enforce self-contained skills, and `bin/ytstack-gstack-diff` reports upstream drift.
+- [x] S02 -- The six skills are rewritten as self-contained ytstack skills from gstack v1.96.0.0.
+- [x] S03 -- The six skills are synced to the newest gstack tag and the whole tree verifies.
 
 ## Run order
 
