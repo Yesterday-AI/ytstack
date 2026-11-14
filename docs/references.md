@@ -33,6 +33,30 @@ Sources consulted while designing ytstack. Contributors should read these before
 - **What we deliberately leave:** verbatim prose, images, enumerated catalogs. Concepts only.
 - **Attribution:** via `NOTICE` (M008) as "inspired by external AI-first methodology work" -- no name, no URL.
 
+### mattpocock/skills
+
+- **Repo:** https://github.com/mattpocock/skills (MIT)
+- **Read:** at `4ae2317` for coordinator mode, again at `5863806` (2026-11-14) for the full comparison.
+- **What we take:** concepts behind coordinator mode (a coordinating session with written memory, blocking edges and a frontier, claims, checkable briefs, staged scripts for human-only steps, a question queue, retros that end in checks). Credited in `NOTICE`; details in `docs/methodology.md`.
+- **What we deliberately leave:** the issue tracker as the store for specs and tickets, open interviews in place of the question format, a router skill, and every skill text (concepts only).
+- **Research note:** `docs/research/2026-11-14-mattpocock-skills.md` -- skill-by-skill comparison, the status of the ten recommendations of 2026-11-07, six ranked candidates, three questions for the operator.
+
+## Research notes
+
+Dated notes under `docs/research/`, newest first. Each states what was read and what was not.
+
+### 2026-11-14 -- mattpocock/skills against ytstack
+
+- **File:** `docs/research/2026-11-14-mattpocock-skills.md`
+- **Relevance:** confirmed that the coordinator-mode concepts had not moved upstream; nothing new adopted. Its open candidates are listed in `docs/methodology.md`.
+
+### 2026-11-13 -- an agentic software factory against ytstack
+
+- **File:** `docs/research/2026-11-13-openai-software-factory.md`
+- **Sources:** a published account of an agentic software factory (sections 1 to 3 read in full, the paywalled rest not read), an earlier harness-engineering post known only through third-party summaries, and a podcast page. URLs are in the note.
+- **Key insight:** ytstack covered the development half of the factory (outcome, context, implementation, CI, review) and none of the operations half (rollout, observation, performance, incidents). The furthest gap was who decides whether a person looks at a change: per change by risk there, per project with a person as default in ytstack.
+- **Relevance:** the basis of 0.7.0's risk gate (`bin/ytstack-risk`, `auto_merge`, `REVIEW.md` lenses, `visual-review`, `merge_by: risk`), the product per worktree (`bin/ytstack-runtime`), the release watch, the upkeep recipe, `signal-intake` and `incident`. Credited generically in `NOTICE`; what was adapted and how it diverges is in `docs/methodology.md`.
+
 ## Comparison articles
 
 These two independent articles shaped our cherry-pick decisions and our architectural philosophy.
