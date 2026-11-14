@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-15T00:30:00Z
-current_milestone: none
+last_updated: 2026-11-15T00:45:00Z
+current_milestone: M031
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-11-15, planning):** M031 planned (L, 5 slices: factory tools explicit, issue #54 rest and #61 leftovers), then M032 (M, incident to lesson loop, #53) and M033 (S, upstream feedback channel, #55). Ready to slice M031. Next action: run `ytstack:slice-milestone` for M031.
 
 **Status (2026-11-15, 0.10.0):** Release of issue #57 (PR #63, `38486b8`: `.ytstack/standing/` one file per instruction, `yt_standing`, `ytstack-check --standing`, `ytstack-risk` rule document, `coordinate` 0.3.0) and the main points of issue #61 (PRs #62, #64: skipped checks, head moved after own push, status block only on change, merge suggestion only after a bot finding). Open next: from #61 the "plugin updated, reload skills" notice and a one-step coordinator rotation; then plan the rest of #54, #53 and #55.
 
