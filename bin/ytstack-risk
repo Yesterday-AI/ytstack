@@ -5,6 +5,7 @@
 #   ytstack-risk [-C DIR] floor --base SHA --head SHA
 #   ytstack-risk [-C DIR] route --plan FILE --base SHA --head SHA [--author WORKER]
 #   ytstack-risk [-C DIR] check
+#   ytstack-risk [-C DIR] reviewers
 #   ytstack-risk manifest EVIDENCE_DIR
 #
 # DIR is a directory of the repository (default: $PWD). A relative --plan and
@@ -43,6 +44,9 @@
 #         a lens line when no path under its "applies" changed since. A
 #         relative evidence directory is read from the root of the repository.
 # check   validates .ytstack/spec/REVIEW.md of the working tree.
+# reviewers  prints the "Own reviewers" of REVIEW.md in the working tree, one
+#         tab separated line per role: role, marker, lessons, bots (comma
+#         list, empty when none). Read by bin/ytstack-review-escapes.
 # manifest  writes EVIDENCE_DIR/MANIFEST: one line per image (png, jpg, jpeg,
 #         webp, gif) with its SHA-256 and its name. What a line already said
 #         about an image is kept. The reviewer fills in url, viewport, shows:
@@ -54,6 +58,8 @@
 #   route   0 unattended; 10 person; 64 usage, also a plan file that does not
 #           exist; 65 git
 #   check   0 clean, or no REVIEW.md; 1 one line per problem; 64 usage
+#   reviewers  0 (no line without REVIEW.md or the section); 1 a problem in
+#           the section, one line per problem on stderr; 64 usage
 #   manifest  0 written; 1 no directory, no image in it, or no sha256 tool;
 #           64 usage
 
@@ -136,8 +142,8 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '5,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
-case "$CMD" in floor|route|check|manifest) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+usage() { sed -n '5,9p'"${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+case "$CMD" in floor|route|check|reviewers|manifest) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 # The resolver falls back to $PWD for a missing directory: refuse it here.
 [ -d "$DIR" ] || { echo "ytstack-risk: -C '$DIR' is not a directory" >&2; exit 64; }
 
@@ -213,8 +219,8 @@ review_parse() {
     fence { next }
     /^## / {
       sec = trim(substr($0, 4))
-      if (sec != "Always a person" && sec != "Never low" && sec != "Lenses" && sec != "Size") {
-        bad("section \047## " sec "\047 is not one of Always a person, Never low, Lenses, Size"); sec = ""
+      if (sec != "Always a person" && sec != "Never low" && sec != "Lenses" && sec != "Size" && sec != "Own reviewers") {
+        bad("section \047## " sec "\047 is not one of Always a person, Never low, Lenses, Size, Own reviewers"); sec = ""
       }
       next
     }
@@ -248,18 +254,62 @@ review_parse() {
       if (ev == "") bad("lens " name " has no evidence")
       else if (ev != "visual" && ev != "none") bad("lens " name ": evidence \047" ev "\047 is not visual or none")
       print "lens|" name "|" applies "|" reads "|" ev "|" skill
+      next
+    }
+    # An own reviewer: "<role> | marker: <text> | lessons: <path> | bots: <logins>".
+    # The marker is matched literally; it cannot hold a bar.
+    sec == "Own reviewers" {
+      n = split(item, part, "|"); name = trim(part[1])
+      marker = ""; lessons = ""; bots = ""
+      for (i = 2; i <= n; i++) {
+        p = trim(part[i]); k = p; sub(/:.*/, "", k); v = trim(substr(p, length(k) + 2))
+        if (k == "marker") marker = v
+        else if (k == "lessons") lessons = v
+        else if (k == "bots") bots = list(v)
+        else bad("own reviewer " name ": field \047" k "\047 is not marker, lessons or bots")
+      }
+      if (name !~ /^[a-z0-9][a-z0-9-]*$/) bad("own reviewer name \047" name "\047 is not a lowercase slug")
+      if (own[name]++) bad("own reviewer " name " is defined twice")
+      if (marker == "") bad("own reviewer " name " has no marker")
+      else if (mk[marker] != "") bad("own reviewer " name ": marker \047" marker "\047 is the marker of " mk[marker] " already")
+      else mk[marker] = name
+      if (lessons == "") bad("own reviewer " name " has no lessons")
+      print "own|" name "|" marker "|" lessons "|" bots
     }
   '
 }
 
+# reviewers_of <REVIEW.md>: the own reviewers as "role<TAB>marker<TAB>lessons<TAB>bots"
+# lines; a problem with the section goes to stderr as "REVIEW.md: <what>" and
+# makes the status 1. Problems of other sections are left to check.
+reviewers_of() {
+  local kind a b c d bad=0 out="" t=$'\t'
+  while IFS='|' read -r kind a b c d; do
+    case "$kind" in
+      bad) case "$a" in "own reviewer"*) echo "REVIEW.md: $a" >&2; bad=1 ;; esac ;;
+      own)
+        if [ -n "$c" ] && [ ! -e "$TOP/$c" ]; then echo "REVIEW.md: own reviewer $a: lessons $c does not exist" >&2; bad=1; fi
+        out="$out$a$t$b$t$c$t$d
+" ;;
+    esac
+  done <<EOF
+$(review_parse < "$1")
+EOF
+  printf '%s' "$out"
+  return "$bad"
+}
+
 # ---- check ---------------------------------------------------------------------
 cmd_check() {
-  local f="${YT_DIR:+$YT_DIR/spec/REVIEW.md}" bad=0 n=0 kind a b c d e doc
+  local f="${YT_DIR:+$YT_DIR/spec/REVIEW.md}" bad=0 n=0 o=0 kind a b c d e doc
   [ $# -eq 0 ] || { usage >&2; return 64; }
   if [ -z "$f" ] || [ ! -f "$f" ]; then echo "no review policy"; return 0; fi
   while IFS='|' read -r kind a b c d e; do
     case "$kind" in
       bad) bad=$((bad + 1)); echo "REVIEW.md: $a" ;;
+      own)
+        o=$((o + 1))
+        [ -z "$c" ] || [ -e "$TOP/$c" ] || { bad=$((bad + 1)); echo "REVIEW.md: own reviewer $a: lessons $c does not exist"; } ;;
       lens)
         n=$((n + 1))
         while IFS= read -r doc; do
@@ -273,7 +323,15 @@ EOD
 $(review_parse < "$f")
 EOF
   [ "$bad" -eq 0 ] || return 1
-  echo "review policy ok: $n lens(es)"
+  echo "review policy ok: $n lens(es), $o own reviewer(s)"
+}
+
+# ---- reviewers -----------------------------------------------------------------
+cmd_reviewers() {
+  local f="${YT_DIR:+$YT_DIR/spec/REVIEW.md}"
+  [ $# -eq 0 ] || { usage >&2; return 64; }
+  [ -n "$f" ] && [ -f "$f" ] || return 0
+  reviewers_of "$f"
 }
 
 # ---- the change ----------------------------------------------------------------
@@ -734,5 +792,6 @@ case "$CMD" in
   floor)    cmd_floor "$@" ;;
   route)    cmd_route "$@" ;;
   check)    cmd_check "$@" ;;
+  reviewers) cmd_reviewers "$@" ;;
   manifest) cmd_manifest "$@" ;;
 esac

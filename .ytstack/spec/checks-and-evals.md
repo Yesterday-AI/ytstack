@@ -11,6 +11,7 @@ paths:
   - bin/ytstack-handover
   - bin/ytstack-watch
   - bin/ytstack-risk
+  - bin/ytstack-review-escapes
   - bin/ytstack-runtime
   - bin/ytstack-signals
   - bin/ytstack-upkeep
@@ -57,7 +58,11 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 - `floor --base <sha> --head <sha>` prints the lowest class of the tree difference (`low`, `normal` or `person`), one `reason:` per path and rule, the touched areas, their ceiling and the required lenses. It reads the policy at the base commit, never from the working tree; git matches the globs.
 - `route --plan <file> --base <sha> --head <sha> --author <worker>` exits 0 with `route: unattended` only when the floor is not `person`, the newest round line approves, states `risk` and `invariants: none`, names a reviewer other than the author and is valid for the head, the class is within the ceiling, and every required lens has a passing line with its evidence (for `evidence: visual` a `MANIFEST` whose hashes match). Every other case exits 10 with `route: person` and one reason per failed condition. `by: self` and a missing `--author` always route to a person.
-- `check` validates `REVIEW.md`; `manifest <dir>` writes hash and name of every image into the `MANIFEST` of an evidence directory.
+- `check` validates `REVIEW.md`, its "Own reviewers" too (slug names, a unique `marker`, a `lessons` file that exists); `reviewers` prints the own reviewers tab separated; `manifest <dir>` writes hash and name of every image into the `MANIFEST` of an evidence directory.
+
+**`bin/ytstack-review-escapes`: review-bot findings the own reviewers missed** (`docs/ux/review-policy-format.md`, "Escapes")
+
+- `--pr <n>` reads a pull request's review threads, reviews and commits through `gh` (GraphQL, paginated) and the changes of the commits after a resolved bot thread (one REST call per commit), and prints one TSV line per bot thread: resolution `fixed`, `rejected` or `open`, and `caught` (with the role) or `escaped`. Exit 10 with a `fixed` and `escaped` line, 0 without, 1 when `REVIEW.md` declares no own reviewers (before any read), 2 on usage or read errors. Read-only. Its suite answers from recorded fixtures under `tests/fixtures/review-escapes/`.
 
 **`bin/ytstack-runtime`: `RUNTIME.md` and the product per worktree** (`docs/ux/runtime-format.md`)
 
@@ -67,6 +72,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **`bin/ytstack-signals`: production findings and incident records** (`docs/ux/signal-format.md`)
 
 - `new` records a finding once: a second sighting of the key raises its count, a sighting of a `fixed` one writes a regression with `reopens:`, a `dismissed` one stays dismissed; writes under a noclobber lock. `list`, `set`, `incident new`, `check` (findings and incident records; every mitigation names a handover script that passes `bin/ytstack-handover check` unless declined).
+- `--kind review` records an escaped review-bot finding (key `review:<role>:<class-slug>`) without a "Signals" source; `review-checked` records and asks which merged pull request had its escape check, in `signals/review-checks`.
 
 **`bin/ytstack-upkeep`**: one read-only run over `.ytstack/` with seven counted sections (spec, state, gates, questions, lanes, runtime, review policy); exit 0 with `nothing needs a look`, 10 otherwise. `--question` writes one question file and none while an earlier `Upkeep found ...` is open or asked. `docs/recipes/recurring-upkeep.md` puts it on a schedule.
 

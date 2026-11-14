@@ -22,6 +22,11 @@
 #           record is named, exit 1; a mitigation that is not declined names a
 #           script that exists and passes ytstack-handover check; without both
 #           directories "no signals", exit 0
+#   review  --kind review needs no "Signals" source and a key
+#           review:<role>:<class-slug>; a recurring class raises the count
+#   review-checked  records a merged pull request's escape check once in
+#           signals/review-checks and answers whether it had one; check
+#           names a broken or repeated line
 #
 # Run: /bin/bash tests/ytstack-signals.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -159,7 +164,7 @@ eq "no stdin at all: exit 1" 1 "$EC"
 feed "x" "$D" new --source errors --key "two words" --title "Bad key";       eq "a key with a space: exit 64" 64 "$EC"
 feed "x" "$D" new --source Errors --key errors:x --title "Bad source";       eq "a source that is no lowercase slug: exit 64" 64 "$EC"
 feed "x" "$D" new --source -errors --key errors:x --title "Bad source";      eq "a source that starts with a dash: exit 64" 64 "$EC"
-feed "x" "$D" new --source errors --key errors:x --title "Bad kind" --kind crash;  eq "a kind outside the four: exit 64" 64 "$EC"
+feed "x" "$D" new --source errors --key errors:x --title "Bad kind" --kind crash;  eq "a kind outside the five: exit 64" 64 "$EC"
 feed "x" "$D" new --source errors --key errors:x --title "Bad time" --read-at "2026-11-13 09:15"; eq "a read time that is no UTC time: exit 64" 64 "$EC"
 feed "x" "$D" new --source errors --key errors:x;                            eq "no --title: exit 64" 64 "$EC"
 feed "x" "$D" new --key errors:x --title "No source";                        eq "no --source: exit 64" 64 "$EC"
@@ -385,7 +390,7 @@ defect "a key that is not one word" "$NAME: key \"two words\" is not one word of
 fresh; edit "$F" 's/^source: .*/source: Errors/'
 defect "a source that is no lowercase slug" "$NAME: source \"Errors\" is not a lowercase slug"
 fresh; edit "$F" 's/^kind: .*/kind: crash/'
-defect "a kind outside the four" "$NAME: kind \"crash\" is not one of errors|performance|alerts|logs"
+defect "a kind outside the five" "$NAME: kind \"crash\" is not one of errors|performance|alerts|logs|review"
 fresh; edit "$F" 's/^state: .*/state: pending/'
 defect "a state outside the four" "$NAME: state \"pending\" is not one of open|planned|fixed|dismissed"
 fresh; edit "$F" 's/^first_seen: .*/first_seen: yesterday/'
@@ -582,6 +587,58 @@ inc; script restart; mitigation proposed; edit "$R" 's/^## Proposed mitigations$
 \
 Smallest reversible one first./'
 passes "free text beside the mitigation lines"
+
+# ---- review escapes: kind review and the checked pull requests -----------------
+echo "# kind review"
+project review
+ROW="chatgpt-codex-connector${TAB}fixed${TAB}escaped${TAB}-${TAB}src/app.ts${TAB}10-12${TAB}https://github.com/acme/shop/pull/101#discussion_r1${TAB}P1 Guard the empty cart"
+feed "$ROW" "$D" new --source review --key review:code:missing-null-guard --kind review --title "Null guard missing before a read" --read-at "$T1"
+eq "an escape is recorded without a Signals source" "new F001 $S/F001-null-guard-missing-before-a-read.md" "$OUT"
+F="$S/F001-null-guard-missing-before-a-read.md"
+eq "its kind" "review" "$(field "$F" kind)"
+has "the sighting is the escape row, indented" "    $ROW" "$(cat "$F")"
+feed "$ROW" "$D" new --source review --key review:code:missing-null-guard --kind review --title "Null guard missing before a read"
+eq "the same class again raises the count" "seen-again F001 $F" "$OUT"
+eq "count 2" 2 "$(field "$F" count)"
+feed "$ROW" "$D" new --source review --key code:missing-null-guard --kind review --title "Wrong key"
+eq "a review key without the review: prefix: exit 64" 64 "$EC"
+has "and names the form" "review:<role>:<class-slug>" "$OUT"
+feed "$ROW" "$D" new --source review --key review:Code:x --kind review --title "Wrong key"
+eq "a role that is no lowercase slug: exit 64" 64 "$EC"
+feed "$ROW" "$D" new --source review --key review:code --kind review --title "Wrong key"
+eq "a key without a class: exit 64" 64 "$EC"
+run "$D" check; eq "the review finding passes the check" "signals ok: 1 finding(s), 0 incident(s)" "$OUT"
+edit "$F" 's/^key: .*/key: review:code/'
+run "$D" check; eq "check: a review finding with a key outside the form: exit 1" 1 "$EC"
+has "and names it" "F001-null-guard-missing-before-a-read.md: kind review, but key \"review:code\" is not review:<role>:<class-slug>" "$OUT"
+edit "$F" 's/^key: .*/key: review:code:missing-null-guard/'
+
+echo "# review-checked"
+run "$D" review-checked acme/shop#101
+eq "a pull request without its check: exit 1" "1:" "$EC:$OUT"
+run "$D" review-checked acme/shop#101 0123abc --at "$T1"
+eq "recording the check" "0:checked acme/shop#101" "$EC:$OUT"
+eq "one line in signals/review-checks" "acme/shop#101 0123abc $T1" "$(cat "$S/review-checks")"
+run "$D" review-checked acme/shop#101
+eq "asked again: exit 0 and its line" "0:acme/shop#101 0123abc $T1" "$EC:$OUT"
+run "$D" review-checked acme/shop#101 fedcba9
+eq "a second record of the same pull request is refused as already there" "0:already acme/shop#101 0123abc $T1" "$EC:$OUT"
+run "$D" review-checked acme/shop#102 fedcba9876
+eq "another pull request" "checked acme/shop#102" "$OUT"
+eq "two lines" 2 "$(grep -c . "$S/review-checks")"
+is_utc "$(sed -n 2p "$S/review-checks" | cut -d' ' -f3)" && ok "without --at the time of the call" || bad "without --at the time of the call"
+run "$D" check; eq "the file passes the check" "signals ok: 1 finding(s), 0 incident(s)" "$OUT"
+run "$D" review-checked acme/shop;                   eq "a reference without a number: exit 64" 64 "$EC"
+run "$D" review-checked shop#3 0123abc;              eq "a reference without an owner: exit 64" 64 "$EC"
+run "$D" review-checked acme/shop#3 XYZ;             eq "a merge commit that is no hex: exit 64" 64 "$EC"
+run "$D" review-checked acme/shop#3 --at "$T1";      eq "--at without a merge commit: exit 64" 64 "$EC"
+run "$D" review-checked acme/shop#3 0123abc --at x;  eq "--at that is no UTC time: exit 64" 64 "$EC"
+run "$D" review-checked;                             eq "no reference: exit 64" 64 "$EC"
+eq "the refused calls wrote nothing" 2 "$(grep -c . "$S/review-checks")"
+printf 'acme/shop#101 0123abc %s\nnot a line\n' "$T1" >> "$S/review-checks"
+run "$D" check; eq "check: a broken or repeated line: exit 1" 1 "$EC"
+has "names the repeated pull request" "review-checks: acme/shop#101 stands twice" "$OUT"
+has "names the broken line" "review-checks: line 4 is not" "$OUT"
 
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

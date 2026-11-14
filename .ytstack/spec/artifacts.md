@@ -43,9 +43,10 @@ The `.ytstack/` artifact model: the Markdown files that hold a project's memory 
 |---|---|---|
 | `PROJECT.md`, `PREFERENCES.md` | `init-project` or `adopt-brownfield` | the user; no skill step edits them |
 | `RUNTIME.md` | `init-project` or `adopt-brownfield`, with the headings "Run", "Release" and "Signals" and one line of free text each | the user; key lines in the three sections follow `docs/ux/runtime-format.md` and are read only through `bin/ytstack-runtime`; `adopt-brownfield` writes a key line only for a command a document or script of the project states and names that source. "Release" is run by `bin/ytstack-watch release`, "Signals" by `signal-intake` and `incident` |
-| `spec/REVIEW.md` | a person (optional), linked from `SPEC.md` | a person; four sections (Always a person, Never low, Lenses, Size); a change to it always goes to a person |
+| `spec/REVIEW.md` | a person (optional), linked from `SPEC.md` | a person; five sections (Always a person, Never low, Lenses, Size, Own reviewers); a change to it always goes to a person |
 | `evidence/<lane>/<short sha>/<lens>/` with `MANIFEST` (`evidence_dir` of `PREFERENCES.md`) | `visual-review`, in the main checkout of the repository; `bin/ytstack-risk manifest` writes hash and name per image | -- ; a process record; committing it is the project's choice |
-| `signals/F###-<slug>.md` | `bin/ytstack-signals new` (from `signal-intake`) | `bin/ytstack-signals new` (a second sighting: count, last seen), `set` (state, ref); format `docs/ux/signal-format.md` |
+| `signals/F###-<slug>.md` | `bin/ytstack-signals new` (from `signal-intake`; `--kind review` for an escaped review-bot finding) | `bin/ytstack-signals new` (a second sighting: count, last seen), `set` (state, ref); format `docs/ux/signal-format.md` |
+| `signals/review-checks` | `bin/ytstack-signals review-checked` | the same command, one line appended per merged pull request whose escape check ran; never rewritten |
 | `incidents/<date>-<slug>.md` | `bin/ytstack-signals incident new` (from `incident`) | `incident`: facts with read times, the timeline (append-only), hypotheses, mitigations with their handover scripts, the person's decisions in own words |
 | `DECISIONS.md` | `init-project` or `adopt-brownfield` | appends by `plan-ceo-review`, `plan-eng-review`, `systematic-debugging`, `code-review`, `retro`, `grill`, `reassess-roadmap` |
 | `KNOWLEDGE.md` | `init-project` or `adopt-brownfield` | appends by `systematic-debugging`, `test-driven-development`, `code-review`, `retro` |
