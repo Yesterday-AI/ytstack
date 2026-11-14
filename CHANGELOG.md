@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-11-14
+
+### Fixed
+
+- PR watch `install-worker`: a `gh` from a version manager (asdf, mise) is a
+  shim that cannot run under launchd, so every read failed and all watches
+  showed `unavailable`. The worker now gets the first `gh` on `PATH` that runs
+  with nothing but its own directory and the system directories, and
+  `install-worker` refuses with a clear message when only a shim exists.
+
 ## [0.8.1] - 2026-11-14
 
 ### Fixed
@@ -725,6 +735,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.8.2]: https://github.com/Yesterday-AI/ytstack/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/Yesterday-AI/ytstack/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.7.0
