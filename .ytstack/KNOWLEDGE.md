@@ -109,6 +109,8 @@ Patterns, rules, and lessons learned while building ytstack. This file is read b
 
 ## Eval runs (`claude plugin eval`)
 
+- **2026-11-14, release 0.9.1 (`coordinate` 0.2.1), `--case coordinator-resume --ablation none --no-publish`:** 1/1, score 1.00, $0.39, 62 s. The case covers resuming the ledger, not the PR watch registration paragraph; that one is covered by `tests/pr_watch/test_register_all.py` only.
+
 - **2026-11-13, Claude Code 2.1.323, M022 + M023, two arms, `--runs 1 --ablation none -j 4 --no-publish`:**
   - Revised instructions (branch `spec-and-bounded-work` on top of `f4f54ab`), all 17 cases: 17/17 at threshold 1.0, cost $6.30, 227 s wall clock.
   - Current instructions (an export of `f4f54ab` with the three new cases copied into `evals-cmp/`), 7 cases: 5/7, cost $2.94, 146 s. Misses: `gates-one-question` (the reply never called the gate whose condition had passed "lapsed") and `review-round-three` (a third reviewer was dispatched).
