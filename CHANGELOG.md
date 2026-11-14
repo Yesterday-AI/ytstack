@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-14
+
 ### Added
 
 - **PR watch, optional** (M029, DECISIONS 2026-11-14 "PR watch ships inside
@@ -23,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   has `pr_watch=on`. Claude Code pulls notices with the next prompt; Codex
   threads are woken when idle. Tests: `tests/pr_watch/` (unittest) and
   `tests/pr-watch.test.sh`. Reference: `docs/pr-watch.md`.
+- The PR watch worker spends the GitHub REST quota (5,000 calls an hour,
+  shared with every `gh` call of your agents) carefully: settled PRs are read
+  every 5 minutes instead of every minute, closed ones every 30 minutes (they
+  can be reopened), merged ones never; before each tick it keeps a reserve for
+  your agents (30% by default, `rate_limit_reserve` in `policy.json`).
 
 ## [0.7.0] - 2026-11-14
 
@@ -705,6 +712,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.8.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.5.0
