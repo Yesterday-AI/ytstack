@@ -134,6 +134,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `.ytstack/spec/SPEC.md` no longer says hooks write nothing into the
+  checkout: it separates volatile state (outside the tree) from the two
+  deliberate artifact writers, `post-tool-use-bash` and `task-completed`.
 - The verifier and `spawn-milestone-team` reuse an earlier PASS only for
   the same commit, environment and command. On another commit the check runs
   again: unchanged planned files do not cover a changed import, configuration
