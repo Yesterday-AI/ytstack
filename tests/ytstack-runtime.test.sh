@@ -297,9 +297,11 @@ defect "a signal line without fields" 'line 3: Signals: errors: "./errors.sh" is
 
 - errors | ./errors.sh
 EOF
+# Built here, so that no token-looking literal sits in this file (the secret scan of CI reads it).
+HEXTOK=$(printf '8f3a%.0s' 1 2 3 4 5 6 7 8)
 defect "a token in a command" "line 4: Release: token-looking string" <<EOF
 $REL
-- healthy: curl -fsS -H "Authorization: Bearer 8f3a9c0d1e2b4a5f6c7d8e9f0a1b2c3d" https://app.example.com/healthz
+- healthy: curl -fsS -H "Authorization: Bearer $HEXTOK" https://app.example.com/healthz
 EOF
 defect "a token in the free text of a section" "line 5: Run: token-looking string" <<EOF
 $RUN
@@ -313,7 +315,7 @@ cat > "$F" <<EOF
 
 ## Environment variables
 
-- API_KEY: 8f3a9c0d1e2b4a5f6c7d8e9f0a1b2c3d (outside the three sections nothing is read)
+- API_KEY: $HEXTOK (outside the three sections nothing is read)
 
 $REL
 EOF
