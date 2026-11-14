@@ -39,12 +39,13 @@ def evaluate(s, policy):
         status = statuses.get(need['context']) if not need.get('integration_id') else None
         if not matches and status is None:
             pending.append('Required check missing: ' + need['context'])
-    optional_skips = set(policy.get('optional_skipped_checks', []))
+    # A skipped or neutral job that nothing requires is the normal green state of
+    # change-class workflows; required checks and review-bot checks still need a pass.
+    review_checks = {r.get('check') for r in policy.get('reviewers', []) if r.get('check')}
     labels = {label['name'] for label in s['pr'].get('labels', [])}
     for condition in policy.get('label_required_checks', []):
         if condition['label'] in labels:
             name = condition['name']
-            optional_skips.discard(name)
             required_names.add(name)
             if not any(c['name'] == name for c in latest.values()) and name not in statuses:
                 pending.append('Label-required check missing: ' + name)
@@ -56,7 +57,7 @@ def evaluate(s, policy):
             pending.append('Check running: ' + name)
         elif c['conclusion'] == 'success':
             pass
-        elif c['conclusion'] == 'skipped' and name in optional_skips and name not in required_names:
+        elif c['conclusion'] in ('skipped', 'neutral') and name not in required_names and name not in review_checks:
             pass
         else:
             issues.append(f'Check {name}: {c["conclusion"]}')
