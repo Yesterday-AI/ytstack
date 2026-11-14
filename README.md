@@ -12,7 +12,7 @@
   <p>
     <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
     <a href="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml/badge.svg"></a>
-    <img alt="version" src="https://img.shields.io/badge/version-0.6.0-FC4E14">
+    <img alt="version" src="https://img.shields.io/badge/version-0.7.0-FC4E14">
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
     <img alt="Codex" src="https://img.shields.io/badge/Codex-plugin-0A0A0A">
     <img alt="skills" src="https://img.shields.io/badge/skills-31-FC4E14">
@@ -372,7 +372,7 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 
 ## Status
 
-**v0.6.0 -- shipping, actively dogfooded.** 0.6.0 ships the six gstack-derived skills as ytstack's own adaptations (no gstack install, nothing in `~/.claude/skills/`) and adds the upstream sync check `bin/ytstack-gstack-diff`. 0.5.0 added the status line segment (`bin/ytstack-status`, #31). 0.2.0 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); 0.3.0 pulled superpowers to v7.0.2 and turned gstack into an installed, tag-pinned dependency (#25); 0.4.0 adds brownfield import (`adopt-brownfield`, #18), ceremony scaling (quick lane, reconcile, minimal-code guard, STATE lint), the 2026 skill bar (`metadata:` frontmatter, trigger-only descriptions measured by `evals/`, CI), six lifecycle skills (`code-review`, `finish-branch`, `grill`, `retro`, `ship`, `document-release`) and the worktree-subagent execution model. ytstack tracks its own development in `.ytstack/`; see `.ytstack/ROADMAP.md` for what is next.
+**v0.7.0 -- shipping, actively dogfooded.** 0.7.0 adds the technical spec (`.ytstack/spec/`, #36), bounded work (#35), coordinator mode (#34), the risk gate (whether a person looks at a change is decided per change, with a visual review for interface changes), the product per worktree, the release watch, signal intake and incidents. 0.6.0 ships the six gstack-derived skills as ytstack's own adaptations (no gstack install, nothing in `~/.claude/skills/`) and adds the upstream sync check `bin/ytstack-gstack-diff`. 0.5.0 added the status line segment (`bin/ytstack-status`, #31). 0.2.0 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); 0.3.0 pulled superpowers to v7.0.2 and turned gstack into an installed, tag-pinned dependency (#25); 0.4.0 adds brownfield import (`adopt-brownfield`, #18), ceremony scaling (quick lane, reconcile, minimal-code guard, STATE lint), the 2026 skill bar (`metadata:` frontmatter, trigger-only descriptions measured by `evals/`, CI), six lifecycle skills (`code-review`, `finish-branch`, `grill`, `retro`, `ship`, `document-release`) and the worktree-subagent execution model. ytstack tracks its own development in `.ytstack/`; see `.ytstack/ROADMAP.md` for what is next.
 
 Ships:
 

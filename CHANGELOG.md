@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-14
+
 ### Added
 
 - **Workflow diagrams for the whole cycle**: the greenfield, brownfield and
@@ -686,6 +688,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.7.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.5.0
 [0.4.2]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.2

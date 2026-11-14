@@ -987,3 +987,17 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** See AGENTS.md "Skills adapted from gstack". Fold method changes in, skip runtime-only changes, then move the baseline. Adapting a further gstack skill needs its own DECISIONS entry.
 
 **Supersedes:** The gstack half of "2026-11-07: Vendor strategy" (installed, tag-pinned dependency) and the gstack-resolution rules of the M020 planning entry "2026-11-09: Multi-host adapters share one plugin and keep gstack resolution unambiguous", which is not on `main` yet (there is no installed gstack to resolve any more; its multi-host reuse rule stays).
+
+---
+
+## 2026-11-14: Models work autonomously; no skill gets `disable-model-invocation`
+
+**Context:** The landscape note of 2026-11-07 (recommendation 2) and the comparison with mattpocock/skills (`docs/research/2026-11-14-mattpocock-skills.md`) proposed to mark human-timed skills (`plan-milestone`, `slice-milestone`, `spawn-milestone-team`, `summarize-task`, `reassess-roadmap` and others) with `disable-model-invocation: true`, so that only a person could start them. No entry recorded why that never happened.
+
+**Chose:** No. Every procedure skill stays model-invocable. An agent picks the skill that fits and carries the cycle forward on its own; a person steers through intent, standing instructions and the gates that the skills themselves define.
+
+**Reason:** The operator wants models to work autonomously. Where a person has to decide, ytstack already says so at the point of decision: gates and the question queue, `handover-step` for steps only a person performs, the risk route of M025 for merges. A blanket "only on a person's word" at the skill level would put the person back in front of every step.
+
+**How to apply:** Do not add `disable-model-invocation` to a ytstack skill. Hold a decision for a person where it belongs (a gate, a question, a handover, the route), not by hiding the skill from the model.
+
+**Supersedes:** Recommendation 2 of `docs/research/2026-11-07-notes/developer-skills-landscape.md` (the `disable-model-invocation` half) and open question 1 of `docs/research/2026-11-14-mattpocock-skills.md`.
