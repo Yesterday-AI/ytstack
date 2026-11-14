@@ -112,8 +112,8 @@ def monitor(db, watch):
                 # where a review bot left a finding the watch saw: without one there is
                 # nothing an own reviewer could have missed. The key makes it once per
                 # PR, and it costs no GitHub call of its own.
-                findings = db.execute('SELECT COUNT(*) FROM outbox WHERE event_key LIKE ?',
-                                      (f'bot-thread:{repo}:{number}:%',)).fetchone()[0]
+                findings = db.execute("SELECT COUNT(*) FROM outbox WHERE repo=? AND number=? AND event_key LIKE 'bot-thread:%'",
+                                      (repo, number)).fetchone()[0]
                 if findings:
                     enqueue(db, merged_key(repo, number), watch, merged_notice(repo, number, head, findings))
         now = time.time()
