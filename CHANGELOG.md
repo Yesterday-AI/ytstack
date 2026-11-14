@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- PR watch: a Claude Code session that passed its own id to `register` or
+  `create` without the `claude:` prefix had its watches stored as a Codex
+  thread, so its notices were never shown and failed delivery over and over.
+  The CLI now adds the prefix for the current session's id, and the next
+  `register` moves such watches and their pending notices to the right
+  session. `coordinate` (0.2.2) leaves `--session` out.
+
 ## [0.9.1] - 2026-11-14
 
 ### Added
