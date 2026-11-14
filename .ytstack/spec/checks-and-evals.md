@@ -26,7 +26,7 @@ sources:
   - docs/ux/review-policy-format.md
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
-verified_at: 54a25e7
+verified_at: 851b2f4
 ---
 
 # checks-and-evals
@@ -40,7 +40,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **`bin/ytstack-check`: static contracts**
 
 - A Python script on the standard library. It finds the plugin root by walking up to `.claude-plugin/plugin.json`; an optional path argument sets where it starts.
-- `check_standing` validates `.ytstack/standing/` (`docs/ux/coordinator-format.md`): the name `<YYYYMMDDTHHMMZ>-<slug>.md`, `given` as ISO UTC in the minute of the name, a `scope`, a body, and a `supersedes` that names an earlier existing entry. The full run checks the plugin's own directory; `--standing [<project dir>]` runs only this check in any project with `.ytstack/` and needs no plugin root (exit 0 or 1).
+- `check_standing` validates `.ytstack/standing/` (`docs/ux/coordinator-format.md`): the name `<YYYYMMDDTHHMMZ>-<slug>.md` with a date and time that exist, `given` as an existing ISO UTC time in the minute of the name, a `scope`, a body, and a `supersedes` that names an earlier existing entry (missing seconds count as `00`). The full run checks the plugin's own directory; `--standing [<project dir>]` runs only this check in any project with `.ytstack/`, resolved through `hooks/lib/git-ctx.sh` like the preambles (user scope included), and needs no plugin root (exit 0 or 1).
 - It reads `skills/*/SKILL.md`, `agents/*.md`, the scripts in `hooks/`, both manifests in `.claude-plugin/` and this repository's own `.ytstack/spec/`. One function per contract: `check_skill`, `check_agent`, `check_cross_refs`, `check_vendor_sibling_refs`, `check_resolver_contract`, `check_inline_leaks`, `check_gstack_adapted`, `check_spec`, `check_keeping_block`. Those functions are the complete rule list; the two groups below summarize them.
 - `check_spec` runs `bin/ytstack-spec lint` and `drift` on the plugin root and is skipped when the tree has no `.ytstack/spec/`. A format error is a failure; an area whose paths changed after its description is a warning to look. `check_keeping_block` fails when the "Keeping this true" block in `skills/init-project/SKILL.md` or `skills/adopt-brownfield/SKILL.md` differs from the one in `docs/ux/spec-format.md`.
 - Failures (`[fail]`): skill frontmatter missing, `name` different from the directory, no description or one over the length limit; a procedure skill without `## Checklist` or `## Terminal State`; an agent file that breaks `docs/ux/agent-structure.md` (required fields, examples, existing `ytstack:` skills, hard line limit); a role named in `skills/spawn-milestone-team/SKILL.md` without `agents/<role>.md`; a wrapper naming a vendored `SKILL.md` that does not exist; a banned shell pattern (`_BANNED`) in a skill or hook; a preamble or hook that does not source `hooks/lib/git-ctx.sh`; inlined vendor text without a covering `## Namespace note`; an adapted gstack skill without `metadata.upstream`, with a gstack runtime reference, a symlink or an em-dash.

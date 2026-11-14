@@ -163,7 +163,7 @@ One review per lane, a second only for the fix.
 
 | Key | Holds |
 |---|---|
-| `given` | The UTC time, ISO (`YYYY-MM-DDTHH:MMZ`, seconds optional). The same minute as the file name, so that the name sorts by time. |
+| `given` | The UTC time, ISO (`YYYY-MM-DDTHH:MMZ`, seconds optional). The same minute as the file name, whose time orders the entries; missing seconds count as `00`. |
 | `scope` | Where the instruction applies. Not empty. |
 | `supersedes` | Empty, or the file name (without `.md`) of the earlier entry this one replaces. |
 
@@ -193,4 +193,4 @@ Where both exist, both are read: `STANDING.md` may be a short index that points 
 - `bin/ytstack-questions check`: ids are unique and match the file name, `state` holds a listed value, `asked` and `answered` are set exactly when the state says so, an answered file has text under `## Answer`.
 - `bin/ytstack-brief check`: the report labels, the three `Status:` values and their consistency with `Blockers:`.
 - `bin/ytstack-handover check`: the staged script of a human-only step (see `skills/handover-step/SKILL.md`).
-- `bin/ytstack-check --standing [<project dir>]`: every entry in `standing/` has a name of the form above, `given` as an ISO UTC time in the minute of its name, a `scope` and a body, and every `supersedes` names an earlier entry that exists.
+- `bin/ytstack-check --standing [<project dir>]`: every entry in `standing/` has a name of the form above with a date and time that exist, `given` as an existing ISO UTC time in the minute of its name, a `scope` and a body, and every `supersedes` names an earlier entry that exists (missing seconds count as `00`). Without a directory argument it resolves `.ytstack` like the skill preambles, user scope included.
