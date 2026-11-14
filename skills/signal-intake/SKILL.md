@@ -3,7 +3,7 @@ name: signal-intake
 description: "Reads the signal sources a project declares under Signals in RUNTIME.md (an error tracker, a latency report, alerts, logs) and records what is new, seen again or back after a fix as findings under .ytstack/signals/, changing nothing else. Use in a scheduled or unattended run, or when the user says look at what production reports, check the error tracker, anything new in production, go through the alerts, run the signal intake. Not for an outage that is happening now (incident), not for finding the cause of one finding (systematic-debugging) and not for watching a release after a merge (finish-lane)."
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.1.1
 allowed-tools:
   - Bash
   - Read
@@ -118,6 +118,12 @@ fi
 echo "SIGNALS_TOOL: ${_SIG:-unavailable}"
 echo "RUNTIME_TOOL: ${_RT:-unavailable}"
 echo "STANDING: $([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STANDING.md" ] && echo yes || echo no)"
+# One file per standing instruction (.ytstack/standing/): the ones in force, newest first.
+echo "STANDING_ENTRIES_BEGIN"
+if [ -n "$_YT_DIR" ] && [ -d "$_YT_DIR/standing" ]; then
+  command -v yt_standing >/dev/null 2>&1 && yt_standing "$_YT_DIR" || echo "list $_YT_DIR/standing/ yourself: newest first, skip superseded"
+fi
+echo "STANDING_ENTRIES_END"
 echo "NOW: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "RUNTIME_CHECK: $([ -n "$_RT" ] && bash "$_RT" check 2>&1 | head -10)"
 # One line per source: name, kind, read, scope (tab separated).
@@ -241,7 +247,7 @@ cd "{PROJECT_DIR}" && bash "{SIGNALS_TOOL}" check
 
 `signals ok: N finding(s)` is the result. A problem in a file you wrote in this run: fix it and check again. A problem in an older file: leave the file alone and put the line into the report.
 
-The files under `.ytstack/signals/` are the memory of the intake: without them the next run records everything as new. Commit only when the prompt, the schedule or `STANDING.md` says that this run commits; then exactly `.ytstack/signals/`, with the message `chore: signal intake {date}`. Never push on your own, and never commit another path.
+The files under `.ytstack/signals/` are the memory of the intake: without them the next run records everything as new. Commit only when the prompt, the schedule or a standing instruction (an entry between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END`, or `STANDING.md`) says that this run commits; then exactly `.ytstack/signals/`, with the message `chore: signal intake {date}`. Never push on your own, and never commit another path.
 
 ### Step 7: Report
 
