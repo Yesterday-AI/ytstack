@@ -3,9 +3,9 @@ milestone: M031
 slice: S03
 project: ytstack
 created: 2026-11-15T09:00:00Z
-status: in-progress
+status: done
 task_count: 3
-completed_tasks: 2
+completed_tasks: 3
 ---
 
 # M031-S03 -- Slice Plan
@@ -16,7 +16,7 @@ completed_tasks: 2
 
 - [x] T01 -- Factory-tool notices: `yt_factory_notices` in `hooks/lib/git-ctx.sh` (risk routing with `.ytstack/spec/` but no `REVIEW.md` or no area with `auto_merge: low|normal`; PR watch not enabled or without a fresh worker heartbeat on a GitHub origin; `RUNTIME.md` without "Release" or "Signals" while deploy or signal evidence exists), `ytstack-runtime sections`, the lines in the `session-start` injection on `startup` and `clear` only, a "factory tools" section in `bin/ytstack-upkeep` that is not counted. Tests: `tests/session-notices.test.sh`, `tests/ytstack-upkeep.test.sh`, `tests/ytstack-runtime.test.sh`.
 - [x] T02 -- Version notice: `hooks/version-notice` on UserPromptSubmit records the plugin version a session first ran with (out of tree, per session) and says once per installed version "ytstack X installed, this session loaded A: reload the skills you use" with the CHANGELOG entry titles in between (bounded). Installed version from `installed_plugins.json`, else the newest non-orphaned sibling in the plugin cache. Tests: `tests/session-notices.test.sh`, `tests/hooks-json.test.sh`.
-- [ ] T03 -- Docs and spec: `hooks-and-state` and `checks-and-evals` areas, `docs/ux/runtime-format.md`, `docs/recipes/recurring-upkeep.md`, `docs/pr-watch.md`, DECISIONS entry (SessionStart stays read-only, the prompt hook owns the version record).
+- [x] T03 -- Docs and spec: `hooks-and-state` and `checks-and-evals` areas, `docs/ux/runtime-format.md`, `docs/recipes/recurring-upkeep.md`, `docs/pr-watch.md`, DECISIONS entry (SessionStart stays read-only, the prompt hook owns the version record).
 
 ## Done when
 

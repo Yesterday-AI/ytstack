@@ -150,6 +150,13 @@ the LaunchAgent and the launcher and keeps the state.
 `status` shows `health.heartbeat` (the last finished tick), discovery and
 delivery errors.
 
+In a project with a `.ytstack` directory and a GitHub `origin`, the
+SessionStart hook says once when a session starts, and `bin/ytstack-upkeep`
+lists, that the PR watch is off (no `pr_watch` line in `~/.ytstack/config`)
+or on without a heartbeat under 10 minutes. It reads the heartbeat from
+`watch.sqlite3` (`sqlite3 -readonly`), else from the time of `worker.lock`,
+and asks GitHub nothing. `pr_watch=off` is taken as a choice and silences it.
+
 ## GitHub quota
 
 GitHub allows 5,000 REST calls an hour per account, shared by everything that
