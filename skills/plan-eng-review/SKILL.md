@@ -3,8 +3,8 @@ name: plan-eng-review
 description: "Reviews the execution approach of a pitch or a sliced milestone for feasibility, architecture, data flow, edge cases, test coverage, performance and security. Use after plan-ceo-review on a pitch, or after slice-milestone and before plan-task on M###-S##-PLAN.md; also when the user says eng review, architecture review, lock the approach. Not for scope and ambition questions (plan-ceo-review)."
 metadata:
   tier: core
-  version: 1.0.0
-  upstream: "gstack v1.96.0.0 (plan-eng-review/, commit 6666b7296)"
+  version: 1.0.1
+  upstream: "gstack v1.99.3.0 (plan-eng-review/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
   - Read
@@ -41,7 +41,7 @@ Run every section. A section with nothing to say gets "No issues found" in one l
 
 You MUST create a task for each of these items and complete them in order:
 
-1. **Run preamble** -- resolver, mode detection, review file path, `CODEX` availability
+1. **Run preamble** -- resolver, mode detection, review file path
 2. **Mode gate** -- stop with the abort message when `MODE: abort`
 3. **Load review context** -- read the target files, DECISIONS, KNOWLEDGE, any CEO review notes, `TODOS.md`
 4. **Scope Challenge** -- assess, reality rows, complexity questions (only if 8+ files or 2+ new services), findings decisions
@@ -49,7 +49,7 @@ You MUST create a task for each of these items and complete them in order:
 6. **Section 2: Code quality** -- structure, shared-code rubric, error handling, edge cases, debt
 7. **Section 3: Tests** -- read `references/test-review.md`, coverage diagram or strategy, test plan
 8. **Section 4: Performance** -- queries in loops, unbounded work, caching, blocking calls, with scale
-9. **Outside voice** -- read `references/outside-voice.md`, run Codex (only if `CODEX: yes`) or a fresh subagent, resolve findings
+9. **Outside voice** -- read `references/outside-voice.md`, run a fresh-context subagent, resolve findings
 10. **TODO decisions** -- one question per deferred item
 11. **Write the review file** -- read `references/outputs.md`, write `REVIEW_FILE`, read it back
 12. **Apply accepted changes** -- slice plans + `DECISIONS.md` (milestone) or pitch annotation (concept)
@@ -173,7 +173,6 @@ echo "TODOS: $([ -f TODOS.md ] && echo TODOS.md || echo none)"
 _DEFAULT=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
 echo "DEFAULT_BRANCH: ${_DEFAULT:-$(git rev-parse --verify --quiet main >/dev/null && echo main || echo unknown)}"
 echo "HEAD: $(git rev-parse --short HEAD 2>/dev/null || echo none)"
-echo "CODEX: $(command -v codex >/dev/null 2>&1 && echo yes || echo no)"
 ```
 
 ## Procedure
@@ -422,7 +421,7 @@ Give each finding its scale (rows, requests per second, bytes) or mark the scale
 
 ### Step 9: Outside voice
 
-Read `${CLAUDE_SKILL_DIR}/references/outside-voice.md` and follow it: build the prompt, run Codex read-only when `CODEX: yes`, otherwise one fresh-context `Plan` subagent, then resolve every outside finding as its own decision. Missing coverage is recorded, never counted as a clean review.
+Read `${CLAUDE_SKILL_DIR}/references/outside-voice.md` and follow it: build the prompt, run one fresh-context `Plan` subagent, then resolve every outside finding as its own decision. Missing coverage is recorded, never counted as a clean review.
 
 ### Step 10: TODO decisions
 

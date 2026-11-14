@@ -21,7 +21,7 @@ Read-only review: return findings in your final response. Do NOT edit or write a
 
 You are a brutally honest technical reviewer examining a development plan that has already been through a multi-section review. Your job is NOT to repeat that review. Find what it missed: logical gaps and unstated assumptions that survived, overcomplexity (is there a fundamentally simpler approach the review was too deep in the weeds to see?), feasibility risks the review took for granted, missing dependencies or sequencing issues, and strategic miscalibration (is this the right thing to build at all?). Be direct. Be terse. No compliments. Just the problems. Give each finding a severity (Critical, High, Medium, Low) and a file:line or plan line when one exists.
 
-End with "Recommendation: <action> because <specific reason>". If there are no findings, say so and explain why the plan is ready.
+Write "Recommendation: <action> because <specific reason>"; if there are no findings, explain why the plan is ready. End with exactly `VERDICT: CLEAN` (no findings) or `VERDICT: FINDINGS` as the last line.
 
 THE PLAN:
 <plan, findings, decisions>
@@ -29,32 +29,18 @@ THE PLAN:
 
 ## 2. Run one reviewer
 
-**If `CODEX: yes` in the preamble** (the `codex` CLI is on PATH), run it read-only in the foreground with a Bash timeout of 360000 ms. Replace `PROMPT_FILE` with the path from step 1:
-
-```bash
-_P='PROMPT_FILE'
-_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-_OUT=$(mktemp -d "${TMPDIR:-/tmp}/yt-eng-codex.XXXXXXXX") || exit 1
-_RC=0
-codex exec -C "$_ROOT" -s read-only -o "$_OUT/text" - <"$_P" >"$_OUT/events" 2>"$_OUT/stderr" || _RC=$?
-echo "CODEX_EXIT: $_RC"
-cat "$_OUT/text" 2>/dev/null || tail -n 20 "$_OUT/events"
-tail -n 20 "$_OUT/stderr" >&2
-rm -rf "$_OUT" "$_P"
-```
-
-A nonzero exit, empty output, a refusal or a missing `Recommendation:` line means the outside voice is unavailable. Name the repair when it is obvious (authentication failure: `codex login`; timeout: the 5-minute limit) and fall through to the subagent below. Present a completed answer verbatim:
+Dispatch one fresh-context subagent with the Agent tool in the foreground, `subagent_type: "Plan"` (it cannot edit files), the inherited model, and the prompt text (Read the prompt file and pass its content). Accept only a complete final report with a `Recommendation:` line and a last line `VERDICT: CLEAN` or `VERDICT: FINDINGS`; a partial or empty result, a refusal or a missing marker is unavailable coverage. Present a completed answer verbatim:
 
 ```
-CODEX SAYS (plan review, outside voice):
+OUTSIDE VOICE (fresh-context subagent):
 ============================================================
 <full output, verbatim, not truncated or summarized>
 ============================================================
 ```
 
-**Otherwise, or when Codex failed:** dispatch one fresh-context subagent with the Agent tool, `subagent_type: "Plan"` (it cannot edit files), the inherited model, and the same prompt text (Read the prompt file and pass its content). Accept only a complete final report that ends with a `Recommendation:` line; a partial or empty result is unavailable coverage. Present it under an `OUTSIDE VOICE (Claude subagent):` header. Delete the prompt file afterwards.
+Delete the prompt file afterwards. The subagent runs on the same model family as this review; weigh its agreement accordingly.
 
-If neither reviewer completes: "Outside voice unavailable: <cause>. Continuing to the TODO decisions." Record `unavailable (<cause>)` in the report. Missing coverage is never a clean review.
+If it does not complete: "Outside voice unavailable: <cause>. Continuing to the TODO decisions." Record `unavailable (<cause>)` in the report. Missing coverage is never a clean review.
 
 ## 3. Resolve the findings
 

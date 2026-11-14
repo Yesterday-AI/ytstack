@@ -3,8 +3,8 @@ name: document-release
 description: "Writes the release documentation for a version bump (CHANGELOG section, release notes), fed with the task summaries since the last tag. Use when a version is being cut, after ship or finish-branch landed the work, or when the user says write the changelog, release notes, document the release. Not for ad-hoc docs edits (quick-task) and not for the retrospective (retro)."
 metadata:
   tier: task
-  version: 1.0.0
-  upstream: "gstack v1.96.0.0 (document-release/, commit 6666b7296)"
+  version: 1.0.1
+  upstream: "gstack v1.99.3.0 (document-release/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
   - Read
@@ -370,11 +370,9 @@ A fresh-context reviewer catches what the author of the edits no longer sees. Sk
 
 Dispatch one subagent with the Agent tool (wait for it, 5-minute bound). Prompt, with `<diff-base>` replaced by the printed SHA and the paths filled in:
 
-> You are reviewing documentation against the code that shipped in `{PROJECT_SLUG}` {version}. Read `git diff <diff-base> HEAD` and these docs as they are now in the working tree: {paths edited this run plus docs whose claims the diff affects}. Do not read or run files under `~/.claude/`, `.claude/skills/` or `agents/`, and do not invoke skills. Find: doc claims that no longer match the code; public surface (commands, flags, config keys, endpoints) that shipped undocumented; stale examples, paths, counts or version numbers; CHANGELOG bullets that over- or under-sell what shipped. Be terse. One line per gap with a severity (Critical, High, Medium, Low), then a final line `Recommendation: <action> because <reason>`, including the reason when there are no gaps.
+> You are reviewing documentation against the code that shipped in `{PROJECT_SLUG}` {version}. Read `git diff <diff-base> HEAD` and these docs as they are now in the working tree: {paths edited this run plus docs whose claims the diff affects}. Do not read or run files under `~/.claude/`, `.claude/skills/` or `agents/`, and do not invoke skills. Find: doc claims that no longer match the code; public surface (commands, flags, config keys, endpoints) that shipped undocumented; stale examples, paths, counts or version numbers; CHANGELOG bullets that over- or under-sell what shipped. Be terse. One line per gap with a severity (Critical, High, Medium, Low), then a line `Recommendation: <action> because <reason>`, including the reason when there are no gaps. End with exactly `VERDICT: CLEAN` (no gaps) or `VERDICT: FINDINGS` as the last line.
 
-If `codex` is on PATH and the user wants a cross-model view, the same prompt can run through `codex exec - -C <repo root> -s read-only < <prompt file>` instead; its output is presented the same way.
-
-- Reviewer failed or timed out: say "Doc review unavailable" and continue. Unavailable is not a clean review.
+- Reviewer failed or timed out, or its output lacks the final `VERDICT:` line: say "Doc review unavailable" and continue. Unavailable is not a clean review.
 - Zero gaps: say "Docs match what shipped" and name the reviewer.
 - Gaps found: show them, then ask once:
 

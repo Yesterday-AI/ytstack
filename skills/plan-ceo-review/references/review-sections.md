@@ -399,7 +399,7 @@ Use the full mode name from 0E. "System Audit" summarizes repository findings fr
   | Scope proposals      | ___ proposed, ___ accepted (EXP + SEL)      |
   | CEO scope summary    | written / skipped by mode                   |
   | Spec review          | score _/10, ___ iterations / unavailable    |
-  | Outside voice        | codex completed / skipped (reason)          |
+  | Outside voice        | completed / unavailable / skipped (reason)  |
   | Lake Score           | X/Y recommendations chose complete option   |
   | Diagrams produced    | ___ (list types)                            |
   | Stale diagrams found | ___                                         |
@@ -426,7 +426,7 @@ The report is always the **last** `## ` section of the review file. Format:
 | Mode | <full mode name> |
 | Status | CLEAR / ISSUES OPEN |
 | Findings | <N proposals, A accepted, D deferred> or <mode: X, N critical gaps> |
-| Outside voice | <codex: N findings, R resolved, U unresolved> or <skipped: reason> |
+| Outside voice | <subagent: N findings, R resolved, U unresolved> or <unavailable / skipped: reason> |
 
 **VERDICT:** <proceed / proceed with changes / rescope / kill> -- <one line why>. Engineering review: <required next / already done>.
 

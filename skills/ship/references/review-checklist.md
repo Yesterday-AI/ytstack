@@ -98,11 +98,12 @@ corruption, wrong results without errors, error handling that swallows failures,
 boundary violations. No compliments, only problems. For each finding: file:line, the
 quoted code, FIXABLE (you know the fix) or INVESTIGATE (needs judgment),
 `Severity: Critical|High|Medium|Low`, `Blocks: yes|no` (blocks only if it would fail a test,
-break production, or lose data or secrets). End with one line:
+break production, or lose data or secrets). Then write one line:
 `Recommendation: <action> because <reason naming the most exploitable finding>`.
+End with exactly `VERDICT: CLEAN` (no findings) or `VERDICT: FINDINGS` as the last line.
 ````
 
-FIXABLE or `Blocks: yes` findings are CRITICAL; other INVESTIGATE findings are informational. Merge them with your own findings, dropping duplicates (same file, same defect class). The subagent fails or times out: record "Adversarial review: unavailable (<reason>)" for the PR body; never report it as clean.
+FIXABLE or `Blocks: yes` findings are CRITICAL; other INVESTIGATE findings are informational. Merge them with your own findings, dropping duplicates (same file, same defect class). Only a completed response ending with its `VERDICT:` line counts. The subagent fails, times out or omits the `VERDICT:` line: record "Adversarial review: unavailable (<reason>)" for the PR body; never report it as clean.
 
 ## Fix-First
 

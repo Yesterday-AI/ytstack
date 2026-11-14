@@ -8,7 +8,7 @@ Audit the plan this branch was built from, never a plan that is merely the newes
 
 1. **ytstack (`HAS_YTSTACK: yes` and `SLICE_PLAN` exists):** the slice plan is the plan. Its `**Goal:**` line and `## Tasks` list are the deliverables; each task plan (`M###-S##-T##-PLAN.md`) adds its `## Files`, `## What this does` and `## Verification`; each task summary (`M###-S##-T##-SUMMARY.md`) records `## Outcome`, `## Deviations from plan` and `## Follow-ups`. A deviation recorded in a summary is an approved scope change, not a gap.
 2. **A plan in this conversation** (plan mode file, a spec the user pointed at): use it.
-3. **PR binding:** a `Plan: <path>` line in the branch's open PR body (`gh pr view --json body -q .body`).
+3. **PR binding:** a `Plan: <path>` line in the branch's open PR body (`gh pr view --json body -q .body`). Take the first token after `Plan:` on the first such line whose value is a path; a status line (`Plan: approved ...`, `Plan: exempt`, `Plan: required`) is not a binding.
 4. **Candidates:** Markdown under `docs/plans/`, `docs/designs/` or `docs/specs/` that this branch added or changed (`git diff --name-only --diff-filter=AM $(git merge-base origin/<base> HEAD) -- 'docs/**/*.md'`) or that names the branch. More than one, or one you are unsure of: ask, one option per candidate (at most four) plus "No plan: skip the audit". Recommend a candidate only when exactly one plan file changed on this branch. Read the chosen file's first 20 lines to confirm it is the right feature.
 5. **Nothing bound:** print `Plan completion audit: not run (no plan is bound to this branch). Fix: add "Plan: <path>" to the PR body.` Skip to section 4 (scope drift still runs).
 

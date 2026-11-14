@@ -4,7 +4,7 @@ description: "Validates a new project, feature or initiative before anything is 
 metadata:
   tier: core
   version: 1.0.0
-  upstream: "gstack v1.96.0.0 (office-hours/, commit 6666b7296)"
+  upstream: "gstack v1.99.3.0 (office-hours/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
   - Read

@@ -3,8 +3,8 @@ name: ship
 description: "Ships the current branch (merge the base, tests, coverage and plan audit, pre-landing review, version and CHANGELOG, docs sync, commit, push, pull request), gated on ytstack's slice state. Use when a slice or milestone is closed on paper and verified, or when the user says ship it, open the PR, land this, create a PR. Not before every task of the slice has a summary (summarize-task), not for merging into the base locally (finish-branch), and never for a merge without an explicit merge instruction."
 metadata:
   tier: task
-  version: 1.0.0
-  upstream: "gstack v1.96.0.0 (ship/, commit 6666b7296)"
+  version: 1.0.1
+  upstream: "gstack v1.99.3.0 (ship/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
   - Read
@@ -22,7 +22,7 @@ Adapted from gstack's `ship` skill (MIT, Garry Tan), baseline in `metadata.upstr
 
 The release path for a feature branch: integrate the base, prove the change with the project's own tests, audit coverage and plan completion, review the diff, cut the version and CHANGELOG, sync the docs, commit, push and open (or update) the pull request. It runs with git, gh and the project's test command; nothing else is required. In a ytstack project it also refuses to ship a slice that is not closed on paper and puts the slice's outcomes into the PR body.
 
-This skill differs from upstream gstack ship: no review log, receipts, merge queue, Greptile/Capy, Codex outside voice, Apple release, budget handoff, measure loop or specialist review army; the review is one checklist pass plus one fresh-context adversarial subagent, and every helper binary is replaced by plain git/gh.
+This skill differs from upstream gstack ship: no review log, receipts, merge queue, Greptile/Capy, outside-voice CLI, Apple release, budget handoff, measure loop or specialist review army; the review is one checklist pass plus one fresh-context adversarial subagent, and every helper binary is replaced by plain git/gh. Commit subjects and PR titles keep the `<type>:` / `M###-S##-T##:` prefix that ytstack projects use (upstream dropped it in v1.99).
 
 <HARD-GATE>
 Do NOT push, open a pull request, bump the version or write the CHANGELOG until the tests passed on the code merged with the base branch, and do NOT ship a ytstack slice while `OPEN_TASKS` is not `none`.
@@ -304,7 +304,7 @@ The project's own release rules win: read `CLAUDE.md` / `AGENTS.md` / `CONTRIBUT
 3. Read `git diff origin/<base>` to understand what each commit changed.
 4. Group by theme before writing: features, performance, fixes, removals, infrastructure and tests, refactors.
 5. Write one entry with Edit (never Write on CHANGELOG.md), after the header and before the first release entry, dated today: `## [<NEW_VERSION>] - YYYY-MM-DD` (or the file's own heading style), with `### Added` / `### Changed` / `### Fixed` / `### Removed` as applicable. Entries this branch already added for these commits are replaced by the one unified entry. Version kept or no version source: put the entry under `## [Unreleased]`, never under a released heading.
-6. **Voice:** lead with what the user can now do that they could not before. Plain language, no implementation detail, nothing about internal tracking (TODOS, `.ytstack` bookkeeping). Each bullet names a concrete change; cut any bullet that would fit every release.
+6. **Voice:** lead with what the user can now do that they could not before. Plain language, no implementation detail, nothing about internal tracking (TODOS, `.ytstack` bookkeeping): no tracker codes (issue keys, `M###-S##` refs) anywhere in the entry, and a bold lead that a user of the project understands without the repository's coined terms. Each bullet names a concrete change; cut any bullet that would fit every release.
 7. **Cross-check** against the commit list from item 2: every user-facing change appears. Merges, version bumps and fixes to work introduced earlier on this same branch need no bullet.
 
 Do not ask the user to describe the changes; infer them from the diff and the commits.

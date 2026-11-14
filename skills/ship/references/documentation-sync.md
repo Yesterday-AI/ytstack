@@ -39,19 +39,20 @@ Doc roots: <list>.
 Return a short report, then on the LAST line, nothing after it, one JSON object:
 {"status":"updated|current|blocked","files_updated":["path"],"files_reviewed":["path"],"blockers":["..."],"documentation_section":"<markdown: scope audited, what changed, doc debt (gaps from the coverage map)>"}
 status is `updated` when you edited, `current` when nothing needed editing, `blocked` when
-the audit could not finish or a needed change is a blocker.
+the audit could not finish or a needed change is a blocker. documentation_section is the
+complete section itself, never a placeholder. Spell every key exactly as listed; no extra fields.
 ````
 
 ## Validate (parent)
 
-1. Parse the LAST line as JSON. Missing field, wrong type or no result after about 10 minutes: blocked.
+1. Parse the LAST nonempty line as JSON. Missing or misspelled key, wrong type, placeholder section or no result after about 10 minutes: blocked. Never default or reconstruct a missing value.
 2. Compare `git status --porcelain` with the saved state. The only new or changed paths must be exactly `files_updated`, all inside the doc roots. HEAD and the index must be unchanged. Any other write (a manifest, CHANGELOG, a source file, a commit) is an ownership violation: report it, and revert only the child's hunks with Edit after confirming the child has stopped. Never reset or clean the tree.
 3. Read every edited hunk. A factual correction from the diff stays. A narrative rewrite, removal or uncertain claim is reverted with Edit and listed as a blocker.
 4. Print `Documentation: updated (<paths>)` or `Documentation: current (<scope>)`. Keep `documentation_section` unchanged for the PR body's `## Documentation`.
 
 ## Blocked recovery
 
-`blocked`, a failed check or a reverted edit: report `Documentation: blocked` with the reason and the paths. If the one repair attempt is still unused and a concrete fix exists (a missing input, a narrower brief), fix it and dispatch once more. Otherwise ask:
+`blocked`, a failed check or a reverted edit: report `Documentation: blocked` with the reason and the paths. If the one repair attempt is still unused and a concrete fix exists (a missing input, a narrower brief, or a malformed result: end the retry brief with a note naming each bad key), fix it and dispatch once more. Otherwise ask:
 
 > Shipping branch `{BRANCH}` of `{PROJECT_SLUG}`: the documentation audit is blocked: {reason, paths}.
 >

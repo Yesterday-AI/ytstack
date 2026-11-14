@@ -118,7 +118,7 @@ P1 blocks shipping, P2 lands in the same milestone, P3 is a follow-up for `TODOS
 - TODOS.md: <n> items proposed
 - Failure modes: <n> critical gaps
 - Unresolved decisions: <n>
-- Outside voice: <codex / subagent> <completed / unavailable / skipped> (<reason>)
+- Outside voice: subagent <completed / unavailable / skipped> (<reason>)
 - Parallelization: <n> lanes, <n> parallel / <n> sequential
 - Completeness picks: <X>/<Y> answers chose the 10/10 option (n/a if no scored answers)
 ```

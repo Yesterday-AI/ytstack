@@ -16,7 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gbrain, learnings, Greptile, browser) left out. They run with bash, git
   and gh; gstack and Bun are no longer needed, and nothing is registered in
   `~/.claude/skills/`. Each skill records its gstack baseline in
-  `metadata.upstream` and moves to 1.0.0.
+  `metadata.upstream`: drafted from gstack v1.96.0.0, then synced to
+  v1.99.3.0 with the new diff tool (VERDICT line for subagent second
+  opinions and the adversarial review, plain-language PR titles and
+  CHANGELOG leads, stricter docs-audit result format). The optional outside
+  voice in `plan-ceo-review` / `plan-eng-review` runs as a fresh-context
+  subagent; no external CLI is called.
 - `bin/ytstack-check`: the gstack-wrapper rule is replaced by a
   self-contained rule for the six skills (no gstack runtime reference,
   `metadata.upstream` present, no symlinks, no em-dashes in any file of the

@@ -4,7 +4,7 @@ description: "Milestone retrospective fed with the milestone's task summaries, d
 metadata:
   tier: task
   version: 1.0.0
-  upstream: "gstack v1.96.0.0 (retro/, commit 6666b7296)"
+  upstream: "gstack v1.99.3.0 (retro/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
   - Read

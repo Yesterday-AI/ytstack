@@ -12,7 +12,7 @@ GitLab: `glab mr list --source-branch "<branch>"`. An empty list means a new PR.
 
 ## 2. Title
 
-- New PR with a version bump: `v<NEW_VERSION> <type>: <summary>`; `<summary>` names what the user gets, not the mechanism.
+- New PR with a version bump: `v<NEW_VERSION> <type>: <summary>`; `<summary>` says in everyday words what changed for someone using the project and names what the user gets, not the mechanism. No tracker code and none of the repository's coined terms before the trailing group; an issue or slice code goes last, in parentheses.
 - Existing PR: keep its wording, replace or add the `v<version> ` prefix.
 - No version bump (no version source or version kept): `<type>: <summary>` without prefix.
 - `<type>` follows the repo's convention (`feat`, `fix`, `chore`, `docs`, `refactor`). In a ytstack project a slice PR may lead with the slice: `v0.5.1 feat: <summary> (M004-S02)`.
@@ -21,9 +21,11 @@ Check the title starts with `v<NEW_VERSION> ` whenever a version was bumped.
 
 ## 3. Body
 
-Write the body with the Write tool into a file outside the repo (`mktemp "${TMPDIR:-/tmp}/ship-pr-body.XXXXXX"`); never pass body text inline in a shell command. Compose fresh every run; never reuse an earlier body. Sections in this order, omitting a section only where it says so:
+Write the body with the Write tool into a file outside the repo (`mktemp "${TMPDIR:-/tmp}/ship-pr-body.XXXXXX"`); never pass body text inline in a shell command. Compose fresh every run; never reuse an earlier body. The front is for people, the end is for machines: the body opens with one or two plain sentences, no heading above them, saying what changed for someone using the project and which goal from the project's README it serves (with no stated goals, the user-visible benefit). Tracker codes and other machine-read lines never go above them. Sections in this order, omitting a section only where it says so:
 
 ```
+<One or two plain sentences: what changed for a user, and the README goal it serves.>
+
 ## Summary
 <Open with the problem in the user's words (what they hit, saw or asked), then the fix and
 what they get now. Themes from `git log origin/<base>..HEAD --oneline`, minus VERSION /
