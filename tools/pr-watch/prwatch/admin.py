@@ -325,4 +325,6 @@ def _migrate(db_path, policy_path, state, target, scratch, yes):
     print('  2. remove the old `pr-watch hook --host claude` entries from ~/.claude/settings.json (back it up first)')
     print('  3. disable or remove the old Codex plugin pr-watch@local-pr-watch (Codex plugin settings)')
     print(f'  4. {cli()} enable, then {cli()} install-worker --yes')
+    print('  5. restart every running Claude Code and Codex session (a running session keeps the hooks it '
+          f'started with), then in each: {cli()} register --repo OWNER/REPO --all-open')
     return 0

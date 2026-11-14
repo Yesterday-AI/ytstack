@@ -3,7 +3,7 @@ name: coordinate
 description: "Coordinator mode for the session that owns a plan and delegates all of it, writing no product code itself. Use when many lanes are in flight, when a plan has dozens of work packages, when a session with open lanes continues after a compaction or a resume, or when the user says coordinate this, run the plan, you are the coordinator, keep the lanes moving, where does each lane stand. Not for one milestone with a handful of independent slices (spawn-milestone-team) and not for doing a task yourself (plan-task)."
 metadata:
   tier: task
-  version: 0.2.0
+  version: 0.2.1
 allowed-tools:
   - Bash
   - Read
@@ -181,6 +181,8 @@ A lane named in the `blocks:` of an open or asked question is not ready, whateve
 ```bash
 ytstack-watch --pr <the open numbers> --interval 60
 ```
+
+With the PR watch on (`pr_watch=on` in `~/.ytstack/config`, `docs/pr-watch.md`), the background worker already reports red checks, unresolved bot threads and conflicts to this session with the next prompt, also for pull requests the lanes' subagents opened. Register the repository's open pull requests to this session once at the start of coordination and after every restart: `ytstack-pr-watch register --repo <owner/name> --all-open`. Without it, start `ytstack-watch` as below.
 
 Start it as a background process; on a host with a monitor tool, through that tool, so that each new line reaches you as an event. It prints a line only when a head moved, the checks changed, a review arrived, mergeability changed or a pull request closed, and it ends when all are merged or closed. Act on the line: red checks go back to the lane's worker with the name of the check; a review on a commit that is not the head is no review of the head. A pull request that merged, also when a person merged it: set its lane to `merged` and watch the release of its merge commit as `ytstack:finish-lane` describes ("Watch the release"), with `ytstack-watch release --commit <merge commit>` in the background. Its receipt goes into the next status; `not arrived` or `unhealthy` is a status at once. You deploy nothing and roll nothing back: a countermeasure on the target is a step for the human (`ytstack:handover-step`). Start the watcher again with the new list when a pull request opens. Never read status in a loop from the conversation, with or without a sleep. The single read of Step 4 before an action is not polling.
 
