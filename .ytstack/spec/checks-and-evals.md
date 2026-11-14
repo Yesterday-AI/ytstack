@@ -11,6 +11,7 @@ paths:
   - bin/ytstack-handover
   - bin/ytstack-watch
   - bin/ytstack-risk
+  - bin/ytstack-review-escapes
   - bin/ytstack-runtime
   - bin/ytstack-signals
   - bin/ytstack-upkeep
@@ -25,7 +26,7 @@ sources:
   - docs/ux/review-policy-format.md
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
-verified_at: 4207daa
+verified_at: d6001bb
 ---
 
 # checks-and-evals
@@ -57,7 +58,11 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 - `floor --base <sha> --head <sha>` prints the lowest class of the tree difference (`low`, `normal` or `person`), one `reason:` per path and rule, the touched areas, their ceiling and the required lenses. It reads the policy at the base commit, never from the working tree; git matches the globs.
 - `route --plan <file> --base <sha> --head <sha> --author <worker>` exits 0 with `route: unattended` only when the floor is not `person`, the newest round line approves, states `risk` and `invariants: none`, names a reviewer other than the author and is valid for the head, the class is within the ceiling, and every required lens has a passing line with its evidence (for `evidence: visual` a `MANIFEST` whose hashes match). Every other case exits 10 with `route: person` and one reason per failed condition. `by: self` and a missing `--author` always route to a person.
-- `check` validates `REVIEW.md`; `manifest <dir>` writes hash and name of every image into the `MANIFEST` of an evidence directory.
+- `check` validates `REVIEW.md`, its "Own reviewers" too (slug names, a unique `marker`, a `lessons` file that exists); `reviewers` prints the own reviewers tab separated; `manifest <dir>` writes hash and name of every image into the `MANIFEST` of an evidence directory.
+
+**`bin/ytstack-review-escapes`: review-bot findings the own reviewers missed** (`docs/ux/review-policy-format.md`, "Escapes")
+
+- `--pr <n>` reads a pull request's review threads, reviews and commits through `gh` (GraphQL, paginated) and the changes of the commits after a resolved bot thread (one REST call per commit), and prints one TSV line per bot thread: resolution `fixed`, `rejected` or `open`, and `caught` (with the role) or `escaped`. Exit 10 with a `fixed` and `escaped` line, 0 without, 1 when `REVIEW.md` declares no own reviewers (before any read), 2 on usage or read errors. Read-only. Its suite answers from recorded fixtures under `tests/fixtures/review-escapes/`.
 
 **`bin/ytstack-runtime`: `RUNTIME.md` and the product per worktree** (`docs/ux/runtime-format.md`)
 
@@ -67,8 +72,9 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **`bin/ytstack-signals`: production findings and incident records** (`docs/ux/signal-format.md`)
 
 - `new` records a finding once: a second sighting of the key raises its count, a sighting of a `fixed` one writes a regression with `reopens:`, a `dismissed` one stays dismissed; writes under a noclobber lock. `list`, `set`, `incident new`, `check` (findings and incident records; every mitigation names a handover script that passes `bin/ytstack-handover check` unless declined).
+- `--kind review` records an escaped review-bot finding (key `review:<role>:<class-slug>`) without a "Signals" source; `review-checked` records and asks which merged pull request had its escape check, in `signals/review-checks`; `--tally` adds caught/escaped per role as a fourth field, which `check` validates.
 
-**`bin/ytstack-upkeep`**: one read-only run over `.ytstack/` with seven counted sections (spec, state, gates, questions, lanes, runtime, review policy); exit 0 with `nothing needs a look`, 10 otherwise. `--question` writes one question file and none while an earlier `Upkeep found ...` is open or asked. `docs/recipes/recurring-upkeep.md` puts it on a schedule.
+**`bin/ytstack-upkeep`**: one read-only run over `.ytstack/` with eight counted sections (spec, state, gates, questions, lanes, runtime, review policy, review checks); exit 0 with `nothing needs a look`, 10 otherwise. `review checks` lists, only when `REVIEW.md` declares own reviewers, the merged pull requests without a line in `signals/review-checks` (an anchored window from 14 days before the earliest time in that file, or 14 days ago without one, at most 90 days back; cut at 500 with a notice), from one `gh pr list --search merged:>=<day>` (one call per 100) (plus one `gh repo view` when `origin` is not a GitHub URL); a failed read is an item, a missing `gh` or `jq` a note. `--question` writes one question file and none while an earlier `Upkeep found ...` is open or asked. `docs/recipes/recurring-upkeep.md` puts it on a schedule.
 
 **`bin/ytstack-brief`: the brief of a dispatched worker and its report**
 
@@ -87,10 +93,8 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **Shell suites: `tests/*.test.sh`**
 
 - Plain bash, no framework. A suite prints one line per assertion and ends with its pass and fail count; fixtures live in `mktemp` directories. The comment at the top of each file states the contract it pins.
-- `tests/run-all.sh` runs every suite from a neutral temporary directory and prints `PASS` or `FAIL` per suite with that suite's last line. It stops at the first failing suite, prints up to ten of its `FAIL` lines and exits 1. The last line is `ALL SUITES PASSED` or `SUITE FAILURE`.
-- `tests/run-all.sh --linux` runs the same inside an `alpine/git` container with the repository mounted read-only. Without a working Docker daemon it prints a skip line and exits 0.
+- `tests/run-all.sh` runs every suite from a neutral temporary directory and prints `PASS` or `FAIL` per suite with that suite's last line. It stops at the first failing suite, prints up to ten of its `FAIL` lines and exits 1. The last line is `ALL SUITES PASSED` or `SUITE FAILURE`. `--linux` runs the same inside an `alpine/git` container with the repository mounted read-only; without a working Docker daemon it prints a skip line and exits 0.
 - `tests/ytstack-check.test.sh` tests the checker on a copy of the plugin tree. `tests/ytstack-spec.test.sh` tests `bin/ytstack-spec` on fixture repositories, one case per rule. `tests/ytstack-brief.test.sh` does the same for `bin/ytstack-brief` and compares the rendered contract with the real `skills/minimal-code/SKILL.md`. `tests/evidence-rule.test.sh` pins the evidence reuse rule: the verifier, the dispatcher and the skills area reuse a PASS only for the same commit, and its git fixture shows why (an unchanged planned file, a changed imported helper, a failing check).
-
 - `tests/pr-watch.test.sh` runs the PR watch engine's `unittest` suite (`tests/pr_watch/`, standard library, `gh` and the Codex daemon mocked) and then shell cases for `hooks/pr-watch` (off, on, malformed input), `bin/ytstack-pr-watch` (enable/disable, install-worker and migrate plans, migrate copy, the worker launcher's engine choice) under a temporary HOME. The resolver rule of `bin/ytstack-check` exempts `hooks/pr-watch` by name (`_HOOKS_WITHOUT_RESOLVER`).
 
 **Python host tests: `tests/*_test.py`**
@@ -119,9 +123,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 | `.github/workflows/plugin-check.yml` | `check` | ubuntu-latest | the Python Codex tests, Kimi packaging and lifecycle tests, `bash tests/post-tool-use-bash.test.sh`, `bin/ytstack-check` |
 | `.github/workflows/secret-scan.yml` | `secret-scan` | ubuntu-latest | gitleaks over the commits of the pull request or push; the whole tree on a branch-creation push |
 
-- All three run on pull requests and on pushes to `main`.
-- Both checker steps accept exit code 2 and fail on any other non-zero code.
-- The `ci.yml` matrix does not cancel the other runner when one fails.
+- All three run on pull requests and on pushes to `main`. Both checker steps accept exit code 2 and fail on any other non-zero code. The `ci.yml` matrix does not cancel the other runner when one fails.
 
 ## Invariants and security boundaries
 
@@ -138,10 +140,8 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 ## Runtime and deployment assumptions
 
-- The suites run on bash 3.2 (macOS) and bash 5 (Linux). `ci.yml` prints the versions of bash, git, jq and python3 on each runner.
-- `--linux` needs Docker and network access for the image and its packages.
-- `claude plugin validate` and `claude plugin eval` need the Claude Code CLI; the minimum version for evals is in `evals/README.md`.
-- An eval run loads nothing that is installed on the machine. A fixture creates everything a skill reads.
+- The suites run on bash 3.2 (macOS) and bash 5 (Linux). `ci.yml` prints the versions of bash, git, jq and python3 on each runner. `--linux` needs Docker and network access for the image and its packages.
+- `claude plugin validate` and `claude plugin eval` need the Claude Code CLI; the minimum version for evals is in `evals/README.md`. An eval run loads nothing that is installed on the machine. A fixture creates everything a skill reads.
 
 ## Known limits
 
@@ -158,7 +158,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 - `bin/ytstack-spec` -- the spec tool; `tests/ytstack-spec.test.sh` pins it.
 - `bin/ytstack-brief` -- brief renderer and report check; `tests/ytstack-brief.test.sh` pins it.
 - `bin/ytstack-frontier`, `bin/ytstack-questions`, `bin/ytstack-finish-lane`, `bin/ytstack-handover`, `bin/ytstack-watch` -- the coordinator scripts, each with `tests/<name>.test.sh`.
-- `bin/ytstack-risk`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it).
+- `bin/ytstack-risk`, `bin/ytstack-review-escapes`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it).
 - `tests/run-all.sh` -- the suite runner. `tests/*.test.sh` -- the suites. `tests/codex_plugin_test.py`, `kimi_plugin_test.py`, `kimi_lifecycle_test.py`, `kimi_live_test.py` -- the Python host tests.
 - `evals/<case>/` -- the eval cases. `evals/README.md` -- how to run them.
 - `.github/workflows/ci.yml`, `plugin-check.yml`, `secret-scan.yml`.

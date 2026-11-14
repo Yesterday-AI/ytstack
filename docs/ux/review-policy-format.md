@@ -85,6 +85,11 @@ It is the highest class that may merge into this area without a person. No field
 ## Size
 
 - size: 400 lines, 20 files
+
+## Own reviewers
+
+- code | marker: (`code`) | lessons: .github/reviewers/code.md | bots: cursor, greptile-apps
+- tests | marker: (`tests`) | lessons: .github/reviewers/tests.md
 ```
 
 Paths are git pathspec globs relative to the repository root, one per line. Every section is optional. Git itself matches them, the way `bin/ytstack-spec lint` and `drift` read `paths`: `*` stays inside one directory, `**` crosses directories, and `**/name` also matches at the root.
@@ -123,6 +128,72 @@ A `MANIFEST` line:
 The hash and the name are separated by two spaces, the way `sha256sum` prints them. The name is a file in the same directory. Blank lines and lines that start with `#` do not count. `bin/ytstack-risk manifest <dir>` writes the hash and the name for every image in the directory (`png`, `jpg`, `jpeg`, `webp`, `gif`) and keeps what a line already said; the reviewer fills in `url`, `viewport` and `shows`. `route` reads the evidence directory a lens line names in the working tree; a relative path starts at the root of the repository.
 
 The procedure is the skill `visual-review`.
+
+## Own reviewers: who learns from a review bot
+
+A project that runs review agents of its own (a role per review goal, each with a file it reads at every review) declares them here, so that a finding a review bot made and the roles missed can become a lesson for the role that owns it. Without the section nothing changes.
+
+| Field | Required | Holds |
+|---|---|---|
+| name | yes | The role, a lowercase slug, unique. |
+| `marker` | yes | The text every finding of the role carries, matched literally and unique among the roles: in the pilot project `` (`code`) `` in `🟠 **High** (`code`). <finding>`. A marker that also appears in text the role does not write (a bare `` `code` `` in a "Checked and fine" line) makes that text count as a finding; choose one that does not. It cannot hold a `|`. |
+| `lessons` | yes | The file a lesson for the role goes to: the role file or the rule source it reads. It exists in the repository. |
+| `bots` | no | Logins, comma-separated, that count as review bots although GitHub does not mark them as bots. |
+
+A lesson is a change to the `lessons` file, and that is a rule change: it is proposed to a person and never written by an agent on its own.
+
+`bin/ytstack-risk reviewers` prints the section, one tab separated line per role: name, marker, lessons, bots.
+
+## Escapes
+
+`bin/ytstack-review-escapes [-C <dir>] --pr <n> [--repo <owner/name>]` reads one pull request through `gh` and prints one tab separated line per review-bot thread under a header:
+
+```
+bot	resolution	match	role	path	lines	url	title
+chatgpt-codex-connector	fixed	escaped	-	src/app.ts	10-12	https://github.com/acme/shop/pull/101#discussion_r1	P1 Guard the empty cart
+greptile-apps	fixed	caught	code	src/app.ts	39	https://github.com/acme/shop/pull/101#discussion_r3	logic: `total` can be undefined
+```
+
+**A bot thread** is a review thread whose first comment is by an author GitHub marks as a bot, by a login that ends in `[bot]`, or by a login a `bots:` list names, and whose text carries no role marker. The marker wins over the author type: an own role that posts through a GitHub App is still an own role.
+
+**Resolution:**
+
+| Value | When |
+|---|---|
+| `fixed` | A commit of the pull request after the thread's commit changed the thread's file on a line no more than 3 lines (`MARGIN`) outside the thread's range. A thread on a whole file is fixed by any later change of the file. |
+| `rejected` | The thread is resolved and no such commit exists: the finding was answered without a code change. |
+| `open` | The thread is not resolved. |
+
+**Match:** `caught` with the role, when an own finding on the same file overlaps the thread's range widened by `MARGIN`, at the same or an earlier head than the bot's; `escaped` otherwise. An own finding carries a role's marker, whoever posted it, and is either
+
+- a review thread: its file and line range, its commit, or
+- a line of a review body: it has no anchor of its own, so it counts only with a cited `` `<path>:<line>` `` or `` `<path>:<start>-<end>` `` on the thread's file (the path in full or a tail of it after a slash), at the commit the review was submitted on. A body line without a cited line matches nothing.
+
+"Earlier head" compares the positions of the two commits in the pull request; when one of them is no longer part of it (a force push), the creation times decide. Lines are those of the commit a thread was written on; MARGIN absorbs the small shifts of the commits in between. Same file and overlapping lines is where the script stops: whether the two findings say the same thing is judged by whoever reads the line.
+
+Only a `fixed` and `escaped` line is a lesson. A `rejected` bot finding was a false positive and is not recorded.
+
+| Exit | Means |
+|---|---|
+| 0 | No line is `fixed` and `escaped`. |
+| 10 | At least one is. |
+| 1 | `REVIEW.md` declares no own reviewers; one line of hint, nothing read from the host. |
+| 2 | Usage, a broken "Own reviewers" section, or a read that failed. |
+
+Cost: one GraphQL call per 100 threads, reviews or commits (one for most pull requests), one REST call per commit after the oldest resolved bot thread, and one `gh repo view` when neither `--repo` nor an `origin` on github.com names the repository. An escape is recorded as a finding of `kind: review` (`docs/ux/signal-format.md`).
+
+### The lessons loop
+
+From a merge to a changed role file, end to end:
+
+1. **A pull request merges**, whoever merges it. Three ways lead to the check: with the PR watch on, the worker that sees the merge queues one notice to the owning session ("run ytstack:review-lessons for #N", `docs/pr-watch.md`); `bin/ytstack-upkeep` lists, under `review checks`, every merged pull request without a line in `.ytstack/signals/review-checks` (one `gh pr list` per run, one call per 100 merged pull requests: the window opens 14 days before the earliest time in `review-checks`, or 14 days ago without one, never further back than 90 days, and stays there, so a check of a newer pull request never hides an older unchecked one; cut at 500 with a notice); `finish-lane` invokes the skill itself after a merge it made. The skill also runs on demand.
+2. **`ytstack:review-lessons` reads the pull request** with `bin/ytstack-review-escapes`. Only `fixed` and `escaped` lines go on; `rejected` and `open` ones are counted in its report and recorded nowhere.
+3. **It names the owning role** of each escape from the role files (the `lessons` files of this section): their stated scope, checklist and sources. An escape no role owns, for example on a planning file no role reviews, is recorded nowhere and named in the report: that is a gap in the roles, not a lesson for the nearest one.
+4. **It records the escape** as `review:<role>:<class>` through `bin/ytstack-signals new --kind review`, with the merge time as the read time, and then the check line with `bin/ytstack-signals review-checked <owner/name>#<n> <merge sha> --tally <role>=<caught>/<escaped>,...`: every `fixed` bot thread counted once, a caught one for the role that caught it, an escaped one for the owning role (`-` without one). A class seen before keeps its key; its count rises.
+5. **At the threshold it proposes.** The threshold is the second sighting of a class (count 2 on an `open` finding), the first one at critical or high severity as the bot states it (a Codex `P1` is high, `P0` critical, `P2` medium), or a regression of a class whose lesson was marked fixed. The proposal is a question file under `.ytstack/questions/` (`bin/ytstack-questions new`): the exact checklist line, the role file and the section it goes to, and the escaped threads as evidence. Measured on 30 merged pull requests of the pilot project: 8 bot threads, all `fixed`, 2 caught and 6 escaped, each escape a class of its own; most classes are one-offs, so a single medium escape proposes nothing.
+6. **A person answers.** An accepted line goes through the normal task loop, linked with `bin/ytstack-signals set <F> --state planned --ref <task>`, and the task that adds it sets `fixed`. A rejected one is dismissed by the person (`set <F> --state dismissed`, the reason on stdin); further sightings of the class are counted and never proposed again. No agent writes the role file on its own.
+
+`retro` reports per role, for the milestone window, caught and escaped bot findings and the escape rate (escaped / (caught + escaped)) from the tallies, and the `kind: review` findings with their state, read from the ledger and not from the host. A check line without a tally (written before tallies existed) is reported as "not recorded".
 
 ## Records
 
@@ -193,7 +264,7 @@ The route says nothing about the host. `finish-lane` reads the host's gates (che
 
 ## Checked mechanically
 
-`bin/ytstack-risk check` reads the `REVIEW.md` of the working tree. It fails on a section outside the four, a lens whose name is not a lowercase slug, a lens without `applies`, `reads` or `evidence`, a lens field outside the five, an `evidence` outside the two values, a `reads` document that does not exist, a lens name used twice, and a `size` line that is not two numbers. It prints one line per problem (`REVIEW.md: <what is wrong>`) and exits 1; a clean policy and a project without `REVIEW.md` exit 0.
+`bin/ytstack-risk check` reads the `REVIEW.md` of the working tree. It fails on a section outside the five, a lens whose name is not a lowercase slug, a lens without `applies`, `reads` or `evidence`, a lens field outside the five, an `evidence` outside the two values, a `reads` document that does not exist, a lens name used twice, a `size` line that is not two numbers, an own reviewer whose name is not a lowercase slug or is used twice, one without `marker` or `lessons`, a marker another role has, a `lessons` file that does not exist, and an own reviewer field outside the three. It prints one line per problem (`REVIEW.md: <what is wrong>`) and exits 1; a clean policy and a project without `REVIEW.md` exit 0.
 
 `bin/ytstack-spec lint` runs that check when `REVIEW.md` exists and counts each line as a failure. It also fails on an `auto_merge` outside the three values and on a `REVIEW.md` that `SPEC.md` does not link.
 

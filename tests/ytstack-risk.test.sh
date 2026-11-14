@@ -11,7 +11,9 @@
 #           "normal" for the built-in never-low patterns, the project's list
 #           and a change over the size limit. The ceiling is the lowest
 #           auto_merge of the touched areas. The policy is read at the base.
-#   check   a well-formed REVIEW.md passes; each format rule fails on its own
+#   check   a well-formed REVIEW.md passes; each format rule fails on its own,
+#           the "Own reviewers" rules too
+#   reviewers  one tab separated line per own reviewer; 1 on a broken section
 #   route   "unattended" (exit 0) only with a floor that is not person, a
 #           newest round line that approves, states risk and "invariants:
 #           none", is by somebody other than --author and is valid for the
@@ -271,7 +273,25 @@ check_fails() { # <label> <REVIEW.md body> <expected text>
   run "$C" check
   if [ "$EC" = 1 ]; then has "$1" "$3" "$OUT"; else bad "$1" "exit $EC, output: $OUT"; fi
 }
-check_fails "a section outside the four" '## Reviewers\n\n- somebody\n' "REVIEW.md: section '## Reviewers' is not one of Always a person, Never low, Lenses, Size"
+check_fails "a section outside the five" '## Reviewers\n\n- somebody\n' "REVIEW.md: section '## Reviewers' is not one of Always a person, Never low, Lenses, Size, Own reviewers"
+check_fails "an own reviewer without marker" '## Own reviewers\n\n- code | lessons: docs/api.md\n' "REVIEW.md: own reviewer code has no marker"
+check_fails "an own reviewer without lessons" '## Own reviewers\n\n- code | marker: `code`\n' "REVIEW.md: own reviewer code has no lessons"
+check_fails "a lessons file that does not exist" '## Own reviewers\n\n- code | marker: `code` | lessons: docs/gone.md\n' "REVIEW.md: own reviewer code: lessons docs/gone.md does not exist"
+check_fails "an own reviewer name that is no slug" '## Own reviewers\n\n- Code | marker: `code` | lessons: docs/api.md\n' "REVIEW.md: own reviewer name 'Code' is not a lowercase slug"
+check_fails "an own reviewer defined twice" '## Own reviewers\n\n- code | marker: `code` | lessons: docs/api.md\n- code | marker: `c2` | lessons: docs/api.md\n' "REVIEW.md: own reviewer code is defined twice"
+check_fails "a marker used twice" '## Own reviewers\n\n- code | marker: `code` | lessons: docs/api.md\n- tests | marker: `code` | lessons: docs/api.md\n' "REVIEW.md: own reviewer tests: marker '\`code\`' is the marker of code already"
+check_fails "an own reviewer field outside the three" '## Own reviewers\n\n- code | marker: `code` | lessons: docs/api.md | applies: src/**\n' "REVIEW.md: own reviewer code: field 'applies' is not marker, lessons or bots"
+printf '# Review policy\n\n## Own reviewers\n\n- code | marker: `code` | lessons: docs/api.md | bots: cursor, greptile-apps\n- tests | marker: (`tests`) | lessons: docs/design.md\n' > "$C/.ytstack/spec/REVIEW.md"
+run "$C" check;               eq "two own reviewers pass" 0 "$EC"
+has "and are counted" "review policy ok: 0 lens(es), 2 own reviewer(s)" "$OUT"
+run "$C" reviewers;           eq "reviewers: exit 0" 0 "$EC"
+eq "reviewers: one tab separated line per role" "code	\`code\`	docs/api.md	cursor,greptile-apps
+tests	(\`tests\`)	docs/design.md	" "$OUT"
+printf '# Review policy\n\n## Own reviewers\n\n- code | marker: `code` | lessons: docs/gone.md\n' > "$C/.ytstack/spec/REVIEW.md"
+run "$C" reviewers;           eq "reviewers: a broken section exits 1" 1 "$EC"
+has "and names the problem" "lessons docs/gone.md does not exist" "$OUT"
+printf '# Review policy\n\n## Never low\n\n- **/*.sql\n' > "$C/.ytstack/spec/REVIEW.md"
+run "$C" reviewers;           eq "reviewers: no section, no line" "0:" "$EC:$OUT"
 check_fails "a lens without applies" '## Lenses\n\n- ui | reads: docs/design.md | evidence: visual\n' "REVIEW.md: lens ui has no applies"
 check_fails "a lens without reads" '## Lenses\n\n- ui | applies: src/ui/** | evidence: visual\n' "REVIEW.md: lens ui has no reads"
 check_fails "a lens without evidence" '## Lenses\n\n- ui | applies: src/ui/** | reads: docs/design.md\n' "REVIEW.md: lens ui has no evidence"

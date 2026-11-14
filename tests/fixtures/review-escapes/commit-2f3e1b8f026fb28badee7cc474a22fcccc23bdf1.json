@@ -1,0 +1,113 @@
+{
+  "sha": "2f3e1b8f026fb28badee7cc474a22fcccc23bdf1",
+  "node_id": "C_kwDOSLrTmtoAKDJmM2UxYjhmMDI2ZmIyOGJhZGVlN2NjNDc0YTIyZmNjY2MyM2JkZjE",
+  "commit": {
+    "author": {
+      "name": "Alex Wegener",
+      "email": "github.com@m.9aw.de",
+      "date": "2026-11-14T13:43:34Z"
+    },
+    "committer": {
+      "name": "Alex Wegener",
+      "email": "github.com@m.9aw.de",
+      "date": "2026-11-14T13:43:34Z"
+    },
+    "message": "fix: reopen check pays every page and only revives watches inside the window (PR #47 review)\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
+    "tree": {
+      "sha": "7a5de96eabf4e214f600ac2666f9bf9892cb062d",
+      "url": "https://api.github.com/repos/Yesterday-AI/ytstack/git/trees/7a5de96eabf4e214f600ac2666f9bf9892cb062d"
+    },
+    "url": "https://api.github.com/repos/Yesterday-AI/ytstack/git/commits/2f3e1b8f026fb28badee7cc474a22fcccc23bdf1",
+    "comment_count": 0,
+    "verification": {
+      "verified": true,
+      "reason": "valid",
+      "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgyx6M2XjyXLiyC2VI4WLNqt5TwK\nQWWojqQWOwEixATGYAAAADZ2l0AAAAAAAAAAZzaGE1MTIAAABTAAAAC3NzaC1lZDI1NTE5\nAAAAQHcjtf8zR7+LCNT7wOKygK9H2ORBIB8yBJLnDz1lqFJJjgLUHCepAy3f3+JGCu3V/k\nbvLcewI0X1AvvwHXqviQw=\n-----END SSH SIGNATURE-----",
+      "payload": "tree 7a5de96eabf4e214f600ac2666f9bf9892cb062d\nparent 9f5dc7381d57b6596dbe838b43479a55c3b2e16b\nauthor Alex Wegener <github.com@m.9aw.de> 1794663814 +0100\ncommitter Alex Wegener <github.com@m.9aw.de> 1794663814 +0100\n\nfix: reopen check pays every page and only revives watches inside the window (PR #47 review)\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n",
+      "verified_at": "2026-11-14T13:43:36Z"
+    }
+  },
+  "url": "https://api.github.com/repos/Yesterday-AI/ytstack/commits/2f3e1b8f026fb28badee7cc474a22fcccc23bdf1",
+  "html_url": "https://github.com/Yesterday-AI/ytstack/commit/2f3e1b8f026fb28badee7cc474a22fcccc23bdf1",
+  "comments_url": "https://api.github.com/repos/Yesterday-AI/ytstack/commits/2f3e1b8f026fb28badee7cc474a22fcccc23bdf1/comments",
+  "author": {
+    "login": "lx-0",
+    "id": 51857173,
+    "node_id": "MDQ6VXNlcjUxODU3MTcz",
+    "avatar_url": "https://avatars.githubusercontent.com/u/51857173?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/lx-0",
+    "html_url": "https://github.com/lx-0",
+    "followers_url": "https://api.github.com/users/lx-0/followers",
+    "following_url": "https://api.github.com/users/lx-0/following{/other_user}",
+    "gists_url": "https://api.github.com/users/lx-0/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/lx-0/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/lx-0/subscriptions",
+    "organizations_url": "https://api.github.com/users/lx-0/orgs",
+    "repos_url": "https://api.github.com/users/lx-0/repos",
+    "events_url": "https://api.github.com/users/lx-0/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/lx-0/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "committer": {
+    "login": "lx-0",
+    "id": 51857173,
+    "node_id": "MDQ6VXNlcjUxODU3MTcz",
+    "avatar_url": "https://avatars.githubusercontent.com/u/51857173?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/lx-0",
+    "html_url": "https://github.com/lx-0",
+    "followers_url": "https://api.github.com/users/lx-0/followers",
+    "following_url": "https://api.github.com/users/lx-0/following{/other_user}",
+    "gists_url": "https://api.github.com/users/lx-0/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/lx-0/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/lx-0/subscriptions",
+    "organizations_url": "https://api.github.com/users/lx-0/orgs",
+    "repos_url": "https://api.github.com/users/lx-0/repos",
+    "events_url": "https://api.github.com/users/lx-0/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/lx-0/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "parents": [
+    {
+      "sha": "9f5dc7381d57b6596dbe838b43479a55c3b2e16b",
+      "url": "https://api.github.com/repos/Yesterday-AI/ytstack/commits/9f5dc7381d57b6596dbe838b43479a55c3b2e16b",
+      "html_url": "https://github.com/Yesterday-AI/ytstack/commit/9f5dc7381d57b6596dbe838b43479a55c3b2e16b"
+    }
+  ],
+  "stats": {
+    "total": 66,
+    "additions": 50,
+    "deletions": 16
+  },
+  "files": [
+    {
+      "sha": "1ab0aef98c75f9faeb1a849a1a593ac8d5eeac30",
+      "filename": "tests/pr_watch/test_watch.py",
+      "status": "modified",
+      "additions": 28,
+      "deletions": 5,
+      "changes": 33,
+      "blob_url": "https://github.com/Yesterday-AI/ytstack/blob/2f3e1b8f026fb28badee7cc474a22fcccc23bdf1/tests%2Fpr_watch%2Ftest_watch.py",
+      "raw_url": "https://github.com/Yesterday-AI/ytstack/raw/2f3e1b8f026fb28badee7cc474a22fcccc23bdf1/tests%2Fpr_watch%2Ftest_watch.py",
+      "contents_url": "https://api.github.com/repos/Yesterday-AI/ytstack/contents/tests%2Fpr_watch%2Ftest_watch.py?ref=2f3e1b8f026fb28badee7cc474a22fcccc23bdf1",
+      "patch": "@@ -175,17 +175,40 @@ def test_merged_pr_is_never_checked_again(self):\n \n     def ticked(self,budget=None,open_prs=()):\n         \"\"\"Watch numbers one tick reads, with the quota answer `budget` (None: unknown);\n-        `open_prs` is what the open-PR list of a repository returns (calls in self.open_calls).\"\"\"\n-        seen=[]; self.open_calls=0\n-        def listing(repo):\n+        `open_prs` is the repository's open-PR list, served in pages of 100\n+        (every page request counted in self.open_calls).\"\"\"\n+        seen=[]; self.open_calls=0; prs=list(open_prs)\n+        def page(path):\n             self.open_calls+=1\n-            return list(open_prs)\n+            n=int(path.rsplit('page=',1)[1])\n+            return prs[(n-1)*100:n*100]\n         with patch.object(worker,'discover'),patch.object(worker,'monitor',side_effect=lambda db,w:seen.append(w['number'])),\\\n              patch.object(worker,'deliver'),patch.object(worker,'spendable',return_value=budget),\\\n-             patch.object(github,'open_pulls',side_effect=listing):\n+             patch.object(github,'api',side_effect=page):\n             worker.tick(send=False,reconcile=False)\n         return seen\n \n+    def test_reopen_listing_pays_every_page_and_resumes_later(self):\n+        self.close()\n+        many=[{'number':n} for n in range(1000,1250)]+[{'number':1}]   # three pages\n+        self.ticked(budget=2,open_prs=many)\n+        self.assertEqual(self.open_calls,2)\n+        self.assertEqual(self.watch()['status'],'closed')               # incomplete: not on the first two pages\n+        self.assertIsNone(self.db.execute(\"SELECT value FROM meta WHERE key='reopen_check:o/r'\").fetchone())\n+        self.ticked(budget=3,open_prs=many)\n+        self.assertEqual(self.open_calls,3)\n+        self.assertEqual(self.watch()['status'],'registered')\n+\n+    def test_reopen_ignores_watches_outside_the_window(self):\n+        self.close()\n+        with self.db:\n+            register(self.db,'o/r',2,'session-a','/tmp')\n+            old=time.time()-worker.REOPEN_WINDOW-1\n+            self.db.execute(\"UPDATE watches SET status='closed',detail='[]',closed_at=? WHERE number=2\",(old,))\n+        self.ticked(open_prs=[{'number':1},{'number':2}])\n+        self.assertEqual(self.db.execute('SELECT status FROM watches WHERE number=1').fetchone()[0],'registered')\n+        self.assertEqual(self.db.execute('SELECT status FROM watches WHERE number=2').fetchone()[0],'closed')\n+\n     def test_settled_prs_are_read_less_often(self):\n         n=self.watch()['number']; now=time.time(); fresh=now-10; stale=now-worker.FAST_WINDOW-1\n         for status,age,changed,expected in (('registered',10,None,[n]),('waiting',10,fresh,[n]),('waiting',10,stale,[]),"
+    },
+    {
+      "sha": "f96075c085f7cf112ef25269f4f762a54f6e2d37",
+      "filename": "tools/pr-watch/prwatch/worker.py",
+      "status": "modified",
+      "additions": 22,
+      "deletions": 11,
+      "changes": 33,
+      "blob_url": "https://github.com/Yesterday-AI/ytstack/blob/2f3e1b8f026fb28badee7cc474a22fcccc23bdf1/tools%2Fpr-watch%2Fprwatch%2Fworker.py",
+      "raw_url": "https://github.com/Yesterday-AI/ytstack/raw/2f3e1b8f026fb28badee7cc474a22fcccc23bdf1/tools%2Fpr-watch%2Fprwatch%2Fworker.py",
+      "contents_url": "https://api.github.com/repos/Yesterday-AI/ytstack/contents/tools%2Fpr-watch%2Fprwatch%2Fworker.py?ref=2f3e1b8f026fb28badee7cc474a22fcccc23bdf1",
+      "patch": "@@ -266,28 +266,39 @@ def reopen_checks(db, now, budget):\n     \"\"\"A closed, unmerged PR can be reopened on GitHub. Instead of one snapshot\n     per closed watch, read the open PRs once per repository (one call per 100\n     open PRs) every REOPEN_CHECK, for watches closed within REOPEN_WINDOW, and\n-    put a reopened one back to `registered`. Returns the budget left.\"\"\"\n-    repos = [r['repo'] for r in db.execute(\n-        \"SELECT DISTINCT repo FROM watches WHERE paused=0 AND status='closed' AND closed_at IS NOT NULL \"\n-        \"AND closed_at > ? AND detail NOT LIKE '%\\\"merged\\\"%'\", (now - REOPEN_WINDOW,))]\n+    put a reopened one back to `registered`. Every page is one REST call paid\n+    from `budget`; a listing the budget cannot finish is resumed on a later\n+    tick. Returns the budget left.\"\"\"\n+    eligible = (\"paused=0 AND status='closed' AND closed_at IS NOT NULL AND closed_at > ? \"\n+                \"AND detail NOT LIKE '%\\\"merged\\\"%'\")\n+    window = now - REOPEN_WINDOW\n+    repos = [r['repo'] for r in db.execute(f'SELECT DISTINCT repo FROM watches WHERE {eligible}', (window,))]\n     for repo in repos:\n         key = f'reopen_check:{repo}'\n         last = db.execute('SELECT value FROM meta WHERE key=?', (key,)).fetchone()\n         if last and now - float(last['value']) < REOPEN_CHECK:\n             continue\n-        if budget is not None:\n-            if budget < 1:\n-                break\n-            budget -= 1\n+        open_numbers, page, complete = set(), 1, False\n         try:\n-            open_numbers = {pr['number'] for pr in github.open_pulls(repo)}\n+            while budget is None or budget >= 1:\n+                if budget is not None:\n+                    budget -= 1\n+                batch = github.api(f'repos/{repo}/pulls?state=open&per_page=100&page={page}')\n+                open_numbers.update(pr['number'] for pr in batch)\n+                if len(batch) < 100:\n+                    complete = True\n+                    break\n+                page += 1\n         except (github.APIError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):\n             continue\n         with db:\n-            db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (key, str(now)))\n+            if complete:\n+                db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (key, str(now)))\n             for number in open_numbers:\n                 db.execute(\"UPDATE watches SET status='registered', updated=0, closed_at=NULL \"\n-                           \"WHERE repo=? AND number=? AND status='closed'\", (repo, number))\n+                           f'WHERE repo=? AND number=? AND {eligible}', (repo, number, window))\n+        if not complete:\n+            break\n     return budget\n \n "
+    }
+  ]
+}

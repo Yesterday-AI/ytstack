@@ -3,9 +3,9 @@ milestone: M030
 project: ytstack
 size: M
 created: 2026-11-14T15:30:00Z
-status: planned
+status: done
 total_slices: 3
-completed_slices: 0
+completed_slices: 3
 ---
 
 # M030 Roadmap
@@ -16,9 +16,9 @@ completed_slices: 0
 
 ## Slices
 
-- [ ] S01 -- `bin/ytstack-review-escapes` reads a pull request's bot threads, their resolution and the own roles' findings, and says which bot findings escaped.
-- [ ] S02 -- Projects declare their own reviewers in `REVIEW.md`, and escapes are recorded and counted as signals of `kind: review`.
-- [ ] S03 -- The `review-lessons` skill turns recurring or severe escapes into role-file proposals, runs after merges, and `retro` reports escape rates.
+- [x] S01 -- `bin/ytstack-review-escapes` reads a pull request's bot threads, their resolution and the own roles' findings, and says which bot findings escaped.
+- [x] S02 -- Projects declare their own reviewers in `REVIEW.md`, and escapes are recorded and counted as signals of `kind: review`.
+- [x] S03 -- The `review-lessons` skill turns recurring or severe escapes into role-file proposals, runs after merges, and `retro` reports escape rates.
 
 ## Run order
 

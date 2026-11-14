@@ -3,7 +3,7 @@ name: finish-lane
 description: "Takes a delegated lane from the worker's report to a pull request merged at the reviewed commit, with every gate read from the host. Use in the coordinating session when a lane reported and its work has to become a merged pull request, or when the user says finish the lane, land this lane, get this lane merged. Not for the session's own branch (finish-branch), not for a release (ship) and not for the worker of the lane."
 metadata:
   tier: task
-  version: 0.2.0
+  version: 0.3.0
 allowed-tools:
   - Bash
   - Read
@@ -45,7 +45,8 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 10. **Read the gates** -- `gates`; a failing gate is handled by what it is
 11. **Merge or hand over** -- `MERGE_BY: risk` with route `unattended`, or `coordinator`: `merge`; every other case: stop with the command and the reasons
 12. **Watch the release** (only after a merge, by anyone) -- `ytstack-watch release --commit <merge commit>`; the receipt goes into the report; `not arrived` and `unhealthy` go to the person at once
-13. **Report + return** -- one line per step, the lenses, the route, the read time of the gates, the release receipt, what was not checked
+13. **Escape check** (only after a merge this run made, and only if `OWN_REVIEWERS: yes`) -- invoke `ytstack:review-lessons` for the pull request
+14. **Report + return** -- one line per step, the lenses, the route, the read time of the gates, the release receipt, the escape check, what was not checked
 
 ## Process Flow
 
@@ -65,7 +66,7 @@ digraph finish_lane {
     "Gates hold?" [shape=diamond];
     "Who merges?" [shape=diamond];
     "Ready: a person merges, with the reasons" [shape=doublecircle];
-    "Merged at the reviewed commit, release watched" [shape=doublecircle];
+    "Merged at the reviewed commit, release watched, escapes checked" [shape=doublecircle];
 
     "Run preamble" -> "Commit leftovers" -> "Junk or out of scope?";
     "Junk or out of scope?" -> "Back to worker or user" [label="yes"];
@@ -82,7 +83,7 @@ digraph finish_lane {
     "Gates hold?" -> "Back to worker or user" [label="no"];
     "Gates hold?" -> "Who merges?" [label="yes"];
     "Who merges?" -> "Ready: a person merges, with the reasons" [label="human; risk and route person; standing instruction"];
-    "Who merges?" -> "Merged at the reviewed commit, release watched" [label="coordinator; risk and route unattended"];
+    "Who merges?" -> "Merged at the reviewed commit, release watched, escapes checked" [label="coordinator; risk and route unattended"];
 }
 ```
 
@@ -136,6 +137,9 @@ echo "FINISH_TOOL: ${_TOOL:-missing}"
 echo "MERGE_BY: $_MERGE_BY"
 [ -n "$_MERGE_BY_NOTE" ] && echo "MERGE_BY_NOTE: $_MERGE_BY_NOTE"
 echo "STANDING: $([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STANDING.md" ] && echo "$_YT_DIR/STANDING.md" || echo none)"
+# Own reviewers in REVIEW.md (M030): after its own merge this skill runs the escape check.
+_RISK="${CLAUDE_SKILL_DIR}/../../bin/ytstack-risk"; [ -f "$_RISK" ] || _RISK=$(command -v ytstack-risk 2>/dev/null)
+echo "OWN_REVIEWERS: $([ -n "$_RISK" ] && [ -n "$(bash "$_RISK" -C "$_PROJECT_DIR" reviewers 2>/dev/null)" ] && echo yes || echo no)"
 if [ -n "$YTSTACK_NON_INTERACTIVE" ] || [ -n "$OPENCLAW_SESSION" ] || [ -n "$CLAUDE_AGENT_TEAM_MEMBER" ]; then
   echo "YTSTACK_NON_INTERACTIVE: true"
 else
@@ -404,7 +408,13 @@ You deploy nothing, restart nothing, revert nothing and roll nothing back, whate
 
 If other lanes wait for this session, do not sit on the watch: write the report with `release: watching {MERGE_SHA} since <UTC>`, set the row's next action (`ytstack-frontier set {REF} --next "read the release receipt of {MERGE_SHA}"`), and add the receipt when it is there.
 
-### Step 13: Report + return
+### Step 13: Escape check
+
+Only after a merge you made in Step 11 of this run, and only when the preamble printed `OWN_REVIEWERS: yes`. A merge a person made is not yours to follow up: the PR watch notice or `bin/ytstack-upkeep` brings it to `review-lessons`.
+
+Invoke `ytstack:review-lessons` with the pull request `{N}`. It reads the review-bot findings of the merged pull request, records the ones the project's own reviewers missed and writes a question when a class of them reached its threshold; it changes no rule file. Its report's first lines go into yours. If it stops at its gate, put its message into the report and go on: a missing escape check never holds up a lane.
+
+### Step 14: Report + return
 
 > Lane {REF}, pull request #{N}
 > - leftovers: {committed <sha>, n files | none}
@@ -416,6 +426,7 @@ If other lanes wait for this session, do not sit on the watch: write the report 
 > - gates: {the gate lines}, read {UTC time}
 > - merge: {merged unattended at <sha>: class <class>, ceiling <ceiling>, lenses <lenses> | merged at <sha> (merge_by: coordinator, the route said <route>) | ready, a person merges: <command>; because: <reasons> | not ready: <gate>}
 > - release: {the five receipt lines | watching <merge commit> since <UTC> | not watched: <why> | nothing merged}
+> - escapes: {the first lines of the review-lessons report | no own reviewers | not merged by this run}
 >
 > Not checked: {what this run did not read or run, and the reviewer's own `Not checked:` value}
 
@@ -432,4 +443,4 @@ The terminal state is one of:
 - Returning control with the lane back at the worker or the user: leftovers, findings, a failing gate, a third round; the row's next action says what it waits for
 - Exiting after Step 9 on a host other than GitHub, with the review's verdict, the lens verdicts and the route
 
-Do NOT invoke `ytstack:finish-branch`, `ytstack:ship`, `ytstack:code-review` or `ytstack:summarize-task`. This skill invokes no other skill: control returns to the session that called it (`ytstack:coordinate`, when it runs the plan).
+Do NOT invoke `ytstack:finish-branch`, `ytstack:ship`, `ytstack:code-review` or `ytstack:summarize-task`. The ONLY skill you may invoke is `ytstack:review-lessons`, in Step 13, after a merge of this run; then control returns to the session that called it (`ytstack:coordinate`, when it runs the plan).

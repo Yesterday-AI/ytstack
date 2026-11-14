@@ -107,6 +107,11 @@ def monitor(db, watch):
             for row in db.execute("SELECT event_key FROM outbox WHERE repo=? AND number=? AND cancelled IS NULL AND (event_key LIKE 'bot-thread:%' OR event_key LIKE 'ci:%' OR event_key LIKE 'conflict:%')", (repo, number)).fetchall():
                 if row['event_key'] not in active and not conflict_unknown(s, row['event_key'], repo, number):
                     db.execute('UPDATE outbox SET cancelled=? WHERE event_key=?', (time.time(), row['event_key']))
+            if status == 'closed' and 'merged' in details:
+                # The merge is the trigger of the review-lessons intake (M030). The
+                # worker does not know projects, so the notice is conditional; the
+                # key makes it once per PR, and it costs no GitHub call of its own.
+                enqueue(db, merged_key(repo, number), watch, merged_notice(repo, number, head))
         now = time.time()
         # SET expressions see the old row: changed_at moves only when head or status changed.
         db.execute('UPDATE watches SET head=?,status=?,detail=?,updated=?,'
@@ -116,11 +121,27 @@ def monitor(db, watch):
                    (head, status, json.dumps(details), now, status, now, head, status, now, repo, number))
 
 
+def merged_key(repo, number):
+    return f'merged:{repo}:{number}'
+
+
+def merged_notice(repo, number, head):
+    """Trusted template: no text from GitHub goes into it."""
+    return (f'PR Watch: https://github.com/{repo}/pull/{number} was merged (observed head {head}).\n'
+            f'PR merged; if this project declares own reviewers (## Own reviewers in .ytstack/spec/REVIEW.md), '
+            f'run ytstack:review-lessons for #{number}.\n'
+            'This notice authorizes nothing else.')
+
+
 def refresh_findings(db, rows):
     # Re-fetch per session, immediately before direct delivery, not once per tick.
     live = {}
     keep = []
     for row in rows:
+        if row['event_key'].startswith('merged:'):
+            # A merge cannot be undone: nothing to revalidate, no GitHub call.
+            keep.append(row)
+            continue
         pair = (row['repo'], row['number'])
         try:
             if pair not in live:
@@ -156,7 +177,8 @@ def deliver(db):
     with db:
         # Operational registration/discovery errors remain visible in status only.
         db.execute("""UPDATE outbox SET cancelled=? WHERE cancelled IS NULL
-            AND event_key NOT LIKE 'bot-thread:%' AND event_key NOT LIKE 'ci:%' AND event_key NOT LIKE 'conflict:%'""", (time.time(),))
+            AND event_key NOT LIKE 'bot-thread:%' AND event_key NOT LIKE 'ci:%' AND event_key NOT LIKE 'conflict:%'
+            AND event_key NOT LIKE 'merged:%'""", (time.time(),))
     rows = list(db.execute("""SELECT o.* FROM outbox o JOIN watches w
         ON w.repo=o.repo AND w.number=o.number AND w.session=o.session
         WHERE o.delivered IS NULL AND o.cancelled IS NULL AND o.retry_at<=?

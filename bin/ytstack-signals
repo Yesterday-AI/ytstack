@@ -7,7 +7,18 @@
 #   ytstack-signals [-C DIR] set <id> --state STATE [--ref REF] [< reason]
 #   ytstack-signals [-C DIR] incident new --title TEXT [--severity TEXT]
 #   ytstack-signals [-C DIR] incident list [--state open|mitigated|closed|all]
+#   ytstack-signals [-C DIR] review-checked OWNER/NAME#N [MERGE_SHA] [--at TIME] [--tally TALLY]
 #   ytstack-signals [-C DIR] check
+#
+# --kind review records a review-bot finding the project's own reviewers
+# missed (bin/ytstack-review-escapes): no "Signals" source is needed, the key
+# is review:<role>:<class-slug>, the sighting is the escape row or rows.
+# review-checked with a merge commit records that a merged pull request had
+# its escape check, one line "<owner/name>#<n> <merge sha> <UTC> [<tally>]" in
+# signals/review-checks; without one it asks whether it had. The tally counts
+# the fixed bot findings of the pull request per role, "<role>=<caught>/<escaped>"
+# comma separated ("-" for escapes no role owns), or "none" when it had none;
+# a line without a tally was written before tallies existed.
 #
 # A finding is one file, signals/F###-<slug>.md, inside the .ytstack directory
 # of DIR (default: $PWD). new decides by the key: the newest finding that
@@ -32,6 +43,9 @@
 #                  record of that day with that title exists; 64 usage
 #   incident list  0; one line per record: id, state, opened, severity, title
 #                  (tab separated); without --state the ones that are not closed
+#   review-checked  with MERGE_SHA (and optionally --tally): 0 "checked <pr>", or "already <its line>"
+#                   when the pull request has a line; without: 0 and its line,
+#                   1 when it has none; 1 no .ytstack directory; 64 usage
 #   check  0 "signals ok: <n> finding(s), <m> incident(s)", or "no signals"
 #          without both directories; 1 one line per problem
 
@@ -43,7 +57,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT/hooks/lib/git-ctx.sh"
 
 STATES='open|planned|fixed|dismissed'
-KINDS='errors|performance|alerts|logs'
+KINDS='errors|performance|alerts|logs|review'
 ISTATES='open|mitigated|closed'
 WORD='letters, digits and . _ : / @ + = -'
 TAB=$'\t'
@@ -54,9 +68,9 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '5,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '5,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "ytstack-signals: $*" >&2; exit 1; }
-case "$CMD" in new|list|set|incident|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+case "$CMD" in new|list|set|incident|review-checked|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 # The resolver falls back to $PWD for a missing directory: refuse it here.
 [ -d "$DIR" ] || { echo "ytstack-signals: -C '$DIR' is not a directory" >&2; exit 64; }
 
@@ -65,6 +79,7 @@ yt_resolve_yt_dir >/dev/null
 SDIR="${YT_DIR:+$YT_DIR/signals}"
 IDIR="${YT_DIR:+$YT_DIR/incidents}"
 LOCK="${YT_DIR:+$YT_DIR/signals.lock}"
+CHECKS="${SDIR:+$SDIR/review-checks}"
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 oneline() { printf '%s' "$1" | tr '\n\r\t' '   ' | sed 's/  */ /g; s/^ //; s/ $//'; }
@@ -77,6 +92,17 @@ is_utc() {
     [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) return 0 ;;
   esac
   return 1
+}
+# review_key <key>: review:<role>:<class-slug>, both parts lowercase slugs.
+review_key() {
+  local rest=${1#review:} role cls p
+  [ "$rest" != "$1" ] || return 1
+  role=${rest%%:*}; cls=${rest#*:}
+  [ "$cls" != "$rest" ] || return 1
+  for p in "$role" "$cls"; do
+    case "$p" in ""|[!a-z0-9]*|*[!a-z0-9-]*) return 1 ;; esac
+  done
+  return 0
 }
 
 # rows: one line per finding file, in id order, tab separated, "-" for an empty
@@ -233,6 +259,8 @@ cmd_new() {
     kind=$(bash "$ROOT/bin/ytstack-runtime" -C "$DIR" signals 2>/dev/null | YTS_SRC="$src" awk -F'\t' '$1 == ENVIRON["YTS_SRC"] { k = $2 } END { print k }')
     listed "$kind" "$KINDS" || die "the source '$src' is not declared under \"Signals\" in RUNTIME.md; pass --kind (one of: $KINDS)"
   fi
+  [ "$kind" != review ] || review_key "$key" \
+    || { echo "ytstack-signals: a finding of kind review has the key review:<role>:<class-slug>, both lowercase slugs" >&2; return 64; }
   [ ! -t 0 ] || die "the raw sighting comes on stdin: the line or lines the source printed"
   # At most twenty lines of a sighting are kept: a record, not a log.
   sighting=$(tr -d '\r' | awk 'NF { n++; if (n <= 20) print } END { if (n > 20) print "(" (n - 20) " more lines not recorded)" }')
@@ -416,6 +444,84 @@ cmd_incident() {
   esac
 }
 
+# ---- review-checked ------------------------------------------------------------
+# signals/review-checks: one line per merged pull request whose escape check
+# ran, "<owner/name>#<n> <merge sha> <UTC>". Written only here, under the lock.
+PR_RE='^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9_.-]+#[1-9][0-9]*$'
+SHA_RE='^[0-9a-f]{7,40}$'
+TALLY_RE='^(none|(-|[a-z0-9][a-z0-9-]*)=[0-9]+/[0-9]+(,(-|[a-z0-9][a-z0-9-]*)=[0-9]+/[0-9]+)*)$'
+# tally_ok <tally>: the form, and no role twice.
+tally_ok() {
+  [[ $1 =~ $TALLY_RE ]] || return 1
+  [ "$1" = none ] && return 0
+  [ -z "$(printf '%s\n' "$1" | tr ',' '\n' | sed 's/=.*//' | sort | uniq -d)" ]
+}
+cmd_review_checked() {
+  local pr="" sha="" at="" tally="" line
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --at) [ $# -ge 2 ] || { usage >&2; return 64; }; at=$2; shift 2 ;;
+      --tally) [ $# -ge 2 ] || { usage >&2; return 64; }; tally=$2; shift 2 ;;
+      -*) usage >&2; return 64 ;;
+      *)
+        if [ -z "$pr" ]; then pr=$1; elif [ -z "$sha" ]; then sha=$1; else usage >&2; return 64; fi
+        shift ;;
+    esac
+  done
+  [[ $pr =~ $PR_RE ]] || { echo "ytstack-signals: review-checked takes OWNER/NAME#N" >&2; return 64; }
+  [ -z "$sha" ] || [[ $sha =~ $SHA_RE ]] || { echo "ytstack-signals: the merge commit is 7 to 40 lowercase hex digits" >&2; return 64; }
+  if [ -n "$at" ]; then
+    [ -n "$sha" ] || { usage >&2; return 64; }
+    is_utc "$at" || { echo "ytstack-signals: --at takes a UTC time like 2026-11-13T09:15:00Z" >&2; return 64; }
+  fi
+  if [ -n "$tally" ]; then
+    [ -n "$sha" ] || { usage >&2; return 64; }
+    tally_ok "$tally" || { echo "ytstack-signals: --tally takes \"none\" or <role>=<caught>/<escaped>, comma separated, each role once (\"-\" for no role)" >&2; return 64; }
+  fi
+  [ -n "$SDIR" ] || die "no .ytstack directory for $DIR"
+  if [ -z "$sha" ]; then
+    [ -f "$CHECKS" ] || return 1
+    line=$(awk -v pr="$pr" '$1 == pr { print; exit }' "$CHECKS")
+    [ -n "$line" ] || return 1
+    printf '%s\n' "$line"
+    return 0
+  fi
+  mkdir -p "$SDIR" || die "cannot create $SDIR"
+  lock
+  if [ -f "$CHECKS" ]; then
+    line=$(awk -v pr="$pr" '$1 == pr { print; exit }' "$CHECKS")
+    [ -z "$line" ] || { echo "already $line"; return 0; }
+  fi
+  TMPF="$CHECKS.tmp"
+  { [ ! -f "$CHECKS" ] || cat "$CHECKS"; printf '%s %s %s%s\n' "$pr" "$sha" "${at:-$(now)}" "${tally:+ $tally}"; } > "$TMPF" && mv "$TMPF" "$CHECKS" \
+    || die "cannot write $CHECKS"
+  TMPF=""
+  echo "checked $pr"
+}
+
+# check_review_checks: the lines of signals/review-checks; status 1 with a problem.
+check_review_checks() {
+  [ -n "$CHECKS" ] && [ -f "$CHECKS" ] || return 0
+  awk -v pre="$PR_RE" -v tre="$TALLY_RE" '
+    NF == 0 { next }
+    {
+      if ((NF != 3 && NF != 4) || $1 !~ pre || $2 !~ /^[0-9a-f]+$/ || length($2) < 7 || length($2) > 40 \
+          || $3 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/) {
+        print "review-checks: line " NR " is not \"<owner/name>#<n> <merge sha> <UTC time> [<tally>]\""; bad = 1; next
+      }
+      if (NF == 4) {
+        if ($4 !~ tre) { print "review-checks: line " NR ": the tally \"" $4 "\" is not \"none\" or <role>=<caught>/<escaped>, comma separated"; bad = 1 }
+        else if ($4 != "none") {
+          n = split($4, part, ","); split("", role)
+          for (i = 1; i <= n; i++) { r = part[i]; sub(/=.*/, "", r); if (role[r]++) { print "review-checks: line " NR ": the tally names " r " twice"; bad = 1 } }
+        }
+      }
+      if (seen[$1]++) { print "review-checks: " $1 " stands twice"; bad = 1 }
+    }
+    END { exit bad }
+  ' "$CHECKS"
+}
+
 # ---- check ---------------------------------------------------------------------
 # check_incidents: the records under incidents/. Sets NI; status 1 with a problem.
 # What a file cannot show on its own is asked afterwards: a mitigation's script
@@ -576,6 +682,7 @@ check_findings() {
         if (!word(V["key"])) p("key \"" V["key"] "\" is not one word of " wordtext)
         if (V["source"] !~ /^[a-z0-9][a-z0-9-]*$/) p("source \"" V["source"] "\" is not a lowercase slug")
         if (!listed(V["kind"], kinds)) p("kind \"" V["kind"] "\" is not one of " kinds)
+        else if (V["kind"] == "review" && V["key"] !~ /^review:[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*$/) p("kind review, but key \"" V["key"] "\" is not review:<role>:<class-slug>")
         if (!listed(V["state"], states)) p("state \"" V["state"] "\" is not one of " states)
         if (!utc(V["first_seen"])) p("first_seen \"" V["first_seen"] "\" is not a UTC time like 2026-11-13T09:15:00Z")
         if (!utc(V["last_seen"])) p("last_seen \"" V["last_seen"] "\" is not a UTC time like 2026-11-13T09:15:00Z")
@@ -649,6 +756,7 @@ cmd_check() {
   if [ -z "$YT_DIR" ] || { [ ! -d "$SDIR" ] && [ ! -d "$IDIR" ]; }; then echo "no signals"; return 0; fi
   check_findings || bad=1
   check_incidents || bad=1
+  check_review_checks || bad=1
   [ "$bad" -eq 0 ] || return 1
   echo "signals ok: $NF finding(s), $NI incident(s)"
 }
@@ -658,5 +766,6 @@ case "$CMD" in
   list)     cmd_list "$@" ;;
   set)      cmd_set "$@" ;;
   incident) cmd_incident "$@" ;;
+  review-checked) cmd_review_checked "$@" ;;
   check)    cmd_check "$@" ;;
 esac

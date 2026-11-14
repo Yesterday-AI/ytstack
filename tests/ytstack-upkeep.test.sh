@@ -17,7 +17,12 @@
 #   runtime   the problems of `ytstack-runtime check`
 #   review policy  the problems of `ytstack-risk check` when the script exists
 #             beside ytstack-upkeep, a note when it does not
-#   exit      10 when a count is not 0; 1 without a .ytstack directory; 64 usage
+#   review checks  with own reviewers in REVIEW.md: merged pull requests
+#             without a line in signals/review-checks, from one `gh pr list`
+#             (a stand-in gh), merged at or after the earliest check time (the
+#             last 14 days without one), an old number merged late included; a failed
+#             read is an item; without own reviewers no host call
+#   exit     10 when a count is not 0; 1 without a .ytstack directory; 64 usage
 #   --question  one question file through `ytstack-questions new`, the report
 #             under "## Context"; none while an earlier one is open or asked,
 #             none for a clean project
@@ -87,10 +92,11 @@ run "$D"
 eq "a clean project: exit 0" 0 "$EC"
 eq "the last line says so" "nothing needs a look" "$(printf '%s\n' "$OUT" | tail -1)"
 like "the first line names the directory and the time of the read" "^ytstack upkeep: $Y, read $STAMP" "$(printf '%s\n' "$OUT" | sed -n 1p)"
-for s in spec state gates questions lanes runtime "review policy"; do
+for s in spec state gates questions lanes runtime "review policy" "review checks"; do
   eq "section $s: 0" 0 "$(count "$s")"
 done
-eq "seven sections, the first and the last line" 9 "$(printf '%s\n' "$OUT" | awk 'NF { n++ } END { print n + 0 }')"
+eq "eight sections, the first and the last line" 10 "$(printf '%s\n' "$OUT" | awk 'NF { n++ } END { print n + 0 }')"
+has "a project without own reviewers says so" "review checks: 0 (no own reviewers)" "$OUT"
 has "a project without a technical spec says so" "spec: 0 (no technical spec)" "$OUT"
 eq "nothing was written" "$BEFORE" "$(snap)"
 run "$D" --question
@@ -331,7 +337,88 @@ run "$D" --question
 eq "after the answer a new run writes a new question" "question: $Y/questions/Q003-upkeep-found-1-thing-that-needs-a-look.md" "$(printf '%s\n' "$OUT" | tail -1)"
 eq "three files then" 3 "$(ls "$Y/questions" | awk 'END { print NR }')"
 
-# ---- 10. usage and errors ---------------------------------------------------------
+# ---- 10. review checks: merged pull requests without an escape check --------------
+echo "# review checks"
+project reviews
+mkdir -p "$Y/spec" "$Y/signals" "$D/.github/reviewers" "$TMP/fakebin"
+echo "# code reviewer" > "$D/.github/reviewers/code.md"
+printf '# Review policy\n\n## Own reviewers\n\n- code | marker: (`code`) | lessons: .github/reviewers/code.md\n' > "$Y/spec/REVIEW.md"
+( cd "$D" && git init -q && git remote add origin https://github.com/acme/shop.git ) >/dev/null 2>&1 || { echo "FATAL fixture"; exit 2; }
+GHLOG="$TMP/gh.log"
+# A stand-in for gh: `pr list` prints the merged pull requests of $GHJSON
+# (it does not apply the search; upkeep filters by mergedAt itself), `repo
+# view` the repository; every call is logged. GH_FAIL makes `pr list` fail.
+cat > "$TMP/fakebin/gh" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >> "$GHLOG"
+case "$1 $2" in
+  "pr list")
+    [ -z "${GH_FAIL:-}" ] || { echo "HTTP 502: bad gateway" >&2; exit 1; }
+    cat "$GHJSON" ;;
+  "repo view") echo "acme/other" ;;
+  *) echo "stand-in gh: unexpected $*" >&2; exit 64 ;;
+esac
+EOF
+chmod +x "$TMP/fakebin/gh"
+GHJSON="$TMP/merged.json"; export GHLOG GHJSON
+M15=$(ago $DAY); M13=$(ago $((2 * DAY))); M8=$(ago $((5 * DAY / 2))); M12=$(ago $((3 * DAY))); M10=$(ago $((20 * DAY)))
+CHECKED=$(ago $((3 * DAY - HOUR)))
+# #8 is old by number but merged late: a window by number would miss it.
+printf '[{"number":15,"mergedAt":"%s","mergeCommit":{"oid":"ffff000011112222333344445555666677778888"},"title":"Add the export"},
+ {"number":13,"mergedAt":"%s","mergeCommit":{"oid":"dddd000011112222333344445555666677778888"},"title":"Fix the\\tcart"},
+ {"number":12,"mergedAt":"%s","mergeCommit":{"oid":"cccc000011112222333344445555666677778888"},"title":"Checked already"},
+ {"number":10,"mergedAt":"%s","mergeCommit":{"oid":"aaaa000011112222333344445555666677778888"},"title":"Before the loop"},
+ {"number":8,"mergedAt":"%s","mergeCommit":{"oid":"8888000011112222333344445555666677778888"},"title":"A long-lived branch"}]\n' \
+  "$M15" "$M13" "$M12" "$M10" "$M8" > "$GHJSON"
+OLDPATH=$PATH; PATH="$TMP/fakebin:$PATH"
+echo "acme/shop#12 cccc000011112222333344445555666677778888 $CHECKED code=1/0" > "$Y/signals/review-checks"
+: > "$GHLOG"
+BEFORE=$(snap)
+run "$D"
+eq "merged pull requests without a check: exit 10" 10 "$EC"
+eq "review checks: 3" 3 "$(count "review checks")"
+has "the newer unchecked one is an item" "  - acme/shop#15: merged $M15 at ffff00001111, no escape check: Add the export" "$OUT"
+has "a tab in a title becomes a space" "  - acme/shop#13: merged $M13 at dddd00001111, no escape check: Fix the cart" "$OUT"
+has "an old number merged after the first check is listed" "  - acme/shop#8: merged $M8 at 888800001111" "$OUT"
+hasnt "a checked pull request is not listed" "acme/shop#12:" "$OUT"
+hasnt "one merged more than 14 days before the earliest check is not listed" "acme/shop#10" "$OUT"
+eq "one gh call, searched from 14 days before the earliest check, with the repository from origin" \
+  "pr list -R acme/shop --state merged --search merged:>=$(ago $((3 * DAY - HOUR + 14 * DAY)) | cut -c1-10) --limit 500 --json number,mergedAt,mergeCommit,title" "$(cat "$GHLOG")"
+eq "nothing was written" "$BEFORE" "$(snap)"
+# A run that checks only the newest pull request writes a later check time;
+# the window stays anchored, so the older unchecked ones are still listed.
+echo "acme/shop#15 ffff000011112222333344445555666677778888 $(ago 60) code=0/0" >> "$Y/signals/review-checks"
+run "$D"
+has "after checking the newest: #13 still listed" "acme/shop#13: merged" "$OUT"
+has "after checking the newest: #8 still listed" "acme/shop#8: merged" "$OUT"
+hasnt "and #15 is gone" "acme/shop#15:" "$OUT"
+# At MERGED_LIMIT the list is cut, and the report says so.
+jq '[range(500) as $i | .[0] + {number: (1000 + $i)}]' "$GHJSON" > "$TMP/many.json"
+GHJSON="$TMP/many.json" run "$D"
+has "a list cut at the limit is named" "500 merged pull requests since" "$OUT"
+rm -f "$Y/signals/review-checks"
+: > "$GHLOG"
+run "$D"
+eq "without any check line: the last 14 days" 4 "$(count "review checks")"
+hasnt "and not what merged before them" "acme/shop#10" "$OUT"
+eq "searched from 14 days ago" "merged:>=$(ago $((14 * DAY)) | cut -c1-10)" "$(sed -n 's/.*--search \([^ ]*\) .*/\1/p' "$GHLOG")"
+git -C "$D" remote set-url origin git@gitlab.example.com:acme/shop.git
+: > "$GHLOG"
+run "$D"
+eq "origin on another host: gh names the repository, two calls" "2|repo view --json nameWithOwner -q .nameWithOwner" "$(awk 'END { print NR }' "$GHLOG")|$(sed -n 1p "$GHLOG")"
+has "and the items carry its name" "  - acme/other#15: " "$OUT"
+GH_FAIL=1; export GH_FAIL
+run "$D"
+unset GH_FAIL
+eq "a read that fails is one item" 1 "$(count "review checks")"
+has "with gh's message" "  - check: gh could not list the merged pull requests of acme/other: HTTP 502: bad gateway" "$OUT"
+rm -f "$Y/spec/REVIEW.md"
+: > "$GHLOG"
+run "$D"
+eq "without own reviewers: no host call" "0|0" "$(count "review checks")|$(awk 'END { print NR }' "$GHLOG")"
+PATH=$OLDPATH
+
+# ---- 11. usage and errors ---------------------------------------------------------
 echo "# usage"
 project usage
 run "$D" --forever;            eq "an unknown flag: exit 64" 64 "$EC"

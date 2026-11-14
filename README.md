@@ -16,7 +16,7 @@
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
     <img alt="Codex" src="https://img.shields.io/badge/Codex-plugin-0A0A0A">
     <img alt="Kimi Code" src="https://img.shields.io/badge/Kimi%20Code-plugin-0A0A0A">
-    <img alt="skills" src="https://img.shields.io/badge/skills-38-FC4E14">
+    <img alt="skills" src="https://img.shields.io/badge/skills-39-FC4E14">
     <img alt="hooks" src="https://img.shields.io/badge/hooks-9-FC4E14">
   </p>
 
@@ -24,7 +24,7 @@
     <tr>
       <td align="center"><strong>1</strong><br/>install</td>
       <td align="center"><strong>0</strong><br/>separate runtimes</td>
-      <td align="center"><strong>38</strong><br/>curated skills</td>
+      <td align="center"><strong>39</strong><br/>curated skills</td>
       <td align="center"><strong>MIT</strong><br/>open source</td>
     </tr>
   </table>
@@ -143,6 +143,7 @@ SessionStart hook injects `STATE.md` + the `using-ytstack` directive before your
   -> "retro"                   -> ytstack:retro             (after the milestone closed)
   -> "write the changelog"     -> ytstack:document-release  (release notes from the summaries)
   -> "check the UI of this"    -> ytstack:visual-review     (product started at the commit, own screenshots)
+  -> "what did the bots catch" -> ytstack:review-lessons    (escapes of the own reviewers, a proposed line)
   -> "what does prod report"   -> ytstack:signal-intake     (findings under .ytstack/signals/, read only)
   -> "production is down"      -> ytstack:incident          (record, mitigations you run, cause afterwards)
 ```
@@ -195,7 +196,7 @@ Source: [`docs/ytstack-debugging-flow.excalidraw`](docs/ytstack-debugging-flow.e
 
 ### 4. Delivery -- from a finished change to production
 
-A finished change does not merge because it is finished. A reviewer that is not the author states its class and the invariants it touches; the lenses that `REVIEW.md` requires for that kind of change run, a `ui` lens through `visual-review` at the running product. `bin/ytstack-risk route` then puts the floor from the diff, the stated class and the ceiling of the touched areas together: with `merge_by: risk` the change merges without you only when every condition holds and the host's checks are green; everything else comes to you. After the merge `bin/ytstack-watch release` waits until the target serves the commit and stays healthy. A release that does not arrive or is unhealthy goes to you at once; an outage is `incident`, and what production reports between incidents comes in through `signal-intake`. Both lead back into the plan.
+A finished change does not merge because it is finished. A reviewer that is not the author states its class and the invariants it touches; the lenses that `REVIEW.md` requires for that kind of change run, a `ui` lens through `visual-review` at the running product. `bin/ytstack-risk route` then puts the floor from the diff, the stated class and the ceiling of the touched areas together: with `merge_by: risk` the change merges without you only when every condition holds and the host's checks are green; everything else comes to you. After the merge `bin/ytstack-watch release` waits until the target serves the commit and stays healthy. A release that does not arrive or is unhealthy goes to you at once; an outage is `incident`, and what production reports between incidents comes in through `signal-intake`. Both lead back into the plan. A project with review roles of its own (`## Own reviewers` in `REVIEW.md`) also learns from each merge: `review-lessons` records the review-bot findings those roles missed, and a repeated or severe one becomes a proposed line for the role's file that you approve.
 
 <details>
 <summary><strong>Delivery flow diagram</strong> (click to expand)</summary>
@@ -245,7 +246,7 @@ Start a new session. With trusted hooks, ytstack supplies its runtime context
 automatically. Without hooks, first ask Codex to read the installed plugin's
 `codex/adapter.md`, then select `$ytstack:using-ytstack` in the skill picker.
 On local hosts with hook support, review and trust the plugin hooks for automatic
-startup context, compaction handoff, and session journaling. All supported hosts load the same 38 skill files. Worktree subagents, Claude Agent Teams and edit/commit hooks remain
+startup context, compaction handoff, and session journaling. All supported hosts load the same 39 skill files. Worktree subagents, Claude Agent Teams and edit/commit hooks remain
 Claude-only; Codex and Kimi use the sequential task flow and explicit verification.
 See [Codex setup and compatibility](docs/codex.md) for local development,
 hook-free usage, and validation.
@@ -259,7 +260,7 @@ Install a reviewed local checkout from Kimi's plugin manager, then reload:
 /plugins reload
 ```
 
-Use `/new` for a fresh session and `/plugins info ytstack` to check 38 skills and
+Use `/new` for a fresh session and `/plugins info ytstack` to check 39 skills and
 five lifecycle hooks. Invoke skills as `/skill:ytstack:<name>`. Kimi combines the
 static sessionStart skill with pending context consumed once through
 UserPromptSubmit; SessionStart hook stdout is not a context channel.
@@ -365,6 +366,7 @@ Milestone states are data, not prose: `planned`, `in-progress`, `done`, `dropped
 | `.ytstack/LANES.md`, `bin/ytstack-frontier` | one row per delegated lane; slice plans name what blocks them; the frontier is what is open, unblocked and unclaimed; a claim precedes every dispatch, so no lane starts twice |
 | `bin/ytstack-finish-lane`, `ytstack:finish-lane` | a reported lane becomes a merged pull request: commit what it left, push, wait until the host shows the head, review pinned to that commit, the required lenses, the route, gates read from the host, merge at the reviewed commit, then the release watch (GitHub through `gh`; who merges is `merge_by`) |
 | `bin/ytstack-risk` | whether a change may merge without a person: `floor` from the diff, `route` from the review records, the ceilings of the touched areas and the lenses, `check` for `REVIEW.md`, `manifest` for the screenshots of a visual review |
+| `bin/ytstack-review-escapes` | for a project with review agents of its own ("Own reviewers" in `REVIEW.md`): which findings a review bot made on a pull request were fixed and which own role reported them first; a fixed finding no role caught is an escape (exit 10). Read-only through `gh` |
 | `ytstack:visual-review` | the lens reviewer of a user interface change: starts the product at the reviewed commit, operates it in a browser, its own screenshots against your guidelines; `not run` when it cannot, never a pass |
 | `ytstack:handover-step`, `bin/ytstack-handover` | a step only you may perform arrives as one staged script with read-only checks, a confirmation before every change and a receipt; the agent checks it and never runs it |
 | `.ytstack/questions/`, `bin/ytstack-questions` | one file per question for you, asked once, decision-ready |
@@ -407,11 +409,11 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 
 Ships:
 
-- 38 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), six adapted from gstack and synced with upstream (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`), review and production (`visual-review`, `signal-intake`, `incident`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
+- 39 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), six adapted from gstack and synced with upstream (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`), review and production (`visual-review`, `review-lessons`, `signal-intake`, `incident`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
 - 9 Claude Code hooks (SessionStart / PreCompact / SessionEnd / Stop / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers + STATE lint + lifecycle hints.
 - A status line segment (`bin/ytstack-status`): project progress from an optional `progress` block in `STATE.md`, or the active slice's task count, plus the current task. See [`docs/statusline.md`](./docs/statusline.md).
 - An optional PR watch (`bin/ytstack-pr-watch`, off until `enable`): tells the session that opened a pull request about red CI, unresolved bot review threads and merge conflicts, through hooks for Claude Code and Codex and a 60-second background worker. See [`docs/pr-watch.md`](./docs/pr-watch.md).
-- 26 shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks, the repository's own technical spec) and an eval suite for `claude plugin eval` (`evals/`, 25 cases).
+- 27 shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks, the repository's own technical spec) and an eval suite for `claude plugin eval` (`evals/`, 25 cases).
 - Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
 - Codex manifest + self-marketplace, shared skills, and 3 lifecycle hooks; see [host support](docs/codex.md#supported-behavior)
@@ -429,9 +431,9 @@ ytstack/
 ├── hooks/                       9 hook scripts + pr-watch (opt-in) + hooks.json + lib/git-ctx.sh (shared resolver)
 ├── kimi/                        Kimi runtime adapter
 ├── tools/pr-watch/              PR watch engine (Python 3.9+, stdlib only), driven by bin/ytstack-pr-watch
-├── skills/                      38 skill packages shared by all hosts
-├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-brief (brief for a dispatched worker, report check), ytstack-frontier (lanes, claims, what may start), ytstack-finish-lane (a lane to a merged pull request), ytstack-risk (whether a change merges without a person), ytstack-runtime (the product per worktree, RUNTIME.md), ytstack-handover (staged script for a human-only step), ytstack-questions (questions for the human), ytstack-watch (pull request changes, release watch), ytstack-upkeep (what needs a look, for a schedule), ytstack-signals (production findings, incident records), ytstack-gstack-diff (upstream changes of the adapted gstack skills), ytstack-status (status line segment), ytstack-pr-watch (opt-in PR watch), ytstack-codex, ytstack-kimi, dev-reinstall
-├── tests/                       26 shell test suites + run-all.sh (--linux via Docker), pr_watch/ (unittest), Kimi unittest suites
+├── skills/                      39 skill packages shared by all hosts
+├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-brief (brief for a dispatched worker, report check), ytstack-frontier (lanes, claims, what may start), ytstack-finish-lane (a lane to a merged pull request), ytstack-risk (whether a change merges without a person), ytstack-review-escapes (review-bot findings the own reviewers missed), ytstack-runtime (the product per worktree, RUNTIME.md), ytstack-handover (staged script for a human-only step), ytstack-questions (questions for the human), ytstack-watch (pull request changes, release watch), ytstack-upkeep (what needs a look, for a schedule), ytstack-signals (production findings, incident records), ytstack-gstack-diff (upstream changes of the adapted gstack skills), ytstack-status (status line segment), ytstack-pr-watch (opt-in PR watch), ytstack-codex, ytstack-kimi, dev-reinstall
+├── tests/                       27 shell test suites + run-all.sh (--linux via Docker), pr_watch/ (unittest), Kimi unittest suites
 ├── vendor/                      read-only subtree: superpowers v7.0.2 (the six gstack skills are adapted under skills/, not vendored)
 ├── docs/
 │   ├── ux/                      mandatory skill-authoring contracts and artifact formats

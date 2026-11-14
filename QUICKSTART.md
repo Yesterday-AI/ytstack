@@ -330,6 +330,23 @@ Agent fires `ytstack:incident`. Mitigation first, cause afterwards:
 
 Format of both records: `docs/ux/signal-format.md`.
 
+## When review bots catch what your reviewers missed
+
+A project that runs review roles of its own (a role per review goal, each with a file it reads at every review) declares them in `.ytstack/spec/REVIEW.md`:
+
+```markdown
+## Own reviewers
+
+- code | marker: (`code`) | lessons: .github/reviewers/code.md
+- security | marker: (`security`) | lessons: .github/reviewers/security.md
+```
+
+> "What did the bots catch on #142 that our reviewers missed?"
+
+Agent fires `ytstack:review-lessons`. For each merged pull request it lists the review-bot threads that a later commit fixed and that no role reported on the same lines, names the role whose file says it should have caught each one, and records it once as `review:<role>:<class>` under `.ytstack/signals/`. An escape on a file no role reviews is only named in the report. When a class comes back, or comes once at critical or high severity, it writes the exact checklist line for the role's file as a question under `.ytstack/questions/`. You answer; it never edits the role file itself.
+
+Nobody has to remember to ask. After a merge, the PR watch (when on) tells the owning session to run it, `finish-lane` runs it after its own merge, and `bin/ytstack-upkeep` lists every merged pull request that had no check yet. `retro` counts the escapes per role for the milestone. The loop end to end: `docs/ux/review-policy-format.md`, "The lessons loop".
+
 ## Optional: PR watch
 
 Want to hear about a red check or an unresolved bot thread without the agent polling its PRs? Switch on the PR watch once per user:

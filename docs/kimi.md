@@ -26,7 +26,7 @@ For a reviewed local checkout, open Kimi in the target project and use:
 /plugins info ytstack
 ```
 
-`plugins info` must report `state: ok`, 38 skills and five lifecycle hooks. Use
+`plugins info` must report `state: ok`, 39 skills and five lifecycle hooks. Use
 `/new` when a fresh session is required. The current session does not reliably
 pick up every installation change by itself.
 

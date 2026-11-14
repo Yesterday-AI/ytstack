@@ -3,7 +3,7 @@ name: retro
 description: "Milestone retrospective fed with the milestone's task summaries, deviations and follow-ups plus the git history of the milestone window, written to M###-RETRO.md. Use after a milestone's last slice closed and reassess-roadmap ran, or when the user says retro, retrospective, what did we learn, lessons from this milestone. Not mid-milestone (reassess-roadmap) and not for closing a task (summarize-task)."
 metadata:
   tier: task
-  version: 1.0.1
+  version: 1.1.0
   upstream: "gstack v1.99.3.0 (retro/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
@@ -39,7 +39,7 @@ You MUST create a task for each of these items and complete them in order:
 5. **Gather metrics** -- one bash command, then the freshness guard
 6. **Shipping outcomes** -- merged PRs (only if `HAS_GH=yes`), CHANGELOG features, backlog (only if `TODOS=yes`)
 7. **Analyze** -- time, sessions, commit types, hotspots, sizes, focus, ship of the milestone, people, streaks
-8. **Milestone outcomes** -- exit criteria vs summaries, deviations, open follow-ups, plan completion
+8. **Milestone outcomes** -- exit criteria vs summaries, deviations, open follow-ups, plan completion; own reviewers vs bots (only if `OWN_REVIEWERS` is not `none`)
 9. **Compare with the prior retro** (only if `PRIOR_RETRO` is not `none`, or in `compare` mode) -- trends + recommendation follow-through
 10. **Ask before replacing** (only if `RETRO_EXISTS=yes`) -- replace or stop
 11. **Write `M###-RETRO.md`** -- frontmatter + report + snapshot, and show the report in the conversation
@@ -149,6 +149,16 @@ echo "USER_NAME: $(git config user.name 2>/dev/null || echo unknown)"
 echo "HAS_GH: $(command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1 && echo yes || echo no)"
 echo "CHANGELOG: $([ -f "$_PROJECT_DIR/CHANGELOG.md" ] && echo yes || echo no)"
 echo "TODOS: $([ -f "$_PROJECT_DIR/TODOS.md" ] && echo yes || echo no)"
+# Own reviewers (M030): the roles of REVIEW.md and the escape records of the signals ledger.
+_RISK="${CLAUDE_SKILL_DIR}/../../bin/ytstack-risk"; [ -f "$_RISK" ] || _RISK=$(command -v ytstack-risk 2>/dev/null)
+_SIG="${CLAUDE_SKILL_DIR}/../../bin/ytstack-signals"; [ -f "$_SIG" ] || _SIG=$(command -v ytstack-signals 2>/dev/null)
+_ROLES=""; [ -n "$_RISK" ] && _ROLES=$(bash "$_RISK" -C "$_PROJECT_DIR" reviewers 2>/dev/null | cut -f1 | tr '\n' ' ')
+echo "OWN_REVIEWERS: ${_ROLES:-none}"
+if [ -n "$_ROLES" ] && [ -n "$_SIG" ]; then
+  echo "REVIEW_FINDINGS_BEGIN"
+  bash "$_SIG" -C "$_PROJECT_DIR" list --state all 2>/dev/null | awk -F'\t' '$4 == "review"'
+  echo "REVIEW_FINDINGS_END"
+fi
 ```
 
 ## Procedure
@@ -380,6 +390,12 @@ This is the part a calendar retro cannot give. From the material read in step 3:
 - **Deviations.** Every non-empty Deviations section, grouped by cause (plan was wrong, scope grew, tool or environment surprise, upstream change). Repeated causes are the strongest lesson candidates.
 - **Follow-ups.** Every follow-up from the summaries, marked `done` (a later commit or summary resolves it) or `open`. Open follow-ups are candidates for the next milestone, not for silent dropping.
 - **Summaries vs git.** Where the two witnesses disagree (a "clean" task next to a fix chain, a task with no commits in the window, commits with no task), say so plainly.
+- **Own reviewers vs bots** (only if `OWN_REVIEWERS` is not `none`). Read from the signals ledger, never from the host. The counts come from `.ytstack/signals/review-checks` (format: `docs/ux/signal-format.md`, "Review escapes"): one line per checked merged pull request, `<owner/name>#<n> <merge sha> <check time> [<tally>]`, the tally `<role>=<caught>/<escaped>` comma separated, or `none`. Take the lines whose check time lies in the window and sum caught and escaped per role; the escape rate of a role is escaped / (caught + escaped), `n/a` at 0. `-` collects escapes no role owns: show it as its own row, it is a gap in the roles. A line without a tally was written before tallies existed: list those pull requests as "not recorded" and leave them out of the sums, never count them as 0. The classes come from the findings between `REVIEW_FINDINGS_BEGIN` and `REVIEW_FINDINGS_END`: per role the keys and their state. One row per role of `OWN_REVIEWERS`, a role without findings included:
+
+  | Role | Caught | Escaped | Escape rate | Classes (open / planned / fixed / dismissed) | Proposed (`ref` a question) |
+  | --- | --- | --- | --- | --- | --- |
+
+  Above the table: how many checked pull requests the window has, how many of them without a tally, and how many merged pull requests step 6 found, when it found any; a gap means pull requests had no escape check. A class whose count is 2 or more and that is still `open` without a question is a candidate for "3 Things to Improve". Put the table under `## Milestone Outcomes` and `"review_escapes": {"<role>": {"caught": <n>, "escaped": <n>}, ...}` into the snapshot.
 
 ### 9. Compare with the prior retro
 
@@ -476,7 +492,7 @@ Rules for the file:
 
 - Size every section to its evidence. A section with nothing to say is cut, not padded. Keep `## Summary`, `## Milestone Outcomes`, `## 3 Things to Improve` and `## Snapshot` always.
 - `prs_merged` is `null` when hosting data was unavailable. `recommendations` is always present: one object per "3 Things to Improve" item with a one-word lowercase category and the item text verbatim; `[]` when there are none, never padded.
-- Add `"backlog": {...}` only when `TODOS=yes`.
+- Add `"backlog": {...}` only when `TODOS=yes`, and `"review_escapes": {...}` only when `OWN_REVIEWERS` is not `none`.
 - After writing, show the report (everything above `## Snapshot`) in the conversation.
 
 **Tone.** Encouraging but candid, no coddling. Specific and concrete, always anchored in commits or summaries. No generic praise ("great job"): say what was good and why. Praise sounds like something you would say in a 1:1. Growth suggestions sound like investment advice ("worth your time because..."), not "you failed at". Never compare teammates against each other negatively. Tables and code blocks for data, prose for narrative. If the test ratio is under 20%, flag it as a growth area.

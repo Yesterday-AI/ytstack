@@ -1,6 +1,6 @@
 # Recipe: recurring upkeep
 
-`bin/ytstack-upkeep` reads a project's `.ytstack/` and prints what needs a look: spec failures and drift, the STATE lint, open and lapsed gates, questions nobody put or answered, lanes without movement, a `RUNTIME.md` or a review policy that fails its check. It exits 0 with `nothing needs a look` and 10 when something does. It needs bash and git, and no model. This recipe puts it on a schedule.
+`bin/ytstack-upkeep` reads a project's `.ytstack/` and prints what needs a look: spec failures and drift, the STATE lint, open and lapsed gates, questions nobody put or answered, lanes without movement, a `RUNTIME.md` or a review policy that fails its check, and, when `REVIEW.md` declares own reviewers, merged pull requests that had no escape check yet (`ytstack:review-lessons`). It exits 0 with `nothing needs a look` and 10 when something does. It needs bash and git, and no model; the review checks section also needs `gh` and `jq` and costs one `gh pr list` per run, one call per 100 merged pull requests in its window (from 14 days before the first escape check, or 14 days ago before there is one, never more than 90 days back; cut at 500 with a notice) (plus one `gh repo view` when `origin` is not a GitHub URL). In the CI job below the job's own token reads the pull requests. This recipe puts it on a schedule.
 
 **What a run may leave behind.** By default nothing. With `--question` one file, `.ytstack/questions/Q###-upkeep-found-<n>-things-that-need-a-look.md`, with the report in it, and no second one while the first is open or asked. In CI one issue instead. Never a change to the product, never a commit, never a merge. What happens with a finding stays with a person, or with a session a person started.
 
@@ -17,6 +17,7 @@ on:
 permissions:
   contents: read
   issues: write
+  pull-requests: read # the review checks section; drop it without own reviewers
 jobs:
   upkeep:
     runs-on: ubuntu-latest
@@ -28,6 +29,8 @@ jobs:
         run: git clone --quiet --depth 1 --branch main https://github.com/Yesterday-AI/ytstack "$RUNNER_TEMP/ytstack"
       - name: Run upkeep
         id: upkeep
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           code=0
           bash "$RUNNER_TEMP/ytstack/bin/ytstack-upkeep" > "$RUNNER_TEMP/upkeep.txt" || code=$?

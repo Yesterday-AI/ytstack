@@ -2,7 +2,8 @@
 
 Claude sessions are stored host-qualified (`claude:<session_id>`). The worker
 never pushes to them; instead every user prompt surfaces the session's pending
-actionable notices (CI failure, unresolved bot thread, merge conflict) and a
+actionable notices (CI failure, unresolved bot thread, merge conflict, an
+observed merge) and a
 one-line readiness summary per watched PR, read from the last worker tick.
 Hooks make no GitHub calls, so the evidence is at most one tick old and the
 agent re-fetches before acting.

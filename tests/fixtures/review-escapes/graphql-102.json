@@ -1,0 +1,61 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "T1"
+          },
+          "nodes": [
+            {
+              "isResolved": true,
+              "path": "src/db.ts",
+              "line": null,
+              "startLine": null,
+              "originalLine": 80,
+              "originalStartLine": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "chatgpt-codex-connector"
+                    },
+                    "body": "Close the connection",
+                    "url": "https://github.com/acme/shop/pull/102#discussion_r1",
+                    "createdAt": "2026-11-10T10:07:00Z",
+                    "originalCommit": {
+                      "oid": "1111111111111111111111111111111111111111"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "reviews": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": null
+          },
+          "nodes": []
+        },
+        "commits": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "C1"
+          },
+          "nodes": [
+            {
+              "commit": {
+                "oid": "1111111111111111111111111111111111111111",
+                "committedDate": "2026-11-10T10:00:00Z"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

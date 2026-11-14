@@ -54,7 +54,7 @@ Pick up with `systematic-debugging`; then `ytstack-signals set F007 --state plan
 | `id` | `F` and three digits. Equal to the start of the file name, unique. |
 | `key` | The stable identity of the finding at its source: an issue id, a normalised error signature, a route name. The intake chooses it. One word of letters, digits and `. _ : / @ + = -`. By convention it starts with the source name and a colon (`errors:4812`, `latency:/api/export`), so that two sources never share one. |
 | `source` | The name of the signal source, as "Signals" declares it. |
-| `kind` | `errors`, `performance`, `alerts` or `logs`: the kind of the source. |
+| `kind` | `errors`, `performance`, `alerts` or `logs`: the kind of the source; `review` for a review-bot finding the own reviewers missed (see "Review escapes"). |
 | `state` | `open`, `planned`, `fixed` or `dismissed`, see below. |
 | `first_seen`, `last_seen` | The read times of the first and of the newest sighting, UTC with seconds. |
 | `count` | How many intake runs saw it. Not the number of events at the source. |
@@ -97,6 +97,30 @@ Per key the findings form a chain: the first one reopens nothing, each later one
 The intake never dismisses, never marks a finding fixed and never opens a task. A person or a coordinating session picks a finding, starts `systematic-debugging` and links the two with `set <id> --state planned --ref <task>`. Whoever closes that task sets `fixed`.
 
 Two intake runs can overlap. Every write of the script holds a lock (the file `signals.lock` in `.ytstack/`) and goes through a temporary file in the same directory, so two sightings of one key at the same moment give one file with `count: 2`.
+
+### Review escapes
+
+A finding a review bot made on a pull request, that a later commit fixed and that none of the project's own reviewers reported (`fixed` and `escaped` in the output of `bin/ytstack-review-escapes`, `docs/ux/review-policy-format.md`, "Escapes"), is a finding of `kind: review`. Its source is no command of "Signals": the pull request is.
+
+```
+bin/ytstack-signals new --source review --kind review --key review:<role>:<class-slug> --title <text> --read-at <time> < escape rows
+```
+
+- **The key** is `review:<role>:<class-slug>`: the own reviewer that owns the finding, as `REVIEW.md` names it, and a lowercase slug for the class of mistake (`missing-null-guard`, `quota-not-charged`). Both parts are lowercase slugs; the script refuses another form for `kind: review`. One class of one role is one finding: the second escape of the class raises `count` instead of opening a file.
+- **The sighting** is the escape row or rows as the script printed them: the bot, the resolution, the match, the file, the lines, the URL of the thread and its title, which carries the bot's severity where the bot states one.
+- **A `rejected` bot finding is never recorded**: it was answered without a code change. An `open` one is not a lesson yet.
+
+Which merged pull requests had their escape check is one line each in `.ytstack/signals/review-checks`:
+
+```
+<owner/name>#<n> <merge sha> <UTC time> [<tally>]
+```
+
+The tally counts the `fixed` bot findings of the pull request per role: `<role>=<caught>/<escaped>`, comma separated, each role once, `-` for escapes no own role owns (`code=1/2,security=1/0,-=0/3`), or `none` when the pull request had no `fixed` bot finding. A caught finding counts for the role that caught it, an escaped one for the role it was assigned to. It is what `retro` computes the escape rate from. A line without a tally was written before tallies existed; its pull request counts as "not recorded".
+
+`bin/ytstack-signals review-checked <owner/name>#<n> <merge sha> [--at <time>] [--tally <tally>]` appends the line and prints `checked <owner/name>#<n>`; a pull request that has its line keeps it and the call prints `already <its line>`. `review-checked <owner/name>#<n>` without a commit asks: exit 0 with the line, 1 without. The reference is written as `gh` prints `nameWithOwner`, the commit as 7 to 40 lowercase hex digits. A pull request without escapes gets its line too: the line says the check ran, not that something was found.
+
+The skill that writes both is `review-lessons`; the loop from a merge to a proposed line for a role file is `docs/ux/review-policy-format.md`, "The lessons loop". It passes the merge time of the pull request as `--read-at`, so a sighting's time is the time the escape merged.
 
 ## `incidents/` -- the record of an incident
 
@@ -196,7 +220,8 @@ Every mitigation is a staged script for a person, made with `bin/ytstack-handove
 - a list line under "Proposed mitigations" that does not start with `M<n> -- `, an id used twice, a missing field, a `status` outside the four forms
 - a mitigation that is not `declined` and whose script does not exist or does not pass `bin/ytstack-handover check`, and a `carried out` whose receipt does not exist
 - a file in `signals/` whose name is not `F###-<slug>.md`, an id that differs from the file name or is used by two files, a file without frontmatter
-- a `key` or a `ref` that is not one word of the listed characters, a `source` that is not a lowercase slug, a `kind` or a `state` outside the listed values
+- a `key` or a `ref` that is not one word of the listed characters, a `source` that is not a lowercase slug, a `kind` or a `state` outside the listed values, a finding of `kind: review` whose key is not `review:<role>:<class-slug>`
+- a line of `review-checks` that is not `<owner/name>#<n> <merge sha> <UTC time>`, and a pull request that has two lines
 - `first_seen` or `last_seen` that is not a UTC time with seconds, a `count` that is not a number from 1
 - a `planned` finding whose `ref` is `none`, a `dismissed` finding without a reason under "Assessment"
 - a body that does not have the three sections, each once and in order

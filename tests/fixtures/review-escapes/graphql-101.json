@@ -1,0 +1,134 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "pageInfo": {
+            "hasNextPage": true,
+            "endCursor": "T2"
+          },
+          "nodes": [
+            {
+              "isResolved": true,
+              "path": "src/app.ts",
+              "line": null,
+              "startLine": null,
+              "originalLine": 12,
+              "originalStartLine": 10,
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "chatgpt-codex-connector"
+                    },
+                    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Guard the empty cart**\n\nThe cart can be empty here.",
+                    "url": "https://github.com/acme/shop/pull/101#discussion_r1",
+                    "createdAt": "2026-11-10T10:05:00Z",
+                    "originalCommit": {
+                      "oid": "1111111111111111111111111111111111111111"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "isResolved": true,
+              "path": "src/app.ts",
+              "line": null,
+              "startLine": null,
+              "originalLine": 40,
+              "originalStartLine": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "__typename": "User",
+                      "login": "lx-0"
+                    },
+                    "body": "🟠 **High** (`code`). `total` is read before the null check.",
+                    "url": "https://github.com/acme/shop/pull/101#discussion_r2",
+                    "createdAt": "2026-11-10T10:02:00Z",
+                    "originalCommit": {
+                      "oid": "1111111111111111111111111111111111111111"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "reviews": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "R3"
+          },
+          "nodes": [
+            {
+              "author": {
+                "__typename": "User",
+                "login": "lx-0"
+              },
+              "url": "https://github.com/acme/shop/pull/101#pullrequestreview-1",
+              "createdAt": "2026-11-10T10:03:00Z",
+              "commit": {
+                "oid": "1111111111111111111111111111111111111111"
+              },
+              "body": "### Independent review (T-1 r1)\n\n**Non-blocking**\n- 🟡 **Medium** (`code`) the cart handling in src/app.ts looks fragile\n\n**Checked and fine**\n- `code`: src/app.ts"
+            },
+            {
+              "author": {
+                "__typename": "User",
+                "login": "lx-0"
+              },
+              "url": "https://github.com/acme/shop/pull/101#pullrequestreview-2",
+              "createdAt": "2026-11-10T11:03:00Z",
+              "commit": {
+                "oid": "2222222222222222222222222222222222222222"
+              },
+              "body": "### Independent review (T-1 r2)\n\n**Non-blocking**\n- 🟡 **Medium** (`tests`) `src/db.ts:19`: the retry is not covered by a test"
+            },
+            {
+              "author": {
+                "__typename": "User",
+                "login": "lx-0"
+              },
+              "url": "https://github.com/acme/shop/pull/101#pullrequestreview-3",
+              "createdAt": "2026-11-10T12:03:00Z",
+              "commit": {
+                "oid": "3333333333333333333333333333333333333333"
+              },
+              "body": "### Independent review (T-1 r3)\n\n**Non-blocking**\n- ⚪ **Low** (`code`) `src/app.ts:11`: rename the guard"
+            }
+          ]
+        },
+        "commits": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "C3"
+          },
+          "nodes": [
+            {
+              "commit": {
+                "oid": "1111111111111111111111111111111111111111",
+                "committedDate": "2026-11-10T10:00:00Z"
+              }
+            },
+            {
+              "commit": {
+                "oid": "2222222222222222222222222222222222222222",
+                "committedDate": "2026-11-10T11:00:00Z"
+              }
+            },
+            {
+              "commit": {
+                "oid": "3333333333333333333333333333333333333333",
+                "committedDate": "2026-11-10T12:00:00Z"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
