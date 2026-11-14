@@ -3,9 +3,9 @@ milestone: M031
 slice: S05
 project: ytstack
 created: 2026-11-15T09:00:00Z
-status: in-progress
+status: done
 task_count: 3
-completed_tasks: 2
+completed_tasks: 3
 ---
 
 # M031-S05 -- Slice Plan
@@ -18,7 +18,7 @@ completed_tasks: 2
 
 - [x] T01 -- `bin/ytstack-plans`: `scan` finds plan directories (`plans/`, `plan/`, `planning/`, `roadmap/` and the same under `docs/`), counts work rows (task-list items and rows of tables with a status or checkbox column) as open, done or dropped, applies the thresholds and reads a recorded answer from `PREFERENCES.md`; `rows` prints one line per work row with `path:line`, state, id, section and title. `tests/ytstack-plans.test.sh` first.
 - [x] T02 -- The question and the mapping: `docs/ux/external-plans.md` (thresholds, mapping rules, pointer format, answer record); `reconcile` gets the class "External plan" (preamble line, one AskUserQuestion, the mapping after a yes); `adopt-brownfield` asks the same question after its artifacts exist. Preamble suite covers the new line.
-- [ ] T03 -- Docs and checks: spec areas (`artifacts`, `checks-and-evals`), README tools list, the eval case `evals/external-plan/` with its README row, a `DECISIONS.md` entry for "script detects, agent maps".
+- [x] T03 -- Docs and checks: spec areas (`artifacts`, `checks-and-evals`), README tools list, the eval case `evals/external-plan/` with its README row, a `DECISIONS.md` entry for "script detects, agent maps".
 
 ## Done when
 

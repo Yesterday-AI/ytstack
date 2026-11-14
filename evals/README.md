@@ -16,6 +16,7 @@ Behavioural tests for `claude plugin eval` (Claude Code >= 2.1.269): one case pe
 | `handoff-session` | M001 in progress | `HANDOFF.md` carries the in-flight note |
 | `quick-task` | README typo, `quick_lane: on` | `quick/Q001-SUMMARY.md`, typo fixed |
 | `reconcile` | one `closed: draft` stub | `RECONCILE-<date>.md` |
+| `external-plan` | initialized `.ytstack/` without a milestone, `plans/` with a board of 9 open and 2 done work packages | `M001-ROADMAP.md` lists the EXP-03 slice, `M001-S01-PLAN.md` has a `**Source:**` pointer into `plans/`, `PREFERENCES.md` records `mapped`, the plan row is unchanged |
 | `adopt-brownfield` | README + docs/ + CHANGELOG + commits, no `.ytstack/` | `.ytstack/PROJECT.md`, `.ytstack/spec/SPEC.md` |
 | `init-project` | fresh repo with `OFFICE-HOURS.md` | `.ytstack/STATE.md`, `.ytstack/spec/SPEC.md` |
 | `bounded-evidence` | T01 committed, its plan asks for one run of a 44-scenario script that counts its own runs | `M001-S01-T01-SUMMARY.md`, `tests/.scenario-runs` holds `1` |
