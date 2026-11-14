@@ -44,7 +44,7 @@ You MUST create a TodoWrite task for each of these items. Items 4 to 13 are one 
 9. **Record standing instructions** -- one file per instruction in `standing/` when they are given
 10. **Stop loops that do not converge** -- a diagnosis to the human instead of another dispatch
 11. **Report status** -- only on a change the human acts on, or at a boundary he set
-12. **Rotate** -- after one compaction or with a large context: handoff, files current, fresh session
+12. **Rotate** -- after one compaction or with a large context, in one step while lanes run: files current, handoff with the PR watch session, the watches and the workers' addresses, fresh session; this one stays open only as a relay
 13. **Sample finished lanes** -- `ytstack:lane-retro` about every fifth lane
 
 ## Process Flow
@@ -188,6 +188,8 @@ The scripts live in `${CLAUDE_SKILL_DIR}/../../bin/`; the commands below are wri
 
 **Step 3 -- Start from files.** At the first start, after every compaction and after every resume, before anything else: read the standing instructions in full (every file listed between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END`, newest first, and `STANDING.md` when `STANDING: yes`; an entry that another entry supersedes is not listed and no longer holds), the rows between `LANES_BEGIN` and `LANES_END`, the frontier, every file listed between `QUESTIONS_BEGIN` and `QUESTIONS_END`, and the newer of the two handoffs. Do not rebuild who holds what from a conversation summary. Where a summary and a file disagree, the file is the claim, and Step 4 checks it against the host before anybody acts on it. A `running` row whose worker no longer exists in this session is not dispatched again blindly: read its branch (`git log <base>..<branch>`), then `ytstack-frontier release <lane>` and claim it for a new worker that continues on that branch, or write a question.
 
+When the newer handoff carries a "Rotation" block (Step 12 of the session before, `docs/ux/coordinator-format.md`), this session is its successor. Before Step 4: `ytstack-pr-watch handover --from <the PR watch session it names>` (skip with `PR watch session: none`; check that the output names the moved pull requests), start the background watches it lists again, and leave the rows of its running workers alone: those workers report to the old session, which stays open as a relay and appends each report under "Reports after the rotation" in `HANDOFF.md` and sets the row to `reported`. Read the handoff again when such a row turns `reported`, and send a worker a message at its address only where the host lets this session reach it. Only when the person says the old session is closed before a worker reported does the rule above for a lost worker apply.
+
 **Step 4 -- Read host facts fresh.** Before a status, and before an action that depends on the state of a pull request, its checks, a review or a deployed build, read now:
 
 ```bash
@@ -244,7 +246,14 @@ An `asked` question is never asked again: name it as waiting since its time. Whe
 
 **Step 11 -- Report status.** Only when something changed that the human acts on (a question, a blocker, a finished plan, a lane that waits for his merge), or at a boundary he set in a standing instruction. No interim reports that work is running. A lane that merged without a person is no reason for a status of its own: the next status that is due names it in one line, with its class and the ceiling it merged under. A status is two to four full sentences with pointers (files, commits, pull request numbers). When the plan has gates it carries two numbers side by side, closed by work and accepted, as `ytstack:reassess-roadmap` counts them. Every host fact in it comes from a read made for this status and carries `read <UTC>`. When the human asks where the lanes stand, answer per lane instead: the status and the next action of its row as written, then the open and asked questions with what they block.
 
-**Step 12 -- Rotate.** When the session has been compacted once (a summary stands where the conversation was, or `HANDOFF_AUTO` is from this session), or its context is large by the host's indicator, do not wait for the next compaction. After Step 3: bring the rows' next actions up to date, run `ytstack-frontier check` and `ytstack-questions check`, make sure the standing instructions hold every instruction given so far, write a handoff with `ytstack:handoff-session` (pointers only), and tell the user that a fresh session continues from the files with `ytstack:coordinate`. The watcher and running workers do not depend on this session's context. The same files let another person or another host take over.
+**Step 12 -- Rotate.** When the session has been compacted once (a summary stands where the conversation was, or `HANDOFF_AUTO` is from this session), or its context is large by the host's indicator, rotate now. Do not wait for a quiet moment, for workers to report or for checks to finish: under load there is none, and a second compaction costs more than a rotation. It is one step, done in this order without dispatching anything in between:
+
+1. Bring the rows' next actions up to date, run `ytstack-frontier check` and `ytstack-questions check`, and make sure the standing instructions hold every instruction given so far.
+2. Write `$_YT_DIR/HANDOFF.md` yourself in the format of `ytstack:handoff-session` (its Step 7), without its questions: the answers are in the files, and the handoff points at them. Its "In-flight work" carries the "Rotation" block of `docs/ux/coordinator-format.md`: `PR watch session:` with this session's id as the PR watch stores it (`echo "${CODEX_THREAD_ID:-claude:$CLAUDE_CODE_SESSION_ID}"`; `none` when `PR_WATCH` is `off`), `Background watches:` with the command of every `ytstack-watch` that runs in this session, and under `Running workers:` one line per worker that has not reported: lane, name, address (what the host gave you to reach it: the agent's id or name in Claude Code, another host's process id and log file), worktree, branch, dispatch time. Its "Next action": start `ytstack:coordinate` in a fresh session; its Step 3 runs `ytstack-pr-watch handover --from <PR watch session>`.
+3. Tell the user in one line: start a fresh session with `ytstack:coordinate`, and leave this one open until the workers listed in the handoff have reported (a closed session ends its background workers on most hosts).
+4. From then on this session is a relay and nothing else. When one of its workers reports: `ytstack-brief check`, `ytstack-frontier set <lane> --status reported --next "<the report's Next line>"`, and append the report's labelled lines with the UTC time under `## Reports after the rotation` at the end of `HANDOFF.md`. It dispatches nothing, merges nothing, asks nothing and acts on no watch line or PR watch notice; the PR watch delivers to the successor after the handover anyway. When the last listed worker has reported, it says so in one line: the session can be closed.
+
+The same files let another person or another host take over.
 
 **Step 13 -- Sample finished lanes.** About every fifth finished lane, run `ytstack:lane-retro`, the lanes that went wrong first.
 
@@ -254,6 +263,6 @@ This skill does not end by itself. It returns control to the user in exactly thr
 
 - The frontier is empty and no lane is held: report per Step 11 and name `ytstack:reassess-roadmap` as the next step.
 - A question waits for the human and nothing ready is independent of it.
-- It rotated (Step 12): the handoff path and the sentence that a fresh session continues from the files.
+- It rotated (Step 12): the handoff path and the sentence that a fresh session continues from the files; until its listed workers reported, it only relays their reports.
 
 Do NOT invoke `ytstack:plan-task`, `ytstack:test-driven-development`, `ytstack:code-review` or `ytstack:ship` from this session: that work belongs to a worker or to `finish-lane`. The ONLY skills you may invoke are `ytstack:finish-lane`, `ytstack:handover-step`, `ytstack:reassess-roadmap`, `ytstack:handoff-session`, `ytstack:lane-retro`, and from Step 7 `ytstack:signal-intake`, `ytstack:incident` and `ytstack:review-lessons`.

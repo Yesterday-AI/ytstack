@@ -3,9 +3,9 @@ milestone: M031
 slice: S01
 project: ytstack
 created: 2026-11-14T23:45:00Z
-status: in-progress
+status: done
 task_count: 3
-completed_tasks: 2
+completed_tasks: 3
 ---
 
 # M031-S01 -- Slice Plan
@@ -18,7 +18,7 @@ completed_tasks: 2
 
 - [x] T01 -- PR watch handover: `ytstack-pr-watch handover --from SESSION [--to SESSION]` moves every watch, undelivered notice, branch binding and candidate of the old session to the new one (default: the current session) and forwards later registrations for the old session to the new one. Unittests in `tests/pr_watch/test_handover.py`, `docs/pr-watch.md`, the `hooks-and-state` and `checks-and-evals` area files.
 - [x] T02 -- `coordinate` Step 7 becomes "Factory tools": one table with command, when and when skipped for the route (`ytstack-finish-lane route`, or `ytstack-risk route` for a merge outside the lanes, also when this session merges itself), the PR watch registration or `ytstack-watch`, `ytstack-watch release` after every merge to production, `signal-intake` / `incident`, `review-lessons` after a merge with a bot finding. The PR watch text of Step 7 is unified, not repeated. A test in `tests/skill-preambles.test.sh` checks that every `ytstack-*` command the step names exists with that subcommand. `skills` area file.
-- [ ] T03 -- `coordinate` Step 12 rotates in one step while lanes run: handoff written from the files with the PR watch session, the background watches and every running worker's address; the successor's Step 3 runs `ytstack-pr-watch handover --from <old session>`; the old session stays open only as a relay for its workers' reports. `docs/ux/coordinator-format.md` "Rotation", test assertions, `skills` area file.
+- [x] T03 -- `coordinate` Step 12 rotates in one step while lanes run: handoff written from the files with the PR watch session, the background watches and every running worker's address; the successor's Step 3 runs `ytstack-pr-watch handover --from <old session>`; the old session stays open only as a relay for its workers' reports. `docs/ux/coordinator-format.md` "Rotation", test assertions, `skills` area file.
 
 ## Done when
 

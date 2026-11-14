@@ -62,7 +62,7 @@ The `.ytstack/` artifact model: the Markdown files that hold a project's memory 
 | `quick/Q###-PLAN.md`, `quick/Q###-SUMMARY.md` | `quick-task` | `quick-task` (`status`) |
 | `codebase/{stack,architecture,conventions,concerns}.md`, `backlog/README.md` | `adopt-brownfield` | refreshed by deleting the file and running the skill again |
 | `spec/SPEC.md`, `spec/<area>.md` | `init-project` (every area `planned`), `adopt-brownfield` (pointer-only over existing documents; also for a project that has `.ytstack/` and no spec) | the task that changes the area, in its own commits; `reassess-roadmap` sets `verified_at` when it answers the drift report |
-| `HANDOFF.md` | `handoff-session` | the user; no hook writes it |
+| `HANDOFF.md` | `handoff-session`; `coordinate` when it rotates (its format with the "Rotation" block of `docs/ux/coordinator-format.md`) | the user; the rotating coordinator appends its workers' reports under "Reports after the rotation"; no hook writes it |
 | `LANES.md` | `bin/ytstack-frontier claim` (first claim) | `bin/ytstack-frontier` (`set`, `release`), one row per call; called by `spawn-milestone-team`, `coordinate`, `finish-lane` |
 | `questions/Q###-<slug>.md` | `bin/ytstack-questions new` (from `coordinate`, `reassess-roadmap`, `review-lessons` (a proposed line for a role file, `blocks:` the finding), and from `bin/ytstack-upkeep --question`, which keeps at most one open or asked file titled `Upkeep found ...`) | the agent fills Context, Options, Recommendation; `ask` and `answer` change the state; the answer text is the human's |
 | `standing/<YYYYMMDDTHHMMZ>-<slug>.md`, `STANDING.md` | `coordinate`, when the human gives an instruction that holds beyond the task: a new file with `given`, `scope`, `supersedes` (`docs/ux/coordinator-format.md`); appended to `STANDING.md` only where no `standing/` exists | an entry is never edited; a newer one supersedes it by name, readers skip it; `STANDING.md` alone stays valid, also as an index, and is read beside the directory |
@@ -136,7 +136,7 @@ Automatic handoffs and the session journal are not artifacts. `hooks/pre-compact
 ## Invariants and security boundaries
 
 - `DECISIONS.md` is append-only; a reversal is a new entry.
-- `HANDOFF.md` is written by a person or by `handoff-session`, never by a hook.
+- `HANDOFF.md` is written by a person, by `handoff-session` or by a rotating `coordinate`, never by a hook.
 - Hooks write into `.ytstack/` in two cases only: the draft summary stub, and the auto summary with its checkbox for an Agent Teams task.
 - No state lives in `~/.ytstack/.<name>` sentinel files. An ask-once answer is recorded in the artifact it concerns (`docs/ux/skill-structure.md`, "Ask-once answers").
 - `RUNTIME.md` written by `adopt-brownfield` records environment variable names, never values. The three sections of `RUNTIME.md` hold names of credentials, never values; `bin/ytstack-runtime check` fails on a token-looking string there. In those sections only list lines are read; a section without a list line counts as absent.

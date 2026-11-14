@@ -293,8 +293,18 @@ PY
                   'ytstack-watch release --commit' 'ytstack:signal-intake' 'ytstack:incident' 'ytstack:review-lessons'; do
         grep -qF -- "$want" "$TMP/step7.md" && ok "$s: Step 7 names $want" || bad "$s: Step 7 names $want"
       done
-      grep -o '`ytstack-[a-z-]*[^`]*`' "$TMP/step7.md" | tr -d '`' | sort -u > "$TMP/step7.cmds"
-      [ -s "$TMP/step7.cmds" ] && ok "$s: Step 7 commands found ($(wc -l < "$TMP/step7.cmds" | tr -d ' '))" || bad "$s: Step 7 commands found"
+      # the rotation in one step (issue #61): the successor takes the PR watches over, the workers' addresses travel
+      awk '/^\*\*Step 12 --/ { p = 1 } /^\*\*Step 13 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" > "$TMP/step12.md"
+      for want in 'ytstack-pr-watch handover --from' 'PR watch session:' 'Running workers:' 'address' 'relay' 'Reports after the rotation'; do
+        grep -qF -- "$want" "$TMP/step12.md" && ok "$s: Step 12 names $want" || bad "$s: Step 12 names $want"
+      done
+      awk '/^\*\*Step 3 --/ { p = 1 } /^\*\*Step 4 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF 'ytstack-pr-watch handover --from' \
+        && ok "$s: Step 3 runs the handover for a rotation" || bad "$s: Step 3 runs the handover for a rotation"
+      grep -qF '## Rotation' "$ROOT/docs/ux/coordinator-format.md" && ok "$s: coordinator-format documents the rotation block" || bad "$s: coordinator-format documents the rotation block"
+      # every command of the Procedure, not only Step 7
+      awk '/^## Procedure/ { p = 1 } /^## Terminal State/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" \
+        | grep -o '`ytstack-[a-z-]*[^`]*`' | tr -d '`' | sort -u > "$TMP/step7.cmds"
+      [ -s "$TMP/step7.cmds" ] && ok "$s: Procedure commands found ($(wc -l < "$TMP/step7.cmds" | tr -d ' '))" || bad "$s: Procedure commands found"
       while read -r tool rest; do
         [ -f "$ROOT/bin/$tool" ] || { bad "$s: $tool exists in bin/"; continue; }
         # the subcommand: the first word that is no option and no placeholder, after -C DIR

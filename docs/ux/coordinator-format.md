@@ -187,6 +187,28 @@ The single file of earlier versions stays valid. A project without `standing/` k
 
 Where both exist, both are read: `STANDING.md` may be a short index that points at the directory, and lines it still holds keep holding. New instructions go into `standing/`; the coordinator appends to `STANDING.md` only in a project that has no `standing/` directory yet.
 
+## Rotation -- the handoff of a coordinator
+
+A coordinator rotates to a fresh session after one compaction, while its lanes run (`skills/coordinate/SKILL.md`, Step 12). It writes `HANDOFF.md` in the format of `handoff-session` and puts this block into "In-flight work". The block holds what the files above do not: what runs in the old session and how the successor reaches it.
+
+```markdown
+Rotation at 2026-11-15T09:12Z. Lanes, frontier, questions and standing instructions are in the files.
+
+- PR watch session: claude:6f1c2d0e-1b7a-4c55-9a1e-0c3d5e7f9a21
+- Background watches: `ytstack-watch --pr 41,43 --interval 60`; `ytstack-watch release --commit 9b8c7d6` since 2026-11-15T09:05Z
+- Running workers:
+  - M004-S02 | impl-M004-S02 | address: agent a3f9c1 | worktree: .claude/worktrees/m004-s02 | branch: ytstack/M004-S02 | dispatched 2026-11-15T08:40Z
+  - review-pr-43 | review-pr-43 | address: codex pid 81234, log /tmp/review-pr-43.log | worktree: .worktrees/review-pr-43 | branch: - | dispatched 2026-11-15T09:01Z
+```
+
+| Line | Holds |
+|---|---|
+| `PR watch session:` | The old session's id as the PR watch stores it (`claude:<id>`, or the Codex thread id), or `none` when the PR watch is off. The successor runs `ytstack-pr-watch handover --from <id>` (`docs/pr-watch.md`). |
+| `Background watches:` | The command of every `ytstack-watch` the old session runs, so that the successor starts them again. `none` when there are none. |
+| `Running workers:` | One line per dispatched worker that has not reported: lane, name, address, worktree, branch, dispatch time. The address is what the host gave the dispatcher to reach the worker. A worker reports to the session that started it. |
+
+The old session stays open as a relay until every listed worker has reported. Per report it runs `ytstack-brief check`, sets the row to `reported` and appends the report's labelled lines, with the UTC time, under `## Reports after the rotation` at the end of `HANDOFF.md`. It does nothing else. The successor leaves the rows of the listed workers alone until their reports are there, or until the person says the old session is closed.
+
 ## Checked mechanically
 
 - `bin/ytstack-frontier check`: `LANES.md` has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time.
