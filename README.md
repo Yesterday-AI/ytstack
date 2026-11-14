@@ -96,16 +96,16 @@ Install all three and you get friction: interactive prompts blocking each other,
 
 ## Workflows
 
-ytstack covers three workflows. The `SessionStart` hook injects the `using-ytstack` directive once per session; skill selection after that is semantic -- the agent matches user intent against each skill's `description:` field, not a phrase list.
+ytstack covers four workflows. The `SessionStart` hook injects the `using-ytstack` directive once per session; skill selection after that is semantic -- the agent matches user intent against each skill's `description:` field, not a phrase list.
 
 ### 1. Greenfield -- new project, no `.ytstack/` yet
 
-From raw idea to shipped task. Each process step (orange) produces an artifact on disk (green) that the next step reads as a contract.
+From raw idea to shipped task. Each process step (blue) produces an artifact on disk (green) that the next step reads as a contract.
 
 <details open>
 <summary><strong>Greenfield flow diagram</strong> (click to collapse)</summary>
 
-![ytstack greenfield flow -- office-hours -> plan-ceo-review -> init-project -> plan-milestone -> slice -> task-loop (plan-task -> TDD -> verify -> summarize) -> reassess-roadmap at slice boundaries](docs/ytstack-greenfield-flow.png)
+![ytstack greenfield flow -- office-hours -> plan-ceo-review -> optional plan-eng-review (three planning skills adapted from gstack, shipped inside ytstack) -> init-project scaffolds .ytstack/ and the technical spec (SPEC.md + area files, all planned) -> plan-milestone -> slice-milestone -> task loop (plan-task names the Spec impact -> TDD -> verify -> code-review reads the invariants -> summarize-task checks the area file changed) -> reassess-roadmap reads spec drift at each slice boundary, then finish-branch or ship](docs/ytstack-greenfield-flow.png)
 
 Source: [`docs/ytstack-greenfield-flow.excalidraw`](docs/ytstack-greenfield-flow.excalidraw) (single source of truth).
 
@@ -150,7 +150,7 @@ At each slice boundary: `ytstack:reassess-roadmap` to check the plan still fits 
 <details>
 <summary><strong>Brownfield flow diagram</strong> (click to expand)</summary>
 
-![ytstack brownfield flow -- SessionStart hook injects directive + STATE snapshot, natural-language routing to resume-session / plan-milestone / plan-task / summarize-task / handoff-session, task-loop continuation, post-slice reassess and parallel-team variants](docs/ytstack-brownfield-flow.png)
+![ytstack brownfield flow -- SessionStart hook injects the directive, the STATE snapshot and the minimal-code pointer; natural-language routing of fourteen phrases to their skills; the task loop under the work contract (plan-task with Spec impact -> TDD -> verification -> code-review stating class and invariants touched -> summarize-task checking the spec); the spec under .ytstack/spec/; reassess-roadmap with spec drift, then finish-branch or ship; spawn-milestone-team and the coordinator variant (coordinate, LANES.md and ytstack-frontier, a worker per lane, finish-lane, required lenses incl. visual-review, the ytstack-risk route to an unattended merge or a person, then the release watch)](docs/ytstack-brownfield-flow.png)
 
 Source: [`docs/ytstack-brownfield-flow.excalidraw`](docs/ytstack-brownfield-flow.excalidraw).
 
@@ -175,9 +175,22 @@ Fix path merges back into the brownfield task loop: regression test first (`test
 <details>
 <summary><strong>Debugging flow diagram</strong> (click to expand)</summary>
 
-![ytstack debugging flow -- systematic-debugging 4-phase procedure (investigate / analyze / hypothesize / implement) with iron-rule root-cause gate, KNOWLEDGE + DECISIONS logs, and merge-back into the task loop via test-driven-development / verification-before-completion / summarize-task](docs/ytstack-debugging-flow.png)
+![ytstack debugging flow -- three ways in: production is down (incident keeps a record, every mitigation a handover script a person runs, then hands over the cause), something is broken, and signal-intake findings picked up as work; systematic-debugging 4-phase procedure (investigate / analyze / hypothesize / implement) with the iron-rule root-cause gate and KNOWLEDGE + DECISIONS logs; merge-back into the task loop via test-driven-development / verification-before-completion / code-review / summarize-task, and a regression finding when a fixed key is seen again](docs/ytstack-debugging-flow.png)
 
 Source: [`docs/ytstack-debugging-flow.excalidraw`](docs/ytstack-debugging-flow.excalidraw).
+
+</details>
+
+### 4. Delivery -- from a finished change to production
+
+A finished change does not merge because it is finished. A reviewer that is not the author states its class and the invariants it touches; the lenses that `REVIEW.md` requires for that kind of change run, a `ui` lens through `visual-review` at the running product. `bin/ytstack-risk route` then puts the floor from the diff, the stated class and the ceiling of the touched areas together: with `merge_by: risk` the change merges without you only when every condition holds and the host's checks are green; everything else comes to you. After the merge `bin/ytstack-watch release` waits until the target serves the commit and stays healthy. A release that does not arrive or is unhealthy goes to you at once; an outage is `incident`, and what production reports between incidents comes in through `signal-intake`. Both lead back into the plan.
+
+<details>
+<summary><strong>Delivery flow diagram</strong> (click to expand)</summary>
+
+![ytstack delivery flow -- a finished change -> code-review by a reviewer that is not the author (round line with risk and invariants) -> required lenses, visual-review starting the product at the reviewed commit with its own screenshots and MANIFEST -> ytstack-risk route from the floor (diff), the stated class and the area ceiling (auto_merge) -> unattended merge under merge_by: risk or a person -> release watch with its receipt -> not arrived or unhealthy goes to a person and incident; signal-intake findings and the incident cause lead back into the plan and the next change](docs/ytstack-delivery-flow.png)
+
+Source: [`docs/ytstack-delivery-flow.excalidraw`](docs/ytstack-delivery-flow.excalidraw).
 
 </details>
 
