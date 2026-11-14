@@ -8,7 +8,7 @@ sources:
   - docs/ux/skill-structure.md
   - docs/ux/askuserquestion-format.md
   - docs/ux/agent-structure.md
-verified_at: 08dab40
+verified_at: 1b7bfc8
 ---
 
 # skills
@@ -105,7 +105,7 @@ No other skill reads the flag.
 
 Formats: `docs/ux/coordinator-format.md`. The four skills below are for the session that owns a plan and delegates all of it; none of them writes product code.
 
-- `coordinate` is a loop with a fixed order: start from `STANDING.md`, `LANES.md`, the frontier and the questions (never from a conversation summary), read host facts fresh and stamp them with their read time, claim a lane before dispatching it, finish lanes through `finish-lane`, with the PR watch on register the repository's open pull requests to itself (`ytstack-pr-watch register --all-open`, at the start and after every restart) and otherwise poll through `bin/ytstack-watch`, ask one question at a time from a question file, write a standing instruction down when it is given, stop a lane that failed verification twice or needs a third review, and rotate through a handoff after the first compaction.
+- `coordinate` is a loop with a fixed order: start from `STANDING.md`, `LANES.md`, the frontier and the questions (never from a conversation summary), read host facts fresh and stamp them with their read time, claim a lane before dispatching it, finish lanes through `finish-lane`, with the PR watch on register the repository's open pull requests to itself as their owning session (`ytstack-pr-watch register --all-open`, at the start and after every restart) and otherwise poll through `bin/ytstack-watch`, ask one question at a time from a question file, write a standing instruction down when it is given, stop a lane that failed verification twice or needs a third review, and rotate through a handoff after the first compaction.
 - `spawn-milestone-team` claims each lane with `bin/ytstack-frontier` before it dispatches, keeps the lane's row current, and looks at the frontier again whenever a lane is verified or merged.
 - `finish-lane` takes a reported lane to a merged pull request with `bin/ytstack-finish-lane`: review pinned to the host's head, the required lenses, `route`, the gates read from the host, the merge decided by `merge_by` and the route, then `bin/ytstack-watch release` on the merge commit when `RUNTIME.md` has a "Release" section (in the background; the receipt goes into the report, nothing is rolled back). A merge without a person is reported in one line with class, ceiling and lenses. After a merge it made itself, and when `REVIEW.md` declares own reviewers, it invokes `review-lessons` for the pull request: the one skill it may invoke. The pipeline supports GitHub through `gh` only; on another host the skill stops after the route.
 - **The class of a change.** `code-review` prints the floor of `bin/ytstack-risk` and has a reviewer that is not the author end with `Risk:`, `Severity:`, `Reach:` and `Invariants touched:`, read against "Invariants and security boundaries" and "Decisions that apply now" of the touched areas, also when only code moved. The round line records class, invariants and reviewer; a session reviewing its own change writes `by: self`, which routes to a person. Each lens the floor names gets a separate fresh reviewer with the lens brief (`bin/ytstack-brief render --kind review --lens <name>`) and one lens line.
