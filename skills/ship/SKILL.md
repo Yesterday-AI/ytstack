@@ -3,7 +3,7 @@ name: ship
 description: "Ships the current branch (merge the base, tests, coverage and plan audit, pre-landing review, version and CHANGELOG, docs sync, commit, push, pull request), gated on ytstack's slice state. Use when a slice or milestone is closed on paper and verified, or when the user says ship it, open the PR, land this, create a PR. Not before every task of the slice has a summary (summarize-task), not for merging into the base locally (finish-branch), and never for a merge without an explicit merge instruction."
 metadata:
   tier: task
-  version: 1.0.1
+  version: 1.0.2
   upstream: "gstack v1.99.3.0 (ship/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
@@ -303,7 +303,7 @@ The project's own release rules win: read `CLAUDE.md` / `AGENTS.md` / `CONTRIBUT
 2. List every commit on the branch: `git log origin/<base>..HEAD --oneline`. Count them; this is the checklist.
 3. Read `git diff origin/<base>` to understand what each commit changed.
 4. Group by theme before writing: features, performance, fixes, removals, infrastructure and tests, refactors.
-5. Write one entry with Edit (never Write on CHANGELOG.md), after the header and before the first release entry, dated today: `## [<NEW_VERSION>] - YYYY-MM-DD` (or the file's own heading style), with `### Added` / `### Changed` / `### Fixed` / `### Removed` as applicable. Entries this branch already added for these commits are replaced by the one unified entry. Version kept or no version source: put the entry under `## [Unreleased]`, never under a released heading.
+5. Write one entry with Edit (never Write on CHANGELOG.md), after the header and before the first release entry, dated today: `## [<NEW_VERSION>] - YYYY-MM-DD` (or the file's own heading style), with `### Added` / `### Changed` / `### Fixed` / `### Removed` as applicable. Entries this branch already added for these commits are replaced by the one unified entry. FRESH and ALREADY_BUMPED both have a release version: the heading is `NEW_VERSION` (for ALREADY_BUMPED that is the version the branch already carries). Only when there is no release version (no version source, or the project's release rules leave the bump to someone else so `NEW_VERSION` equals `BASE_VERSION`) does the entry go under `## [Unreleased]`, never under an already released heading.
 6. **Voice:** lead with what the user can now do that they could not before. Plain language, no implementation detail, nothing about internal tracking (TODOS, `.ytstack` bookkeeping): no tracker codes (issue keys, `M###-S##` refs) anywhere in the entry, and a bold lead that a user of the project understands without the repository's coined terms. Each bullet names a concrete change; cut any bullet that would fit every release.
 7. **Cross-check** against the commit list from item 2: every user-facing change appears. Merges, version bumps and fixes to work introduced earlier on this same branch need no bullet.
 

@@ -3,7 +3,7 @@ name: plan-ceo-review
 description: "Challenges premise, scope and ambition of a pitch or a milestone. Use right after office-hours on OFFICE-HOURS.md, or after plan-milestone and before slice-milestone on M###-CONTEXT.md and M###-ROADMAP.md; also when the user says CEO review, scope review, is this too big, is this too small. Not for technical feasibility (plan-eng-review)."
 metadata:
   tier: core
-  version: 1.0.1
+  version: 1.0.2
   upstream: "gstack v1.99.3.0 (plan-ceo-review/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
@@ -496,7 +496,7 @@ The Read-back gate is mandatory. If the write or the Read-back fails, or writes 
 
 - Apply approved scope outcomes to `ROADMAP_FILE`'s slice list: add, reorder or remove slices exactly as approved (accepted expansions become new slice placeholders; approved cuts are removed and listed under "NOT in scope"). Unapproved proposals stay out.
 - Append each locked scope decision to `DECISIONS.md`, append-only, in the file's existing entry format (`## <TODAY> <title>` with decision and reason). One entry per decision that outlives this review; not one per finding.
-- Update `STATE.md`: `last_updated: <TODAY>`, and the next action -> `ytstack:slice-milestone` (or re-slice when slices changed).
+- Update `STATE.md`: `last_updated:` set to the current UTC time in ISO-8601 (`date -u +%Y-%m-%dT%H:%M:%SZ`; the STATE lint rejects a bare date), and the next action -> `ytstack:slice-milestone` (or re-slice when slices changed).
 
 **Concept mode:** insert an annotation block at the very top of `PITCH`, above the office-hours content:
 

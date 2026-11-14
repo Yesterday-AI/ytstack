@@ -108,7 +108,19 @@ for s in $SKILLS; do
       [ "$EC" -eq 0 ] && ok "$s: runs with an empty HOME (no gstack install)" || bad "$s: runs with an empty HOME" "exit $EC"
       has "$s: reports HAS_YTSTACK" "$OUT" "HAS_YTSTACK: yes"
       case "$OUT" in *GSTACK*|*BUN_OK*) bad "$s: no gstack precheck flags" ;; *) ok "$s: no gstack precheck flags" ;; esac
-      grep -rqE '\.claude/skills/gstack|vendor/gstack|gstack-skill-start|\bbun\b' "$ROOT/skills/$s" && bad "$s: no gstack runtime reference" || ok "$s: no gstack runtime reference" ;;
+      grep -rqE '\.claude/skills/gstack|vendor/gstack|gstack-skill-start|\bbun\b' "$ROOT/skills/$s" && bad "$s: no gstack runtime reference" || ok "$s: no gstack runtime reference"
+      # Concept mode picks the newest pitch, also in a checkout path with a space (PR #39 review).
+      case "$s" in plan-ceo-review|plan-eng-review)
+        SP="$TMP/space dir/$s"; mkdir -p "$SP/.ytstack"
+        ( cd "$SP" && git init -q && git config user.email t@t.t && git config user.name t \
+          && printf 'name: x\n' > .ytstack/PROJECT.md \
+          && printf -- '---\nname: a\n---\n' > .ytstack/OFFICE-HOURS-old.md && touch -t 202001010000 .ytstack/OFFICE-HOURS-old.md \
+          && printf -- '---\nname: b\n---\n' > .ytstack/OFFICE-HOURS-new-v2.md \
+          && echo x > f && git add -A && git commit -qm seed ) >/dev/null 2>&1
+        run_pre "$P" "$SP"
+        has "$s: path with a space -> concept mode" "$OUT" "MODE: concept"
+        has "$s: newest pitch selected" "$OUT" "OFFICE-HOURS-new-v2.md" ;;
+      esac ;;
     reconcile)
       has "$s: clean fixture -> no draft stubs" "$OUT" "DRAFT_STUBS: 0"
       printf -- '---\nclosed: draft\n---\n' > "$WT/.ytstack/M999-S01-T09-SUMMARY.md"
