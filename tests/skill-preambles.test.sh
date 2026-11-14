@@ -258,7 +258,53 @@ for s in $SKILLS; do
       has "$s: the entry in force is listed" "$OUT" "STANDING_ENTRIES_BEGIN
 20261114T1436Z-at-most-fifteen.md	2026-11-14T14:36:00Z	every lane
 STANDING_ENTRIES_END"
-      rm -rf "$WT/.ytstack/standing" "$WT/.ytstack/STANDING.md" ;;
+      rm -rf "$WT/.ytstack/standing" "$WT/.ytstack/STANDING.md"
+      # the factory tools (M031, issue #54): Step 7 skips by what the project switched on
+      run_pre "$P" "$WT"
+      has "$s: bare fixture -> merge_by risk" "$OUT" "MERGE_BY: risk"
+      has "$s: bare fixture -> no review policy" "$OUT" "REVIEW_POLICY: no"
+      has "$s: bare fixture -> no own reviewers" "$OUT" "OWN_REVIEWERS: no"
+      has "$s: bare fixture -> PR watch off" "$OUT" "PR_WATCH: off"
+      has "$s: bare fixture -> no release section" "$OUT" "RELEASE: no"
+      has "$s: bare fixture -> no signal sources" "$OUT" "SIGNALS: 0"
+      own_reviewers_on
+      printf '# Runtime\n\n## Release\n\n- deployed: echo abc1234\n\n## Signals\n\n- errors | read: echo none\n- latency | read: echo none\n' > "$WT/.ytstack/RUNTIME.md"
+      mkdir -p "$TMP/home/.ytstack"; echo "pr_watch=on" > "$TMP/home/.ytstack/config"
+      # A version-manager shim (asdf) does not run under the fixture HOME: hand the engine the interpreter itself.
+      export YTSTACK_PYTHON="$(python3 -c 'import sys; print(sys.executable)')"
+      run_pre "$P" "$WT"
+      has "$s: REVIEW.md -> review policy" "$OUT" "REVIEW_POLICY: yes"
+      has "$s: own reviewers declared" "$OUT" "OWN_REVIEWERS: yes"
+      has "$s: a Release section" "$OUT" "RELEASE: yes"
+      has "$s: two signal sources" "$OUT" "SIGNALS: 2"
+      has "$s: flag on, no worker tick -> no heartbeat" "$OUT" "PR_WATCH: on, no heartbeat"
+      "$YTSTACK_PYTHON" - "$TMP/home/.ytstack/pr-watch/state/watch.sqlite3" <<'PY'
+import sqlite3, sys, time
+db = sqlite3.connect(sys.argv[1])
+with db:
+    db.execute("INSERT OR REPLACE INTO meta VALUES('heartbeat', ?)", (str(int(time.time()) - 77),))
+PY
+      run_pre "$P" "$WT"
+      case "$OUT" in *"PR_WATCH: on, heartbeat 7"[0-9]" s ago"*) ok "$s: a worker tick -> heartbeat age";; *) bad "$s: a worker tick -> heartbeat age" "$(printf '%s' "$OUT" | grep PR_WATCH)";; esac
+      rm -rf "$TMP/home/.ytstack" "$WT/.ytstack/RUNTIME.md"; own_reviewers_off; unset YTSTACK_PYTHON
+      # every bin/ command that Step 7 names exists, with the subcommand its usage names
+      awk '/^\*\*Step 7 --/ { p = 1 } /^\*\*Step 8 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" > "$TMP/step7.md"
+      for want in 'ytstack-finish-lane route' 'ytstack-risk route' 'ytstack-pr-watch register --repo <owner/name> --all-open' \
+                  'ytstack-watch release --commit' 'ytstack:signal-intake' 'ytstack:incident' 'ytstack:review-lessons'; do
+        grep -qF -- "$want" "$TMP/step7.md" && ok "$s: Step 7 names $want" || bad "$s: Step 7 names $want"
+      done
+      grep -o '`ytstack-[a-z-]*[^`]*`' "$TMP/step7.md" | tr -d '`' | sort -u > "$TMP/step7.cmds"
+      [ -s "$TMP/step7.cmds" ] && ok "$s: Step 7 commands found ($(wc -l < "$TMP/step7.cmds" | tr -d ' '))" || bad "$s: Step 7 commands found"
+      while read -r tool rest; do
+        [ -f "$ROOT/bin/$tool" ] || { bad "$s: $tool exists in bin/"; continue; }
+        # the subcommand: the first word that is no option and no placeholder, after -C DIR
+        set -- $rest; sub=""
+        while [ $# -gt 0 ]; do
+          case "$1" in -C) shift 2 ;; -*|'<'*) break ;; *) sub="$1"; break ;; esac
+        done
+        if [ -z "$sub" ]; then ok "$s: $tool exists"; continue; fi
+        sed -n '1,40p' "$ROOT/bin/$tool" | grep -qw -- "$sub" && ok "$s: $tool $sub is in its usage" || bad "$s: $tool $sub is in its usage"
+      done < "$TMP/step7.cmds" ;;
     finish-lane)
       # who merges (M025): risk unless PREFERENCES says otherwise; a typo reads as human
       has "$s: no merge_by in PREFERENCES -> risk" "$OUT" "MERGE_BY: risk"

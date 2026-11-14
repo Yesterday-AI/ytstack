@@ -3,7 +3,7 @@ name: coordinate
 description: "Coordinator mode for the session that owns a plan and delegates all of it, writing no product code itself. Use when many lanes are in flight, when a plan has dozens of work packages, when a session with open lanes continues after a compaction or a resume, or when the user says coordinate this, run the plan, you are the coordinator, keep the lanes moving, where does each lane stand. Not for one milestone with a handful of independent slices (spawn-milestone-team) and not for doing a task yourself (plan-task)."
 metadata:
   tier: task
-  version: 0.3.0
+  version: 0.4.0
 allowed-tools:
   - Bash
   - Read
@@ -39,7 +39,7 @@ You MUST create a TodoWrite task for each of these items. Items 4 to 13 are one 
 4. **Read host facts fresh** -- `ytstack-watch --once`, every fact with its read time
 5. **Delegate what is ready** -- claim, render the brief, dispatch, check the report
 6. **Finish reported lanes** -- `ytstack:finish-lane`, one lane at a time per pull request
-7. **Keep the watcher running** -- `ytstack-watch` in the background for the open pull requests, and `ytstack-watch release` for a commit that merged
+7. **Run the factory tools** -- the route before every merge (also your own), the PR watch or `ytstack-watch`, `ytstack-watch release` after every merge to production, signals, review lessons; each skipped only by its condition
 8. **Queue and ask questions** -- look up, write the file, ask one, late
 9. **Record standing instructions** -- one file per instruction in `standing/` when they are given
 10. **Stop loops that do not converge** -- a diagnosis to the human instead of another dispatch
@@ -56,6 +56,7 @@ digraph coordinate {
     "Claim, brief, dispatch what is ready" [shape=box];
     "Reported lane converges?" [shape=diamond];
     "finish-lane" [shape=box];
+    "Factory tools: route before a merge, release watch, lessons" [shape=box];
     "Question file" [shape=box];
     "Compacted or context large?" [shape=diamond];
     "Frontier empty, no lane held" [shape=doublecircle];
@@ -67,7 +68,7 @@ digraph coordinate {
     "Reported lane converges?" -> "finish-lane" [label="yes"];
     "Reported lane converges?" -> "Question file" [label="no: failed twice, third review"];
     "Question file" -> "A question waits for the human" [label="nothing else is ready"];
-    "finish-lane" -> "Compacted or context large?";
+    "finish-lane" -> "Factory tools: route before a merge, release watch, lessons" -> "Compacted or context large?";
     "Question file" -> "Compacted or context large?" [label="other lanes go on"];
     "Compacted or context large?" -> "Rotated to a fresh session" [label="yes"];
     "Compacted or context large?" -> "Read host facts fresh" [label="no, when a lane changes state"];
@@ -106,6 +107,28 @@ echo "YTSTACK_NON_INTERACTIVE: $_NI"
 _PR_HOST=none
 [ -n "$(git remote 2>/dev/null | head -1)" ] && command -v gh >/dev/null 2>&1 && _PR_HOST=gh
 echo "PR_HOST: $_PR_HOST"
+# Factory tools (M031): what the project switched on; Step 7 skips a tool by these lines.
+_BIN="${CLAUDE_SKILL_DIR}/../../bin"
+_MERGE_BY=human
+command -v yt_prefs >/dev/null 2>&1 && { yt_prefs "$_YT_DIR" >/dev/null; _MERGE_BY="$YT_PREF_MERGE_BY"; }
+echo "MERGE_BY: $_MERGE_BY"
+echo "REVIEW_POLICY: $([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/spec/REVIEW.md" ] && echo yes || echo no)"
+echo "OWN_REVIEWERS: $([ -f "$_BIN/ytstack-risk" ] && [ -n "$(bash "$_BIN/ytstack-risk" -C "$_PROJECT_DIR" reviewers 2>/dev/null)" ] && echo yes || echo no)"
+_PRW=off
+if grep -Eq '^[[:space:]]*pr_watch[[:space:]]*=[[:space:]]*on[[:space:]]*$' "${HOME:-/nonexistent}/.ytstack/config" 2>/dev/null; then
+  # Local state only, no GitHub call: the age of the worker's last finished tick.
+  if _ST=$(bash "$_BIN/ytstack-pr-watch" status 2>/dev/null); then
+    _HB=$(printf '%s\n' "$_ST" | sed -n 's/^ *"heartbeat": *"\([0-9]*\).*/\1/p' | head -1)
+    _PRW="on, $([ -n "$_HB" ] && echo "heartbeat $(( $(date +%s) - _HB )) s ago" || echo "no heartbeat")"
+  else
+    _PRW="on, status not readable (run ytstack-pr-watch status)"
+  fi
+fi
+echo "PR_WATCH: $_PRW"
+_RT="$_BIN/ytstack-runtime"; _SIGNALS=0
+echo "RELEASE: $([ -f "$_RT" ] && bash "$_RT" -C "$_PROJECT_DIR" get release deployed >/dev/null 2>&1 && echo yes || echo no)"
+[ -f "$_RT" ] && _SIGNALS=$(bash "$_RT" -C "$_PROJECT_DIR" signals 2>/dev/null | awk 'NF { n++ } END { print n + 0 }')
+echo "SIGNALS: $_SIGNALS"
 echo "STANDING: $([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STANDING.md" ] && echo yes || echo no)"
 # One file per standing instruction (.ytstack/standing/): the ones in force, newest first.
 echo "STANDING_ENTRIES_BEGIN"
@@ -184,15 +207,21 @@ A lane named in the `blocks:` of an open or asked question is not ready, whateve
 
 **Step 6 -- Finish reported lanes.** A `reported` lane goes through `ytstack:finish-lane`: the review at a pinned head with the class its reviewer states, the route of the change, the gates read from the host, the merge at the reviewed commit or not at all. Who merges follows `merge_by` in `PREFERENCES.md`. With `risk`, the default, `finish-lane` merges a lane itself when `bin/ytstack-finish-lane route` printed `route: unattended` and the host's gates hold; every other lane stops at `ready` with its merge command and the reasons, and waits for a person. You state no class and you change no ceiling: the class is the reviewer's, the ceiling stands in the area file of the technical spec (`docs/ux/review-policy-format.md`). A change that requires lenses (`.ytstack/spec/REVIEW.md`) gets one more fresh reviewer per lens from `finish-lane`. A lens reviewer is a lane of kind `review` and never the lane's worker; a lens with visual evidence needs a session that can start the product and has a browser tool. One lane at a time per pull request. `finish-lane` writes the reviewed head and the round into the lane's row; a row that lacks them after a review is repaired before anything else (`ytstack-frontier set <lane> --head <sha> --round <n> --pr <number>`). Never merge around it. A cap on open pull requests, when the project or a standing instruction sets one, is a gate of `finish-lane`: a lane that waits for it stays where it is.
 
-**Step 7 -- Keep the watcher running.** Polling happens outside the model:
+**Step 7 -- Run the factory tools.** The plugin already ships what a coordinator under load starts to build by hand: a pull request babysitter, a review tiering, a release check. Use these tools and build none of your own. `ytstack:finish-lane` runs the route, the release watch and the escape check for the merges it makes (its Steps 9, 12 and 13); this step holds for everything else too: a merge you make yourself, a merge a person made, a release, a signal. A tool is skipped only for the reason in its row; the preamble prints the lines that decide it (`MERGE_BY`, `REVIEW_POLICY`, `OWN_REVIEWERS`, `PR_WATCH`, `RELEASE`, `SIGNALS`).
 
-```bash
-ytstack-watch --pr <the open numbers> --interval 60
-```
+| Tool | Command | When | Skipped when |
+|---|---|---|---|
+| Route | `ytstack-finish-lane route --lane <lane> --base <sha> --head <reviewed head>`; for a pull request without a lane row `ytstack-risk route --plan <plan with the round line> --base <sha> --head <reviewed head> --author <who wrote it>` | before every merge, also one you make yourself outside `finish-lane` | never before a merge. `REVIEW_POLICY: no` does not skip it: the route is then `person` for every change, and the status says that risk routing is not set up |
+| PR watch | `ytstack-pr-watch register --repo <owner/name> --all-open`, without `--session` | at the start of coordination, after every restart and rotation (Step 12), and again after a worker opened a pull request | `PR_WATCH` is `off` or names no heartbeat under 10 minutes (600 s): then `ytstack-watch --pr <the open numbers> --interval 60` in the background, and tell the person once to run `ytstack-pr-watch install-worker --yes` or to check the worker |
+| Release watch | `ytstack-watch release --commit <merge commit>` in the background (`gh pr view <N> --json mergeCommit --jq .mergeCommit.oid`; after a squash it is not the reviewed head) | after every merge that goes to production, by anyone | `finish-lane` already watched that commit; `RELEASE: no` (one line in the next status: nobody watched the release) |
+| Signals | `ytstack:signal-intake`; for an outage `ytstack:incident` | the intake at a slice boundary, after a release receipt, and when the person asks; the incident when a receipt says `unhealthy` or `not arrived` and users are hurt, or the person reports production down | the intake when `SIGNALS: 0` or a schedule or another session already runs it; the incident never on a guess: what hurts no running user is a finding for the intake |
+| Review lessons | `ytstack:review-lessons` for the pull request | after a merge with a bot finding: the PR watch's merge notice names the pull request; without the PR watch, `ytstack-review-escapes --pr <N>` prints a line | `OWN_REVIEWERS: no`; `finish-lane` ran it for that merge (its Step 13) |
 
-The PR watch counts as on only when `pr_watch=on` is set in `~/.ytstack/config` (`docs/pr-watch.md`) and the worker runs: `ytstack-pr-watch status` shows `health.heartbeat` (Unix seconds of the last finished tick) less than 10 minutes old. The flag alone enables only the hooks; without a fresh heartbeat nothing polls, so use `ytstack-watch` as below and tell the person to run `install-worker --yes` or check the worker. With the PR watch on, the background worker already reports red checks, unresolved bot threads and conflicts to this session with the next prompt, also for pull requests the lanes' subagents opened. Register the repository's open pull requests to this session once at the start of coordination and after every restart: `ytstack-pr-watch register --repo <owner/name> --all-open`, without `--session` (it defaults to this session; check that the output says `registered to claude:<id>` in Claude Code). Only the coordinator runs it; a session that works in the same repository but outside this coordination keeps its own PRs (`register --pr N`), and `--all-open` skips the ones it already owns. Without it, start `ytstack-watch` as below.
+**The route, also when you merge yourself.** A merge you make outside `finish-lane` (a pull request outside the lanes, a project rule that the coordinator merges) reads the route for the reviewed head first and follows `finish-lane` Step 11: `MERGE_BY: risk` merges only after `route: unattended`; `coordinator` merges and names the route in the status; `human`, or a standing instruction that reserves the merge, leaves the merge to a person with the `reason:` lines. The merge itself is `ytstack-finish-lane -C <worktree> merge --pr <N> --at <reviewed head> --verdict-pattern '^Verdict: approved'`, never `gh pr merge` by hand. Exit 0 of the route means `unattended`; everything else, an error included, means a person.
 
-Start it as a background process; on a host with a monitor tool, through that tool, so that each new line reaches you as an event. It prints a line only when a head moved, the checks changed, a review arrived, mergeability changed or a pull request closed, and it ends when all are merged or closed. Act on the line: red checks go back to the lane's worker with the name of the check; a review on a commit that is not the head is no review of the head. A pull request that merged, also when a person merged it: set its lane to `merged` and watch the release of its merge commit as `ytstack:finish-lane` describes ("Watch the release"), with `ytstack-watch release --commit <merge commit>` in the background. Its receipt goes into the next status; `not arrived` or `unhealthy` is a status at once. You deploy nothing and roll nothing back: a countermeasure on the target is a step for the human (`ytstack:handover-step`). Start the watcher again with the new list when a pull request opens. Never read status in a loop from the conversation, with or without a sleep. The single read of Step 4 before an action is not polling.
+**Watching pull requests.** Polling happens outside the model. The PR watch counts as on only when `pr_watch=on` is set in `~/.ytstack/config` (`docs/pr-watch.md`) and the worker runs (`PR_WATCH: on, heartbeat <n> s ago`, under 600). The flag alone enables only the hooks; without a fresh heartbeat nothing polls. With the PR watch on, the worker reports red checks, unresolved bot threads, conflicts and merges to this session with the next prompt, also for pull requests the lanes' subagents opened. The `register` call defaults to this session; check that its output says `registered to claude:<id>` in Claude Code. Only the coordinator runs it; a session that works in the same repository outside this coordination keeps its own PRs (`register --pr N`), and `--all-open` skips the ones another session owns. Without the PR watch, start `ytstack-watch` as a background process; on a host with a monitor tool, through that tool, so that each new line reaches you as an event. It prints a line only when a head moved, the checks changed, a review arrived, mergeability changed or a pull request closed, and it ends when all are merged or closed; start it again with the new list when a pull request opens. Act on a line or a notice: red checks go back to the lane's worker with the name of the check; a review on a commit that is not the head is no review of the head. Never read status in a loop from the conversation, with or without a sleep. The single read of Step 4 before an action is not polling.
+
+**After a merge.** A pull request that merged, also when a person merged it: set its lane to `merged`, then the release watch and the review lessons of the table. The receipt goes into the next status; `not arrived` or `unhealthy` is a status at once. You deploy nothing and roll nothing back: a countermeasure on the target is a step for the human (`ytstack:handover-step`).
 
 **Step 8 -- Queue and ask questions.** First look the question up: the plan, `DECISIONS.md`, the answered files in `questions/`. What they answer is not asked. Otherwise `ytstack-questions new --question "<text>" --decides "<who>" --blocks "<lane or gate>"` and fill Context, Options and Recommendation until the human can answer from the file alone. The state is `open` and the lanes that do not depend on it go on. Ask as late as the work allows: when nothing ready is left that is independent of it, or at a boundary from a standing instruction. Ask one (`ytstack-questions next`), mark it (`ytstack-questions ask <id>`), and use AskUserQuestion:
 
@@ -227,4 +256,4 @@ This skill does not end by itself. It returns control to the user in exactly thr
 - A question waits for the human and nothing ready is independent of it.
 - It rotated (Step 12): the handoff path and the sentence that a fresh session continues from the files.
 
-Do NOT invoke `ytstack:plan-task`, `ytstack:test-driven-development`, `ytstack:code-review` or `ytstack:ship` from this session: that work belongs to a worker or to `finish-lane`. The ONLY skills you may invoke are `ytstack:finish-lane`, `ytstack:handover-step`, `ytstack:reassess-roadmap`, `ytstack:handoff-session` and `ytstack:lane-retro`.
+Do NOT invoke `ytstack:plan-task`, `ytstack:test-driven-development`, `ytstack:code-review` or `ytstack:ship` from this session: that work belongs to a worker or to `finish-lane`. The ONLY skills you may invoke are `ytstack:finish-lane`, `ytstack:handover-step`, `ytstack:reassess-roadmap`, `ytstack:handoff-session`, `ytstack:lane-retro`, and from Step 7 `ytstack:signal-intake`, `ytstack:incident` and `ytstack:review-lessons`.
