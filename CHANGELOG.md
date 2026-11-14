@@ -134,6 +134,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The verifier and `spawn-milestone-team` reuse an earlier PASS only for
+  the same commit, environment and command. On another commit the check runs
+  again: unchanged planned files do not cover a changed import, configuration
+  or fixture. `tests/evidence-rule.test.sh` pins the rule.
 - A spec in user scope (`~/.ytstack/projects/<key>/`) no longer blocks
   `summarize-task`: `bin/ytstack-spec impact` reports its area as
   unverifiable (exit 4) with the area file's modification time against the

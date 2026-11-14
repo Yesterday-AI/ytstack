@@ -255,7 +255,7 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - `session-end` -- appends one JSON line to the per-session `session.jsonl` out of tree (no `.ytstack/journal/`)
 - `teammate-idle`, `task-created`, `task-completed` -- Agent Teams coordination (resolved per checkout)
 - `pre-tool-use-edit` (advisory, exit 0), `post-tool-use-bash` (draft summary stub, once, only in the committing checkout and only for commits carrying the task ref) -- quality / safety gates
-- Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (20 suites incl. the #26 acceptance and concurrency suites)
+- Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (21 suites incl. the #26 acceptance and concurrency suites)
 
 #### `quick-task` (execution: quick lane, M018)
 
