@@ -84,6 +84,10 @@ Install all three and you get friction: interactive prompts blocking each other,
 
 **A technical spec that says what applies now.** Plans and summaries are history; they do not describe the system. `.ytstack/spec/SPEC.md` is a one-page entry point, `.ytstack/spec/<area>.md` describes one part of the system each: behaviour, contracts, where it is implemented, how to verify a change, which decisions are in force. Where you already have an architecture document, the area file points at it instead of repeating it. The loop keeps it true: a task plan names its spec impact, a task that changed behaviour is not closed until the area file or its source says so, and `bin/ytstack-spec drift` lists the areas whose code moved on. A fix that restores the described behaviour, a refactoring and a typo need no spec edit. An existing ytstack project gets its spec from `/ytstack:adopt-brownfield`, which then touches nothing else. Format: [`docs/ux/spec-format.md`](./docs/ux/spec-format.md).
 
+**A person looks at a change when its risk asks for one.** Whether a finished change merges without you is decided per change. A script computes a floor from the diff: a change to a rule document, to the invariants or decisions of an area, to the checks, or to code no area covers always goes to you; dependencies, migrations and large changes are never low risk. A reviewer that is not the author states the class (low, normal, high) and names every invariant or decision the change touches, also when only code moved; touching one always goes to you. Each area of the spec says how much may merge into it without a person (`auto_merge`). A kind of change can require a second review: `.ytstack/spec/REVIEW.md` names, for example, a `ui` lens for the interface paths that reads your design guidelines, and its reviewer starts the product itself at the reviewed commit, operates it in a browser and takes its own screenshots (`ytstack:visual-review`). `merge_by: risk` (the default) merges only when all of that holds and the host's checks are green; you get one line per change that merged without you. A project that declares nothing behaves as before: everything goes to you. Format: [`docs/ux/review-policy-format.md`](./docs/ux/review-policy-format.md).
+
+**The running product, the release, and production.** `.ytstack/RUNTIME.md` can say how the product starts in a worktree, how to read which commit a target serves, and where production signals come from ([`docs/ux/runtime-format.md`](./docs/ux/runtime-format.md)). `bin/ytstack-runtime up` starts the product on a port of its own per worktree, so implementers and verifiers check the running product and not only tests. After a merge `bin/ytstack-watch release` waits until the target serves the commit and stays healthy and prints a receipt; it deploys nothing. `ytstack:signal-intake` reads the signal sources (for example from a schedule), records each real finding once and notices regressions; `ytstack:incident` keeps the record of an outage and prepares every mitigation as a staged script that only you run. Nothing in this group changes production.
+
 **Plan like a PM, execute like a senior eng.** Cherry-picked skills from gstack (CEO-review, office-hours, eng-review) lock the plan before code lands. Cherry-picked skills from superpowers (TDD, systematic-debugging, verification-before-completion) lock the code before it ships.
 
 **Parallel execution without a custom runtime.** `ytstack:spawn-milestone-team` turns the main session into a thin orchestrator: one `ytstack:implementer` subagent per slice in its own git worktree (`isolation: worktree`, skills preloaded, fresh context), one `ytstack:verifier` per finished slice branch, then a merge the orchestrator owns. Claude Code Agent Teams remain an opt-in (`team: on`) for milestones where teammates must talk to each other. No separate CLI, no SQLite, no TUI to babysit.
@@ -126,6 +130,9 @@ SessionStart hook injects `STATE.md` + the `using-ytstack` directive before your
   -> "ship it"                 -> ytstack:ship              (gstack release flow: tests, review, PR)
   -> "retro"                   -> ytstack:retro             (after the milestone closed; gstack)
   -> "write the changelog"     -> ytstack:document-release  (release notes from the summaries; gstack)
+  -> "check the UI of this"    -> ytstack:visual-review     (product started at the commit, own screenshots)
+  -> "what does prod report"   -> ytstack:signal-intake     (findings under .ytstack/signals/, read only)
+  -> "production is down"      -> ytstack:incident          (record, mitigations you run, cause afterwards)
 ```
 
 Continuing an open task:
@@ -158,6 +165,8 @@ Source: [`docs/ytstack-brownfield-flow.excalidraw`](docs/ytstack-brownfield-flow
   Phase 3: hypothesis testing
   Phase 4: implementation
 ```
+
+Production is down right now? That is `ytstack:incident` first: the mitigation comes before the cause. It collects what is seen with read times, proposes mitigations as staged scripts you run, and hands the root cause to `systematic-debugging` afterwards. What production reports between incidents comes in through `ytstack:signal-intake` as findings under `.ytstack/signals/`.
 
 Iron rule: root cause required before any fix. Findings auto-log to `KNOWLEDGE.md` (pattern) and `DECISIONS.md` (architectural shift).
 
@@ -290,7 +299,7 @@ See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example written i
 
 ## Dialing ceremony up or down
 
-ytstack's milestone / slice / task loop is the default, not a mandate. Four keys in `.ytstack/PREFERENCES.md` (written by `init-project`, read by every lifecycle skill) size the ceremony to the project (DECISIONS 2026-11-07 "Ceremony scales with the change"):
+ytstack's milestone / slice / task loop is the default, not a mandate. These keys in `.ytstack/PREFERENCES.md` (written by `init-project`, read by every lifecycle skill) size the ceremony to the project (DECISIONS 2026-11-07 "Ceremony scales with the change"):
 
 | Key | Values (default first) | Effect |
 | --- | --- | --- |
@@ -298,6 +307,8 @@ ytstack's milestone / slice / task loop is the default, not a mandate. Four keys
 | `autonomy` | `loop`, `step` | `loop` chains plan-task -> TDD -> verify -> summarize inside a slice without asking (stops at slice boundaries and HARD-GATEs); `step` returns control after each skill |
 | `quick_lane` | `on`, `off` | one-sentence changes ("rename X", "bump Y", "fix the off-by-one in Z") go through `ytstack:quick-task`: a `Q###-PLAN/SUMMARY` pair under `.ytstack/quick/`, TDD + verification, no pitch, no review, no pointer change |
 | `minimal_code` | `on`, `off` | the SessionStart hook injects the pointer to `ytstack:minimal-code`, the work contract: smallest complete change (reach before size, six-rung YAGNI ladder, never-cut list, `shortcut:` markers) and smallest sufficient evidence (run what the plan names, as often as it says) |
+| `merge_by` | `risk`, `human`, `coordinator` | who merges a finished lane: `risk` lets the coordinator merge when `bin/ytstack-risk route` says `unattended` and the host's gates hold, otherwise you; `human` always you; `coordinator` always the coordinator. A value outside the three reads as `human` |
+| `evidence_dir` | a path, default `.ytstack/evidence` | where a visual review stores its screenshots and their `MANIFEST` |
 
 **Work is bounded like code.** The same contract limits checking, reviewing and orchestrating, and it reaches every worker: `bin/ytstack-brief render` builds the brief for a dispatched agent (a Claude subagent or `codex exec`) from the plan files and includes the contract verbatim, and `bin/ytstack-brief check` validates the worker's report, which has fixed labels (a status, the checks with their exit codes, "Not checked:", the next action). A plan's Verification section names the command, how often it runs and where; execution does not add passes. A review has rounds: the first is complete, the second covers the fix, a third becomes a diagnosis of scope, conflicting rules or solution. A reviewer states the load it assumed and gives a concrete case for every finding; the project's own severity policy decides what blocks. Evidence is a check on a commit in an environment and does not expire because a new session reads it. What only a person can decide is written as a gate (who decides, how, when it lapses); `reassess-roadmap` brings all open gates in one question and reports two numbers, closed by work and accepted.
 
@@ -308,14 +319,17 @@ Milestone states are data, not prose: `planned`, `in-progress`, `done`, `dropped
 | File or tool | What it is for |
 | --- | --- |
 | `.ytstack/LANES.md`, `bin/ytstack-frontier` | one row per delegated lane; slice plans name what blocks them; the frontier is what is open, unblocked and unclaimed; a claim precedes every dispatch, so no lane starts twice |
-| `bin/ytstack-finish-lane`, `ytstack:finish-lane` | a reported lane becomes a merged pull request: commit what it left, push, wait until the host shows the head, review pinned to that commit, gates read from the host, merge at the reviewed commit (GitHub through `gh`; `merge_by: human` by default) |
+| `bin/ytstack-finish-lane`, `ytstack:finish-lane` | a reported lane becomes a merged pull request: commit what it left, push, wait until the host shows the head, review pinned to that commit, the required lenses, the route, gates read from the host, merge at the reviewed commit, then the release watch (GitHub through `gh`; who merges is `merge_by`) |
+| `bin/ytstack-risk` | whether a change may merge without a person: `floor` from the diff, `route` from the review records, the ceilings of the touched areas and the lenses, `check` for `REVIEW.md`, `manifest` for the screenshots of a visual review |
+| `ytstack:visual-review` | the lens reviewer of a user interface change: starts the product at the reviewed commit, operates it in a browser, its own screenshots against your guidelines; `not run` when it cannot, never a pass |
 | `ytstack:handover-step`, `bin/ytstack-handover` | a step only you may perform arrives as one staged script with read-only checks, a confirmation before every change and a receipt; the agent checks it and never runs it |
 | `.ytstack/questions/`, `bin/ytstack-questions` | one file per question for you, asked once, decision-ready |
 | `.ytstack/STANDING.md` | what you asked for once and for all, written down when you say it |
-| `bin/ytstack-watch` | polls pull requests outside the model and prints a line only when something changed |
+| `bin/ytstack-watch` | polls pull requests outside the model and prints a line only when something changed; `release --commit <sha>` follows a merged commit until the target serves it and stays healthy, and prints one receipt |
 | `ytstack:lane-retro` | samples finished lanes; a mechanical mistake becomes a check that replaces an instruction line |
+| `bin/ytstack-upkeep` | one read-only run over `.ytstack/` that lists what needs a look (spec, STATE, gates, questions, lanes, runtime, review policy); `--question` leaves one question file. On a schedule: [`docs/recipes/recurring-upkeep.md`](./docs/recipes/recurring-upkeep.md) |
 
-A status never states a pull request's state from memory: host facts are read fresh and carry their read time. Nothing in this group has run against a real host or in a real multi-lane run yet; the suites use a stand-in for `gh`.
+A status never states a pull request's state from memory: host facts are read fresh and carry their read time. Nothing in this group has run against a real host or in a real multi-lane run yet; the suites use a stand-in for `gh` and fixture targets, and no eval or session has yet merged a change without a person or watched a real release.
 
 ## Where ytstack writes
 
@@ -349,10 +363,10 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 
 Ships:
 
-- 31 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), gstack wrappers over the installed dependency (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
+- 38 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), gstack wrappers over the installed dependency (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`), review and production (`visual-review`, `signal-intake`, `incident`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
 - 9 hooks (SessionStart / PreCompact / SessionEnd / Stop / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers + STATE lint + lifecycle hints.
 - A status line segment (`bin/ytstack-status`): project progress from an optional `progress` block in `STATE.md`, or the active slice's task count, plus the current task. See [`docs/statusline.md`](./docs/statusline.md).
-- Twenty shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks, the repository's own technical spec) and an eval suite for `claude plugin eval` (`evals/`, 21 cases).
+- 24 shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks, the repository's own technical spec) and an eval suite for `claude plugin eval` (`evals/`, 25 cases).
 - Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
 - Codex manifest + self-marketplace, shared skills, and 3 lifecycle hooks; see [host support](docs/codex.md#supported-behavior)
@@ -366,12 +380,14 @@ ytstack/
 ├── .claude-plugin/              plugin manifest + marketplace
 ├── .ytstack/                    dogfood: ytstack tracks itself
 ├── hooks/                       9 hook scripts + hooks.json + lib/git-ctx.sh (shared resolver)
-├── skills/                      35 skill packages
-├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-brief (brief for a dispatched worker, report check), ytstack-frontier (lanes, claims, what may start), ytstack-finish-lane (a lane to a merged pull request), ytstack-handover (staged script for a human-only step), ytstack-questions (questions for the human), ytstack-watch (pull request changes), ytstack-status (status line segment), ytstack-codex, dev-reinstall
-├── tests/                       20 shell test suites + run-all.sh (--linux via Docker)
+├── skills/                      38 skill packages
+├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-brief (brief for a dispatched worker, report check), ytstack-frontier (lanes, claims, what may start), ytstack-finish-lane (a lane to a merged pull request), ytstack-risk (whether a change merges without a person), ytstack-runtime (the product per worktree, RUNTIME.md), ytstack-handover (staged script for a human-only step), ytstack-questions (questions for the human), ytstack-watch (pull request changes, release watch), ytstack-upkeep (what needs a look, for a schedule), ytstack-signals (production findings, incident records), ytstack-status (status line segment), ytstack-codex, dev-reinstall
+├── tests/                       24 shell test suites + run-all.sh (--linux via Docker)
 ├── vendor/                      read-only subtree: superpowers v7.0.2 (gstack is an installed dependency, not vendored)
 ├── docs/
-│   ├── ux/                      mandatory skill-authoring contracts
+│   ├── ux/                      mandatory skill-authoring contracts and artifact formats
+│   ├── recipes/                 recurring-upkeep.md: the upkeep run on a schedule, per host
+│   ├── research/                dated research notes
 │   ├── references.md            research sources
 │   └── methodology.md           what we adapted, from where, how
 ├── AGENTS.md                    contributor guide (for agents; CLAUDE.md symlinks to it)

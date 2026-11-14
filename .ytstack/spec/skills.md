@@ -23,7 +23,7 @@ The skill tree (`skills/*/SKILL.md`) and the agent definitions (`agents/*.md`): 
 
 | Class | Mark in the file | Members |
 |---|---|---|
-| Native procedure | no `metadata.kind`; own `## Preamble` with a `bash` block, `## Checklist`, `## Terminal State` | `adopt-brownfield`, `handoff-session`, `init-project`, `plan-milestone`, `plan-task`, `quick-task`, `reassess-roadmap`, `reconcile`, `resume-session`, `slice-milestone`, `spawn-milestone-team`, `summarize-task`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro` |
+| Native procedure | no `metadata.kind`; own `## Preamble` with a `bash` block, `## Checklist`, `## Terminal State` | `adopt-brownfield`, `handoff-session`, `init-project`, `plan-milestone`, `plan-task`, `quick-task`, `reassess-roadmap`, `reconcile`, `resume-session`, `slice-milestone`, `spawn-milestone-team`, `summarize-task`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`, `visual-review`, `signal-intake`, `incident` |
 | superpowers wrapper | a render-time block that prints `vendor/superpowers/skills/<src>/SKILL.md`, plus `## ytstack invocation notes` and `## Namespace note` | `code-review` (two vendored skills), `finish-branch`, `grill`, `systematic-debugging`, `test-driven-development`, `verification-before-completion` |
 | gstack wrapper | `yt_gstack_ctx` precheck, `## HARD-GATE: gstack installed?`, the sentence "Invoke the Skill tool with `<name>`" | `office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release` |
 | Directive | `metadata.kind: directive`, `user-invocable: false` | `using-ytstack`, `minimal-code` |
@@ -59,6 +59,8 @@ Read from `PREFERENCES.md` in the resolved `.ytstack` directory by `yt_prefs` in
 | `quick_lane` | `off`: `quick-task` stops at its gate and points at `plan-task`. `on`: `using-ytstack` routes one-sentence changes with a known cause to `quick-task`. | `quick-task`, `using-ytstack` |
 | `minimal_code` | `on`: `hooks/session-start` adds a pointer that tells the agent to load `minimal-code` before writing code or adding a check, and the TDD wrapper applies its ladder in the GREEN step. `off`: no pointer. A rendered brief carries the contract in both cases. | `hooks/session-start`, `test-driven-development`, `bin/ytstack-brief` |
 | `team` | `off`: `spawn-milestone-team` dispatches worktree subagents. `on`: it emits an Agent Teams instruction and requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. | `spawn-milestone-team` |
+| `merge_by` | `risk` (default): the coordinator merges when `bin/ytstack-risk route` says `unattended` and the host's gates hold, otherwise a person. `human`: always a person. `coordinator`: always the coordinator. A value outside the three reads as `human`. | `finish-lane` |
+| `evidence_dir` | Where a visual review stores its screenshots, default `.ytstack/evidence`, relative to the main checkout. | `visual-review`, `bin/ytstack-risk`, `bin/ytstack-finish-lane` |
 
 ### Non-interactive mode
 
@@ -96,6 +98,7 @@ No other skill reads the flag.
 - **Review.** `code-review` counts rounds from the `## Review` lines in the task plan. Round 1 reviews the whole change, round 2 the fix, and from round 3 no reviewer is dispatched: the skill diagnoses scope, conflicting rules or solution and asks the human. The reviewer states the assumed load, gives a concrete case and "If skipped" per finding and follows the project's severity policy.
 - **Evidence.** A result is a check on a commit in an environment. `verification-before-completion` runs the plan's command as often as the plan says and notes the commit. The verifier makes one independent run per commit and cites an earlier verdict when the task's files are unchanged since. `summarize-task` records check, commit and environment and does not run the check again.
 - **Tests.** The TDD wrapper writes a failing test first for logic and bug fixes; a trivial change gets none. `systematic-debugging` treats a test that fails only sometimes as a question of whose defect it is: reproduced on the base commit it becomes a tracked follow-up, otherwise it is the change's defect; the required check still has to turn green.
+- **The running product.** A plan whose result shows only at the running product names `Environment: instance from bin/ytstack-runtime up` (`plan-task`). `verification-before-completion`, the implementer and the verifier start the instance with `up`, check against its `URL:`, note its `COMMIT:` line and stop it with `down`. Without a "Run" section, or when `up` fails, the check is reported as not possible and never claimed; the verifier gives such a task no PASS.
 - **Handoff.** `handoff-session` points instead of copying and names under "Suggested skills" the one or two skills the next session should start with.
 
 ### Coordinating many lanes
@@ -104,7 +107,10 @@ Formats: `docs/ux/coordinator-format.md`. The four skills below are for the sess
 
 - `coordinate` is a loop with a fixed order: start from `STANDING.md`, `LANES.md`, the frontier and the questions (never from a conversation summary), read host facts fresh and stamp them with their read time, claim a lane before dispatching it, finish lanes through `finish-lane`, poll through `bin/ytstack-watch`, ask one question at a time from a question file, write a standing instruction down when it is given, stop a lane that failed verification twice or needs a third review, and rotate through a handoff after the first compaction.
 - `spawn-milestone-team` claims each lane with `bin/ytstack-frontier` before it dispatches, keeps the lane's row current, and looks at the frontier again whenever a lane is verified or merged.
-- `finish-lane` takes a reported lane to a merged pull request with `bin/ytstack-finish-lane`. Who merges is `merge_by:` in `PREFERENCES.md`: `human` (the default; the skill stops and hands over the command) or `coordinator`. The pipeline supports GitHub through `gh` only.
+- `finish-lane` takes a reported lane to a merged pull request with `bin/ytstack-finish-lane`: review pinned to the host's head, the required lenses, `route`, the gates read from the host, the merge decided by `merge_by` and the route, then `bin/ytstack-watch release` on the merge commit when `RUNTIME.md` has a "Release" section (in the background; the receipt goes into the report, nothing is rolled back). A merge without a person is reported in one line with class, ceiling and lenses. The pipeline supports GitHub through `gh` only; on another host the skill stops after the route.
+- **The class of a change.** `code-review` prints the floor of `bin/ytstack-risk` and has a reviewer that is not the author end with `Risk:`, `Severity:`, `Reach:` and `Invariants touched:`, read against "Invariants and security boundaries" and "Decisions that apply now" of the touched areas, also when only code moved. The round line records class, invariants and reviewer; a session reviewing its own change writes `by: self`, which routes to a person. Each lens the floor names gets a separate fresh reviewer with the lens brief (`bin/ytstack-brief render --kind review --lens <name>`) and one lens line.
+- `visual-review` is the lens reviewer of a user interface change: its own worktree at the reviewed commit, `bin/ytstack-runtime up`, a browser tool that renders and returns screenshots, its own screenshots of the changed views, states and two widths, reviewed against the lens documents; evidence with `MANIFEST` in the main checkout. It is `not run`, never `pass`, when the reviewer is the author, a document or the "Run" section is missing, the product does not come up or no browser tool exists. It edits no product file.
+- `signal-intake` reads every source of "Signals" once with its read time, separates findings from noise by stated rules, records through `bin/ytstack-signals new` (an unreadable source is a finding too) and changes nothing else. `incident` puts the mitigation before the cause: facts with read times, timeline, hypotheses, mitigations as handover scripts it never runs, one question at a time, and never picks a mitigation without a person; the cause goes to `systematic-debugging` afterwards.
 - `handover-step` writes a step only the human may perform as one staged script from `skills/handover-step/template.sh`, checks it with `bin/ytstack-handover check` and never runs it. In the script one typed yes carries one change: every `mutate` takes a `confirm` of its own. The place is `handover_dir:` in `PREFERENCES.md`.
 - `lane-retro` samples finished lanes in six fixed categories and proposes, per candidate, a check that replaces an instruction line or a pointer that replaces a search. It implements nothing itself.
 - `reassess-roadmap` carries a gate that needs a person's verdict as a question file when the project keeps `questions/`, folds a closed milestone into the area files, and names the archive offer of `reconcile`.
@@ -142,6 +148,8 @@ Formats: `docs/ux/coordinator-format.md`. The four skills below are for the sess
 - `explain_level`: two preambles print `EXPLAIN_LEVEL` from `~/.ytstack/config`. No code switches on it, and `yt_prefs` does not read the `explain_level` line in `PREFERENCES.md`.
 - Unknown -- how the open-ended questions of `plan-task`, `slice-milestone` and `summarize-task` are answered in non-interactive mode. The skills define no answer source for them.
 - Unknown -- whether an implementer's `AskUserQuestion` calls reach the user from a worktree subagent. The brief does not set `YTSTACK_NON_INTERACTIVE`.
+- Under `merge_by: risk` only the hard gate of `finish-lane` keeps a session from calling `bin/ytstack-finish-lane merge` after `route: person`; the script's `merge` does not read the route. Whether a screenshot was taken by the reviewer and not copied is the hard gate of `visual-review`; the script checks hashes and names.
+- `visual-review`, `signal-intake`, `incident` and the route in `finish-lane` have not run in a real session; no change has merged without a person yet. Which browser tool a host offers a dispatched reviewer is unknown before such a run.
 
 ## Where implemented
 
@@ -163,6 +171,10 @@ Formats: `docs/ux/coordinator-format.md`. The four skills below are for the sess
 
 ## Decisions that apply now
 
+- DECISIONS.md -- "2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)" (narrows the `merge_by: human` default of the M024 entry to `risk`)
+- DECISIONS.md -- "2026-11-13: `RUNTIME.md` has three sections with a fixed line format, read only through `bin/ytstack-runtime` (M025-S01)"
+- DECISIONS.md -- "2026-11-13: After a merge the release is watched, not driven; upkeep is a script and a recipe, not a skill (M026)"
+- DECISIONS.md -- "2026-11-13: Production findings and incidents are skill work on read-only access; a mitigation is a handover script a person runs (M027)"
 - DECISIONS.md -- "2026-04-23: Skills-based plugin, not Agent SDK library"
 - DECISIONS.md -- "2026-04-23: UX contracts enforced by CI, not convention"
 - DECISIONS.md -- "2026-04-23: Accept Agent Teams experimental status as known risk" (applies to `team: on`)

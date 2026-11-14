@@ -3,9 +3,9 @@ milestone: M026
 project: ytstack
 size: S
 created: 2026-11-13T18:09:00Z
-status: planned
+status: done
 total_slices: 2
-completed_slices: 0
+completed_slices: 2
 ---
 
 # M026 Roadmap
@@ -18,8 +18,8 @@ completed_slices: 0
 
 Slice detail lives in per-slice `M026-S##-PLAN.md` files.
 
-- [ ] S01 -- The release watch: `bin/ytstack-watch release` over the "Release" section of `RUNTIME.md`, and its step in `finish-lane`.
-- [ ] S02 -- Recurring upkeep: `bin/ytstack-upkeep`, the recipe per host, docs and close.
+- [x] S01 -- The release watch: `bin/ytstack-watch release` over the "Release" section of `RUNTIME.md`, and its step in `finish-lane`.
+- [x] S02 -- Recurring upkeep: `bin/ytstack-upkeep`, the recipe per host, docs and close.
 
 ## Run order
 

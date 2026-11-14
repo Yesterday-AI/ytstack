@@ -3,9 +3,9 @@ milestone: M027
 slice: S02
 project: ytstack
 created: 2026-11-13T18:09:00Z
-status: planned
+status: done
 task_count: 3
-completed_tasks: 2
+completed_tasks: 3
 ---
 
 # M027-S02 -- Slice Plan
@@ -18,7 +18,7 @@ completed_tasks: 2
 
 - [x] T01 -- The incident record: `bin/ytstack-signals incident new` and its part of `check`, with the suite.
 - [x] T02 -- The skill `incident`: what is seen with read times, timeline, hypotheses, mitigations as handover scripts it never runs, the root cause afterwards through `systematic-debugging`.
-- [ ] T03 -- Eval cases, README, concept, CHANGELOG, `using-ytstack`, the area files, DECISIONS; close M027.
+- [x] T03 -- Eval cases, README, concept, CHANGELOG, `using-ytstack`, the area files, DECISIONS; close M027.
 
 ## Done when
 

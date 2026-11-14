@@ -9,6 +9,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Risk gate** (M025, research note
+  `docs/research/2026-11-13-openai-software-factory.md`): whether a person has
+  to look at a change is decided per change. Format:
+  `docs/ux/review-policy-format.md`.
+  - `bin/ytstack-risk floor` computes the lowest class a change can have from
+    its diff: a change to a rule document (`DECISIONS.md`, `STANDING.md`,
+    `PREFERENCES.md`, `REVIEW.md`, instruction files), to the frontmatter or
+    the invariant and decision sections of an area file (a `verified_at` stamp
+    alone excepted), to CI, or to a path no area covers always goes to a
+    person; dependency manifests, migrations, infrastructure and changes over
+    400 lines or 20 files are never low. The policy is read at the base
+    commit.
+  - An area file may carry `auto_merge: none | low | normal`; no field is
+    `none`. `.ytstack/spec/REVIEW.md` extends the floor and defines lenses: a
+    second review a kind of change requires, defined by the documents it reads.
+  - `code-review` asks the reviewer for `Risk:`, `Severity:`, `Reach:` and
+    `Invariants touched:` (read against the invariants and decisions of the
+    touched areas, also when only code moved) and records them in the round
+    line with the reviewer's name. `by: self` always counts as the author.
+  - `bin/ytstack-risk route` says `unattended` only with an approving round of
+    another reviewer valid for the head, a class within every touched area's
+    ceiling, no invariant touched, and a passing line of every required lens;
+    every other case is `person` with its reasons.
+  - `merge_by: risk` is the new default: `finish-lane` merges on its own only
+    when the route is `unattended` and the host's gates hold, and reports each
+    such merge in one line. Without `auto_merge` everything goes to a person,
+    as before. A `merge_by` outside the three values reads as `human`.
+  - The skill `visual-review`: a lens reviewer of a user interface change
+    starts the product at the reviewed commit in its own worktree, operates it
+    in a browser, takes its own screenshots and reviews them against the
+    project's guidelines. Evidence under `evidence_dir` with a hashed
+    `MANIFEST`; `route` checks the hashes. No run, no browser tool, or the
+    reviewer is the author: `not run`, never a pass.
+  - `bin/ytstack-brief render --kind review --lens <name>` renders a lens brief;
+    `bin/ytstack-finish-lane route` reads the lane's author and plan.
+- **The product in a worktree** (M025-S01): `.ytstack/RUNTIME.md` gains three
+  sections with a fixed line format ("Run", "Release", "Signals";
+  `docs/ux/runtime-format.md`). `bin/ytstack-runtime up` starts the product on
+  a port of its own per worktree and waits until it answers; `down`, `status`,
+  `get`, `signals`, `check`. The scaffolds write the sections;
+  `verification-before-completion`, the implementer and the verifier check at
+  the running instance where the plan names one, and say so when they cannot.
+- **After the merge** (M026): `bin/ytstack-watch release --commit <sha>` waits
+  until the target serves the commit, asks its health command for the settle
+  time and prints one receipt with read times; it deploys nothing and rolls
+  nothing back. `finish-lane` runs it after a merge. `bin/ytstack-upkeep` lists
+  in one read-only run what needs a look in `.ytstack/` and can leave one
+  question file; `docs/recipes/recurring-upkeep.md` puts it on a schedule.
+- **Production** (M027): `bin/ytstack-signals` records a production finding
+  once (a second sighting raises its count, a sighting of a fixed one is a
+  regression) and keeps incident records (`docs/ux/signal-format.md`). The
+  skill `signal-intake` reads the "Signals" sources and records findings, read
+  only. The skill `incident` keeps the record of an outage, proposes every
+  mitigation as a staged handover script that only a person runs, and hands
+  the root cause to `systematic-debugging`.
+- Eval cases `risk-route`, `visual-review`, `signal-intake`, `incident`.
+
+### Fixed
+
+- `yt_epoch` parses an ISO time with BusyBox `date` (alpine without
+  coreutils); STATE lint W5 never fired there.
+
 - **Technical spec** (issue #36): every project gets `.ytstack/spec/SPEC.md`
   (entry point, one page) and one `.ytstack/spec/<area>.md` per system area.
   They say what applies now: behaviour, contracts, where it is implemented,

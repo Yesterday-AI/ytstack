@@ -3,9 +3,9 @@ milestone: M027
 project: ytstack
 size: M
 created: 2026-11-13T18:09:00Z
-status: planned
+status: done
 total_slices: 2
-completed_slices: 0
+completed_slices: 2
 ---
 
 # M027 Roadmap
@@ -18,8 +18,8 @@ completed_slices: 0
 
 Slice detail lives in per-slice `M027-S##-PLAN.md` files.
 
-- [ ] S01 -- Signal intake: the format of findings, `bin/ytstack-signals`, the skill `signal-intake`.
-- [ ] S02 -- Incidents: the record, the skill `incident`, eval cases, docs and close.
+- [x] S01 -- Signal intake: the format of findings, `bin/ytstack-signals`, the skill `signal-intake`.
+- [x] S02 -- Incidents: the record, the skill `incident`, eval cases, docs and close.
 
 ## Run order
 
