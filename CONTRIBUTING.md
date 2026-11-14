@@ -86,6 +86,39 @@ See above. Wrap, don't edit.
 
 Per ytstack's design direction, we credit external methodology work generically, not by name. PRs that add specific named attribution to public artifacts (README, PROJECT.md, etc.) are rejected. `docs/references.md` is the one place where upstream source projects ARE named (superpowers, gstack, GSD).
 
+## Testing
+
+Three layers, cheapest first.
+
+**Static.** `python3 bin/ytstack-check` checks the UX contracts, frontmatter, descriptions, resolver rules, vendor leaks and the repository's own technical spec. Exit 0 or 2 (warnings only) passes; a `[fail]` line does not. `bash bin/ytstack-spec lint` checks the spec format on its own.
+
+**Shell suites.** `bash tests/run-all.sh` runs every `tests/*.test.sh` and ends with `ALL SUITES PASSED`. A new suite is picked up by name; nothing to register. Each script under `bin/` has its own suite, and 0.7.0 added these:
+
+| Suite | Pins |
+| --- | --- |
+| `ytstack-spec` | spec `lint`, `drift`, `impact`, `areas` |
+| `evidence-rule` | an earlier PASS counts only for the same commit, environment and command |
+| `ytstack-brief` | the rendered brief and the report check |
+| `ytstack-frontier`, `ytstack-questions`, `ytstack-handover` | lanes and claims, question files, staged handover scripts |
+| `ytstack-finish-lane`, `ytstack-watch` | a lane to a merge at the reviewed commit, pull request polling, the release watch (against a stand-in for `gh` and fixture targets) |
+| `ytstack-risk` | floor, route, policy check, `MANIFEST` hashes |
+| `ytstack-runtime` | `up`, `down`, `status`, `get`, `signals`, `check` |
+| `ytstack-upkeep`, `ytstack-signals` | the upkeep report, findings and incident records |
+
+A suite is plain bash, writes only into `mktemp` directories, prints one line per assertion and ends with `<n> passed, 0 failed`. The comment at its top states the contract it pins. Scripts and suites run on macOS `/bin/bash` 3.2, with BSD and GNU tools, BusyBox and uutils.
+
+**Linux, three images.** `bash tests/run-all.sh --linux` runs the suites in `alpine/git` with the `coreutils` package. That is not enough on its own: also run them in `ubuntu:26.04`, the image of the CI runner, whose uutils `mkdir` is not a lock, and in plain `alpine` without coreutils, whose BusyBox `date` cannot read an ISO time (`.ytstack/KNOWLEDGE.md`, "Gotchas"). The suites do not run from a linked worktree, so test an export:
+
+```bash
+D=$(mktemp -d /tmp/yt-linux.XXXXXX); git archive HEAD | tar -x -C "$D"
+docker run --rm -v "$D":/src:ro ubuntu:26.04 bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq git python3 jq >/dev/null 2>&1; cp -r /src /work && cd /work && git init -q && bash tests/run-all.sh'
+docker run --rm -v "$D":/src:ro alpine sh -c 'apk add -q bash git python3 jq >/dev/null 2>&1; cp -r /src /work && cd /work && git init -q && bash tests/run-all.sh'
+```
+
+**Codex.** `python3 -m unittest discover -s tests -p 'codex*_test.py'` (see "Codex compatibility" below).
+
+**Evals.** `evals/` holds one behavioural case per lifecycle skill for `claude plugin eval` ([`evals/README.md`](evals/README.md)): a user-phrased prompt, a `fixture.sh` and graders. A new skill gets a case, and the cases of new and changed skills are run before a release. They are real model calls on your account and not in CI; record the run under "Eval runs" in `.ytstack/KNOWLEDGE.md`.
+
 ## How to add a new skill
 
 1. Read `docs/ux/skill-structure.md`.
@@ -115,7 +148,7 @@ repository-root resolution. Register supported events in `codex/hooks.json`.
 There is no generation step, skill copy, or per-skill Codex boilerplate.
 Keep `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json` versions aligned.
 
-Run `python3 -m unittest discover -s tests -p 'codex_plugin_test.py' -v` and
+Run `python3 -m unittest discover -s tests -p 'codex*_test.py' -v` and
 `bash tests/post-tool-use-bash.test.sh` alongside `bin/ytstack-check`. CI accepts
 the validator's warnings-only exit code (2) and rejects failures. See
 [Codex setup](docs/codex.md) for installation and manual discovery checks.
@@ -142,10 +175,11 @@ the validator's warnings-only exit code (2) and rejects failures. See
 1. `git fetch origin` and merge `origin/main` (never rebase) **before** the release commit; a long local run can hide upstream commits (0.4.0 missed the October Codex support and became 0.4.1 the same evening).
 2. All three manifests agree: `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `.codex-plugin/plugin.json` (`tests/codex_plugin_test.py` checks the Codex one); README version badge; CHANGELOG section with compare link.
 3. gstack upstream: `bin/ytstack-gstack-diff --stat`. Exit 3 means at least one of the six skills adapted from gstack is behind the newest gstack tag; fold the method changes in and move `metadata.upstream` (procedure in AGENTS.md "Skills adapted from gstack") before cutting the release.
-4. Clean clone: `bash tests/run-all.sh`, `bash tests/run-all.sh --linux` (Docker; the lib has GNU/BSD branches), `bin/ytstack-check`, `claude plugin validate .`, `python3 -m unittest discover -s tests -p 'codex_plugin_test.py'`.
-5. Push `main` first, then the tag (`git push origin main && git push origin vX.Y.Z`). `git push origin main --tags` pushes the tags even when `main` is rejected.
-6. A pushed tag is immutable (no force-push): anything that has to follow it is the next patch release.
-7. Watch `gh run list` for `ci`, `Plugin checks`, `Secret Scanning` on the pushed SHA; update the installed plugin (`claude plugin marketplace update yesterday-public-plugins && claude plugin update ytstack`).
+4. Clean clone: `bash tests/run-all.sh`, `bash tests/run-all.sh --linux` (Docker; the lib has GNU/BSD branches), the same suites in `ubuntu:26.04` and in plain `alpine` (commands under "Testing"), `bin/ytstack-check`, `bash bin/ytstack-spec lint`, `claude plugin validate .`, `python3 -m unittest discover -s tests -p 'codex*_test.py'`.
+5. Evals: the cases of every skill added or changed since the last release (`claude plugin eval . --case <name> ...`, [`evals/README.md`](evals/README.md)); the result goes under "Eval runs" in `.ytstack/KNOWLEDGE.md`.
+6. Push `main` first, then the tag (`git push origin main && git push origin vX.Y.Z`). `git push origin main --tags` pushes the tags even when `main` is rejected.
+7. A pushed tag is immutable (no force-push): anything that has to follow it is the next patch release.
+8. Watch `gh run list` for `ci`, `Plugin checks`, `Secret Scanning` on the pushed SHA; update the installed plugin (`claude plugin marketplace update yesterday-public-plugins && claude plugin update ytstack`).
 
 ## Reporting issues
 

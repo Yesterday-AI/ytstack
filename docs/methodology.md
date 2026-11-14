@@ -40,6 +40,14 @@ ytstack's design is opinionated. This file documents which concepts we adapted f
 
 **Divergence:** this pattern appears in Architecture Decision Records (ADR) more broadly. We took the "append-only + supersedes" rigor specifically from external AI-first methodology and anchored it to our milestone/slice/task artifact flow.
 
+### Risk gate and delivery flow
+
+**Adapted concept:** a published account of an agentic software factory (research note `docs/research/2026-11-13-openai-software-factory.md`, which names the sources and marks what was not read). Five ideas: whether a person looks at a change is decided per change from its risk, and an area of the code may allow low-risk changes to merge without one; some kinds of change get a second review of their own; the agent starts the product per worktree and looks at it in a browser; a rollout is watched after the merge; recurring runs look for drift, and an incident helper proposes mitigations that a person orders.
+
+**ytstack implementation:** `bin/ytstack-risk` (floor from the diff, route from the review records), `auto_merge` per area file of the technical spec, `.ytstack/spec/REVIEW.md` with lenses, `ytstack:visual-review`, `merge_by: risk` (formats in `docs/ux/review-policy-format.md`); `bin/ytstack-runtime` and the "Run", "Release" and "Signals" sections of `RUNTIME.md` (`docs/ux/runtime-format.md`); `bin/ytstack-watch release`; `bin/ytstack-upkeep` with `docs/recipes/recurring-upkeep.md`; `ytstack:signal-intake` and `ytstack:incident` with `bin/ytstack-signals` (`docs/ux/signal-format.md`).
+
+**Divergence:** the account describes a company that runs its own harness with unlimited tokens and an agent connected to every internal system. ytstack keeps a person on every path that is not declared: a project that sets no `auto_merge` merges nothing unattended. A mechanical floor sits under the reviewer's judgment (rule documents, invariants, CI and uncovered paths always go to a person). Lens reviewers are defined by the documents they read, not by a role description, because the account itself doubts that role prompts change a review. The rollout is watched, never executed: the watch, the intake and the incident skill only read production, and every mitigation is a staged handover script that only a person runs. Upkeep is a recipe for the host's or the system's scheduler, not a skill, because not every host can schedule a run. The account's numbers are self-reported throughput figures; ytstack took mechanisms, not numbers.
+
 ## What we explicitly did NOT adopt
 
 ### Catalog of enumerated skills
@@ -74,6 +82,19 @@ The external source distinguishes multiple agent types with specific roles. We d
 - Outcome-framing vs implementation-framing
 - Jargon-gloss-on-first-use
 - Writing-style guidance (short sentences, concrete nouns, outcome framing, jargon gloss). Note: the banned-words list from an earlier version was rolled back on 2026-04-24 as scope-creep; only the em-dash punctuation rule is mechanically enforced. See DECISIONS 2026-04-24 "drop banned-vocabulary list".
+
+### mattpocock/skills (MIT, concepts only, not vendored)
+
+Coordinator mode (`coordinate`, `finish-lane`, `handover-step`, `lane-retro`, `bin/ytstack-frontier`, `bin/ytstack-questions`, `docs/ux/coordinator-format.md`) adapts concepts from that collection, reviewed at `4ae2317`:
+
+- A coordinating session whose memory outlives it, written as history (`LANES.md`, `STANDING.md`)
+- Blocking edges and a frontier of ready work, a claim before any work
+- A brief with checkable completion criteria (`bin/ytstack-brief`)
+- A staged script for a step only the human may perform (`handover-step`)
+- A queue of decision-ready questions (`.ytstack/questions/`)
+- Retros that end in checks, not in prose (`lane-retro`)
+
+The research note `docs/research/2026-11-14-mattpocock-skills.md` re-read the collection at `5863806` skill by skill and found no upstream change to these concepts since `4ae2317`. Its recommendations (a research-note format, measuring the large skills before cutting them, a terms section in the spec, a reproduction criterion for debugging, wide refactorings in slicing, reversibility as a review field) are candidates, not adopted. What ytstack deliberately keeps different: artifacts under `.ytstack/` instead of the issue tracker, decisions through the question format instead of open interviews, bounded review rounds and a risk class, and every skill reachable by the model.
 
 ### GSD (Get Shit Done) -- architectural influence, NOT vendored
 
