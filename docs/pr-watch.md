@@ -96,7 +96,10 @@ never sent twice. Codex runs plugin hooks only after you trust them in `/hooks`.
   plugin that ran `install-worker`
 - `~/Library/LaunchAgents/com.ytstack.pr-watch.plist`: `tick` every 60 seconds
   and at login, logs in the state directory, a `PATH` with the directories of
-  `gh` and `python3` found at install time
+  `gh` and `python3` found at install time. launchd has no shell profile, so
+  version-manager shims (asdf, mise) do not run there: `install-worker` takes
+  the first `gh` on your `PATH` that runs on its own (for example Homebrew's
+  behind an asdf shim) and refuses when there is none
 
 It refuses when another `*pr-watch*.plist` exists in `~/Library/LaunchAgents`:
 two workers would poll and deliver twice. On Linux it prints a systemd user
