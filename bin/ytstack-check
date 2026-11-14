@@ -521,6 +521,9 @@ _BANNED = [
 
 _FENCE_OPEN_RE = re.compile(r"^```(bash|sh|!)\s*$")
 
+# Hook scripts that resolve no checkout and therefore do not source git-ctx.sh.
+_HOOKS_WITHOUT_RESOLVER = {"pr-watch"}
+
 
 def _code_lines(text):
     """Yield (lineno, line) for non-comment lines."""
@@ -573,7 +576,9 @@ def check_resolver_contract(root):
             pre = _first_shell_preamble(text)
             if pre is not None and "hooks/lib/git-ctx.sh" not in pre:
                 fails.append(f"{rel}: shell preamble does not use the shared resolver (source hooks/lib/git-ctx.sh via ${{CLAUDE_SKILL_DIR}}/../../hooks/lib/git-ctx.sh)")
-        if scope == "hooks" and "lib/git-ctx.sh" not in text:
+        # hooks/pr-watch resolves no checkout: an opt-in wrapper that hands the
+        # payload to tools/pr-watch (DECISIONS 2026-11-14 "PR watch ships inside ytstack").
+        if scope == "hooks" and "lib/git-ctx.sh" not in text and path.name not in _HOOKS_WITHOUT_RESOLVER:
             fails.append(f"{rel}: hook does not source hooks/lib/git-ctx.sh")
 
     # Version agreement between plugin.json and marketplace.json

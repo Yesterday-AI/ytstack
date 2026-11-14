@@ -8,7 +8,7 @@ export CLAUDE_PROJECT_DIR="$PROJECT_DIR"
 cd "$PROJECT_DIR"
 
 usage() {
-  echo 'Usage: ytstack-codex skill <name> [bash arguments...] | hook <session-start|pre-compact|session-end>' >&2
+  echo 'Usage: ytstack-codex skill <name> [bash arguments...] | hook <session-start|pre-compact|session-end|pr-watch>' >&2
   exit 2
 }
 
@@ -37,6 +37,10 @@ case "$MODE" in
 $(cat "$CLAUDE_PLUGIN_ROOT/codex/adapter.md")"
         fi
         exec bash "$CLAUDE_PLUGIN_ROOT/hooks/$NAME"
+        ;;
+      pr-watch)
+        # Opt-in PR watch; exits at once unless pr_watch=on (docs/pr-watch.md).
+        exec bash "$CLAUDE_PLUGIN_ROOT/hooks/pr-watch" codex
         ;;
       *) usage ;;
     esac

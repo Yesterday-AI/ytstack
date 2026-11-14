@@ -1,5 +1,5 @@
 {
-  "description": "ytstack lifecycle hooks: inject project state at session boundaries, persist volatile session state OUT OF TREE on compaction and end-of-session, link commits to tasks. All hooks resolve the checkout from the payload cwd via hooks/lib/git-ctx.sh (never CLAUDE_PROJECT_DIR) and fail open (no onFailure: block). SessionEnd hooks get a 1.5 s default budget from Claude Code; the hook runs in ~0.3-0.5 s.",
+  "description": "ytstack lifecycle hooks: inject project state at session boundaries, persist volatile session state OUT OF TREE on compaction and end-of-session, link commits to tasks. All hooks resolve the checkout from the payload cwd via hooks/lib/git-ctx.sh (never CLAUDE_PROJECT_DIR) and fail open (no onFailure: block). SessionEnd hooks get a 1.5 s default budget from Claude Code; the hook runs in ~0.3-0.5 s. hooks/pr-watch (SessionStart, UserPromptSubmit, PreToolUse and PostToolUse on Bash or an MCP create_pull_request) is the opt-in PR watch: it exits at once unless ~/.ytstack/config has pr_watch=on (docs/pr-watch.md).",
   "hooks": {
     "SessionStart": [
       {
@@ -11,6 +11,31 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start\"",
             "async": false,
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "startup|resume|clear|compact|fork",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pr-watch\" claude",
+            "async": false,
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pr-watch\" claude",
+            "async": false,
+            "timeout": 15
           }
         ]
       }
@@ -105,6 +130,18 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash|mcp__.*create_pull_request.*",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pr-watch\" claude",
+            "async": false,
+            "timeout": 15
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -117,6 +154,18 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use-bash\"",
             "async": false,
             "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|mcp__.*create_pull_request.*",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pr-watch\" claude",
+            "async": false,
+            "timeout": 15
           }
         ]
       }
