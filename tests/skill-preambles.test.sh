@@ -36,7 +36,7 @@ MAIN="$TMP/main"; mkdir -p "$MAIN/.ytstack"
   echo seed > f.txt; git add -A; git commit -qm "M999-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL fixture; exit 2; }
 WT="$TMP/wt"; git -C "$MAIN" worktree add -q -b wt-branch "$WT" >/dev/null 2>&1 || { echo FATAL worktree; exit 2; }
 
-SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill coordinate finish-lane handover-step lane-retro visual-review signal-intake incident"
+SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill coordinate finish-lane handover-step lane-retro visual-review signal-intake incident review-lessons"
 
 # Brownfield fixture (M010, issue #18): existing docs, no .ytstack -> >= 2 signals
 BF="$TMP/brown"; mkdir -p "$BF/docs/adr"
@@ -57,6 +57,14 @@ extract() {
     | sed "s|\${CLAUDE_SKILL_DIR}|$ROOT/skills/$skill|g" > "$out"
   printf '%s' "$out"
 }
+
+# own_reviewers_on / _off: an "Own reviewers" section in the worktree (M030)
+own_reviewers_on() {
+  mkdir -p "$WT/.ytstack/spec" "$WT/.github/reviewers"
+  echo "# code reviewer" > "$WT/.github/reviewers/code.md"
+  printf '# Review policy\n\n## Own reviewers\n\n- code | marker: (`code`) | lessons: .github/reviewers/code.md\n' > "$WT/.ytstack/spec/REVIEW.md"
+}
+own_reviewers_off() { rm -rf "$WT/.github" "$WT/.ytstack/spec/REVIEW.md"; rmdir "$WT/.ytstack/spec" 2>/dev/null; return 0; }
 
 PD="$TMP/plugin-data"
 run_pre() { # run_pre <script> <cwd> -> sets OUT (stdout) and EC (exit code) in this shell
@@ -109,6 +117,17 @@ for s in $SKILLS; do
       has "$s: reports HAS_YTSTACK" "$OUT" "HAS_YTSTACK: yes"
       case "$OUT" in *GSTACK*|*BUN_OK*) bad "$s: no gstack precheck flags" ;; *) ok "$s: no gstack precheck flags" ;; esac
       grep -rqE '\.claude/skills/gstack|vendor/gstack|gstack-skill-start|\bbun\b' "$ROOT/skills/$s" && bad "$s: no gstack runtime reference" || ok "$s: no gstack runtime reference"
+      case "$s" in retro)
+        # own reviewers vs bots (M030): read from the signals ledger
+        has "$s: no REVIEW.md -> OWN_REVIEWERS none" "$OUT" "OWN_REVIEWERS: none"
+        own_reviewers_on
+        mkdir -p "$WT/.ytstack/signals"
+        printf -- '---\nid: F001\nkey: review:code:missing-null-guard\nsource: review\nkind: review\nstate: open\nfirst_seen: 2026-11-14T09:00:00Z\nlast_seen: 2026-11-14T09:00:00Z\ncount: 1\nref: none\nreopens: none\n---\n\n# F001 -- Null guard\n\n## What was seen\n\n### read 2026-11-14T09:00:00Z\n\n    row\n\n## Assessment\n\n## Next\n' > "$WT/.ytstack/signals/F001-null-guard.md"
+        run_pre "$P" "$WT"
+        has "$s: the declared roles are named" "$OUT" "OWN_REVIEWERS: code"
+        has "$s: the review findings are listed" "$OUT" "review:code:missing-null-guard"
+        rm -rf "$WT/.ytstack/signals"; own_reviewers_off ;;
+      esac
       # Concept mode picks the newest pitch, also in a checkout path with a space (PR #39 review).
       case "$s" in plan-ceo-review|plan-eng-review)
         SP="$TMP/space dir/$s"; mkdir -p "$SP/.ytstack"
@@ -233,7 +252,27 @@ for s in $SKILLS; do
       run_pre "$P" "$WT"
       has "$s: a merge_by outside the three values reads as human" "$OUT" "MERGE_BY: human"
       has "$s: and the note names the value" "$OUT" "MERGE_BY_NOTE: merge_by: 'coordinater' is not human|coordinator|risk (using human)"
-      rm -f "$WT/.ytstack/PREFERENCES.md" ;;
+      rm -f "$WT/.ytstack/PREFERENCES.md"
+      # the escape check after its own merge (M030) needs own reviewers in REVIEW.md
+      has "$s: no REVIEW.md -> OWN_REVIEWERS no" "$OUT" "OWN_REVIEWERS: no"
+      own_reviewers_on
+      run_pre "$P" "$WT"
+      has "$s: own reviewers declared -> OWN_REVIEWERS yes" "$OUT" "OWN_REVIEWERS: yes"
+      own_reviewers_off ;;
+    review-lessons)
+      # the scripts of the plugin, the roles of REVIEW.md, nothing recorded yet (M030)
+      has "$s: the escapes script is found" "$OUT" "ESCAPES_TOOL: $ROOT/bin/ytstack-review-escapes"
+      has "$s: the signals script is found" "$OUT" "SIGNALS_TOOL: $ROOT/bin/ytstack-signals"
+      has "$s: the upkeep script is found" "$OUT" "UPKEEP_TOOL: $ROOT/bin/ytstack-upkeep"
+      has "$s: no REVIEW.md -> no reviewers" "$OUT" "REVIEWERS_BEGIN
+REVIEWERS_END"
+      has "$s: nothing checked yet" "$OUT" "CHECKED_PRS: 0"
+      own_reviewers_on
+      mkdir -p "$WT/.ytstack/signals"; echo "o/r#7 abcdef1 2026-11-14T10:00:00Z" > "$WT/.ytstack/signals/review-checks"
+      run_pre "$P" "$WT"
+      has "$s: a declared role is listed" "$OUT" "code	(\`code\`)	.github/reviewers/code.md"
+      has "$s: one checked pull request" "$OUT" "CHECKED_PRS: 1"
+      rm -rf "$WT/.ytstack/signals"; own_reviewers_off ;;
     visual-review)
       # the evidence of a visual review (M025) is read from the main checkout, also from a worktree
       has "$s: worktree -> no Run section in the bare fixture" "$OUT" "RUN_SECTION: no"

@@ -26,7 +26,8 @@
 #           review:<role>:<class-slug>; a recurring class raises the count
 #   review-checked  records a merged pull request's escape check once in
 #           signals/review-checks and answers whether it had one; check
-#           names a broken or repeated line
+#           names a broken or repeated line; --tally stores caught/escaped per
+#           role as a fourth field, and check validates it
 #
 # Run: /bin/bash tests/ytstack-signals.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -634,11 +635,24 @@ run "$D" review-checked acme/shop#3 XYZ;             eq "a merge commit that is 
 run "$D" review-checked acme/shop#3 --at "$T1";      eq "--at without a merge commit: exit 64" 64 "$EC"
 run "$D" review-checked acme/shop#3 0123abc --at x;  eq "--at that is no UTC time: exit 64" 64 "$EC"
 run "$D" review-checked;                             eq "no reference: exit 64" 64 "$EC"
+run "$D" review-checked acme/shop#3 --tally none;    eq "--tally without a merge commit: exit 64" 64 "$EC"
+run "$D" review-checked acme/shop#3 0123abc --tally 'code=1';          eq "a tally without caught/escaped: exit 64" 64 "$EC"
+run "$D" review-checked acme/shop#3 0123abc --tally 'Code=1/0';        eq "a role that is no slug: exit 64" 64 "$EC"
+run "$D" review-checked acme/shop#3 0123abc --tally 'code=1/0,code=0/1'; eq "a role twice: exit 64" 64 "$EC"
 eq "the refused calls wrote nothing" 2 "$(grep -c . "$S/review-checks")"
-printf 'acme/shop#101 0123abc %s\nnot a line\n' "$T1" >> "$S/review-checks"
+# The tally (M030): fixed bot findings per role, caught/escaped; "-" for no owning role.
+run "$D" review-checked acme/shop#103 0123abc --at "$T1" --tally 'code=1/2,security=1/0,-=0/3'
+eq "a check with a tally" "0:checked acme/shop#103" "$EC:$OUT"
+eq "the tally is the fourth field" "acme/shop#103 0123abc $T1 code=1/2,security=1/0,-=0/3" "$(sed -n 3p "$S/review-checks")"
+run "$D" review-checked acme/shop#104 0123abc --tally none
+eq "none for a pull request without fixed bot findings" "none" "$(sed -n 4p "$S/review-checks" | cut -d' ' -f4)"
+run "$D" check; eq "lines with and without a tally pass the check" "signals ok: 1 finding(s), 0 incident(s)" "$OUT"
+printf 'acme/shop#101 0123abc %s\nnot a line\nacme/shop#105 0123abc %s code=1\nacme/shop#106 0123abc %s code=1/0,code=0/1\n' "$T1" "$T1" "$T1" >> "$S/review-checks"
 run "$D" check; eq "check: a broken or repeated line: exit 1" 1 "$EC"
 has "names the repeated pull request" "review-checks: acme/shop#101 stands twice" "$OUT"
-has "names the broken line" "review-checks: line 4 is not" "$OUT"
+has "names the broken line" "review-checks: line 6 is not" "$OUT"
+has "names a broken tally" "review-checks: line 7: the tally \"code=1\" is not" "$OUT"
+has "names a role counted twice" "review-checks: line 8: the tally names code twice" "$OUT"
 
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

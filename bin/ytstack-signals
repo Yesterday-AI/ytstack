@@ -7,15 +7,18 @@
 #   ytstack-signals [-C DIR] set <id> --state STATE [--ref REF] [< reason]
 #   ytstack-signals [-C DIR] incident new --title TEXT [--severity TEXT]
 #   ytstack-signals [-C DIR] incident list [--state open|mitigated|closed|all]
-#   ytstack-signals [-C DIR] review-checked OWNER/NAME#N [MERGE_SHA] [--at TIME]
+#   ytstack-signals [-C DIR] review-checked OWNER/NAME#N [MERGE_SHA] [--at TIME] [--tally TALLY]
 #   ytstack-signals [-C DIR] check
 #
 # --kind review records a review-bot finding the project's own reviewers
 # missed (bin/ytstack-review-escapes): no "Signals" source is needed, the key
 # is review:<role>:<class-slug>, the sighting is the escape row or rows.
 # review-checked with a merge commit records that a merged pull request had
-# its escape check, one line "<owner/name>#<n> <merge sha> <UTC>" in
-# signals/review-checks; without one it asks whether it had.
+# its escape check, one line "<owner/name>#<n> <merge sha> <UTC> [<tally>]" in
+# signals/review-checks; without one it asks whether it had. The tally counts
+# the fixed bot findings of the pull request per role, "<role>=<caught>/<escaped>"
+# comma separated ("-" for escapes no role owns), or "none" when it had none;
+# a line without a tally was written before tallies existed.
 #
 # A finding is one file, signals/F###-<slug>.md, inside the .ytstack directory
 # of DIR (default: $PWD). new decides by the key: the newest finding that
@@ -40,7 +43,7 @@
 #                  record of that day with that title exists; 64 usage
 #   incident list  0; one line per record: id, state, opened, severity, title
 #                  (tab separated); without --state the ones that are not closed
-#   review-checked  with MERGE_SHA: 0 "checked <pr>", or "already <its line>"
+#   review-checked  with MERGE_SHA (and optionally --tally): 0 "checked <pr>", or "already <its line>"
 #                   when the pull request has a line; without: 0 and its line,
 #                   1 when it has none; 1 no .ytstack directory; 64 usage
 #   check  0 "signals ok: <n> finding(s), <m> incident(s)", or "no signals"
@@ -446,11 +449,19 @@ cmd_incident() {
 # ran, "<owner/name>#<n> <merge sha> <UTC>". Written only here, under the lock.
 PR_RE='^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9_.-]+#[1-9][0-9]*$'
 SHA_RE='^[0-9a-f]{7,40}$'
+TALLY_RE='^(none|(-|[a-z0-9][a-z0-9-]*)=[0-9]+/[0-9]+(,(-|[a-z0-9][a-z0-9-]*)=[0-9]+/[0-9]+)*)$'
+# tally_ok <tally>: the form, and no role twice.
+tally_ok() {
+  [[ $1 =~ $TALLY_RE ]] || return 1
+  [ "$1" = none ] && return 0
+  [ -z "$(printf '%s\n' "$1" | tr ',' '\n' | sed 's/=.*//' | sort | uniq -d)" ]
+}
 cmd_review_checked() {
-  local pr="" sha="" at="" line
+  local pr="" sha="" at="" tally="" line
   while [ $# -gt 0 ]; do
     case "$1" in
       --at) [ $# -ge 2 ] || { usage >&2; return 64; }; at=$2; shift 2 ;;
+      --tally) [ $# -ge 2 ] || { usage >&2; return 64; }; tally=$2; shift 2 ;;
       -*) usage >&2; return 64 ;;
       *)
         if [ -z "$pr" ]; then pr=$1; elif [ -z "$sha" ]; then sha=$1; else usage >&2; return 64; fi
@@ -462,6 +473,10 @@ cmd_review_checked() {
   if [ -n "$at" ]; then
     [ -n "$sha" ] || { usage >&2; return 64; }
     is_utc "$at" || { echo "ytstack-signals: --at takes a UTC time like 2026-11-13T09:15:00Z" >&2; return 64; }
+  fi
+  if [ -n "$tally" ]; then
+    [ -n "$sha" ] || { usage >&2; return 64; }
+    tally_ok "$tally" || { echo "ytstack-signals: --tally takes \"none\" or <role>=<caught>/<escaped>, comma separated, each role once (\"-\" for no role)" >&2; return 64; }
   fi
   [ -n "$SDIR" ] || die "no .ytstack directory for $DIR"
   if [ -z "$sha" ]; then
@@ -478,7 +493,7 @@ cmd_review_checked() {
     [ -z "$line" ] || { echo "already $line"; return 0; }
   fi
   TMPF="$CHECKS.tmp"
-  { [ ! -f "$CHECKS" ] || cat "$CHECKS"; printf '%s %s %s\n' "$pr" "$sha" "${at:-$(now)}"; } > "$TMPF" && mv "$TMPF" "$CHECKS" \
+  { [ ! -f "$CHECKS" ] || cat "$CHECKS"; printf '%s %s %s%s\n' "$pr" "$sha" "${at:-$(now)}" "${tally:+ $tally}"; } > "$TMPF" && mv "$TMPF" "$CHECKS" \
     || die "cannot write $CHECKS"
   TMPF=""
   echo "checked $pr"
@@ -487,12 +502,19 @@ cmd_review_checked() {
 # check_review_checks: the lines of signals/review-checks; status 1 with a problem.
 check_review_checks() {
   [ -n "$CHECKS" ] && [ -f "$CHECKS" ] || return 0
-  awk -v pre="$PR_RE" '
+  awk -v pre="$PR_RE" -v tre="$TALLY_RE" '
     NF == 0 { next }
     {
-      if (NF != 3 || $1 !~ pre || $2 !~ /^[0-9a-f]+$/ || length($2) < 7 || length($2) > 40 \
+      if ((NF != 3 && NF != 4) || $1 !~ pre || $2 !~ /^[0-9a-f]+$/ || length($2) < 7 || length($2) > 40 \
           || $3 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/) {
-        print "review-checks: line " NR " is not \"<owner/name>#<n> <merge sha> <UTC time>\""; bad = 1; next
+        print "review-checks: line " NR " is not \"<owner/name>#<n> <merge sha> <UTC time> [<tally>]\""; bad = 1; next
+      }
+      if (NF == 4) {
+        if ($4 !~ tre) { print "review-checks: line " NR ": the tally \"" $4 "\" is not \"none\" or <role>=<caught>/<escaped>, comma separated"; bad = 1 }
+        else if ($4 != "none") {
+          n = split($4, part, ","); split("", role)
+          for (i = 1; i <= n; i++) { r = part[i]; sub(/=.*/, "", r); if (role[r]++) { print "review-checks: line " NR ": the tally names " r " twice"; bad = 1 } }
+        }
       }
       if (seen[$1]++) { print "review-checks: " $1 " stands twice"; bad = 1 }
     }
