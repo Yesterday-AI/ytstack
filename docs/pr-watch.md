@@ -67,6 +67,7 @@ Code, Codex and the worker, and stays the same across plugin updates.
 ```bash
 bin/ytstack-pr-watch create --repo OWNER/REPO --session SESSION_ID --cwd WORKTREE -- --title "..." --body-file body.md
 bin/ytstack-pr-watch register --repo OWNER/REPO --pr 123 --session SESSION_ID --cwd WORKTREE
+bin/ytstack-pr-watch register --repo OWNER/REPO --all-open   # every open PR, for this session
 bin/ytstack-pr-watch pause --repo OWNER/REPO --pr 123     # and resume
 bin/ytstack-pr-watch inspect --repo OWNER/REPO --pr 123   # read only, registers nothing
 bin/ytstack-pr-watch status
@@ -74,6 +75,19 @@ bin/ytstack-pr-watch status
 
 Inside a session `--session` defaults to the current one (`CODEX_THREAD_ID`, or
 `claude:$CLAUDE_CODE_SESSION_ID`).
+
+Subagents run inside their parent session, and their hook calls carry the
+parent's session, so a PR a subagent opens is registered to the coordinating
+session. **A session only has the hooks it loaded when it started**: a session
+that was already running when you switched the PR watch on, or when ytstack was
+updated to a version with these hooks, registers nothing until it is restarted.
+`register --all-open` closes that gap: it registers every open PR of the
+repository to the current session in one listing call (one REST call per 100
+open PRs) and skips, by name, PRs another session already owns. Only the session
+that owns the repository's PRs runs it, typically the coordinator, once at its
+start and after any restart. When several independent sessions work in the same
+repository, each registers only its own PRs (`register --pr N`); a bulk run would
+claim the others' PRs for whichever session restarted first.
 
 ## Delivery: Claude Code pulls, Codex is woken
 
@@ -203,6 +217,7 @@ remaining steps, which are yours to run:
 2. Remove the old `pr-watch hook --host claude` entries from `~/.claude/settings.json` (back the file up first). Otherwise both hook sets run.
 3. Disable or remove the old Codex plugin `pr-watch@local-pr-watch`.
 4. `bin/ytstack-pr-watch enable`, then `bin/ytstack-pr-watch install-worker --yes`.
+5. Restart every running Claude Code and Codex session. A running session keeps the hooks it loaded at start: once step 2 removed the old ones, it registers no PR until it restarts, and what it opened in between is not watched. After the restart, the one session that owns a repository's PRs (a coordinator in particular) runs `bin/ytstack-pr-watch register --repo OWNER/REPO --all-open` once to pick up the PRs opened meanwhile; independent sessions in the same repository register only their own PRs with `register --pr N`.
 
 ## Limits
 

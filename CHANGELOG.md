@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ytstack-pr-watch register --repo OWNER/REPO --all-open` registers every open
+  PR of a repository to the current session in one listing call and names the
+  ones another session owns. Only the session owning the repository's PRs (a
+  coordinator) runs it, at its start and after a restart; independent sessions
+  register their own PRs with `--pr` (issue #54). `register` now checks the
+  owner after its insert, so a PR the worker registered at the same moment is
+  reported as foreign instead of as registered.
+
+### Fixed
+
+- PR watch: the docs and the `migrate` steps now say that running sessions
+  keep the hooks they started with. A session that was running when the PR
+  watch was switched on (or when ytstack gained the hooks) registered nothing
+  until it restarted; on the maintainer's machine a coordinator's subagents
+  opened about 60 PRs in that window that were never watched. `coordinate`
+  (0.2.1) registers the open PRs with `--all-open` when the PR watch is on,
+  and counts it as on only with a worker heartbeat younger than 10 minutes;
+  otherwise it keeps polling through `ytstack-watch`.
+
 ## [0.9.0] - 2026-11-14
 
 ### Added

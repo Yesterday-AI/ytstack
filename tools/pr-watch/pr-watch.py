@@ -33,9 +33,13 @@ def main():
     # Codex exports CODEX_THREAD_ID; Claude Code exports CLAUDE_CODE_SESSION_ID (stored host-qualified).
     default_session = os.environ.get('CODEX_THREAD_ID') or (
         claude.qualify(os.environ['CLAUDE_CODE_SESSION_ID']) if os.environ.get('CLAUDE_CODE_SESSION_ID') else None)
-    add = sub.add_parser('register', help='Watch an open PR for a session')
+    add = sub.add_parser('register', help='Watch an open PR (or every open PR of a repository) for a session')
     add.add_argument('--repo', required=True)
-    add.add_argument('--pr', required=True, type=int)
+    which = add.add_mutually_exclusive_group(required=True)
+    which.add_argument('--pr', type=int)
+    which.add_argument('--all-open', action='store_true',
+                       help='every open PR of --repo, for example the ones subagents or other sessions opened; '
+                            'PRs another session owns are skipped and named')
     add.add_argument('--session', default=default_session)
     add.add_argument('--cwd', default=os.getcwd())
     create = sub.add_parser('create', help='Create a PR and persist ownership before returning')
@@ -117,7 +121,32 @@ def main():
     else:
         db = connect()
         with db:
-            if args.command == 'register':
+            if args.command == 'register' and args.all_open:
+                if not args.session:
+                    parser.error('--session or CODEX_THREAD_ID required')
+                # One paginated list call (one REST call per 100 open PRs).
+                cwd = str(Path(args.cwd).resolve())
+                added, kept, foreign = [], [], []
+                for pr in sorted(github.open_pulls(args.repo), key=lambda p: p['number']):
+                    number = pr['number']
+                    known = db.execute('SELECT session FROM watches WHERE repo=? AND number=?',
+                                       (args.repo, number)).fetchone()
+                    try:
+                        register(db, args.repo, number, args.session, cwd)
+                    except ValueError:
+                        # Re-read: the worker may have registered the PR after the lookup above.
+                        owner = db.execute('SELECT session FROM watches WHERE repo=? AND number=?',
+                                           (args.repo, number)).fetchone()
+                        foreign.append(f'#{number} ({owner["session"] if owner else "unknown"})')
+                        continue
+                    (kept if known else added).append(f'#{number}')
+                print(f'{args.repo}: {len(added)} registered to {args.session}, {len(kept)} already watched by it, '
+                      f'{len(foreign)} owned by another session')
+                if added:
+                    print('  registered: ' + ' '.join(added))
+                if foreign:
+                    print('  skipped (another session owns them; pause or register them there): ' + ' '.join(foreign))
+            elif args.command == 'register':
                 if not args.session:
                     parser.error('--session or CODEX_THREAD_ID required')
                 pr = github.api(f'repos/{args.repo}/pulls/{args.pr}')
