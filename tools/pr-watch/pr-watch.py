@@ -64,6 +64,10 @@ def main():
     move.add_argument('--from', dest='source', required=True, metavar='DIR')
     move.add_argument('--yes', action='store_true')
     args = parser.parse_args()
+    # The current Claude session's id given bare would be stored as a Codex thread and never delivered.
+    own = os.environ.get('CLAUDE_CODE_SESSION_ID')
+    if own and getattr(args, 'session', None) == own:
+        args.session = claude.qualify(own)
     if args.command == 'hook':
         try:
             result = handle(json.load(sys.stdin), args.host)

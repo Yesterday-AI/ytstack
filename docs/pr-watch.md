@@ -89,6 +89,13 @@ start and after any restart. When several independent sessions work in the same
 repository, each registers only its own PRs (`register --pr N`); a bulk run would
 claim the others' PRs for whichever session restarted first.
 
+Leave `--session` out inside a session: it defaults to the current one
+(`claude:<id>` from `CLAUDE_CODE_SESSION_ID`, or `CODEX_THREAD_ID`). Watches
+are keyed by host: a bare id is a Codex thread, so a Claude id without its
+`claude:` prefix was once stored as one and its notices never arrived. The CLI
+now qualifies the current Claude session's bare id, and `register` moves a
+watch stored under that bare id, with its undelivered notices, to `claude:<id>`.
+
 ## Delivery: Claude Code pulls, Codex is woken
 
 **Claude Code.** Sessions are stored as `claude:<session_id>` and are never
