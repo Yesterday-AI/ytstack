@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Run shared skill blocks and Kimi lifecycle hooks from the installed plugin.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+export KIMI_PLUGIN_ROOT="$ROOT"
+export CLAUDE_PLUGIN_ROOT="$ROOT"
+umask 077
+
+usage() {
+  echo 'Usage: ytstack-kimi skill <name> [bash arguments...] | hook <session-start|pre-compact|post-compact|user-prompt-submit|session-end>' >&2
+  exit 2
+}
+
+[ "$#" -ge 2 ] || usage
+MODE="$1"
+NAME="$2"
+shift 2
+
+case "$MODE" in
+  skill)
+    [[ "$NAME" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || usage
+    PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null) || PROJECT_DIR="$PWD"
+    export CLAUDE_PROJECT_DIR="$PROJECT_DIR"
+    export CLAUDE_SKILL_DIR="$ROOT/skills/$NAME"
+    [ -f "$CLAUDE_SKILL_DIR/SKILL.md" ] || {
+      echo "ytstack: skill not found: $NAME" >&2
+      exit 2
+    }
+    cd "$PROJECT_DIR" || exit 2
+    exec bash "$@"
+    ;;
+  hook)
+    [ "$#" -eq 0 ] || usage
+    case "$NAME" in
+      session-start|pre-compact|post-compact|user-prompt-submit|session-end) ;;
+      *) usage ;;
+    esac
+    ;;
+  *) usage ;;
+esac
+
+INPUT=$(cat)
+
+# Kimi discards SessionStart/PostCompact output. Carry context to the next
+# UserPromptSubmit through the existing out-of-tree per-session state instead.
+pending_path() {
+  YT_PENDING=""
+  YT_STDIN="$INPUT"
+  yt_read_stdin
+  [ -n "$YT_CWD" ] || return 0
+  yt_git_ctx "$YT_CWD"
+  YT_PENDING="$(yt_state_dir)/pending-context.md"
+}
+
+prepare_pending() {
+  pending_path
+  [ -n "$YT_PENDING" ] || return 0
+  local context tmp
+  context=$(printf '%s' "$INPUT" | YTSTACK_HOOK_FORMAT=plain YTSTACK_HOST_CONTEXT="[ytstack plugin root: $ROOT]
+
+$(cat "$ROOT/kimi/adapter.md")" bash "$ROOT/hooks/session-start")
+  if [ -z "$context" ]; then
+    rm -f "$YT_PENDING"
+    return 0
+  fi
+  tmp="$YT_PENDING.$$"
+  printf '%s\n' "$context" > "$tmp"
+  mv -f "$tmp" "$YT_PENDING"
+}
+
+consume_pending() {
+  pending_path
+  [ -n "$YT_PENDING" ] && [ -f "$YT_PENDING" ] || return 0
+  local tmp="$YT_PENDING.consume.$$"
+  if mv "$YT_PENDING" "$tmp" 2>/dev/null; then
+    cat "$tmp"
+    rm -f "$tmp"
+  fi
+}
+
+case "$NAME" in
+  session-start|post-compact)
+    . "$ROOT/hooks/lib/git-ctx.sh"
+    prepare_pending
+    ;;
+  user-prompt-submit)
+    . "$ROOT/hooks/lib/git-ctx.sh"
+    consume_pending
+    ;;
+  pre-compact)
+    exec bash "$ROOT/hooks/pre-compact" >/dev/null <<<"$INPUT"
+    ;;
+  session-end)
+    exec bash "$ROOT/hooks/session-end" <<<"$INPUT"
+    ;;
+esac

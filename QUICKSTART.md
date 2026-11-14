@@ -8,9 +8,16 @@ For Codex, follow [Codex setup](docs/codex.md). The workflow below uses Claude
 Code command names; in Codex select the corresponding skill from ytstack with
 `$ytstack:<skill-name>`. Claude Agent Teams and worktree subagents are not available through the Codex adapter.
 
+For Kimi Code, follow [Kimi setup and compatibility](docs/kimi.md). Select
+skills with `/skill:ytstack:<skill-name>` or `Skill(skill="ytstack:<name>")`.
+Kimi uses static `sessionStart.skill` plus pending context consumed through
+UserPromptSubmit, not SessionStart hook stdout. Its close and platform limits
+are part of the host guide.
+
 ### Prerequisites
 
 - Claude Code >= 2.1.214 (the plugin's hooks use `fork`-session matching and `CLAUDE_PLUGIN_DATA`).
+- Kimi Code 2.5.3 is locally verified; 2.6.2 is verified in fresh Linux/Node 24. See [Kimi support status](docs/kimi.md#support-status) before relying on another environment.
 - bash and git. Nothing else to install: `office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship` and `document-release` are ytstack's own adaptations of gstack skills and ship with the plugin.
 - `gh`, logged in, for `ship`, `document-release` and the pull request steps of `finish-lane`. GitHub is the only pull request host the pipeline supports.
 - For `visual-review` only: a browser tool in the session that renders a page and returns a screenshot (a Playwright-style browser server or command line, or the host's built-in browser). `curl` or a web fetch does not count. Without one the visual lens records `not run`.

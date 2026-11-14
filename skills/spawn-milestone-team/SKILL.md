@@ -93,7 +93,8 @@ if [ -n "$_OPEN_SLICES" ]; then
       | grep -oE '(`[^` ]+\.[A-Za-z0-9]+`|(Create|Modify|Delete): *[A-Za-z0-9_./-]+\.[A-Za-z0-9]+|[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+\.[A-Za-z0-9]+)' \
       | sed -E 's/^(Create|Modify|Delete): *//' | tr -d '`' | sort -u | sed "s/^/$s /"
   done > "$_TMPF"
-  _OVERLAP=$(awk '{f[$2]=f[$2]" "$1; n[$2]++} END{for (k in n) if (n[k]>1) print k":"f[k]}' "$_TMPF" | sort)
+  # Whitespace after $ prevents Kimi positional expansion in loaded skill text.
+  _OVERLAP=$(awk '{f[$ 2]=f[$ 2]" "$ 1; n[$ 2]++} END{for (k in n) if (n[k]>1) print k":"f[k]}' "$_TMPF" | sort)
   rm -f "$_TMPF"
 fi
 

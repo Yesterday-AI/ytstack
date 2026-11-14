@@ -6,7 +6,7 @@
   <p><em>An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng.</em></p>
 
   <p>
-    A plugin for Claude Code and Codex that turns multi-session, multi-week projects into something your agent can actually hold onto. Project memory on disk, curated skill set, parallel execution via worktree-isolated subagents in Claude Code. One install, one namespace, no stack to maintain.
+    A plugin for Claude Code, Codex and Kimi Code that turns multi-session, multi-week projects into something your agent can actually hold onto. Project memory on disk, curated skill set, parallel execution via worktree-isolated subagents in Claude Code. One install, one namespace, no stack to maintain.
   </p>
 
   <p>
@@ -15,6 +15,7 @@
     <img alt="version" src="https://img.shields.io/badge/version-0.8.2-FC4E14">
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
     <img alt="Codex" src="https://img.shields.io/badge/Codex-plugin-0A0A0A">
+    <img alt="Kimi Code" src="https://img.shields.io/badge/Kimi%20Code-plugin-0A0A0A">
     <img alt="skills" src="https://img.shields.io/badge/skills-38-FC4E14">
     <img alt="hooks" src="https://img.shields.io/badge/hooks-9-FC4E14">
   </p>
@@ -228,6 +229,7 @@ Source: [`docs/ytstack-delivery-flow.excalidraw`](docs/ytstack-delivery-flow.exc
 ### Prerequisites
 
 - Claude Code >= 2.1.214.
+- Kimi Code 2.5.3 is locally verified; 2.6.2 is verified in fresh Linux/Node 24. Check [Kimi support status](docs/kimi.md#support-status) for platform limits.
 - bash, git and `gh` (for `ship`, `document-release`, and the pull request steps of `finish-lane` and `bin/ytstack-watch`; GitHub is the only pull request host they support). `jq` or Python 3 for the hooks' JSON handling; Python 3 for `bin/ytstack-check`.
 - For `visual-review`: a browser tool in the session that renders a page and returns a screenshot (a Playwright-style browser server or command line, or the host's built-in browser). Without one a visual lens records `not run`.
 - Nothing else: the six skills adapted from gstack (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`) ship inside the plugin, so gstack and Bun are not needed and nothing is registered in `~/.claude/skills/`.
@@ -243,10 +245,26 @@ Start a new session. With trusted hooks, ytstack supplies its runtime context
 automatically. Without hooks, first ask Codex to read the installed plugin's
 `codex/adapter.md`, then select `$ytstack:using-ytstack` in the skill picker.
 On local hosts with hook support, review and trust the plugin hooks for automatic
-startup context, compaction handoff, and session journaling. Both hosts load the same 38 skill files. Worktree subagents, Claude Agent Teams and edit/commit hooks remain
-Claude-only; Codex uses the sequential task flow and explicit verification.
+startup context, compaction handoff, and session journaling. All supported hosts load the same 38 skill files. Worktree subagents, Claude Agent Teams and edit/commit hooks remain
+Claude-only; Codex and Kimi use the sequential task flow and explicit verification.
 See [Codex setup and compatibility](docs/codex.md) for local development,
 hook-free usage, and validation.
+
+### Kimi Code
+
+Install a reviewed local checkout from Kimi's plugin manager, then reload:
+
+```text
+/plugins install /absolute/path/to/ytstack
+/plugins reload
+```
+
+Use `/new` for a fresh session and `/plugins info ytstack` to check 38 skills and
+five lifecycle hooks. Invoke skills as `/skill:ytstack:<name>`. Kimi combines the
+static sessionStart skill with pending context consumed once through
+UserPromptSubmit; SessionStart hook stdout is not a context channel.
+See [Kimi setup and compatibility](docs/kimi.md) for updates, adapted gstack
+skills, interactive close, headless limits and the tested version matrix.
 
 The installation methods below are for Claude Code.
 
@@ -390,13 +408,14 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 Ships:
 
 - 38 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), six adapted from gstack and synced with upstream (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`), review and production (`visual-review`, `signal-intake`, `incident`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
-- 9 hooks (SessionStart / PreCompact / SessionEnd / Stop / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers + STATE lint + lifecycle hints.
+- 9 Claude Code hooks (SessionStart / PreCompact / SessionEnd / Stop / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers + STATE lint + lifecycle hints.
 - A status line segment (`bin/ytstack-status`): project progress from an optional `progress` block in `STATE.md`, or the active slice's task count, plus the current task. See [`docs/statusline.md`](./docs/statusline.md).
 - An optional PR watch (`bin/ytstack-pr-watch`, off until `enable`): tells the session that opened a pull request about red CI, unresolved bot review threads and merge conflicts, through hooks for Claude Code and Codex and a 60-second background worker. See [`docs/pr-watch.md`](./docs/pr-watch.md).
 - 26 shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks, the repository's own technical spec) and an eval suite for `claude plugin eval` (`evals/`, 25 cases).
 - Full docs (`AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, UX contracts, references, methodology)
 - Plugin manifest + marketplace manifest, published via the `yesterday-public-plugins` catalog
 - Codex manifest + self-marketplace, shared skills, and 3 lifecycle hooks; see [host support](docs/codex.md#supported-behavior)
+- Native Kimi manifest, adapter, helper and 5 lifecycle hooks; see [Kimi host support](docs/kimi.md) for the pending lifecycle and support boundaries.
 
 See `.ytstack/ROADMAP.md` for the task list, `.ytstack/STATE.md` for progress, `.ytstack/REVIEW-NOTES.md` for deferred items.
 
@@ -404,13 +423,15 @@ See `.ytstack/ROADMAP.md` for the task list, `.ytstack/STATE.md` for progress, `
 
 ```
 ytstack/
-├── .claude-plugin/              plugin manifest + marketplace
+├── .claude-plugin/              Claude Code plugin manifest + marketplace
+├── .kimi-plugin/                native Kimi plugin manifest
 ├── .ytstack/                    dogfood: ytstack tracks itself
 ├── hooks/                       9 hook scripts + pr-watch (opt-in) + hooks.json + lib/git-ctx.sh (shared resolver)
+├── kimi/                        Kimi runtime adapter
 ├── tools/pr-watch/              PR watch engine (Python 3.9+, stdlib only), driven by bin/ytstack-pr-watch
-├── skills/                      38 skill packages
-├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-brief (brief for a dispatched worker, report check), ytstack-frontier (lanes, claims, what may start), ytstack-finish-lane (a lane to a merged pull request), ytstack-risk (whether a change merges without a person), ytstack-runtime (the product per worktree, RUNTIME.md), ytstack-handover (staged script for a human-only step), ytstack-questions (questions for the human), ytstack-watch (pull request changes, release watch), ytstack-upkeep (what needs a look, for a schedule), ytstack-signals (production findings, incident records), ytstack-gstack-diff (upstream changes of the adapted gstack skills), ytstack-status (status line segment), ytstack-pr-watch (opt-in PR watch), ytstack-codex, dev-reinstall
-├── tests/                       26 shell test suites + run-all.sh (--linux via Docker), pr_watch/ (unittest)
+├── skills/                      38 skill packages shared by all hosts
+├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-brief (brief for a dispatched worker, report check), ytstack-frontier (lanes, claims, what may start), ytstack-finish-lane (a lane to a merged pull request), ytstack-risk (whether a change merges without a person), ytstack-runtime (the product per worktree, RUNTIME.md), ytstack-handover (staged script for a human-only step), ytstack-questions (questions for the human), ytstack-watch (pull request changes, release watch), ytstack-upkeep (what needs a look, for a schedule), ytstack-signals (production findings, incident records), ytstack-gstack-diff (upstream changes of the adapted gstack skills), ytstack-status (status line segment), ytstack-pr-watch (opt-in PR watch), ytstack-codex, ytstack-kimi, dev-reinstall
+├── tests/                       26 shell test suites + run-all.sh (--linux via Docker), pr_watch/ (unittest), Kimi unittest suites
 ├── vendor/                      read-only subtree: superpowers v7.0.2 (the six gstack skills are adapted under skills/, not vendored)
 ├── docs/
 │   ├── ux/                      mandatory skill-authoring contracts and artifact formats
@@ -443,6 +464,7 @@ ytstack/
 | [AGENTS.md](./AGENTS.md) | Contributor guide for AI coding agents (`CLAUDE.md` symlinks to it) |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contributor guide for humans |
 | [docs/concept.md](./docs/concept.md) | Condensed reference paper -- what ytstack wraps, skips, adds |
+| [docs/kimi.md](./docs/kimi.md) | Native Kimi installation, lifecycle, gstack and support limits |
 | [docs/methodology.md](./docs/methodology.md) | What we adapted from gstack / superpowers / GSD, and how |
 | [docs/references.md](./docs/references.md) | Sources consulted while designing ytstack |
 | [docs/ux/](./docs/ux/) | Skill-authoring UX contracts (frontmatter, format, writing style) |
