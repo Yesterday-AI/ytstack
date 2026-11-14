@@ -149,31 +149,86 @@ class DurableWorkflow(unittest.TestCase):
         self.assertIsNotNone(self.db.execute("SELECT cancelled FROM outbox WHERE event_key='state:old'").fetchone()[0])
         self.assertEqual(self.watch()['status'],'closed')
 
-    def test_closed_unmerged_pr_is_rechecked_and_merged_pr_is_not(self):
-        # A closed PR can be reopened on GitHub: the worker looks at it again after REOPEN_CHECK.
-        with patch.object(github,'snapshot',return_value={'head':'head2','closed':True,'pr':{'state':'closed','merged_at':None}}):
+    def close(self,merged=False):
+        pr={'state':'closed','merged_at':'2026-01-01T00:00:00Z' if merged else None}
+        with patch.object(github,'snapshot',return_value={'head':'head2','closed':True,'pr':pr}):
             worker.monitor(self.db,self.watch())
-        with self.db:self.db.execute('UPDATE watches SET updated=?',(time.time()-worker.REOPEN_CHECK-1,))
-        self.assertEqual(self.ticked(),[self.watch()['number']])
-        with patch.object(github,'snapshot',return_value={'head':'head2','closed':True,'pr':{'state':'closed','merged_at':'2026-01-01T00:00:00Z'}}):
-            worker.monitor(self.db,self.watch())
-        with self.db:self.db.execute('UPDATE watches SET updated=?',(time.time()-worker.REOPEN_CHECK-1,))
-        self.assertEqual(self.ticked(),[])
 
-    def ticked(self,budget=None):
-        """Watch numbers one tick reads, with the quota answer `budget` (None: unknown)."""
-        seen=[]
+    def test_closed_pr_is_never_snapshotted_but_comes_back_when_reopened(self):
+        # Reopen detection costs one open-PR list per repository and REOPEN_CHECK, not a snapshot per closed watch.
+        self.close()
+        self.assertEqual(self.ticked(open_prs=[]),[])
+        self.assertEqual(self.open_calls,1)
+        self.assertEqual(self.watch()['status'],'closed')
+        self.assertEqual(self.ticked(open_prs=[{'number':1}]),[])
+        self.assertEqual(self.open_calls,0)   # within REOPEN_CHECK: no second list
+        with self.db:self.db.execute("DELETE FROM meta WHERE key LIKE 'reopen_check:%'")
+        self.ticked(open_prs=[{'number':1}])
+        self.assertEqual(self.watch()['status'],'registered')
+        self.assertEqual(self.ticked(),[1])   # read again on the next tick
+
+    def test_merged_pr_is_never_checked_again(self):
+        self.close(merged=True)
+        self.assertEqual(self.ticked(open_prs=[{'number':1}]),[])
+        self.assertEqual(self.open_calls,0)
+        self.assertEqual(self.watch()['status'],'closed')
+
+    def ticked(self,budget=None,open_prs=()):
+        """Watch numbers one tick reads, with the quota answer `budget` (None: unknown);
+        `open_prs` is the repository's open-PR list, served in pages of 100
+        (every page request counted in self.open_calls)."""
+        seen=[]; self.open_calls=0; prs=list(open_prs)
+        def page(path):
+            self.open_calls+=1
+            n=int(path.rsplit('page=',1)[1])
+            return prs[(n-1)*100:n*100]
         with patch.object(worker,'discover'),patch.object(worker,'monitor',side_effect=lambda db,w:seen.append(w['number'])),\
-             patch.object(worker,'deliver'),patch.object(worker,'spendable',return_value=budget):
+             patch.object(worker,'deliver'),patch.object(worker,'spendable',return_value=budget),\
+             patch.object(github,'api',side_effect=page):
             worker.tick(send=False,reconcile=False)
         return seen
 
+    def test_reopen_listing_pays_every_page_and_resumes_later(self):
+        self.close()
+        many=[{'number':n} for n in range(1000,1250)]+[{'number':1}]   # three pages
+        self.ticked(budget=2,open_prs=many)
+        self.assertEqual(self.open_calls,2)
+        self.assertEqual(self.watch()['status'],'closed')               # incomplete: not on the first two pages
+        self.assertIsNone(self.db.execute("SELECT value FROM meta WHERE key='reopen_check:o/r'").fetchone())
+        self.ticked(budget=3,open_prs=many)
+        self.assertEqual(self.open_calls,3)
+        self.assertEqual(self.watch()['status'],'registered')
+
+    def test_reopen_ignores_watches_outside_the_window(self):
+        self.close()
+        with self.db:
+            register(self.db,'o/r',2,'session-a','/tmp')
+            old=time.time()-worker.REOPEN_WINDOW-1
+            self.db.execute("UPDATE watches SET status='closed',detail='[]',closed_at=? WHERE number=2",(old,))
+        self.ticked(open_prs=[{'number':1},{'number':2}])
+        self.assertEqual(self.db.execute('SELECT status FROM watches WHERE number=1').fetchone()[0],'registered')
+        self.assertEqual(self.db.execute('SELECT status FROM watches WHERE number=2').fetchone()[0],'closed')
+
     def test_settled_prs_are_read_less_often(self):
-        n=self.watch()['number']
-        for status,age,expected in (('waiting',10,[n]),('registered',10,[n]),('ready',10,[]),('ready',worker.QUIET_INTERVAL+1,[n]),
-                                    ('action_required',10,[]),('unavailable',worker.QUIET_INTERVAL+1,[n])):
-            with self.db:self.db.execute('UPDATE watches SET status=?,updated=?',(status,time.time()-age))
-            self.assertEqual(self.ticked(),expected,(status,age))
+        n=self.watch()['number']; now=time.time(); fresh=now-10; stale=now-worker.FAST_WINDOW-1
+        for status,age,changed,expected in (('registered',10,None,[n]),('waiting',10,fresh,[n]),('waiting',10,stale,[]),
+                                            ('waiting',10,None,[]),('waiting',worker.QUIET_INTERVAL+1,stale,[n]),
+                                            ('ready',10,fresh,[]),('ready',worker.QUIET_INTERVAL+1,stale,[n]),
+                                            ('action_required',10,fresh,[]),('unavailable',worker.QUIET_INTERVAL+1,None,[n])):
+            with self.db:self.db.execute('UPDATE watches SET status=?,updated=?,changed_at=?',(status,now-age,changed))
+            self.assertEqual(self.ticked(),expected,(status,age,changed))
+
+    def test_changed_at_moves_only_on_a_change(self):
+        s=snapshot()
+        with patch.object(github,'snapshot',return_value=s):worker.monitor(self.db,self.watch())
+        first=self.watch()['changed_at']; self.assertIsNotNone(first)
+        with self.db:self.db.execute('UPDATE watches SET changed_at=1')
+        with patch.object(github,'snapshot',return_value=s):worker.monitor(self.db,self.watch())
+        self.assertEqual(self.watch()['changed_at'],1)
+        s2=snapshot();s2['head']='head3'
+        for c in s2['checks']:c['head_sha']='head3'
+        with patch.object(github,'snapshot',return_value=s2):worker.monitor(self.db,self.watch())
+        self.assertGreater(self.watch()['changed_at'],1)
 
     def test_quota_reserve_stops_reading(self):
         with self.db:
@@ -195,6 +250,42 @@ class DurableWorkflow(unittest.TestCase):
         self.assertIsNone(self.db.execute("SELECT value FROM meta WHERE key='rate_limited'").fetchone())
         with patch.object(github,'api',side_effect=github.APIError('x')):
             self.assertIsNone(worker.spendable(self.db))
+
+    def test_closed_long_ago_is_not_rechecked(self):
+        self.close()
+        old=time.time()-worker.REOPEN_WINDOW-1
+        with self.db:self.db.execute('UPDATE watches SET updated=?,closed_at=?',(old,old))
+        self.assertEqual(self.ticked(open_prs=[{'number':1}]),[])
+        self.assertEqual(self.open_calls,0)
+
+    def test_legacy_closed_rows_get_their_last_read_as_closing_time(self):
+        # A state copied from an older install has no closed_at column; its
+        # closed rows must not all come back as reopen checks.
+        import sqlite3
+        path=Path(self.tmp.name,'watch.sqlite3'); self.db.close(); path.unlink()
+        for suffix in ('-wal','-shm'):
+            Path(str(path)+suffix).unlink(missing_ok=True)
+        legacy=sqlite3.connect(str(path))
+        legacy.executescript("""CREATE TABLE watches (repo TEXT, number INTEGER, session TEXT, cwd TEXT, head TEXT DEFAULT '',
+            status TEXT DEFAULT 'registered', detail TEXT DEFAULT '', updated REAL DEFAULT 0, paused INTEGER DEFAULT 0, PRIMARY KEY(repo, number));""")
+        legacy.execute("INSERT INTO watches(repo,number,session,cwd,status,detail,updated) VALUES('o/r',1,'session-a','/tmp','closed','[]',?)",
+                       (time.time()-30*86400,))
+        legacy.execute("INSERT INTO watches(repo,number,session,cwd,status,updated) VALUES('o/r',2,'session-a','/tmp','waiting',0)")
+        legacy.commit(); legacy.close()
+        self.db=connect()
+        self.assertEqual(self.db.execute("SELECT closed_at IS NOT NULL FROM watches WHERE number=1").fetchone()[0],1)
+        self.assertEqual(self.ticked(open_prs=[{'number':1}]),[2])
+        self.assertEqual(self.open_calls,0)
+
+    def test_open_prs_are_paid_before_reopen_checks(self):
+        self.close()
+        with self.db:
+            register(self.db,'o/r',2,'session-a','/tmp')
+            self.db.execute("UPDATE watches SET status='waiting',updated=?,changed_at=? WHERE number=2",(time.time(),time.time()))
+        self.assertEqual(self.ticked(budget=worker.SNAPSHOT_COST),[2])
+        self.assertEqual(self.open_calls,0)
+        self.assertEqual(self.ticked(budget=worker.SNAPSHOT_COST+1),[2])
+        self.assertEqual(self.open_calls,1)
 
     def test_registering_again_revives_a_closed_watch(self):
         with patch.object(github,'snapshot',return_value={'head':'head2','closed':True}):
