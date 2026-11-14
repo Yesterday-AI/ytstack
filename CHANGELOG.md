@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `yt_epoch` parses an ISO time with BusyBox `date` (alpine without
   coreutils); STATE lint W5 never fired there.
+- `ytstack-runtime` reads nothing inside a code fence of a section: a fenced
+  `## Release` example inside "Run" no longer counts as configuration.
 
 - **Technical spec** (issue #36): every project gets `.ytstack/spec/SPEC.md`
   (entry point, one page) and one `.ytstack/spec/<area>.md` per system area.

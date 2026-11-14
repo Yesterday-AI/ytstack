@@ -51,7 +51,8 @@ have_file() { [ -n "$FILE" ] && [ -f "$FILE" ]; }
 #   get      the value of <key> in <Section>; status 1 no such key, 2 no such section
 # A section runs from its heading to the next "# " or "## " heading. In it a
 # list line ("- ...") is read and every other line is free text; a section
-# without a list line counts as absent. A heading inside a code fence is text.
+# without a list line counts as absent. Nothing inside a code fence is read,
+# in a section or outside one.
 parse() {
   awk -v mode="$1" -v S="${2:-}" -v K="${3:-}" '
     function trim(s) { sub(/^ +/, "", s); sub(/ +$/, "", s); return s }
@@ -79,17 +80,24 @@ parse() {
       KEYS["Release"] = "target deployed healthy settle"
       KEYS["Signals"] = "read kind scope"
       NAME["run"] = "Run"; NAME["release"] = "Release"; NAME["signals"] = "Signals"
+      TOKMSG = "token-looking string; RUNTIME.md names a credential, the value comes from the environment of whoever runs the command"
     }
     { sub(/\r$/, ""); gsub(/\t/, " ") }
-    sec == "" && (index($0, "```") == 1 || index($0, "~~~") == 1) { fence = !fence; next }
-    !fence && /^##? / {
+    # A fence toggles in and outside a section. Inside one no line is a heading
+    # or a key; the token rule still holds for the text of a section.
+    index($0, "```") == 1 || index($0, "~~~") == 1 { fence = !fence; next }
+    fence {
+      if (sec != "" && token($0)) problem("line " NR ": " sec ": " TOKMSG)
+      next
+    }
+    /^##? / {
       h = $0; sub(/^##? +/, "", h); h = tolower(trim(h))
       sec = (h in NAME) ? NAME[h] : ""
       next
     }
     sec == "" || /^ *$/ { next }
     { at = "line " NR ": " sec ": " }
-    token($0) { problem(at "token-looking string; RUNTIME.md names a credential, the value comes from the environment of whoever runs the command") }
+    token($0) { problem(at TOKMSG) }
     !/^ *- / {
       # Free text. One slip is caught: a key line that lost its dash.
       if (sec != "Signals" && match($0, /^ *[a-z]+:/)) {

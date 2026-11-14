@@ -322,6 +322,44 @@ EOF
 run "$D" check
 eq "text outside the three sections is never read" "runtime ok: Release" "$OUT"
 
+# A fence inside a section is free text as a whole: no heading, no key in it.
+project fenced
+cat > "$F" <<'EOF'
+## Run
+
+- start: pnpm dev
+- ready: curl -fsS http://localhost:3000/
+
+An example of the next section:
+
+```markdown
+## Release
+
+- deployed: ./deploy.sh --now
+```
+
+## Signals
+
+~~~
+- example | read: ./not-a-source.sh | kind: errors
+~~~
+
+- errors | read: ./errors.sh | kind: errors
+EOF
+run "$D" check
+eq "a fenced Release example inside Run is no Release section" "runtime ok: Run, Signals" "$OUT"
+run "$D" get release deployed
+eq "and get finds no Release in it" 1 "$EC"; has "and says so" 'no "Release" section' "$OUT"
+run "$D" signals
+eq "a fenced list line inside Signals is no source" "errors${TAB}errors${TAB}./errors.sh${TAB}-" "$OUT"
+defect "a token inside a fence of a section" "line 7: Run: token-looking string" <<EOF
+$RUN
+
+\`\`\`
+curl -H "Authorization: Bearer $HEXTOK" http://localhost:3000/
+\`\`\`
+EOF
+
 # ---- 4. up, status, down against a real server --------------------------------
 echo "# up, status, down"
 if ! command -v python3 >/dev/null 2>&1; then

@@ -11,7 +11,7 @@ The script is `bin/ytstack-runtime`. The skills that use the sections are `verif
 
 ## What is read in a section
 
-A section runs from its heading (`## Run`, `## Release`, `## Signals`) to the next `#` or `##` heading. In it the list lines (`- ...`) are read. Every other line is free text: a note, the source a value came from. A section without a list line counts as absent, so a scaffold can write the three headings with one line of explanation each.
+A section runs from its heading (`## Run`, `## Release`, `## Signals`) to the next `#` or `##` heading. In it the list lines (`- ...`) are read. Every other line is free text: a note, the source a value came from. A code fence (` ``` ` or `~~~`) is free text as a whole, inside a section or outside one: a heading or a list line in it is part of an example, not configuration. A section without a list line counts as absent, so a scaffold can write the three headings with one line of explanation each.
 
 ## `## Run` -- the product in a worktree
 
