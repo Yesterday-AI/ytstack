@@ -1,7 +1,7 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T09:00:00Z
+last_updated: 2026-11-14T10:30:00Z
 current_milestone: none
 active_slice: none
 active_task: none
@@ -9,7 +9,9 @@ active_task: none
 
 # State
 
-**Status (2026-11-14):** M025 (risk gate and the product per worktree), M026 (release watch, upkeep) and M027 (signal intake, incidents) are built on the branch `risk-gate` (worktree `.claude/worktrees/risk-gate`), stacked on `spec-and-bounded-work`, from the research note `docs/research/2026-11-13-openai-software-factory.md`. Checked: 24 suites `ALL SUITES PASSED` on macOS bash 3.2, on `ubuntu:26.04` and on plain alpine (BusyBox only); checker without failure; 13 Codex tests OK; `claude plugin validate .` passed; eval run of the four new cases in `KNOWLEDGE.md` ("Eval runs"). Not run: any of it in a real session or against a real target (no change merged without a person, no real visual review, release watch or incident yet). No milestone is in flight.
+**Status (2026-11-14):** M025 (risk gate and the product per worktree), M026 (release watch, upkeep) and M027 (signal intake, incidents) are built on the branch `risk-gate` (worktree `.claude/worktrees/risk-gate`), stacked on `spec-and-bounded-work`, from the research note `docs/research/2026-11-13-openai-software-factory.md`. Checked: 24 suites `ALL SUITES PASSED` on macOS bash 3.2, on `ubuntu:26.04` and on plain alpine (BusyBox only); checker without failure; 13 Codex tests OK; `claude plugin validate .` passed; eval run of the four new cases in `KNOWLEDGE.md` ("Eval runs"). Not run: any of it in a real session or against a real target (no change merged without a person, no real visual review, release watch or incident yet). No milestone is in flight. M022-M024 are merged into `main` with #37 (`a410fff`).
+
+**Status (2026-11-14, M028):** M028 DONE, merged (PRs #39 and #40 with the review fixes) and released as 0.6.0: the six gstack skills are ytstack's own self-contained adaptations (no gstack install, nothing registered in `~/.claude/skills/`), each with a `metadata.upstream` baseline, synced to gstack v1.99.3.0 with the new `bin/ytstack-gstack-diff`; the sync check is part of every release (AGENTS.md, CONTRIBUTING). 13 suites green, checker without failures, Codex tests OK, `claude plugin validate .` passed. Release check: `bin/ytstack-gstack-diff --stat` against the live upstream exit 0 (gstack v1.99.3.0 is the newest tag). The adapted skills have not yet run end to end in a real session. `current_milestone: none` on this branch because M022-M027 (open PRs #37/#38) and M020 (main checkout) are on other lines.
 
 **Status (2026-11-13):** M022 (technical spec, issue #36), M023 (bounded work, issue #35) and M024 (coordinator mode, issue #34) are built on the branch `spec-and-bounded-work` (worktree `.claude/worktrees/spec-and-bounded-work`, on top of `f4f54ab`), not pushed. What each milestone built: its `M###-CONTEXT.md` and `ROADMAP.md`; what applies now: `spec/SPEC.md`. Checked: 20 suites `ALL SUITES PASSED` on macOS bash 3.2 and in the Linux container, checker 27 warnings as on `main`, 13 Codex tests OK, `claude plugin validate .` passed, eval run 20 of 21 on the final tree (`KNOWLEDGE.md`, "Eval runs"). Not run: anything of coordinator mode against a real pull request host or in a real multi-lane run (gate G01 in `M024-S02-PLAN.md`), a live dispatch with a rendered brief, a live session on Codex. No milestone is in flight. This file is over its own size bound (lint W8, W9): its history moves out when the operator answers `ytstack:reconcile`.
 

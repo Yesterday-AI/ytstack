@@ -12,7 +12,9 @@ Complete list of every skill in both vendored upstreams. Maintained as a referen
 
 ---
 
-## gstack -- installed dependency, not vendored (since M017 / 0.3.0)
+## gstack -- six skills adapted into ytstack (since 0.6.0); installed dependency 0.3.0 to 0.5.0
+
+**Current state (2026-11-14):** `office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship` and `document-release` are ytstack's own adaptations under `skills/`, each with its gstack baseline in `metadata.upstream`; nothing of gstack is installed. `bin/ytstack-gstack-diff` reports upstream changes since the baseline. The paragraph and tables below are the historical inventory.
 
 Garry Tan's opinionated full-stack framework. **No longer under `vendor/`**: ytstack's three planning wrappers invoke the gstack skills installed at `~/.claude/skills/gstack` (pinned v1.96.0.0, bun >= 1.4.2) through the Skill tool (DECISIONS 2026-11-07 "Vendor strategy"). Upstream has 62 skills at v1.96.0.0 (21 added, `investigate` retired since this snapshot); the current list and the structural changes (`sections/*.md`, `gstack-skill-start`, `gbrain`) are documented in `docs/research/2026-11-07-notes/vendor-upstream-drift.md`. The table below is the 2026-04-24 snapshot (43 skills at `aeea57f`) kept for the "what did we cherry-pick from" question; do not treat it as current.
 

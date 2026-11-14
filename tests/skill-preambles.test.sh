@@ -102,17 +102,25 @@ for s in $SKILLS; do
       has "$s: brownfield -> PITCH none (route condition)" "$OUT" "PITCH: none"
       has "$s: brownfield -> candidates listed" "$OUT" "CANDIDATES:" ;;
     office-hours|plan-ceo-review|plan-eng-review|retro|ship|document-release)
-      # gstack wrappers: precheck flags, empty HOME (no gstack) vs fake install
-      has "$s: no gstack -> GSTACK_AVAILABLE no" "$OUT" "GSTACK_AVAILABLE: no"
-      has "$s: no gstack -> install cmd names the pin" "$OUT" "--branch v1.96.0.0"
-      GSI="$TMP/home/.claude/skills/gstack"; mkdir -p "$GSI"
-      printf '1.96.0.0\n' > "$GSI/VERSION"; for g in office-hours plan-ceo-review plan-eng-review retro ship document-release; do mkdir -p "$GSI/$g"; printf -- '---\nname: %s\n---\n' "$g" > "$GSI/$g/SKILL.md"; done
-      run_pre "$P" "$WT"
-      has "$s: fake install -> GSTACK_AVAILABLE yes" "$OUT" "GSTACK_AVAILABLE: yes"
-      has "$s: fake install -> skill ok" "$OUT" "GSTACK_SKILL_OK: yes"
-      has "$s: fake install -> pin ok" "$OUT" "GSTACK_PIN_OK: yes"
-      rm -rf "$TMP/home/.claude"
-      grep -q 'vendor/gstack' "$ROOT/skills/$s/SKILL.md" && bad "$s: no vendor/gstack reference left" || ok "$s: no vendor/gstack reference left" ;;
+      # Adapted from gstack and shipped in ytstack (DECISIONS 2026-11-14): the
+      # preamble runs with an empty HOME (no gstack anywhere) and needs nothing
+      # outside the plugin.
+      [ "$EC" -eq 0 ] && ok "$s: runs with an empty HOME (no gstack install)" || bad "$s: runs with an empty HOME" "exit $EC"
+      has "$s: reports HAS_YTSTACK" "$OUT" "HAS_YTSTACK: yes"
+      case "$OUT" in *GSTACK*|*BUN_OK*) bad "$s: no gstack precheck flags" ;; *) ok "$s: no gstack precheck flags" ;; esac
+      grep -rqE '\.claude/skills/gstack|vendor/gstack|gstack-skill-start|\bbun\b' "$ROOT/skills/$s" && bad "$s: no gstack runtime reference" || ok "$s: no gstack runtime reference"
+      # Concept mode picks the newest pitch, also in a checkout path with a space (PR #39 review).
+      case "$s" in plan-ceo-review|plan-eng-review)
+        SP="$TMP/space dir/$s"; mkdir -p "$SP/.ytstack"
+        ( cd "$SP" && git init -q && git config user.email t@t.t && git config user.name t \
+          && printf 'name: x\n' > .ytstack/PROJECT.md \
+          && printf -- '---\nname: a\n---\n' > .ytstack/OFFICE-HOURS-old.md && touch -t 202001010000 .ytstack/OFFICE-HOURS-old.md \
+          && printf -- '---\nname: b\n---\n' > .ytstack/OFFICE-HOURS-new-v2.md \
+          && echo x > f && git add -A && git commit -qm seed ) >/dev/null 2>&1
+        run_pre "$P" "$SP"
+        has "$s: path with a space -> concept mode" "$OUT" "MODE: concept"
+        has "$s: newest pitch selected" "$OUT" "OFFICE-HOURS-new-v2.md" ;;
+      esac ;;
     reconcile)
       has "$s: clean fixture -> no draft stubs" "$OUT" "DRAFT_STUBS: 0"
       has "$s: clean fixture -> STATE.md is a pointer" "$OUT" "STATE_HISTORY: no (0 earlier status paragraph(s)"

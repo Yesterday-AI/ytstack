@@ -11,13 +11,9 @@ Code command names; in Codex select the corresponding skill from ytstack with
 ### Prerequisites
 
 - Claude Code >= 2.1.214 (the plugin's hooks use `fork`-session matching and `CLAUDE_PLUGIN_DATA`).
-- For the six gstack-backed skills (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`): **gstack installed** at `~/.claude/skills/gstack` with **bun >= 1.4.2**. ytstack is tested against gstack v1.96.0.0:
+- bash, git and `gh`. Nothing else to install: `office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship` and `document-release` are ytstack's own adaptations of gstack skills and ship with the plugin.
 
-  ```bash
-  git clone --branch v1.96.0.0 https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd ~/.claude/skills/gstack && ./setup --no-browser)
-  ```
-
-  Without it those skills stop with this install command; everything else in ytstack works without gstack or bun. gstack's `./setup` also registers its own `Stop` hook in `~/.claude/settings.json` (remove with `~/.claude/skills/gstack/bin/gstack-settings-hook remove-source --source gstack-timeline-stop`) and may skip Chromium; neither affects ytstack.
+  Upgrading from ytstack 0.5 or older with gstack installed only for ytstack: gstack's `./setup` registered about 60 skills in `~/.claude/skills/` (folders with a `.gstack-owned` marker) plus `~/.claude/skills/gstack`. ytstack no longer uses them; remove them with gstack's own `~/.claude/skills/gstack/bin/gstack-uninstall --keep-state` (read its `--help` first: it also removes gstack installs for other agents).
 
 ### Local dev (recommended for first try)
 
@@ -235,11 +231,11 @@ Agent fires `ytstack:resume-session` -- reads `STATE.md` + `HANDOFF.md` + latest
 
 > "Slice is done -- finish the branch." / "Ship it."
 
-`ytstack:finish-branch` (merge locally / PR / keep; no dependencies) or `ytstack:ship` (gstack's release flow with tests, review and PR). Both refuse while a task of the slice has no real summary.
+`ytstack:finish-branch` (merge locally / PR / keep; no dependencies) or `ytstack:ship` (release flow with tests, review and PR). Both refuse while a task of the slice has no real summary.
 
 > "Retro." / "Write the changelog."
 
-After the milestone closed: `ytstack:retro` (gstack) writes `M###-RETRO.md` from the task summaries; `ytstack:document-release` (gstack) writes the CHANGELOG section for the version. Before the next milestone, "poke holes in this idea" runs `ytstack:grill` (superpowers brainstorming) and parks the design in the milestone context. The SessionStart hook prints these as hints when a slice or milestone is closed.
+After the milestone closed: `ytstack:retro` writes `M###-RETRO.md` from the task summaries; `ytstack:document-release` writes the CHANGELOG section for the version. Before the next milestone, "poke holes in this idea" runs `ytstack:grill` (superpowers brainstorming) and parks the design in the milestone context. The SessionStart hook prints these as hints when a slice or milestone is closed.
 
 ## Handoff / resume
 

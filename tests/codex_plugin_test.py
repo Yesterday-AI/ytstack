@@ -140,7 +140,8 @@ class CodexPluginTests(unittest.TestCase):
     def test_wrapper_preambles_and_vendor_imports(self):
         """Every skill with shell blocks runs its preamble through the helper; the six
         superpowers wrappers end in a vendor `cat` that renders the upstream file verbatim.
-        gstack wrappers have no vendor block (installed dependency, DECISIONS 2026-11-07)."""
+        The six skills adapted from gstack carry their procedure inline and have no
+        vendor block (DECISIONS 2026-11-14)."""
         self.write_state()
         imported = []
         for skill in sorted((self.package / "skills").glob("*/SKILL.md")):

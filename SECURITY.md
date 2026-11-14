@@ -17,7 +17,7 @@ Use GitHub's private vulnerability reporting on `Yesterday-AI/ytstack`, or open 
 ## Third-party runtime
 
 - **superpowers** (MIT) is vendored read-only under `vendor/superpowers/` at a release tag (v7.0.2) and inlined as prose; nothing from it is executed by ytstack.
-- **gstack** (MIT) is **not shipped**. Three skills invoke the gstack skills the user installed at `~/.claude/skills/gstack` (tested against v1.96.0.0, requires bun >= 1.4.2). gstack's own helpers (Bun scripts, optional browser binary, telemetry/update checks per its README) run under the user's install, outside ytstack's control; review gstack's `SECURITY.md` and `ETHOS.md` before installing.
+- **gstack** (MIT): six skills are ytstack's own adaptations of gstack skills (`skills/office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`). Only their method text was taken over; none of gstack's helpers, Bun scripts, browser binary or telemetry is shipped or called, and nothing is installed outside the plugin.
 
 ## No build or runtime images from this repository
 

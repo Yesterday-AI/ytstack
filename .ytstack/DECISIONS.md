@@ -968,3 +968,22 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** Read only. `incident` never picks a mitigation without a person, not in a run nobody watches either. Answering in an incident channel is a host integration and stays out.
 
 **Supersedes:** None.
+
+---
+
+## 2026-11-14: The six gstack skills become ytstack's own adaptations, synced with upstream; no gstack install
+
+**Context:** Since 0.3.0 the wrappers `office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship` and `document-release` called an installed gstack through the Skill tool. gstack's `./setup` registers every gstack skill in `~/.claude/skills/` (63 folders plus `gstack`), so the maintainer's global skill list filled with ~65 skills ytstack never selected. That broke the founding promise: only selected skills, inside the plugin's boundary. The wrappers depended on that registration, because they invoked the skills by their bare names. A 1:1 copy is not an option either: the six skills reference 54 gstack helpers (29 Bun scripts, one compiled binary), ~560 MB of `node_modules` and hard-coded `~/.claude/skills/gstack/` paths.
+
+**Options considered:**
+- A) Adapt the six skills into self-contained ytstack skills: carry over the method text (gstack is MIT), drop gstack's runtime, record the upstream baseline, re-sync on every release.
+- B) Copy the skills plus their runtime closure into `vendor/gstack/` with rewritten paths. Ships Bun scripts and a dependency tree a plugin cannot carry, and tracks gstack's internal layout (the 2026-11-07 option C).
+- C) Keep the install and prune the global registrations after each `./setup`. Every gstack upgrade re-creates them.
+
+**Chose:** A. Each skill is ytstack's own, with `metadata.upstream: "gstack v<tag> (<skill>/, commit <sha>)"`. `bin/ytstack-gstack-diff` shows the upstream diff since that baseline (exit 3 when behind); AGENTS.md and the CONTRIBUTING release checklist make the check mandatory on every release. `bin/ytstack-check` fails gstack runtime references, a missing baseline, symlinks and em-dashes in these skill dirs. `yt_gstack_ctx`, the pin and `tests/gstack-live.test.sh` are removed.
+
+**Reason:** The maintainer asked for copies shipped with ytstack and for upstream changes to be considered on every upgrade. Self-contained skills keep the curation and the plugin boundary, need no Bun and no install, and load from the plugin cache on Claude Code and Codex alike. The recorded baseline plus the diff tool keep the cost of tracking upstream to one command per release.
+
+**How to apply:** See AGENTS.md "Skills adapted from gstack". Fold method changes in, skip runtime-only changes, then move the baseline. Adapting a further gstack skill needs its own DECISIONS entry.
+
+**Supersedes:** The gstack half of "2026-11-07: Vendor strategy" (installed, tag-pinned dependency) and the gstack-resolution rules of the M020 planning entry "2026-11-09: Multi-host adapters share one plugin and keep gstack resolution unambiguous", which is not on `main` yet (there is no installed gstack to resolve any more; its multi-host reuse rule stays).

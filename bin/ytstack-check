@@ -638,33 +638,44 @@ def check_inline_leaks(root):
     return fails, warns
 
 
-# ---------- check: gstack wrappers (installed dependency contract, M017) ----------
+# ---------- check: skills adapted from gstack (self-contained, 2026-11-14) ----------
 
-_GSTACK_WRAPPERS = ("office-hours", "plan-ceo-review", "plan-eng-review", "retro", "ship", "document-release")
+_GSTACK_ADAPTED = ("office-hours", "plan-ceo-review", "plan-eng-review", "retro", "ship", "document-release")
+# Anything that needs a gstack install or its Bun runtime at run time.
+_GSTACK_RUNTIME_RE = re.compile(r"\.claude/skills/gstack|vendor/gstack|gstack-skill-(start|end)|\bbin/gstack-[a-z-]+|\bbun\b|GSTACK_[A-Z_]+|yt_gstack_")
 
 
-def check_gstack_wrappers(root):
-    """gstack is an installed, tag-pinned dependency (DECISIONS 2026-11-07).
-    Each wrapper must run the precheck, carry the install command, invoke the
-    installed skill through the Skill tool, and never inline vendor/gstack."""
+def check_gstack_adapted(root):
+    """Six skills are ytstack's own adaptations of gstack skills (DECISIONS
+    2026-11-14). They ship in the plugin and must run with bash, git and gh
+    only: no gstack runtime reference, no symlink in the skill dir, and a
+    `metadata.upstream` baseline so the upstream sync (bin/ytstack-gstack-diff)
+    knows what to diff against."""
     fails = []
     warns = []
-    for name in _GSTACK_WRAPPERS:
-        path = root / "skills" / name / "SKILL.md"
+    for name in _GSTACK_ADAPTED:
+        sdir = root / "skills" / name
+        path = sdir / "SKILL.md"
         if not path.is_file():
             continue
-        text = path.read_text(encoding="utf-8", errors="replace")
         rel = path.relative_to(root)
-        if "vendor/gstack" in "\n".join(l for l in text.split("\n") if not _COMMENT_RE.match(l)):
-            fails.append(f"{rel}: gstack wrapper references vendor/gstack (gstack is an installed dependency, never inlined)")
-        if "yt_gstack_ctx" not in text:
-            fails.append(f"{rel}: gstack wrapper lacks the yt_gstack_ctx precheck")
-        if "GSTACK_INSTALL_CMD" not in text:
-            fails.append(f"{rel}: gstack wrapper lacks GSTACK_INSTALL_CMD (the stop message must carry the pinned install command)")
-        if f"Invoke the Skill tool with `{name}`" not in text:
-            fails.append(f"{rel}: gstack wrapper must say \"Invoke the Skill tool with `{name}`\"")
-        if "## HARD-GATE" not in text:
-            fails.append(f"{rel}: gstack wrapper lacks a HARD-GATE section")
+        text = path.read_text(encoding="utf-8", errors="replace")
+        fm = text.split("\n---", 1)[0] if text.startswith("---") else ""
+        if not re.search(r"^  upstream:\s*\S", fm, re.M):
+            fails.append(f"{rel}: skill adapted from gstack lacks metadata.upstream (the sync baseline)")
+        for f in sorted(sdir.rglob("*")):
+            frel = f.relative_to(root)
+            if f.is_symlink():
+                fails.append(f"{frel}: symlink in a skill adapted from gstack (plugin dirs must hold real files)")
+                continue
+            if not f.is_file():
+                continue
+            body = f.read_text(encoding="utf-8", errors="replace")
+            for i, line in enumerate(body.split("\n"), 1):
+                if _GSTACK_RUNTIME_RE.search(line):
+                    fails.append(f"{frel}:{i}: skill adapted from gstack references the gstack runtime: {line.strip()[:80]}")
+                if "—" in line:
+                    fails.append(f"{frel}:{i}: em-dash in a skill adapted from gstack (use --)")
     return fails, warns
 
 
@@ -782,8 +793,8 @@ def main():
     all_fails.extend(f)
     all_warns.extend(w)
 
-    # gstack wrappers (M017): installed-dependency contract
-    f, w = check_gstack_wrappers(root)
+    # Skills adapted from gstack (2026-11-14): self-contained contract
+    f, w = check_gstack_adapted(root)
     all_fails.extend(f)
     all_warns.extend(w)
 

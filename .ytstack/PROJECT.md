@@ -30,8 +30,8 @@ ytstack is the cleanup: one curated, opinionated Claude Code plugin that takes t
 - A team can install ytstack with one `/plugin install` and start a tracked project in under 5 minutes.
 - Every skill in ytstack follows the UX contract (AskUserQuestion format, writing-style, skill-structure) enforced by CI.
 - An 8-hour milestone can run with minimal user intervention via Agent Teams + ytstack skills, producing committed artifacts at each phase.
-- No runtime of its own (no GSD CLI). The gstack-backed skills need gstack installed at the pinned tag and bun; everything else runs on shell, git and python3 (DECISIONS 2026-11-07 "Vendor strategy").
-- superpowers stays vendored via git subtree at a release tag and is never edited; gstack is pinned by tag and never copied into the tree.
+- Zero dependencies on external runtimes (no GSD CLI, no gstack binary).
+- Upstream superpowers stays vendored via git subtree at a release tag; six gstack skills are adapted into ytstack and re-synced against upstream tags with `bin/ytstack-gstack-diff` (DECISIONS 2026-11-14).
 
 ## Current status
 

@@ -231,6 +231,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Task plans written before this release have no `## Spec impact` section.
   `summarize-task` then works the impact out at closure instead of refusing.
 
+## [0.6.0] - 2026-11-14
+
+### Fixed
+
+- `retro` counts the milestone's own commits even when the branch has not
+  merged the latest base yet; it reports how many base commits are missing
+  instead of switching the analysis to the base branch.
+- `ship` writes the CHANGELOG entry under the bumped version when the branch
+  already carries it, not under `Unreleased`.
+- `plan-ceo-review` writes `last_updated` in `STATE.md` as a full ISO
+  timestamp, so the STATE lint stays clean.
+- `plan-eng-review` finds the pitch in concept mode when the checkout path
+  contains a space, and picks the newest one.
+
+### Changed
+
+- **The six gstack-derived skills ship inside ytstack** (`office-hours`,
+  `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`,
+  `document-release`). Each is ytstack's own adaptation of the gstack skill
+  (MIT): the method carried over, gstack's runtime (Bun preamble, telemetry,
+  gbrain, learnings, Greptile, browser) left out. They run with bash, git
+  and gh; gstack and Bun are no longer needed, and nothing is registered in
+  `~/.claude/skills/`. Each skill records its gstack baseline in
+  `metadata.upstream`: drafted from gstack v1.96.0.0, then synced to
+  v1.99.3.0 with the new diff tool (VERDICT line for subagent second
+  opinions and the adversarial review, plain-language PR titles and
+  CHANGELOG leads, stricter docs-audit result format). The optional outside
+  voice in `plan-ceo-review` / `plan-eng-review` runs as a fresh-context
+  subagent; no external CLI is called.
+- `bin/ytstack-check`: the gstack-wrapper rule is replaced by a
+  self-contained rule for the six skills (no gstack runtime reference,
+  `metadata.upstream` present, no symlinks, no em-dashes in any file of the
+  skill).
+
+### Added
+
+- `bin/ytstack-gstack-diff`: shows what changed upstream in gstack since
+  each skill's baseline (`--stat`, a target tag, `--source <clone>`); exit 3
+  when a skill is behind. The CONTRIBUTING release checklist runs it before
+  every release; AGENTS.md describes the sync.
+
+### Removed
+
+- `yt_gstack_ctx`, `yt_gstack_skill_ok`, `yt_vergte`, `YT_GSTACK_PIN`,
+  `YT_BUN_MIN` from `hooks/lib/git-ctx.sh`, and `tests/gstack-live.test.sh`.
+
+### Upgrade note
+
+- If gstack was installed only for ytstack, its `./setup` left about 60
+  skill folders in `~/.claude/skills/`. QUICKSTART explains the removal.
+
 ## [0.5.0] - 2026-11-11
 
 ### Added
@@ -627,6 +678,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.6.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.5.0
 [0.4.2]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.1

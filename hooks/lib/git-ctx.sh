@@ -269,60 +269,6 @@ yt_ensure_gitignore() {
   return 0
 }
 
-# ---- gstack as an installed dependency (M017, DECISIONS 2026-11-07) --------
-# ytstack's three planning wrappers (office-hours, plan-ceo-review,
-# plan-eng-review) invoke the gstack skills installed under
-# ${GSTACK_HOME:-$HOME/.claude/skills/gstack}. YT_GSTACK_PIN is the release
-# ytstack is tested against (gstack tag v<pin>); newer is accepted, older warns.
-YT_GSTACK_PIN="1.96.0.0"
-YT_BUN_MIN="1.4.2"
-
-# yt_vergte <a> <b>: dotted-numeric compare, success when a >= b. Missing
-# components count as 0; non-numeric parts are ignored. bash 3.2, no arrays.
-yt_vergte() {
-  local a="$1" b="$2" x y i=0
-  [ -n "$a" ] || return 1
-  while [ $i -lt 6 ]; do
-    x="${a%%.*}"; y="${b%%.*}"
-    x="${x//[!0-9]/}"; y="${y//[!0-9]/}"
-    x="${x:-0}"; y="${y:-0}"
-    if [ "$x" -gt "$y" ]; then return 0; fi
-    if [ "$x" -lt "$y" ]; then return 1; fi
-    case "$a" in *.*) a="${a#*.}";; *) a="";; esac
-    case "$b" in *.*) b="${b#*.}";; *) b="";; esac
-    [ -z "$a" ] && [ -z "$b" ] && return 0
-    i=$((i+1))
-  done
-  return 0
-}
-
-# yt_gstack_skill_ok <name> -> yes|no (SKILL.md present in the install)
-yt_gstack_skill_ok() {
-  if [ -n "${YT_GSTACK_DIR:-}" ] && [ -f "$YT_GSTACK_DIR/$1/SKILL.md" ]; then printf 'yes'; else printf 'no'; fi
-}
-
-# yt_gstack_ctx: sets YT_GSTACK_DIR, YT_GSTACK_AVAILABLE, YT_GSTACK_VERSION,
-# YT_GSTACK_PIN_OK, YT_BUN, YT_BUN_VERSION, YT_BUN_OK, YT_GSTACK_INSTALL_CMD.
-yt_gstack_ctx() {
-  YT_GSTACK_DIR="${GSTACK_HOME:-$HOME/.claude/skills/gstack}"
-  YT_GSTACK_AVAILABLE=no; YT_GSTACK_VERSION=""; YT_GSTACK_PIN_OK=no
-  YT_BUN=""; YT_BUN_VERSION=""; YT_BUN_OK=no
-  if [ -f "$YT_GSTACK_DIR/VERSION" ]; then
-    YT_GSTACK_VERSION=$(head -1 "$YT_GSTACK_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')
-    if [ "$(yt_gstack_skill_ok office-hours)" = yes ] && [ "$(yt_gstack_skill_ok plan-ceo-review)" = yes ] && [ "$(yt_gstack_skill_ok plan-eng-review)" = yes ]; then
-      YT_GSTACK_AVAILABLE=yes
-    fi
-    if yt_vergte "$YT_GSTACK_VERSION" "$YT_GSTACK_PIN"; then YT_GSTACK_PIN_OK=yes; fi
-  fi
-  if command -v bun >/dev/null 2>&1; then
-    YT_BUN=$(command -v bun)
-    YT_BUN_VERSION=$("$YT_BUN" --version 2>/dev/null | head -1 | tr -d '[:space:]')
-    if yt_vergte "$YT_BUN_VERSION" "$YT_BUN_MIN"; then YT_BUN_OK=yes; fi
-  fi
-  YT_GSTACK_INSTALL_CMD="git clone --branch v$YT_GSTACK_PIN https://github.com/garrytan/gstack \"$YT_GSTACK_DIR\" && (cd \"$YT_GSTACK_DIR\" && ./setup --no-browser)"
-  return 0
-}
-
 # ---- preferences (M018, DECISIONS 2026-11-07 "Ceremony scales with the change") ----
 # yt_pref <yt_dir> <key> [default] -> value of `key: value` (or legacy `key=value`)
 # from <yt_dir>/PREFERENCES.md, frontmatter or body; surrounding quotes and a

@@ -12,7 +12,7 @@
   <p>
     <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
     <a href="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/Yesterday-AI/ytstack/actions/workflows/ci.yml/badge.svg"></a>
-    <img alt="version" src="https://img.shields.io/badge/version-0.5.0-FC4E14">
+    <img alt="version" src="https://img.shields.io/badge/version-0.6.0-FC4E14">
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
     <img alt="Codex" src="https://img.shields.io/badge/Codex-plugin-0A0A0A">
     <img alt="skills" src="https://img.shields.io/badge/skills-31-FC4E14">
@@ -92,7 +92,7 @@ Install all three and you get friction: interactive prompts blocking each other,
 
 **Parallel execution without a custom runtime.** `ytstack:spawn-milestone-team` turns the main session into a thin orchestrator: one `ytstack:implementer` subagent per slice in its own git worktree (`isolation: worktree`, skills preloaded, fresh context), one `ytstack:verifier` per finished slice branch, then a merge the orchestrator owns. Claude Code Agent Teams remain an opt-in (`team: on`) for milestones where teammates must talk to each other. No separate CLI, no SQLite, no TUI to babysit.
 
-**One namespace, upstreams consumed the way they want to be.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/superpowers/` is a read-only `git subtree` mirror pinned to an upstream tag (v7.0.2); we never modify it, we inline it. gstack is **not** vendored any more: it ships its skills as a Bun-powered install under `~/.claude/skills/gstack`, so ytstack's six gstack wrappers check for that install (pinned v1.96.0.0) and invoke it through the Skill tool.
+**One namespace, upstreams consumed the way they want to be.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/superpowers/` is a read-only `git subtree` mirror pinned to an upstream tag (v7.0.2); we never modify it, we inline it. From gstack, ytstack takes exactly six skills and ships them as its own adaptations (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`): no gstack install, no Bun, nothing registered in `~/.claude/skills/`. Each records the gstack release it follows; `bin/ytstack-gstack-diff` shows upstream changes before every release.
 
 ## Workflows
 
@@ -127,9 +127,9 @@ SessionStart hook injects `STATE.md` + the `using-ytstack` directive before your
   -> "let's do a handoff"      -> ytstack:handoff-session   (rich HANDOFF.md)
   -> "poke holes in this idea" -> ytstack:grill             (question it before plan-milestone)
   -> "finish the branch"       -> ytstack:finish-branch     (merge / PR / keep, after the slice is closed)
-  -> "ship it"                 -> ytstack:ship              (gstack release flow: tests, review, PR)
-  -> "retro"                   -> ytstack:retro             (after the milestone closed; gstack)
-  -> "write the changelog"     -> ytstack:document-release  (release notes from the summaries; gstack)
+  -> "ship it"                 -> ytstack:ship              (release flow: tests, review, PR)
+  -> "retro"                   -> ytstack:retro             (after the milestone closed)
+  -> "write the changelog"     -> ytstack:document-release  (release notes from the summaries)
   -> "check the UI of this"    -> ytstack:visual-review     (product started at the commit, own screenshots)
   -> "what does prod report"   -> ytstack:signal-intake     (findings under .ytstack/signals/, read only)
   -> "production is down"      -> ytstack:incident          (record, mitigations you run, cause afterwards)
@@ -204,7 +204,7 @@ Source: [`docs/ytstack-debugging-flow.excalidraw`](docs/ytstack-debugging-flow.e
 ### Prerequisites
 
 - Claude Code >= 2.1.214.
-- For the six gstack-backed skills (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`): gstack installed at `~/.claude/skills/gstack` (tested against v1.96.0.0) with bun >= 1.4.2 -- `git clone --branch v1.96.0.0 https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd ~/.claude/skills/gstack && ./setup --no-browser)`. Those skills stop with this command when gstack is missing; the other 25 skills and all hooks need neither gstack nor bun.
+- bash, git and `gh` (for `ship` and `document-release`). Nothing else: the six skills adapted from gstack (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`) ship inside the plugin, so gstack and Bun are not needed and nothing is registered in `~/.claude/skills/`.
 
 ### Codex
 
@@ -359,11 +359,11 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 
 ## Status
 
-**v0.5.0 -- shipping, actively dogfooded.** 0.5.0 adds the status line segment (`bin/ytstack-status`, #31). 0.2.0 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); 0.3.0 pulled superpowers to v7.0.2 and turned gstack into an installed, tag-pinned dependency (#25); 0.4.0 adds brownfield import (`adopt-brownfield`, #18), ceremony scaling (quick lane, reconcile, minimal-code guard, STATE lint), the 2026 skill bar (`metadata:` frontmatter, trigger-only descriptions measured by `evals/`, CI), six lifecycle skills (`code-review`, `finish-branch`, `grill`, `retro`, `ship`, `document-release`) and the worktree-subagent execution model. ytstack tracks its own development in `.ytstack/`; see `.ytstack/ROADMAP.md` for what is next.
+**v0.6.0 -- shipping, actively dogfooded.** 0.6.0 ships the six gstack-derived skills as ytstack's own adaptations (no gstack install, nothing in `~/.claude/skills/`) and adds the upstream sync check `bin/ytstack-gstack-diff`. 0.5.0 added the status line segment (`bin/ytstack-status`, #31). 0.2.0 made hooks and skills worktree-safe and moved volatile session state out of the repository (issues #24, #26, #27); 0.3.0 pulled superpowers to v7.0.2 and turned gstack into an installed, tag-pinned dependency (#25); 0.4.0 adds brownfield import (`adopt-brownfield`, #18), ceremony scaling (quick lane, reconcile, minimal-code guard, STATE lint), the 2026 skill bar (`metadata:` frontmatter, trigger-only descriptions measured by `evals/`, CI), six lifecycle skills (`code-review`, `finish-branch`, `grill`, `retro`, `ship`, `document-release`) and the worktree-subagent execution model. ytstack tracks its own development in `.ytstack/`; see `.ytstack/ROADMAP.md` for what is next.
 
 Ships:
 
-- 38 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), gstack wrappers over the installed dependency (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`), review and production (`visual-review`, `signal-intake`, `incident`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
+- 38 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), six adapted from gstack and synced with upstream (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`), review and production (`visual-review`, `signal-intake`, `incident`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
 - 9 hooks (SessionStart / PreCompact / SessionEnd / Stop / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers + STATE lint + lifecycle hints.
 - A status line segment (`bin/ytstack-status`): project progress from an optional `progress` block in `STATE.md`, or the active slice's task count, plus the current task. See [`docs/statusline.md`](./docs/statusline.md).
 - 25 shell test suites (`tests/run-all.sh`, macOS bash 3.2 + Linux bash 5), `bin/ytstack-check` (UX contracts, `metadata:` + description contract, resolver contract, vendor leaks, the repository's own technical spec) and an eval suite for `claude plugin eval` (`evals/`, 25 cases).
@@ -381,9 +381,9 @@ ytstack/
 ├── .ytstack/                    dogfood: ytstack tracks itself
 ├── hooks/                       9 hook scripts + hooks.json + lib/git-ctx.sh (shared resolver)
 ├── skills/                      38 skill packages
-├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-brief (brief for a dispatched worker, report check), ytstack-frontier (lanes, claims, what may start), ytstack-finish-lane (a lane to a merged pull request), ytstack-risk (whether a change merges without a person), ytstack-runtime (the product per worktree, RUNTIME.md), ytstack-handover (staged script for a human-only step), ytstack-questions (questions for the human), ytstack-watch (pull request changes, release watch), ytstack-upkeep (what needs a look, for a schedule), ytstack-signals (production findings, incident records), ytstack-status (status line segment), ytstack-codex, dev-reinstall
+├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-brief (brief for a dispatched worker, report check), ytstack-frontier (lanes, claims, what may start), ytstack-finish-lane (a lane to a merged pull request), ytstack-risk (whether a change merges without a person), ytstack-runtime (the product per worktree, RUNTIME.md), ytstack-handover (staged script for a human-only step), ytstack-questions (questions for the human), ytstack-watch (pull request changes, release watch), ytstack-upkeep (what needs a look, for a schedule), ytstack-signals (production findings, incident records), ytstack-gstack-diff (upstream changes of the adapted gstack skills), ytstack-status (status line segment), ytstack-codex, dev-reinstall
 ├── tests/                       25 shell test suites + run-all.sh (--linux via Docker)
-├── vendor/                      read-only subtree: superpowers v7.0.2 (gstack is an installed dependency, not vendored)
+├── vendor/                      read-only subtree: superpowers v7.0.2 (the six gstack skills are adapted under skills/, not vendored)
 ├── docs/
 │   ├── ux/                      mandatory skill-authoring contracts and artifact formats
 │   ├── recipes/                 recurring-upkeep.md: the upkeep run on a schedule, per host
