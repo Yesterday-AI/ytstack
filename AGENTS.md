@@ -12,7 +12,7 @@ Before any architectural proposal, read in order: `docs/concept.md` (stable summ
 
 Stop. Read this section before acting.
 
-ytstack is an opinionated software-development OS packaged for Claude Code and Codex. It has strict UX contracts and a curated scope. Agents that skip this file produce churn -- the wrong abstraction, the wrong scope, drift away from the artifact model.
+ytstack is an opinionated software-development OS packaged for Claude Code, Codex and Kimi Code. It has strict UX contracts and a curated scope. Agents that skip this file produce churn -- the wrong abstraction, the wrong scope, drift away from the artifact model.
 
 **Your job is to protect the human from shipping low-quality skills.** Before you open a PR or commit a skill change, you MUST:
 
@@ -27,10 +27,10 @@ If you can't verify all five above, stop and tell the human what you can't verif
 ## What ytstack is (and is not)
 
 **Is:**
-- A Claude Code and Codex plugin (one shared skill tree and lifecycle scripts, host-specific registration; see `docs/codex.md` for the support boundary)
+- A Claude Code, Codex and Kimi Code plugin (one shared skill tree and lifecycle scripts, host-specific registration; see `docs/codex.md` and `docs/kimi.md` for support boundaries)
 - A curated clamp around selected superpowers skills (vendored via git subtree, NEVER modified) and six gstack skills (adapted into ytstack's own skills and kept in sync with upstream, see below)
 - An artifact-first system: `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, the technical spec under `spec/` (what applies now, `docs/ux/spec-format.md`), milestone/slice/task hierarchy
-- SessionStart-hook-driven context injection (following superpowers' using-superpowers pattern)
+- Host-driven lifecycle context injection: SessionStart on Claude Code/Codex, plus Kimi's static bootstrap and pending UserPromptSubmit bridge documented in `docs/kimi.md`
 - MIT licensed, shareable, team-usable
 
 **Is not:**
