@@ -460,7 +460,7 @@ compute() {
   while IFS= read -r p; do
     [ -n "$p" ] || continue
     case "$p" in
-      .ytstack/spec/REVIEW.md|.ytstack/DECISIONS.md|.ytstack/STANDING.md|.ytstack/PREFERENCES.md)
+      .ytstack/spec/REVIEW.md|.ytstack/DECISIONS.md|.ytstack/STANDING.md|.ytstack/PREFERENCES.md|.ytstack/standing/*)
         note person "$p" "always a person: rule document"; echo "$p" >> "$W/exempt" ;;
       .github/workflows/*|.gitlab-ci.yml)
         note person "$p" "always a person: the checks themselves"; echo "$p" >> "$W/exempt" ;;

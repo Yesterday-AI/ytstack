@@ -132,6 +132,8 @@ change "$R" decisions 'echo x >> .ytstack/DECISIONS.md'
 person "DECISIONS.md" "reason: .ytstack/DECISIONS.md -- always a person: rule document"
 change "$R" standing 'echo x > .ytstack/STANDING.md'
 person "STANDING.md" "reason: .ytstack/STANDING.md -- always a person: rule document"
+change "$R" standing-entry 'mkdir -p .ytstack/standing && echo x > .ytstack/standing/20261114T1225Z-report-results-only.md'
+person "a standing entry file" "reason: .ytstack/standing/20261114T1225Z-report-results-only.md -- always a person: rule document"
 change "$R" prefs 'echo x >> .ytstack/PREFERENCES.md'
 person "PREFERENCES.md" "reason: .ytstack/PREFERENCES.md -- always a person: rule document"
 change "$R" agents 'echo x >> AGENTS.md'
