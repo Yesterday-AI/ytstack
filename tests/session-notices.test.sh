@@ -16,6 +16,12 @@
 #   injection the lines appear on SessionStart startup and clear (and without a
 #             source), never on resume or compact; a project with none of it
 #             sees no factory text; the hook writes no file
+#   version   hooks/version-notice (UserPromptSubmit) records the plugin version
+#             of a session's first prompt out of tree and says once per
+#             installed version "ytstack X installed, this session loaded A:
+#             reload the skills you use" with the CHANGELOG entry titles in
+#             between, bounded; installed = installed_plugins.json, else the
+#             newest cached sibling without .orphaned_at
 #
 # HOME, CLAUDE_PLUGIN_DATA and the PR watch state are fixture directories.
 #
@@ -148,6 +154,63 @@ lacks "and not the list" "$CTX" "- Risk routing"
 after=$(find "$TMP/plugin-data" -type f 2>/dev/null | wc -l | tr -d ' ')
 eq "session-start wrote no state file" "$before" "$after"
 eq "and nothing in the checkout" "" "$(git -C "$D" status --porcelain | grep -v '^?? .ytstack/spec' )"
+
+# ---- 6. version notice (UserPromptSubmit) ------------------------------------------
+echo "# version-notice"
+CACHE="$TMP/cache/mkt/ytstack"
+# plugin <version> [<changelog versions newest first>...]: a cached plugin root
+plugin() {
+  local v="$1" r="$CACHE/$1" c; shift
+  mkdir -p "$r/.claude-plugin"
+  printf '{\n  "name": "ytstack",\n  "version": "%s"\n}\n' "$v" > "$r/.claude-plugin/plugin.json"
+  { printf '# Changelog\n\n## [Unreleased]\n'
+    for c in "$@"; do printf '\n## [%s] - 2026-11-15\n\n### Added\n\n- **Feature of %s**: text\n  more text.\n- **Second of %s.** text\n\n### Fixed\n\n- **Fix of %s** (#1): text\n' "$c" "$c" "$c" "$c"; done
+  } > "$r/CHANGELOG.md"
+}
+plugin 0.10.0 0.10.0 0.9.2
+plugin 0.11.0 0.11.0 0.10.1 0.10.0 0.9.2
+OLD="$CACHE/0.10.0"; NEW="$CACHE/0.11.0"
+mkdir -p "$HOME/.claude/plugins"
+installed() { printf '{"version":2,"plugins":{"ytstack@mkt":[{"scope":"user","installPath":"%s","version":"x"}],"other@mkt":[{"installPath":"/nowhere"}]}}\n' "$1" > "$HOME/.claude/plugins/installed_plugins.json"; }
+# vn <session> <plugin root>: OUT of the hook for a prompt in D
+vn() {
+  OUT=$(printf '{"session_id":"%s","cwd":"%s","hook_event_name":"UserPromptSubmit","prompt":"go"}' "$1" "$D" \
+    | CLAUDE_PLUGIN_ROOT="$2" bash "$H/version-notice" 2>&1); EC=$?
+  CTXV=$(printf '%s' "$OUT" | "$JQ" -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+}
+installed "$OLD"
+vn v1 "$OLD"; eq "first prompt, nothing newer: exit 0 and silent" "0:" "$EC:$OUT"
+eq "the session's version is recorded out of tree" "0.10.0" "$(cat "$CLAUDE_PLUGIN_DATA/sessions/v1/plugin-version" 2>/dev/null)"
+installed "$NEW"
+vn v1 "$OLD"
+eq "after an update: JSON for UserPromptSubmit" "UserPromptSubmit" "$(printf '%s' "$OUT" | "$JQ" -r '.hookSpecificOutput.hookEventName' 2>/dev/null)"
+has "names both versions" "$CTXV" "ytstack 0.11.0 installed, this session loaded 0.10.0: reload the skills you use"
+has "lists the entries of 0.11.0" "$CTXV" "0.11.0: Feature of 0.11.0; Second of 0.11.0; Fix of 0.11.0"
+has "and of 0.10.1" "$CTXV" "0.10.1: Feature of 0.10.1"
+lacks "but not of the loaded version" "$CTXV" "Feature of 0.10.0"
+vn v1 "$OLD"; eq "said once" "0:" "$EC:$OUT"
+vn v1 "$NEW"; eq "a refreshed hook root in the same session: still once" "0:" "$EC:$OUT"
+vn v2 "$NEW"; eq "a new session on the installed version: silent" "0:" "$EC:$OUT"
+vn v2b "$OLD"; has "first prompt on a stale root: said at once" "$CTXV" "ytstack 0.11.0 installed, this session loaded 0.10.0"
+rm "$HOME/.claude/plugins/installed_plugins.json"
+vn v3 "$OLD"; eq "without installed_plugins.json, first prompt records" "0.10.0" "$(cat "$CLAUDE_PLUGIN_DATA/sessions/v3/plugin-version" 2>/dev/null)"
+has "and the newest cached sibling counts as installed" "$CTXV" "ytstack 0.11.0 installed"
+: > "$NEW/.orphaned_at"
+vn v4 "$OLD"; eq "an orphaned sibling does not count" "0:" "$EC:$OUT"
+rm "$NEW/.orphaned_at"
+OUT=$(printf '{"cwd":"%s","hook_event_name":"UserPromptSubmit"}' "$D" | CLAUDE_PLUGIN_ROOT="$OLD" bash "$H/version-notice" 2>&1); EC=$?
+eq "no session id: silent" "0:" "$EC:$OUT"
+vn "../escape" "$OLD"; eq "a session id that is no plain name: silent" "0:" "$EC:$OUT"
+lacks "and nothing written beside sessions/" "$(ls "$CLAUDE_PLUGIN_DATA")" "escape"
+# Bounded: many versions in between stay one short line.
+plugin 0.30.0 $(i=30; while [ $i -gt 9 ]; do printf '0.%s.0 ' $i; i=$((i - 1)); done)
+installed "$CACHE/0.30.0"
+vn v5 "$OLD"; has "many versions: said" "$CTXV" "ytstack 0.30.0 installed"
+SHORT=${CTXV//$CACHE\/0.30.0\/CHANGELOG.md/F}
+if [ "${#SHORT}" -le 900 ]; then ok "and bounded (${#SHORT} chars without the path)"; else bad "and bounded" "${#SHORT}"; fi
+has "with the rest pointed at" "$CTXV" "more in"
+OUT=$(printf '{"session_id":"v6","cwd":"%s"}' "$D" | CLAUDE_PLUGIN_ROOT="$OLD" YTSTACK_HOOK_FORMAT=plain bash "$H/version-notice" 2>&1)
+has "plain format: raw text" "$OUT" "ytstack 0.30.0 installed, this session loaded 0.10.0"
 
 echo
 echo "$PASS passed, $FAIL failed"
