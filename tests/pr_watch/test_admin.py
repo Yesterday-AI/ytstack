@@ -58,7 +58,12 @@ class Admin(unittest.TestCase):
             state.register(db, 'o/r', 4, 'claude:abc', '/tmp')
         # An open WAL connection, like a running old worker.
         (source / 'policy.json').write_text('{"defaults": {}}')
-        before = sorted(p.name for p in source.iterdir())
+
+        def files():
+            # Name and content of every source file, -wal and -shm included.
+            return {p.name: p.read_bytes() for p in sorted(source.iterdir())}
+
+        before = files()
         os.environ['PR_WATCH_HOME'] = str(self.home / 'new/state')
         code, out = self.quiet(admin.migrate, str(self.home / 'old'), False)
         self.assertEqual(code, 0)
@@ -66,12 +71,14 @@ class Admin(unittest.TestCase):
         self.assertFalse((self.home / 'new').exists())
         code, out = self.quiet(admin.migrate, str(self.home / 'old'), True)
         self.assertEqual(code, 0, out)
+        # Compared while the "old worker" connection is still open: what that
+        # connection does to its own files on close is not migrate's doing.
+        self.assertEqual(files(), before)
         db.close()
         copied = sqlite3.connect(str(self.home / 'new/state/watch.sqlite3'))
         self.assertEqual(copied.execute('SELECT session FROM watches').fetchone()[0], 'claude:abc')
         copied.close()
         self.assertTrue((self.home / 'new/state/policy.json').exists())
-        self.assertEqual(sorted(p.name for p in source.iterdir()), before)
         self.assertEqual(self.quiet(admin.migrate, str(self.home / 'old'), True)[0], 2)
 
 

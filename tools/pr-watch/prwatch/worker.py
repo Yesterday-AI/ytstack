@@ -4,7 +4,10 @@ import subprocess
 import time
 import uuid
 
-REOPEN_CHECK = 1800  # seconds between rechecks of a closed, unmerged PR
+REOPEN_CHECK = 1800   # seconds between rechecks of a closed, unmerged PR
+QUIET_INTERVAL = 300  # seconds between reads of a ready, blocked or unavailable PR
+SNAPSHOT_COST = 10    # REST calls one snapshot may take (8 for a one-page PR, plus pagination)
+RATE_RESERVE = 0.3    # share of the hourly REST quota left to the user's agents (policy: rate_limit_reserve)
 from datetime import datetime
 from . import github, codex, claude
 from .evaluate import evaluate, notification_events, conflict_unknown
@@ -200,6 +203,15 @@ def tick(send=True, reconcile=True):
         except BlockingIOError:
             db.close()
             return
+        # The REST quota (5,000 an hour per account) is shared with every gh
+        # call of the user's agents. Keep a reserve for them: below it this
+        # tick reads nothing, and each snapshot is paid from what is left.
+        budget = spendable(db)
+        if budget is not None and budget <= 0:
+            with db:
+                db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', ('heartbeat', str(time.time())))
+            db.close()
+            return
         if reconcile:
             try:
                 discover(db)
@@ -209,15 +221,57 @@ def tick(send=True, reconcile=True):
             else:
                 with db:
                     db.execute("DELETE FROM meta WHERE key='discovery_error'")
-        # Closed but unmerged PRs can be reopened on GitHub: recheck them every
-        # REOPEN_CHECK seconds instead of dropping them for good.
-        for watch in db.execute(
-                "SELECT * FROM watches WHERE paused=0 AND (status!='closed' OR "
-                "(detail NOT LIKE '%\"merged\"%' AND updated < ?))",
-                (time.time() - REOPEN_CHECK,)).fetchall():
+        now = time.time()
+        for watch in db.execute("SELECT * FROM watches WHERE paused=0 ORDER BY updated").fetchall():
+            if not due(watch, now):
+                continue
+            if budget is not None:
+                if budget < SNAPSHOT_COST:
+                    break
+                budget -= SNAPSHOT_COST
             monitor(db, watch)
         if send:
             deliver(db)
         with db:
             db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', ('heartbeat', str(time.time())))
     db.close()
+
+
+def due(watch, now):
+    """Whether a watch is read this tick. Moving PRs every tick, settled ones
+    every QUIET_INTERVAL, closed unmerged ones every REOPEN_CHECK (they can be
+    reopened), merged ones never."""
+    status, age = watch['status'], now - (watch['updated'] or 0)
+    if status == 'closed':
+        return '"merged"' not in (watch['detail'] or '') and age >= REOPEN_CHECK
+    if status in ('registered', 'waiting'):
+        return True
+    return age >= QUIET_INTERVAL
+
+
+def spendable(db):
+    """REST calls this tick may spend: remaining minus the reserve, or None
+    when the quota cannot be read (then the worker behaves as before). The
+    rate_limit endpoint itself is not counted by GitHub."""
+    try:
+        core = github.api('rate_limit')['resources']['core']
+        limit, remaining, reset = int(core['limit']), int(core['remaining']), int(core['reset'])
+    except (github.APIError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
+        return None
+    reserve = int(limit * reserve_share())
+    with db:
+        if remaining <= reserve:
+            db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', ('rate_limited',
+                       f'{remaining}/{limit} REST calls left, reserve {reserve}; paused until {time.strftime("%H:%M:%SZ", time.gmtime(reset))}'))
+        else:
+            db.execute("DELETE FROM meta WHERE key='rate_limited'")
+    return remaining - reserve
+
+
+def reserve_share():
+    value = policy('').get('rate_limit_reserve', RATE_RESERVE)
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return RATE_RESERVE
+    return min(max(value, 0.0), 0.9)

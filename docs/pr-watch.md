@@ -106,6 +106,24 @@ the LaunchAgent and the launcher and keeps the state.
 `status` shows `health.heartbeat` (the last finished tick), discovery and
 delivery errors.
 
+## GitHub quota
+
+GitHub allows 5,000 REST calls an hour per account, shared by everything that
+runs under your login: the worker, every `gh` call of your agents, scripts. One
+PR snapshot costs about eight calls, so a worker that read ten PRs every minute
+would use nearly the whole hour on its own. The worker therefore:
+
+- reads a PR every minute only while something moves (`registered`,
+  `waiting`); a PR that is `ready`, blocked (`action_required`) or
+  `unavailable` every 5 minutes; a closed one every 30 minutes (it can be
+  reopened); a merged one never again;
+- asks GitHub for the remaining quota before each tick (`gh api rate_limit`,
+  which GitHub does not count) and keeps a reserve for your agents: 30% of the
+  hourly quota by default, `rate_limit_reserve` (0 to 0.9) in the `defaults` of
+  `policy.json`. At or below the reserve the tick reads nothing and `status`
+  shows `health.rate_limited` with the reset time; above it, each snapshot is
+  paid from what is left and the least recently read PRs go first.
+
 ## Policy
 
 `policy.json` in the state directory says per repository which review bots must
@@ -176,6 +194,8 @@ remaining steps, which are yours to run:
 - A closed PR stays watched: the worker looks at it again every 30 minutes and
   picks it up when it was reopened; registering it again does the same at
   once. A merged PR is not checked again.
+- A settled PR is read every 5 minutes, so a red check on it can take that
+  long to show up; below the quota reserve nothing is read until the reset.
 - GitHub and the agent cannot be read atomically. A finding can resolve right
   after the last read; the agent re-reads before acting.
 - Codex delivery uses the Codex app server's local API. An unsupported API

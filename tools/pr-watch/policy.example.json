@@ -1,7 +1,8 @@
 {
   "defaults": {
     "review_policy_configured": false,
-    "reviewers": []
+    "reviewers": [],
+    "rate_limit_reserve": 0.3
   },
   "repositories": {
     "owner/repo": {

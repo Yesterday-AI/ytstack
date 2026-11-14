@@ -154,19 +154,47 @@ class DurableWorkflow(unittest.TestCase):
         with patch.object(github,'snapshot',return_value={'head':'head2','closed':True,'pr':{'state':'closed','merged_at':None}}):
             worker.monitor(self.db,self.watch())
         with self.db:self.db.execute('UPDATE watches SET updated=?',(time.time()-worker.REOPEN_CHECK-1,))
-        seen=[]
-        with patch.object(worker,'discover'),patch.object(worker,'monitor',side_effect=lambda db,w:seen.append(w['number'])),\
-             patch.object(worker,'deliver'):
-            worker.tick(send=False,reconcile=False)
-        self.assertEqual(seen,[self.watch()['number']])
+        self.assertEqual(self.ticked(),[self.watch()['number']])
         with patch.object(github,'snapshot',return_value={'head':'head2','closed':True,'pr':{'state':'closed','merged_at':'2026-01-01T00:00:00Z'}}):
             worker.monitor(self.db,self.watch())
         with self.db:self.db.execute('UPDATE watches SET updated=?',(time.time()-worker.REOPEN_CHECK-1,))
+        self.assertEqual(self.ticked(),[])
+
+    def ticked(self,budget=None):
+        """Watch numbers one tick reads, with the quota answer `budget` (None: unknown)."""
         seen=[]
         with patch.object(worker,'discover'),patch.object(worker,'monitor',side_effect=lambda db,w:seen.append(w['number'])),\
-             patch.object(worker,'deliver'):
+             patch.object(worker,'deliver'),patch.object(worker,'spendable',return_value=budget):
             worker.tick(send=False,reconcile=False)
-        self.assertEqual(seen,[])
+        return seen
+
+    def test_settled_prs_are_read_less_often(self):
+        n=self.watch()['number']
+        for status,age,expected in (('waiting',10,[n]),('registered',10,[n]),('ready',10,[]),('ready',worker.QUIET_INTERVAL+1,[n]),
+                                    ('action_required',10,[]),('unavailable',worker.QUIET_INTERVAL+1,[n])):
+            with self.db:self.db.execute('UPDATE watches SET status=?,updated=?',(status,time.time()-age))
+            self.assertEqual(self.ticked(),expected,(status,age))
+
+    def test_quota_reserve_stops_reading(self):
+        with self.db:
+            register(self.db,'o/r',2,'session-a','/tmp')
+            self.db.execute("UPDATE watches SET status='waiting'")
+        self.assertEqual(self.ticked(budget=0),[])
+        self.assertEqual(len(self.ticked(budget=worker.SNAPSHOT_COST)),1)
+        self.assertEqual(len(self.ticked(budget=2*worker.SNAPSHOT_COST)),2)
+        self.assertEqual(len(self.ticked(budget=None)),2)
+
+    def test_spendable_keeps_the_reserve_and_reports_it(self):
+        rl={'resources':{'core':{'limit':5000,'remaining':1400,'reset':int(time.time())+600}}}
+        with patch.object(github,'api',return_value=rl):
+            self.assertEqual(worker.spendable(self.db),1400-1500)
+        self.assertIn('1400/5000',self.db.execute("SELECT value FROM meta WHERE key='rate_limited'").fetchone()[0])
+        rl['resources']['core']['remaining']=4000
+        with patch.object(github,'api',return_value=rl):
+            self.assertEqual(worker.spendable(self.db),2500)
+        self.assertIsNone(self.db.execute("SELECT value FROM meta WHERE key='rate_limited'").fetchone())
+        with patch.object(github,'api',side_effect=github.APIError('x')):
+            self.assertIsNone(worker.spendable(self.db))
 
     def test_registering_again_revives_a_closed_watch(self):
         with patch.object(github,'snapshot',return_value={'head':'head2','closed':True}):
