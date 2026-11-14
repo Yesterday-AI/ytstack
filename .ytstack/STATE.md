@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T14:15:51Z
-current_milestone: none
+last_updated: 2026-11-14T15:30:00Z
+current_milestone: M030
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-11-14, M030):** Planned and sliced: review lessons from bot findings (3 slices, 9 tasks). Next: `ytstack:plan-task` for M030-S01-T01. The project side is Yesterday-AI/context-mcp#1650.
 
 **Status (2026-11-14, M020):** M020 DONE (7/7) on `feat/kimi-code-support`, rebuilt directly on 0.8.0 (`41e5199`). The native Kimi manifest loads all 38 shared skills as `ytstack:<name>`; the helper provides static bootstrap plus pending startup/compaction context, shared handoff and supported-close journal behavior. The six gstack-derived skills stay self-contained; the earlier external-resolution design was removed. Verification: 26 macOS and 26 Linux suites, 16 Codex tests, two Kimi packaging and nine lifecycle tests, native Kimi 2.5.3 and official Linux 2.6.2 each 7/7, and Claude plugin validation. Headless SessionEnd #4380, web close, local macOS npm 2.6.2 and real-model selection limits are documented. Issue #30 remains open until its PR merges.
 
