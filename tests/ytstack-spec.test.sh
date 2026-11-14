@@ -10,7 +10,8 @@
 #           --exit-code
 #   impact  "none" closes; a named area is satisfied by a change to the area
 #           file OR to one of its sources, committed or not; nothing changed
-#           fails; a plan without the section exits 3
+#           fails; a plan without the section exits 3; file names git quotes
+#           (a space, a non-ASCII byte, a rename) compare as the real names
 #   areas   names the area whose paths cover a path
 #
 # Run: /bin/bash tests/ytstack-spec.test.sh   (exit 0 = all pass; macOS bash 3.2)
@@ -232,6 +233,39 @@ eq "a flag without a value is a usage error, not a hang" 64 "$EC"
 plan "- auth: Behavior -- a\n- billing: Known limits -- b"
 run "$R" impact --plan "$P" --base "$BASE"
 eq "two areas, both satisfied" 0 "$EC"
+
+# Filenames git quotes in its plain output (a space, a non-ASCII byte) are
+# compared as the real names: the records are read NUL-delimited.
+# srcarea <name> <source>: an implemented area whose one source has a space or
+# a non-ASCII byte in its name (the area() helper splits sources on spaces).
+srcarea() {
+  printf -- '---\narea: %s\nstatus: implemented\npaths:\n  - docs/**\nsources:\n  - %s\nverified_at: %s\n---\n\n# %s\n\n## Purpose\n\nx\n\n## Where implemented\n\nx\n\n## How to verify\n\nx\n\n## Decisions that apply now\n\nnone\n' \
+    "$1" "$2" "$V" "$1" > "$R/.ytstack/spec/$1.md"
+}
+echo v1 > "$R/docs/Architecture Overview.md"; echo v1 > "$R/docs/Übersicht.md"
+srcarea arch "docs/Architecture Overview.md"; srcarea intro "docs/Übersicht.md"
+spec "$R" auth billing arch intro
+commit "$R" "add spaced and non-ASCII sources"; BASE2=$(head_of "$R")
+run "$R" lint;                eq "spaced and non-ASCII sources pass lint" 0 "$EC"
+plan "- arch: Behavior -- new overview"
+echo v2 > "$R/docs/Architecture Overview.md"
+run "$R" impact --plan "$P" --grep '^M001-S01-T03:'
+eq "an uncommitted source with a space in its name satisfies impact" 0 "$EC"
+has "and is named unquoted" "arch: docs/Architecture Overview.md changed (uncommitted)" "$OUT"
+commit "$R" "M001-S01-T03: overview"
+plan "- intro: Behavior -- new intro"
+echo v2 > "$R/docs/Übersicht.md"; commit "$R" "M001-S01-T04: intro"
+run "$R" impact --plan "$P" --grep '^M001-S01-T04:'
+eq "a committed source git quotes (non-ASCII) satisfies impact" 0 "$EC"
+has "and is named as the real file name" "intro: docs/Übersicht.md changed (committed)" "$OUT"
+run "$R" impact --plan "$P" --grep '^none-such:' --base "$BASE2"
+eq "the --base range reads quoted names too" 0 "$EC"
+has "and names the real file" "intro: docs/Übersicht.md changed (committed)" "$OUT"
+( cd "$R" && git mv "docs/Übersicht.md" "docs/Intro neu.md" ) >/dev/null 2>&1
+run "$R" impact --plan "$P" --grep '^none-such:'
+eq "an uncommitted rename counts for its origin" 0 "$EC"
+has "the origin is read from its own record" "intro: docs/Übersicht.md changed (uncommitted)" "$OUT"
+( cd "$R" && git mv "docs/Intro neu.md" "docs/Übersicht.md" ) >/dev/null 2>&1
 
 # ---- 4. areas -----------------------------------------------------------------
 echo "# areas"

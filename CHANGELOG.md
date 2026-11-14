@@ -134,6 +134,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `bin/ytstack-spec impact` reads git's path records NUL-delimited, so a
+  source with a space or a non-ASCII byte in its name counts as changed,
+  committed or not.
 - `bin/ytstack-brief` reads a planned path with a space inside its backticks,
   so the brief names the area file that covers it.
 

@@ -98,6 +98,26 @@ rel() { case "$1" in "$TOP"/*) printf '%s' "${1#"$TOP"/}" ;; *) printf '%s' "$1"
 
 is_commit() { git -C "$TOP" rev-parse --verify --quiet "$1^{commit}" >/dev/null 2>&1; }
 
+# nul_paths: NUL-delimited git path records on stdin, one path per line out.
+# `git log -z --format=` may start a commit's names with a newline.
+nul_paths() {
+  local p
+  while IFS= read -r -d '' p; do
+    p=${p#$'\n'}
+    [ -z "$p" ] || printf '%s\n' "$p"
+  done
+}
+# status_paths: `git status --porcelain -z` records, one path per line out. A
+# rename or copy ("R  new" NUL "old") carries its origin as a record of its own.
+status_paths() {
+  local r
+  while IFS= read -r -d '' r; do
+    [ -n "$r" ] || continue
+    printf '%s\n' "${r:3}"
+    case "${r:0:2}" in *R*|*C*) IFS= read -r -d '' r && printf '%s\n' "$r" ;; esac
+  done
+}
+
 # ---- lint ----------------------------------------------------------------------
 cmd_lint() {
   local fails=0 warns=0 f name area status ver n h last idx p s
@@ -266,23 +286,34 @@ cmd_impact() {
   # What the task changed: commits whose subject matches --grep, else
   # --base..HEAD, plus the working tree (a summary is often written before the
   # commit that carries it).
+  # Paths come as NUL-delimited records (-z): the plain output quotes a name
+  # with a space or a non-ASCII byte, and a quoted name never equals the path
+  # a plan or an area file names.
   committed=""
   if [ "$YT_IS_GIT" = yes ]; then
-    [ -z "$pat" ] || committed=$(git -C "$TOP" log --no-merges -E --grep "$pat" --name-only --pretty=format: 2>/dev/null)
+    [ -z "$pat" ] || committed=$(git -C "$TOP" log --no-merges -E --grep "$pat" --name-only -z --format= 2>/dev/null | nul_paths)
     if [ -z "$committed" ] && [ -n "$base" ]; then
-      committed=$(git -C "$TOP" diff --name-only "$base..HEAD" 2>/dev/null)
+      committed=$(git -C "$TOP" diff --name-only -z "$base..HEAD" 2>/dev/null | nul_paths)
     fi
-    changed=$(git -C "$TOP" status --porcelain --untracked-files=all 2>/dev/null | sed 's/^...//; s/.* -> //')
+    changed=$(git -C "$TOP" status --porcelain -z --untracked-files=all 2>/dev/null | status_paths)
   else
     changed=""
   fi
 
-  # touched <path>: "committed", "uncommitted" or nothing. A directory matches by prefix.
+  # touched <path>: "committed", "uncommitted" or nothing. A directory matches
+  # by prefix. Compared as literal strings, not as patterns.
   touched() {
-    local re; re="^$(printf '%s' "${1%/}" | sed 's/[][\.*^$+?(){}|]/\\&/g')(/|\$)"
-    if printf '%s\n' "$committed" | grep -E "$re" >/dev/null; then echo committed
-    elif printf '%s\n' "$changed" | grep -E "$re" >/dev/null; then echo uncommitted
-    fi
+    local s="${1%/}" p
+    while IFS= read -r p; do
+      case "$p" in "$s"|"$s"/*) echo committed; return ;; esac
+    done <<EOT
+$committed
+EOT
+    while IFS= read -r p; do
+      case "$p" in "$s"|"$s"/*) echo uncommitted; return ;; esac
+    done <<EOT
+$changed
+EOT
   }
 
   while IFS= read -r line; do
