@@ -21,9 +21,30 @@ eq()  { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected '$2' got '$3'"
 
 jq -e . "$J" >/dev/null 2>&1 && ok "hooks.json is valid JSON" || { bad "hooks.json is valid JSON"; echo "$PASS passed, $FAIL failed"; exit 1; }
 
-eq "ships exactly the nine events" \
-  "PostToolUse PreCompact PreToolUse SessionEnd SessionStart Stop TaskCompleted TaskCreated TeammateIdle" \
+eq "ships exactly the ten events" \
+  "PostToolUse PreCompact PreToolUse SessionEnd SessionStart Stop TaskCompleted TaskCreated TeammateIdle UserPromptSubmit" \
   "$(jq -r '.hooks | keys | sort | join(" ")' "$J")"
+
+# Opt-in PR watch (DECISIONS 2026-11-14): one entry per event, own matcher on the tool events.
+PW='bash "${CLAUDE_PLUGIN_ROOT}/hooks/pr-watch" claude'
+eq "pr-watch registered on SessionStart, UserPromptSubmit, PreToolUse, PostToolUse" \
+  "PostToolUse PreToolUse SessionStart UserPromptSubmit" \
+  "$(jq -r --arg c "$PW" '[.hooks | to_entries[] | select([.value[].hooks[].command] | index($c)) | .key] | sort | join(" ")' "$J")"
+for ev in PreToolUse PostToolUse; do
+  eq "$ev pr-watch matcher" 'Bash|mcp__.*create_pull_request.*' \
+    "$(jq -r --arg c "$PW" --arg e "$ev" '.hooks[$e][] | select(.hooks[0].command == $c) | .matcher' "$J")"
+done
+eq "pr-watch timeouts are 15 s" "15" \
+  "$(jq -r --arg c "$PW" '[.hooks[][].hooks[] | select(.command == $c) | .timeout] | unique | join(",")' "$J")"
+eq "session-start stays the first SessionStart entry" 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/session-start"' \
+  "$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$J")"
+
+# Off (no ~/.ytstack/config): exit 0, no output, even with python3 off PATH.
+PWH=$(mktemp -d "${TMPDIR:-/tmp}/ytpw.XXXXXX")
+mkdir "$PWH/bin" && ln -s "$(command -v grep)" "$PWH/bin/grep"
+out=$(printf '{"session_id":"s","hook_event_name":"UserPromptSubmit"}' | HOME="$PWH" PATH="$PWH/bin" /bin/bash "$ROOT/hooks/pr-watch" claude 2>&1); ec=$?
+eq "pr-watch off: exit 0 and silent without python3 on PATH" "0:" "$ec:$out"
+rm -rf "$PWH"
 
 M=$(jq -r '.hooks.SessionStart[0].matcher' "$J")
 for src in startup resume clear compact fork; do
