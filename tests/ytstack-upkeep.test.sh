@@ -3,7 +3,10 @@
 # project's .ytstack/ and prints one report.
 #
 # Contract:
-#   clean     seven sections with the count 0, "nothing needs a look", exit 0;
+#   factory tools  the lines of yt_factory_notices (a factory tool that is off
+#             although the project would use it), listed and never counted:
+#             they do not change the exit code or raise a question
+#   clean     nine sections with the count 0, "nothing needs a look", exit 0;
 #             nothing is written
 #   spec      the failures of `ytstack-spec lint` and the areas of `drift`
 #   state     the findings of the STATE.md lint
@@ -92,16 +95,29 @@ run "$D"
 eq "a clean project: exit 0" 0 "$EC"
 eq "the last line says so" "nothing needs a look" "$(printf '%s\n' "$OUT" | tail -1)"
 like "the first line names the directory and the time of the read" "^ytstack upkeep: $Y, read $STAMP" "$(printf '%s\n' "$OUT" | sed -n 1p)"
-for s in spec state gates questions lanes runtime "review policy" "review checks"; do
+for s in spec state gates questions lanes runtime "review policy" "review checks" "factory tools"; do
   eq "section $s: 0" 0 "$(count "$s")"
 done
-eq "eight sections, the first and the last line" 10 "$(printf '%s\n' "$OUT" | awk 'NF { n++ } END { print n + 0 }')"
+eq "nine sections, the first and the last line" 11 "$(printf '%s\n' "$OUT" | awk 'NF { n++ } END { print n + 0 }')"
 has "a project without own reviewers says so" "review checks: 0 (no own reviewers)" "$OUT"
 has "a project without a technical spec says so" "spec: 0 (no technical spec)" "$OUT"
 eq "nothing was written" "$BEFORE" "$(snap)"
 run "$D" --question
 eq "--question on a clean project: exit 0" 0 "$EC"
 eq "and still nothing was written" "$BEFORE" "$(snap)"
+
+# ---- 1b. factory tools that are off: listed, not counted ----------------------------
+echo "# factory tools"
+project factory
+mkdir -p "$Y/spec"; printf 'FROM scratch\n' > "$D/Dockerfile"
+BEFORE=$(snap)
+OUT=$(HOME="$TMP/fhome" "$BASH" "$UP" -C "$D" --question 2>&1); EC=$?
+eq "factory lines alone: exit 0" 0 "$EC"
+eq "factory tools: 2, marked as not counted" "factory tools: 2 (not counted: settings, not findings)" "$(printf '%s\n' "$OUT" | grep '^factory tools:')"
+has "the risk line is an item" "  - Risk routing is not set up (no spec/REVIEW.md" "$OUT"
+has "the runtime line is an item" '  - RUNTIME.md has no "Release" section (the project deploys: Dockerfile)' "$OUT"
+eq "the last line ignores them" "nothing needs a look" "$(printf '%s\n' "$OUT" | tail -1)"
+eq "and --question wrote nothing" "$BEFORE" "$(snap)"
 
 # ---- 2. spec ----------------------------------------------------------------------
 echo "# spec"

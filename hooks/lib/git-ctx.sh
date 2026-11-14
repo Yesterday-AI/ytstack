@@ -2,7 +2,7 @@
 # ytstack shared context library -- source it, never execute it.
 #
 #   . "${CLAUDE_PLUGIN_ROOT}/hooks/lib/git-ctx.sh"
-#   yt_read_stdin                 # hook payload -> YT_CWD, YT_SESSION_ID, ...
+#   yt_read_stdin                 # hook payload -> YT_CWD, YT_SESSION_ID, YT_SOURCE, ...
 #   yt_git_ctx "${YT_CWD:-$PWD}"  # git context of the dir the agent works in
 #   YT_DIR=$(yt_resolve_yt_dir)   # .ytstack dir (project or user scope)
 #   STATE=$(yt_state_dir)         # out-of-tree per-session state dir
@@ -86,7 +86,7 @@ yt_read_stdin() {
     if [ -t 0 ]; then YT_STDIN=""; else YT_STDIN=$(cat 2>/dev/null); fi
   fi
   YT_CWD=""; YT_SESSION_ID=""; YT_HOOK_EVENT=""; YT_TOOL_CMD=""; YT_TOOL_EXIT=""
-  YT_TRIGGER=""; YT_REASON=""
+  YT_TRIGGER=""; YT_REASON=""; YT_SOURCE=""
   [ -n "$YT_STDIN" ] || return 0
   local out="" jq_bin
   jq_bin=$(yt_jq)
@@ -95,6 +95,7 @@ yt_read_stdin() {
       "YT_CWD="        + ((.cwd // "") | tostring | @sh) + " " +
       "YT_SESSION_ID=" + ((.session_id // "") | tostring | @sh) + " " +
       "YT_HOOK_EVENT=" + ((.hook_event_name // "") | tostring | @sh) + " " +
+      "YT_SOURCE="     + ((.source // "") | tostring | @sh) + " " +
       "YT_TRIGGER="    + ((.trigger // "") | tostring | @sh) + " " +
       "YT_REASON="     + ((.reason // "") | tostring | @sh) + " " +
       "YT_TOOL_CMD="   + (((.tool_input | objects | .command) // "") | tostring | @sh) + " " +
@@ -116,8 +117,8 @@ tr = d.get("tool_response") if isinstance(d.get("tool_response"), dict) else {}
 ex = tr.get("exit_code")
 if ex is None:
     ex = d.get("exit_code")
-print("YT_CWD=%s YT_SESSION_ID=%s YT_HOOK_EVENT=%s YT_TRIGGER=%s YT_REASON=%s YT_TOOL_CMD=%s YT_TOOL_EXIT=%s" % tuple(
-    shlex.quote(s(x)) for x in (d.get("cwd"), d.get("session_id"), d.get("hook_event_name"), d.get("trigger"), d.get("reason"), ti.get("command"), ex)))
+print("YT_CWD=%s YT_SESSION_ID=%s YT_HOOK_EVENT=%s YT_SOURCE=%s YT_TRIGGER=%s YT_REASON=%s YT_TOOL_CMD=%s YT_TOOL_EXIT=%s" % tuple(
+    shlex.quote(s(x)) for x in (d.get("cwd"), d.get("session_id"), d.get("hook_event_name"), d.get("source"), d.get("trigger"), d.get("reason"), ti.get("command"), ex)))
 ' 2>/dev/null) || out=""
   fi
   if [ -n "$out" ]; then eval "$out"; fi
@@ -642,6 +643,125 @@ yt_standing() {
     { n[NR] = $2; l[NR] = $2 "\t" $3 "\t" $4; if ($5 != "" && $5 != "none" && $5 != "None" && $5 != "-") sup[$5] = 1 }
     END { for (i = 1; i <= NR; i++) { b = n[i]; sub(/\.md$/, "", b); if (!(b in sup)) print l[i] } }
   '
+  return 0
+}
+
+# ---- factory tools that are off (M031-S03, issues #54 and #61) -----------------
+# yt_mtime <file> -> seconds since epoch of the last change ("" when unreadable).
+# GNU and BusyBox take -c; BSD stat rejects -c and takes -f.
+yt_mtime() {
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || true
+}
+
+# yt_pr_watch_heartbeat -> YT_PRW_HEARTBEAT: Unix seconds of the PR watch
+# worker's last finished tick (`health.heartbeat`, meta key `heartbeat` in
+# watch.sqlite3, read with `sqlite3 -readonly`), else the mtime of worker.lock
+# (opened at the start of every tick), else "". Local files only, no GitHub
+# call. State directory as in tools/pr-watch/prwatch/state.py: PR_WATCH_HOME,
+# else $YTSTACK_PR_WATCH_HOME/state, else ~/.ytstack/pr-watch/state.
+yt_pr_watch_heartbeat() {
+  local st="${PR_WATCH_HOME:-${YTSTACK_PR_WATCH_HOME:-$HOME/.ytstack/pr-watch}/state}" v=""
+  YT_PRW_HEARTBEAT=""
+  if [ -f "$st/watch.sqlite3" ] && command -v sqlite3 >/dev/null 2>&1; then
+    v=$(sqlite3 -readonly "$st/watch.sqlite3" "SELECT value FROM meta WHERE key='heartbeat'" 2>/dev/null | head -1)
+    v="${v%%.*}"
+  fi
+  case "$v" in ''|*[!0-9]*) v="" ;; esac
+  [ -n "$v" ] || [ ! -f "$st/worker.lock" ] || v=$(yt_mtime "$st/worker.lock")
+  case "$v" in ''|*[!0-9]*) v="" ;; esac
+  YT_PRW_HEARTBEAT="$v"
+  return 0
+}
+
+# yt_factory_notices <yt_dir> <toplevel> -> YT_FACTORY_NOTICES: one line per
+# factory tool that is off although the project would use it, "" when none.
+# Cheap local evidence only (no host call), so hooks can run it:
+#   risk     .ytstack/spec/ exists, merge_by resolves to risk, and spec/REVIEW.md
+#            is missing or no area file allows auto_merge low or normal. An
+#            explicit merge_by human or coordinator is a choice: silent.
+#   pr-watch origin is a GitHub URL and ~/.ytstack/config has no pr_watch line
+#            (pr_watch=off is a choice: silent), or pr_watch=on and the worker's
+#            heartbeat is missing or YT_PRW_STALE (600) seconds old or older.
+#   runtime  deploy evidence (one of the files in the loop below at the toplevel,
+#            or a workflow whose name holds "deploy") without a "Release"
+#            section, or signal evidence (an incident record, a finding whose
+#            kind is not review, a Sentry configuration, SENTRY_DSN in
+#            .env.example) without a "Signals" section. The sections come from
+#            `ytstack-runtime sections`, run only when there is evidence.
+yt_factory_notices() {
+  local ytd="$1" top="${2:-${YT_TOPLEVEL:-$PWD}}" mb url cfg age deploy="" signal="" f secs miss="" lib secs_list tools
+  YT_FACTORY_NOTICES=""
+  [ -n "$ytd" ] && [ -d "$ytd" ] || return 0
+  if [ -d "$ytd/spec" ]; then
+    mb=$(yt_pref "$ytd" merge_by risk)
+    if [ "$mb" = risk ]; then
+      if [ ! -f "$ytd/spec/REVIEW.md" ]; then
+        miss="no spec/REVIEW.md"
+      fi
+      if ! grep -l -E '^auto_merge:[[:space:]]*(low|normal)[[:space:]]*$' "$ytd"/spec/*.md >/dev/null 2>&1; then
+        miss="${miss:+$miss, }no area allows auto_merge low or normal"
+      fi
+      [ -z "$miss" ] || YT_FACTORY_NOTICES="Risk routing is not set up ($miss): every merge goes to a person. Policy: docs/ux/review-policy-format.md; merge_by: human in PREFERENCES.md silences this."
+    fi
+  fi
+  url=$(git -C "$top" config --get remote.origin.url 2>/dev/null || true)
+  case "$url" in
+    *github.com[:/]*)
+      cfg=$(grep -E '^[[:space:]]*pr_watch[[:space:]]*=' "${HOME:-/nonexistent}/.ytstack/config" 2>/dev/null | tail -1 | tr -d '[:space:]')
+      case "$cfg" in
+        pr_watch=on)
+          yt_pr_watch_heartbeat
+          if [ -z "$YT_PRW_HEARTBEAT" ]; then
+            age="has never ticked"
+          else
+            secs=$(( $(date +%s) - YT_PRW_HEARTBEAT ))
+            [ "$secs" -lt "${YT_PRW_STALE:-600}" ] && age="" || age="last ticked $((secs / 60)) minutes ago"
+          fi
+          [ -z "$age" ] || YT_FACTORY_NOTICES="${YT_FACTORY_NOTICES:+$YT_FACTORY_NOTICES
+}PR watch is on, but its worker $age (health.heartbeat): nothing polls the pull requests. Check: ytstack-pr-watch status; start it: ytstack-pr-watch install-worker --yes (docs/pr-watch.md)." ;;
+        '')
+          YT_FACTORY_NOTICES="${YT_FACTORY_NOTICES:+$YT_FACTORY_NOTICES
+}PR watch is off for this GitHub repository: red checks and bot findings reach a session only when it looks. Enable: ytstack-pr-watch enable, then install-worker --yes (docs/pr-watch.md); pr_watch=off in ~/.ytstack/config silences this." ;;
+      esac ;;
+  esac
+  for f in Dockerfile fly.toml railway.json railway.toml vercel.json netlify.toml render.yaml app.yaml Procfile; do
+    if [ -f "$top/$f" ]; then deploy="$f"; break; fi
+  done
+  if [ -z "$deploy" ]; then
+    for f in "$top"/.github/workflows/*[Dd]eploy*; do
+      if [ -f "$f" ]; then deploy=".github/workflows/${f##*/}"; break; fi
+    done
+  fi
+  for f in "$ytd"/incidents/*.md; do
+    if [ -f "$f" ]; then signal="incidents/"; break; fi
+  done
+  if [ -z "$signal" ]; then
+    for f in "$ytd"/signals/F*.md; do
+      [ -f "$f" ] || continue
+      if ! grep -q -E '^kind:[[:space:]]*review[[:space:]]*$' "$f" 2>/dev/null; then signal="signals/${f##*/}"; break; fi
+    done
+  fi
+  if [ -z "$signal" ]; then
+    for f in "$top"/.sentryclirc "$top"/sentry.*.config.*; do
+      if [ -f "$f" ]; then signal="${f##*/}"; break; fi
+    done
+  fi
+  if [ -z "$signal" ] && grep -q -E '^(export )?(SENTRY_DSN|GLITCHTIP_DSN)=' "$top/.env.example" 2>/dev/null; then
+    signal=".env.example"
+  fi
+  if [ -n "$deploy$signal" ]; then
+    lib=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    secs_list=$(bash "$lib/../../bin/ytstack-runtime" -C "$top" sections 2>/dev/null)
+    tools=""; miss=""
+    if [ -n "$deploy" ] && ! printf '%s\n' "$secs_list" | grep -qx Release; then
+      miss="\"Release\" section (the project deploys: $deploy)"; tools="ytstack-watch release"
+    fi
+    if [ -n "$signal" ] && ! printf '%s\n' "$secs_list" | grep -qx Signals; then
+      miss="${miss:+$miss and no }\"Signals\" section (production reports: $signal)"; tools="${tools:+$tools and }signal-intake"
+    fi
+    [ -z "$miss" ] || YT_FACTORY_NOTICES="${YT_FACTORY_NOTICES:+$YT_FACTORY_NOTICES
+}RUNTIME.md has no $miss: $tools cannot run. Format: docs/ux/runtime-format.md."
+  fi
   return 0
 }
 

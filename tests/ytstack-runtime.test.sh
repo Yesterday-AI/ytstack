@@ -8,6 +8,8 @@
 #            or the key is missing; the section argument in any case
 #   signals  one tab separated line per source: name, kind, read, scope; a bar
 #            inside a command stays part of the command
+#   sections the sections that have a list line, one per line, also when check
+#            fails; nothing without the file
 #   check    a well-formed file passes and names its sections; free text in a
 #            section and a section without a list line pass, and so does the
 #            RUNTIME.md template of init-project and of adopt-brownfield; each
@@ -73,6 +75,7 @@ echo "# no RUNTIME.md, no sections"
 project empty
 run "$D" check;   eq "check without the file: exit 0" 0 "$EC"; eq "and says so" "runtime ok: no RUNTIME.md" "$OUT"
 run "$D" signals; eq "signals without the file: exit 0" 0 "$EC"; eq "and prints nothing" "" "$OUT"
+run "$D" sections; eq "sections without the file: exit 0" 0 "$EC"; eq "and prints nothing" "" "$OUT"
 run "$D" get run start; eq "get without the file: exit 1" 1 "$EC"; has "and says so" "no RUNTIME.md" "$OUT"
 run "$D" status;  eq "status without an instance: exit 1" 1 "$EC"; eq "and says so" "not running" "$OUT"
 run "$D" down;    eq "down without an instance: exit 0" 0 "$EC"; eq "and says so" "not running" "$OUT"
@@ -109,6 +112,11 @@ EOF
 run "$D" check
 eq "headings with free text and no list line pass" 0 "$EC"
 eq "and count as no section" "runtime ok: no sections" "$OUT"
+run "$D" sections; eq "sections of headings without a list line: exit 0" 0 "$EC"; eq "and none named" "" "$OUT"
+printf '## Release\n\n- deployed: curl x\n- settle: soon\n' > "$TMP/badrel.md"
+cp "$F" "$TMP/keep.md"; cp "$TMP/badrel.md" "$F"
+run "$D" sections; eq "sections names a section that fails check" "Release" "$OUT"
+cp "$TMP/keep.md" "$F"
 run "$D" get run start; eq "get from a section without a list line: exit 1" 1 "$EC"
 has "and says that the section is missing" 'no "Run" section' "$OUT"
 run "$D" up; eq "up without a Run section: exit 1" 1 "$EC"
@@ -174,6 +182,10 @@ EOF
 run "$D" check
 eq "the example of the format passes" 0 "$EC"
 eq "and its sections are named" "runtime ok: Run, Release, Signals" "$OUT"
+run "$D" sections
+eq "sections: one name per line" "Run
+Release
+Signals" "$OUT"
 run "$D" get run start;       eq "get run start" "pnpm dev --port {port}" "$OUT"
 run "$D" get Run url;         eq "a value keeps its colons" "http://localhost:{port}" "$OUT"
 run "$D" get RELEASE settle;  eq "the section argument in any case" "180" "$OUT"
