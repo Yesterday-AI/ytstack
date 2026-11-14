@@ -177,7 +177,7 @@ For each check, record: check name, result (PASS / WARN / FAIL), findings list.
 
 #### Check 8: Workflow skill references
 
-- From `docs/concept.md` §5 (all three workflows), extract every ytstack skill name mentioned.
+- From `docs/concept.md` §5 (all workflows) and the README section "Workflows" (four), extract every ytstack skill name mentioned.
 - Each name must resolve to `skills/<name>/`. Dangling reference -> FAIL.
 - From `QUICKSTART.md` do the same.
 

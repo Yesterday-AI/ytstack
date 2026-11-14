@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Workflow diagrams for the whole cycle**: the greenfield, brownfield and
+  debugging diagrams show the technical spec, the class of a change in
+  `code-review`, the coordinator lane with its lenses and route, and
+  `incident` / `signal-intake`; a fourth diagram
+  (`docs/ytstack-delivery-flow.png`) follows a finished change through review,
+  lenses, the route and the release watch into production and back.
+- Research notes `docs/research/2026-11-13-openai-software-factory.md` and
+  `docs/research/2026-11-14-mattpocock-skills.md`.
 - **Risk gate** (M025, research note
   `docs/research/2026-11-13-openai-software-factory.md`): whether a person has
   to look at a change is decided per change. Format:
