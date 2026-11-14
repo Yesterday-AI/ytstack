@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T13:30:00Z
+last_updated: 2026-11-14T14:15:51Z
 current_milestone: none
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-11-14, M020):** M020 DONE (7/7) on `feat/kimi-code-support`, rebuilt directly on 0.8.0 (`41e5199`). The native Kimi manifest loads all 38 shared skills as `ytstack:<name>`; the helper provides static bootstrap plus pending startup/compaction context, shared handoff and supported-close journal behavior. The six gstack-derived skills stay self-contained; the earlier external-resolution design was removed. Verification: 26 macOS and 26 Linux suites, 16 Codex tests, two Kimi packaging and nine lifecycle tests, native Kimi 2.5.3 and official Linux 2.6.2 each 7/7, and Claude plugin validation. Headless SessionEnd #4380, web close, local macOS npm 2.6.2 and real-model selection limits are documented. Issue #30 remains open until its PR merges.
 
 **Status (2026-11-14, M029):** Optional PR watch merged (#45, `05f7fec`) and released as 0.8.0, including the GitHub-quota guard (reserve for agents, settled PRs every 5 minutes): the maintainer's local watcher ported into `tools/pr-watch/`, `bin/ytstack-pr-watch`, opt-in hooks for Claude Code and Codex (`pr_watch=on` in `~/.ytstack/config`), `docs/pr-watch.md`. All suites, checker, Codex tests and plugin validation pass. Not exercised: a real launchd install and real Codex delivery. After the release, the maintainer's live install moves over in one explicit step (unload the old LaunchAgent, `migrate --from ~/.agents/pr-watch --yes`, `install-worker --yes`, `enable`, remove the old hooks from `~/.claude/settings.json`, disable the old Codex plugin).
 
