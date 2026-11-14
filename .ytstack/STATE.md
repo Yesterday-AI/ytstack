@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T19:10:00Z
+last_updated: 2026-11-14T20:30:00Z
 current_milestone: none
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-11-14, 0.9.1):** Patch release for issue #54 point 2 (PR #56, `eaad9c3`): `ytstack-pr-watch register --all-open` for the session that owns a repository's PRs, `coordinate` 0.2.1 relies on the PR watch only with a fresh worker heartbeat, `migrate` step 5 (restart, then re-register). Open next: plan the rest of #54 (incl. the risk-route round-line finding and the setup guide), #53 (incident to lesson loop) and #55 (upstream feedback channel).
 
 **Status (2026-11-14, M030):** Done, merged (#51, `974888e`) and released as 0.9.0 together with Kimi Code support (M020, #49): `bin/ytstack-review-escapes`, `## Own reviewers` in `REVIEW.md`, signals `kind: review` with per-PR caught/escaped tallies, skill `review-lessons`, triggers after every merge (upkeep by merge date, PR watch merge notice, `finish-lane`), escape rate per role in `retro`. Pilot read on 30 merged context-mcp PRs: 8 bot findings, 2 caught, 6 escaped (5 on bookkeeping files). Not covered: an eval case and a live run of the skill (pilot in Yesterday-AI/context-mcp#1650).
 
