@@ -18,7 +18,8 @@
 #            ports; a taken port is skipped; a start that exits and a ready
 #            that never passes end with the log, exit 1 and nothing running
 #   down     ends the process group, children included, after "stop" when set;
-#            never touches a process that only carries a recorded pid
+#            never touches a process that only carries a recorded pid; a zombie
+#            (ended, not collected by its parent) counts as ended (Linux case)
 #   status   the instance, or "not running" with exit 1
 #
 # The live cases need python3 (a tiny HTTP server) and are skipped without it.
@@ -372,10 +373,20 @@ fi
 listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 # answers <port>: the product serves /healthz there
 answers() { "$BASH" "$TMP/ready.sh" "$1" 2>/dev/null; }
+# runs <pid>: the process runs and is no zombie (one that ended but was not
+# collected, as under a PID 1 that collects nothing)
+runs() {
+  local s
+  kill -0 "$1" 2>/dev/null || return 1
+  if [ -r "/proc/$1/stat" ]; then s=$(sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f1)
+  else s=$(ps -o stat= -p "$1" 2>/dev/null)
+  fi
+  case "$s" in *Z*) return 1 ;; esac
+}
 # gone <pid>: the process ended (waits up to five seconds)
 gone() {
   local i=0
-  while kill -0 "$1" 2>/dev/null; do [ "$i" -lt 50 ] || return 1; sleep 0.1; i=$((i + 1)); done
+  while runs "$1" 2>/dev/null; do [ "$i" -lt 50 ] || return 1; sleep 0.1; i=$((i + 1)); done
 }
 
 cat > "$TMP/ready.sh" <<'EOF'
@@ -423,7 +434,7 @@ case "$PORT_A" in 273[01][0-9]) ok "PORT is one of the range" ;; *) bad "PORT is
 eq "URL carries the port" "http://127.0.0.1:$PORT_A/" "$(line URL)"
 eq "COMMIT is the commit of the checkout" "$SHA" "$(line COMMIT)"
 yes "the product answers on that port" answers "$PORT_A"
-yes "PID is a running process" kill -0 "$PID_A"
+yes "PID is a running process" runs "$PID_A"
 case "$LOG_A" in "$TMP/state/"*) ok "LOG lies in the state directory, outside the checkout" ;; *) bad "LOG lies in the state directory, outside the checkout" "$LOG_A" ;; esac
 eq "the start command got the port as argument and as PORT" "PORT=$PORT_A arg=$PORT_A" "$(sed -n 1p "$LOG_A")"
 eq "the checkout holds nothing new" "" "$(git -C "$A" status --porcelain)"
@@ -446,15 +457,15 @@ eq "COMMIT outside a repository" "none" "$(line COMMIT)"
 run "$B" down
 eq "down: exit 0" 0 "$EC"
 eq "down names what it stopped" "stopped: pid $PID_B, port $PORT_B" "$OUT"
-no "the stopped product is gone" kill -0 "$PID_B"
+no "the stopped product is gone" runs "$PID_B"
 yes "the other one still answers" answers "$PORT_A"
 
 CHILD_A=$(cat "$A/child.pid")
-yes "the child of the product runs" kill -0 "$CHILD_A"
+yes "the child of the product runs" runs "$CHILD_A"
 run "$A" down
 eq "down: exit 0" 0 "$EC"
-no "down leaves no process: the server" kill -0 "$PID_A"
-no "down leaves no process: its child" kill -0 "$CHILD_A"
+no "down leaves no process: the server" runs "$PID_A"
+no "down leaves no process: its child" runs "$CHILD_A"
 no "the port is free again" listening "$PORT_A"
 run "$A" status; eq "status after down: exit 1" 1 "$EC"; eq "and says so" "not running" "$OUT"
 run "$A" down;   eq "down twice: exit 0" 0 "$EC";        eq "and says so" "not running" "$OUT"
@@ -472,7 +483,7 @@ if [ -n "$PORT_A2" ] && [ "$PORT_A2" != "$PORT_A" ]; then ok "the taken port is 
 yes "the product answers on the next one" answers "$PORT_A2"
 eq "COMMIT says when the checkout differs from the commit" "$SHA (with uncommitted changes)" "$(line COMMIT)"
 run "$A" down
-yes "down does not touch the foreign listener" kill -0 "$FOREIGN"
+yes "down does not touch the foreign listener" runs "$FOREIGN"
 kill "$FOREIGN" 2>/dev/null; wait "$FOREIGN" 2>/dev/null; FOREIGN=""
 
 # A stale instance file: the process is gone.
@@ -490,7 +501,7 @@ sed 's/^born=.*/born=another process/' "$INST" > "$INST.tmp" && cat "$INST.tmp" 
 run "$A" status; eq "a pid that another process carries: not running" "not running" "$OUT"
 run "$A" down
 eq "down says so" "not running" "$OUT"
-yes "and ends nothing that it did not start" kill -0 "$PID_OF"
+yes "and ends nothing that it did not start" runs "$PID_OF"
 kill -TERM -- "-$PID_OF" 2>/dev/null; gone "$PID_OF"
 
 # stop: the command runs, and the group is ended as well.
@@ -499,7 +510,36 @@ run "$D" up; PID_C=$(line PID)
 run "$D" down
 eq "down with a stop command: exit 0" 0 "$EC"
 yes "the stop command ran in the checkout" test -f "$D/stopped.flag"
-no "and the process is gone" kill -0 "$PID_C"
+no "and the process is gone" runs "$PID_C"
+
+# Under a parent that collects nothing (a container whose PID 1 is no init) an
+# ended product stays a zombie, which kill -0 still reaches. A python3
+# subreaper plays that parent: the product is orphaned to it and never
+# collected. Linux only (prctl PR_SET_CHILD_SUBREAPER).
+product z; Z="$D"
+cat > "$TMP/subreaper.py" <<'EOF'
+import ctypes, subprocess, sys
+try:
+    if ctypes.CDLL(None).prctl(36, 1, 0, 0, 0) != 0: sys.exit(77)
+except AttributeError:
+    sys.exit(77)
+sys.exit(subprocess.run(sys.argv[1:]).returncode)
+EOF
+OUT=$(python3 "$TMP/subreaper.py" "$BASH" -c '
+  "$1" "$2" -C "$3" up >/dev/null 2>&1 || { echo "up failed"; exit 1; }
+  "$1" "$2" -C "$3" status | sed -n "s/^PID: /pid=/p"
+  "$1" "$2" -C "$3" down; echo "down=$?"
+  "$1" "$2" -C "$3" status; echo "status=$?"
+' _ "$BASH" "$BIN" "$Z" 2>&1); EC=$?
+if [ "$EC" = 77 ]; then
+  echo "  skip - zombies: no PR_SET_CHILD_SUBREAPER here (not Linux)"
+else
+  PID_Z=$(printf '%s\n' "$OUT" | sed -n 's/^pid=//p')
+  has "down under a parent that collects nothing: exit 0" "down=0" "$OUT"
+  has "and it names what it stopped" "stopped: pid $PID_Z," "$OUT"
+  has "status then says not running" "not running
+status=1" "$OUT"
+fi
 
 # ---- 5. up that fails ----------------------------------------------------------
 echo "# up that fails"
@@ -539,7 +579,7 @@ has "it shows what ready said" "no answer yet" "$OUT"
 hasnt "it prints no job message of the shell" "Terminated" "$OUT"
 has "it shows the end of the log" "warming up" "$OUT"
 if [ $((SECONDS - T0)) -lt 10 ]; then ok "it ends at the timeout"; else bad "it ends at the timeout" "$((SECONDS - T0))s"; fi
-no "what was started is stopped" kill -0 "$(cat "$D/pid.txt")"
+no "what was started is stopped" runs "$(cat "$D/pid.txt")"
 run "$D" status; eq "nothing is recorded as running" "not running" "$OUT"
 
 hangs stuck "sleep 300"
@@ -548,7 +588,7 @@ run "$D" up --timeout 2
 eq "a ready that hangs: exit 1" 1 "$EC"
 hasnt "it prints no job message of the shell" "Terminated" "$OUT"
 if [ $((SECONDS - T0)) -lt 10 ]; then ok "it cannot outlast the timeout"; else bad "it cannot outlast the timeout" "$((SECONDS - T0))s"; fi
-no "what was started is stopped" kill -0 "$(cat "$D/pid.txt")"
+no "what was started is stopped" runs "$(cat "$D/pid.txt")"
 
 project broken
 cat > "$F" <<'EOF'

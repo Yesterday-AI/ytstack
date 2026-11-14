@@ -226,11 +226,34 @@ born() {
   else LC_ALL=C TZ=UTC ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//; s/ *$//'
   fi
 }
+# A zombie has ended but still answers kill -0 until its parent collects it. In
+# a container whose PID 1 collects nothing it stays forever, so neither check
+# below counts one. Linux: field 3 (state) and 5 (group) of /proc/<pid>/stat.
+# Elsewhere: ps.
+# live <pid>: that process runs and is no zombie.
+live() {
+  local s
+  kill -0 "$1" 2>/dev/null || return 1
+  if [ -r "/proc/$1/stat" ]; then s=$(sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f1)
+  else s=$(ps -o stat= -p "$1" 2>/dev/null)
+  fi
+  case "$s" in *Z*) return 1 ;; esac
+}
+# group_live <pgid>: a process of that group runs and is no zombie.
+group_live() {
+  kill -0 -- "-$1" 2>/dev/null || return 1
+  if [ -r /proc/self/stat ]; then
+    { cat /proc/[0-9]*/stat 2>/dev/null; true; } \
+      | awk -v g="$1" '{ sub(/.*\) /, "") } $3 == g && $1 != "Z" { f = 1 } END { exit !f }'
+  else
+    ps -A -o pgid=,stat= 2>/dev/null | awk -v g="$1" '$1 == g && $2 !~ /Z/ { f = 1 } END { exit !f }'
+  fi
+}
 # alive: the recorded process runs and is the one that was started. Sets PID and P.
 alive() {
   PID=$(st pid); P=$(st port)
   case "$PID" in ''|*[!0-9]*) return 1 ;; esac
-  kill -0 "$PID" 2>/dev/null || return 1
+  live "$PID" || return 1
   [ "$(born "$PID")" = "$(st born)" ]
 }
 # in_use <port>: something accepts connections on it, on 127.0.0.1 or ::1.
@@ -253,10 +276,10 @@ end_group() {
   for sig in TERM KILL; do
     kill "-$sig" -- "-$1" || break
     i=0
-    while kill -0 -- "-$1" && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    while group_live "$1" && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
   done
   wait "$1"
-  ! kill -0 -- "-$1"
+  ! group_live "$1"
 } 2>/dev/null
 # end_instance: the "stop" command when one is set, then the process group.
 end_instance() {
@@ -354,13 +377,13 @@ cmd_up() {
   READY=$(fill "$(val ready)")
   DEADLINE=$((SECONDS + timeout))
   while :; do
-    kill -0 "$PID" 2>/dev/null || fail_up "the start command exited before the product was ready"
+    live "$PID" || fail_up "the start command exited before the product was ready"
     if ready_once; then
       # A second process on the same port answers "ready" for a start that failed.
       # shortcut: a start that dies only after this line is not seen here; it
       # needs two worktrees that pick the same port in the same second, and
       # "status" shows it. Claim the port in a shared file if that ever happens.
-      kill -0 "$PID" 2>/dev/null || fail_up "the start command exited; something else answered \"ready\""
+      live "$PID" || fail_up "the start command exited; something else answered \"ready\""
       break
     fi
     [ "$SECONDS" -lt "$DEADLINE" ] || fail_up "\"ready\" did not pass within ${timeout}s"

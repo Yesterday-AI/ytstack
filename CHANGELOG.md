@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coreutils); STATE lint W5 never fired there.
 - `ytstack-runtime` reads nothing inside a code fence of a section: a fenced
   `## Release` example inside "Run" no longer counts as configuration.
+- `ytstack-runtime` counts a zombie as ended: `down` and `status` no longer
+  report a stopped product as running in a container whose PID 1 reaps nothing.
 
 - **Technical spec** (issue #36): every project gets `.ytstack/spec/SPEC.md`
   (entry point, one page) and one `.ytstack/spec/<area>.md` per system area.
