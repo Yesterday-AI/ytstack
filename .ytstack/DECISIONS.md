@@ -1020,3 +1020,44 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** `docs/pr-watch.md` is the reference. Nothing pr-watch does may run without the opt-in. The worker install, the migration of an existing local install and any change to `~/.claude/settings.json` stay explicit user steps. The 2026-04-25 lifecycle heuristic stays the default for other generic tools; this entry is the exception for PR watching.
 
 **Supersedes:** None. Narrows the 2026-04-25 "Lifecycle-phase as the curation heuristic" for this one tool.
+
+---
+
+## 2026-11-09: Multi-host adapters share one plugin and keep gstack resolution unambiguous
+
+**Context:** Issues #28, #29 and #30 ask for OpenCode, Vibe and Kimi support. The maintainer prefers solutions that reuse the existing Claude Code and Codex plugin as much as possible and explicitly asked for a better gstack integration. Flat skill directories and copied gstack skills create duplicate names: a host can load a gstack original instead of the ytstack wrapper, or let a wrapper invoke itself recursively.
+
+**Options considered:**
+- A) Generate or copy a separate skill tree for each host and copy gstack skills into host-specific directories.
+- B) Keep one shared skill and lifecycle tree, package it with thin native host adapters, and resolve gstack as an independent installed dependency with unambiguous skill identity.
+- C) Load ytstack and gstack through flat shared directories and rely on directory precedence.
+
+**Chose:** B. Use native plugin manifests and skill namespaces where the host supports them. Do not copy ytstack or gstack skill trees. Every adapter must ensure that a ytstack gstack wrapper invokes the original installed gstack skill, never the wrapper itself or an unrelated override. If a host cannot provide that resolution, mark the affected wrappers unsupported and stop with a clear message instead of silently recursing or skipping ytstack artifact handling.
+
+**Reason:** One source prevents host drift. Namespaced ytstack skills and independently resolved gstack skills preserve the installed-dependency contract and prevent shadowing and recursion. Native plugin capabilities carry host integration; adapters contain only unavoidable runtime, lifecycle and documentation differences.
+
+**How to apply:**
+- M020 (#30) uses Kimi's native plugin manifest, `ytstack:<skill>` names, plugin lifecycle declarations and the existing `skills/` and `hooks/` trees. Kimi's documented `sessionStart.skill`, system-prompt and plugin-hook capabilities are preferred over user-level wrapper configuration.
+- The later #28 and #29 milestones apply the same reuse and gstack-identity requirements; their unsupported host capabilities remain explicit support boundaries, not reasons to fork skill content.
+- Keep the existing pinned gstack installation. Do not copy gstack skills into `~/.agents/skills` or another shared flat directory as an installation workaround.
+
+**Supersedes:** None. Extends the 2026-10-13 single-source Codex distribution decision and the 2026-11-07 installed-gstack dependency decision to the new host adapters. The 2026-11-14 gstack-adaptation entry supersedes its installed-gstack resolution rules; the multi-host reuse rule stays.
+
+---
+
+## 2026-11-14: Kimi uses native plugin bootstrap and pending lifecycle context (M020)
+
+**Context:** Issue #30 proposed user-level `extra_skill_dirs` and hook wrappers. Native plugin verification showed that Kimi discards SessionStart and PostCompact hook stdout, so a plain-output switch alone would lose project context. Kimi does consume UserPromptSubmit stdout and supports a static `sessionStart.skill`.
+
+**Options considered:**
+- A) Keep user-level configuration and claim SessionStart stdout reaches the model.
+- B) Use the native manifest and static bootstrap, prepare context out of tree on SessionStart/PostCompact and consume it once on the next UserPromptSubmit.
+- C) Generate a separate Kimi skill tree without lifecycle integration.
+
+**Chose:** B. `.kimi-plugin/plugin.json` selects the existing `skills/`, the Kimi adapter and five native lifecycle events. `bin/ytstack-kimi` supplies the shared shell environment and owns the pending-file handoff. The existing SessionStart script emits plain text only when `YTSTACK_HOOK_FORMAT=plain`; its default JSON remains unchanged for Claude Code and Codex.
+
+**Reason:** This reuses the shared plugin and preserves observable startup, compaction, handoff and journal behavior without copied skills. Atomic pending-file replacement and consume-by-rename prevent partial or duplicate injection. The six gstack-derived skills are already ytstack's own adaptations, so Kimi invokes their qualified plugin names and needs no external gstack resolution.
+
+**How to apply:** SessionStart and PostCompact prepare pending context; UserPromptSubmit emits and removes it at most once. PreCompact and SessionEnd delegate to the shared scripts. Document the tested versions and host limits, including headless SessionEnd #4380, interactive Ctrl+C-twice close and unverified web close paths. Do not add a Kimi `extra_skill_dirs` requirement or external gstack install.
+
+**Supersedes:** The user-level setup proposed in issue #30. The 2026-11-09 shared-source rule and the 2026-11-14 in-tree gstack adaptations remain in force.
