@@ -108,12 +108,18 @@ def monitor(db, watch):
                 if row['event_key'] not in active and not conflict_unknown(s, row['event_key'], repo, number):
                     db.execute('UPDATE outbox SET cancelled=? WHERE event_key=?', (time.time(), row['event_key']))
             if status == 'closed' and 'merged' in details:
-                # The merge is the trigger of the review-lessons intake (M030). The
-                # worker does not know projects, so the notice is conditional; the
-                # key makes it once per PR, and it costs no GitHub call of its own.
-                enqueue(db, merged_key(repo, number), watch, merged_notice(repo, number, head))
+                # The merge is the trigger of the review-lessons intake (M030), but only
+                # where a review bot left a finding the watch saw: without one there is
+                # nothing an own reviewer could have missed. The key makes it once per
+                # PR, and it costs no GitHub call of its own.
+                findings = db.execute('SELECT COUNT(*) FROM outbox WHERE event_key LIKE ?',
+                                      (f'bot-thread:{repo}:{number}:%',)).fetchone()[0]
+                if findings:
+                    enqueue(db, merged_key(repo, number), watch, merged_notice(repo, number, head, findings))
         now = time.time()
+        branch = ((s.get('pr') or {}).get('head') or {}).get('ref')
         # SET expressions see the old row: changed_at moves only when head or status changed.
+        db.execute('UPDATE watches SET branch=COALESCE(?, branch) WHERE repo=? AND number=?', (branch, repo, number))
         db.execute('UPDATE watches SET head=?,status=?,detail=?,updated=?,'
                    "closed_at=CASE WHEN ?='closed' THEN COALESCE(closed_at, ?) ELSE NULL END,"
                    'changed_at=CASE WHEN head IS NOT ? OR status IS NOT ? THEN ? ELSE changed_at END '
@@ -125,9 +131,11 @@ def merged_key(repo, number):
     return f'merged:{repo}:{number}'
 
 
-def merged_notice(repo, number, head):
+def merged_notice(repo, number, head, findings):
     """Trusted template: no text from GitHub goes into it."""
-    return (f'PR Watch: https://github.com/{repo}/pull/{number} was merged (observed head {head}).\n'
+    noun = 'bot finding' if findings == 1 else 'bot findings'
+    return (f'PR Watch: https://github.com/{repo}/pull/{number} was merged (observed head {head}); '
+            f'the watch saw {findings} {noun} on it.\n'
             f'PR merged; if this project declares own reviewers (## Own reviewers in .ytstack/spec/REVIEW.md), '
             f'run ytstack:review-lessons for #{number}.\n'
             'This notice authorizes nothing else.')
@@ -277,6 +285,10 @@ def due(watch, now):
     if status == 'closed':
         return False
     if status == 'registered':
+        return True
+    pushed = watch['pushed_at'] if 'pushed_at' in watch.keys() else None
+    if pushed and pushed > (watch['updated'] or 0):
+        # The owning session pushed since the last read: the stored head is stale.
         return True
     changed = watch['changed_at'] if 'changed_at' in watch.keys() else None
     if status == 'waiting' and changed is not None and now - changed < FAST_WINDOW:

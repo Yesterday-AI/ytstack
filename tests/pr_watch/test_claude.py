@@ -55,9 +55,8 @@ class Claude(unittest.TestCase):
         row = self.db.execute("SELECT * FROM outbox WHERE session='claude:abc'").fetchone()
         self.assertIsNotNone(row['delivered'])
         self.assertTrue(row['dispatch_id'].startswith('claude-prompt:'))
-        second = self.prompt()['hookSpecificOutput']['additionalContext']
-        self.assertIn('o/r#7: action_required', second)
-        self.assertNotIn('Actionable notices', second)
+        # Delivered once, and the unchanged status block is not repeated (issue #61).
+        self.assertEqual(self.prompt(), {})
 
     def test_ready_pr_is_summarised_and_closed_pr_drops_out(self):
         s = snapshot()

@@ -61,6 +61,11 @@ def connect():
             # saw them closed (an older install: weeks back, so never rechecked).
             db.execute('ALTER TABLE watches ADD COLUMN closed_at REAL')
             db.execute("UPDATE watches SET closed_at=updated WHERE status='closed'")
+        # The PR's head branch (set by the worker) lets an own `git push` mark the
+        # watch: pushed_at newer than updated means the stored head is stale.
+        for name, kind in [('branch', 'TEXT'), ('pushed_at', 'REAL')]:
+            if name not in watch_columns:
+                db.execute(f'ALTER TABLE watches ADD COLUMN {name} {kind}')
     return db
 
 
