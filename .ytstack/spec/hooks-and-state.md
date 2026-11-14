@@ -10,7 +10,7 @@ sources:
   - docs/statusline.md
   - docs/pr-watch.md
   - docs/kimi.md
-verified_at: 08dab40
+verified_at: 54a25e7
 ---
 
 # hooks-and-state
@@ -36,6 +36,7 @@ The lifecycle hooks under `hooks/` and the shared library `hooks/lib/git-ctx.sh`
 - `yt_brownfield_signals` counts up to six signs of an existing codebase and names which file would feed which artifact. The comment above the function lists the counted signals and the hint-only ones.
 - `yt_commit_ref_pattern` renders a task's commit pattern from `commit_ref_pattern` in `PREFERENCES.md`, or from the default. `yt_task_commits` lists commits whose subject matches it. When none match, it falls back to the commits on the current branch after the merge-base with the default branch, and reports which source it used.
 - `yt_find_artifacts` lists artifacts newest first from the flat layout and from the alternative layouts named in its comment. Reading tolerates those layouts. Writing stays flat.
+- `yt_standing` lists the standing instructions in force from `.ytstack/standing/` (name, `given`, `scope`, tab separated), newest first by name, without the entries another entry names in `supersedes`. It prints nothing without the directory; `STANDING.md` is read by the skills themselves.
 
 ### STATE lint and progress block
 

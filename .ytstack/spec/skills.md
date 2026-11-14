@@ -8,7 +8,7 @@ sources:
   - docs/ux/skill-structure.md
   - docs/ux/askuserquestion-format.md
   - docs/ux/agent-structure.md
-verified_at: 1b7bfc8
+verified_at: 54a25e7
 ---
 
 # skills
@@ -105,7 +105,7 @@ No other skill reads the flag.
 
 Formats: `docs/ux/coordinator-format.md`. The four skills below are for the session that owns a plan and delegates all of it; none of them writes product code.
 
-- `coordinate` is a loop with a fixed order: start from `STANDING.md`, `LANES.md`, the frontier and the questions (never from a conversation summary), read host facts fresh and stamp them with their read time, claim a lane before dispatching it, finish lanes through `finish-lane`, with the PR watch on (flag set and a worker heartbeat under 10 minutes old) register the repository's open pull requests to itself as their owning session (`ytstack-pr-watch register --all-open` without `--session`, at the start and after every restart) and otherwise poll through `bin/ytstack-watch`, ask one question at a time from a question file, write a standing instruction down when it is given, stop a lane that failed verification twice or needs a third review, and rotate through a handoff after the first compaction.
+- `coordinate` is a loop with a fixed order: start from the standing instructions (the entries of `standing/` newest first without superseded ones, and `STANDING.md`), `LANES.md`, the frontier and the questions (never from a conversation summary), read host facts fresh and stamp them with their read time, claim a lane before dispatching it, finish lanes through `finish-lane`, with the PR watch on (flag set and a worker heartbeat under 10 minutes old) register the repository's open pull requests to itself as their owning session (`ytstack-pr-watch register --all-open` without `--session`, at the start and after every restart) and otherwise poll through `bin/ytstack-watch`, ask one question at a time from a question file, write a standing instruction down when it is given (a new file in `standing/`; `STANDING.md` only where no `standing/` exists), stop a lane that failed verification twice or needs a third review, and rotate through a handoff after the first compaction.
 - `spawn-milestone-team` claims each lane with `bin/ytstack-frontier` before it dispatches, keeps the lane's row current, and looks at the frontier again whenever a lane is verified or merged.
 - `finish-lane` takes a reported lane to a merged pull request with `bin/ytstack-finish-lane`: review pinned to the host's head, the required lenses, `route`, the gates read from the host, the merge decided by `merge_by` and the route, then `bin/ytstack-watch release` on the merge commit when `RUNTIME.md` has a "Release" section (in the background; the receipt goes into the report, nothing is rolled back). A merge without a person is reported in one line with class, ceiling and lenses. After a merge it made itself, and when `REVIEW.md` declares own reviewers, it invokes `review-lessons` for the pull request: the one skill it may invoke. The pipeline supports GitHub through `gh` only; on another host the skill stops after the route.
 - **The class of a change.** `code-review` prints the floor of `bin/ytstack-risk` and has a reviewer that is not the author end with `Risk:`, `Severity:`, `Reach:` and `Invariants touched:`, read against "Invariants and security boundaries" and "Decisions that apply now" of the touched areas, also when only code moved. The round line records class, invariants and reviewer; a session reviewing its own change writes `by: self`, which routes to a person. Each lens the floor names gets a separate fresh reviewer with the lens brief (`bin/ytstack-brief render --kind review --lens <name>`) and one lens line.
@@ -196,5 +196,5 @@ Formats: `docs/ux/coordinator-format.md`. The four skills below are for the sess
 - DECISIONS.md -- "2026-10-13: Remove generated Codex copies; load the existing skills directly" (one skill tree for both hosts)
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)" (the spec steps in the loop)
 - DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)" (the work contract; extends the ceremony entry of 2026-11-07 from code to evidence and review)
-- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)"
+- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)", extended by "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/`; `STANDING.md` stays valid (issue #57)"
 - DECISIONS.md -- "2026-11-13: `STATE.md` is a pointer with a size bound; history leaves it through `reconcile`, a closed milestone is folded into the spec (M022-S03)"

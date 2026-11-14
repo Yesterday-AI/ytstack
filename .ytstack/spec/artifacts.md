@@ -19,7 +19,7 @@ sources:
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
   - docs/statusline.md
-verified_at: 08dab40
+verified_at: 54a25e7
 ---
 
 # artifacts
@@ -65,7 +65,7 @@ The `.ytstack/` artifact model: the Markdown files that hold a project's memory 
 | `HANDOFF.md` | `handoff-session` | the user; no hook writes it |
 | `LANES.md` | `bin/ytstack-frontier claim` (first claim) | `bin/ytstack-frontier` (`set`, `release`), one row per call; called by `spawn-milestone-team`, `coordinate`, `finish-lane` |
 | `questions/Q###-<slug>.md` | `bin/ytstack-questions new` (from `coordinate`, `reassess-roadmap`, `review-lessons` (a proposed line for a role file, `blocks:` the finding), and from `bin/ytstack-upkeep --question`, which keeps at most one open or asked file titled `Upkeep found ...`) | the agent fills Context, Options, Recommendation; `ask` and `answer` change the state; the answer text is the human's |
-| `STANDING.md` | `coordinate`, when the human gives an instruction that holds beyond the task | appended; an overtaken line is struck through and dated, not removed |
+| `standing/<YYYYMMDDTHHMMZ>-<slug>.md`, `STANDING.md` | `coordinate`, when the human gives an instruction that holds beyond the task: a new file with `given`, `scope`, `supersedes` (`docs/ux/coordinator-format.md`); appended to `STANDING.md` only where no `standing/` exists | an entry is never edited; a newer one supersedes it by name, readers skip it; `STANDING.md` alone stays valid, also as an index, and is read beside the directory |
 | `handover/<date>-<slug>.sh` and its receipt | `handover-step` through `bin/ytstack-handover new`; the receipt by the script when the human runs it | a script that ran is not edited |
 | `retro/LANES-<date>.md` | `lane-retro` | appended on a second run of the same day |
 | `archive/<date>/`, `archive/INDEX.md`, `RECONCILE-<date>.md` | `reconcile` | -- |
@@ -141,7 +141,7 @@ Automatic handoffs and the session journal are not artifacts. `hooks/pre-compact
 - No state lives in `~/.ytstack/.<name>` sentinel files. An ask-once answer is recorded in the artifact it concerns (`docs/ux/skill-structure.md`, "Ask-once answers").
 - `RUNTIME.md` written by `adopt-brownfield` records environment variable names, never values. The three sections of `RUNTIME.md` hold names of credentials, never values; `bin/ytstack-runtime check` fails on a token-looking string there. In those sections only list lines are read; a section without a list line counts as absent.
 - The commands under "Release" and "Signals" of `RUNTIME.md` only read. No skill and no script runs a command that changes a target; a mitigation is a handover script a person runs.
-- A change to `spec/REVIEW.md`, `DECISIONS.md`, `STANDING.md`, `PREFERENCES.md`, an instruction file, the frontmatter of an area file (a `verified_at` stamp on its own excepted) or its sections "Invariants and security boundaries" and "Decisions that apply now" always goes to a person (`bin/ytstack-risk floor`).
+- A change to `spec/REVIEW.md`, `DECISIONS.md`, `STANDING.md`, a file under `standing/`, `PREFERENCES.md`, an instruction file, the frontmatter of an area file (a `verified_at` stamp on its own excepted) or its sections "Invariants and security boundaries" and "Decisions that apply now" always goes to a person (`bin/ytstack-risk floor`).
 - `## Decisions` of an incident record holds only what a person ordered, in own words.
 
 ## Error behavior
@@ -190,6 +190,7 @@ Automatic handoffs and the session journal are not artifacts. `hooks/pre-compact
 - DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)" (the `Runs:` line, `## Gates`, `## Review`, the evidence fields of a summary)
 - DECISIONS.md -- "2026-11-13: `STATE.md` is a pointer with a size bound; history leaves it through `reconcile`, a closed milestone is folded into the spec (M022-S03)"
 - DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)" (the lanes table is not part of `STATE.md`, which narrows the proposal in issue #34)
+- DECISIONS.md -- "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/`; `STANDING.md` stays valid (issue #57)"
 - DECISIONS.md -- "2026-04-23: `.ytstack/` location is user-chosen (project vs user vs both)"
 - DECISIONS.md -- "2026-05-31: active_slice is plan-task-owned and team-member-guarded (M012 / issue #21-RC1)"
 - DECISIONS.md -- "2026-05-31: post-tool-use-bash is stub-once; summarize-task owns commit-to-task linking (M015 / issue #22)"
