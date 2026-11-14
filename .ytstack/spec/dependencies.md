@@ -6,7 +6,7 @@ paths:
   - vendor/README.md
   - NOTICE
   - bin/ytstack-gstack-diff
-verified_at: 030d254
+verified_at: 799d6bf
 ---
 
 # dependencies
