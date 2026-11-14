@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-14
+
 ### Added
+
+- **Kimi Code host support** (M020, issue #30, PR #49): a native Kimi plugin
+  manifest (`.kimi-plugin/plugin.json`) loads the same `skills/` tree and
+  lifecycle scripts as Claude Code and Codex; Kimi adds only the manifest,
+  `kimi/adapter.md` and `bin/ytstack-kimi`. Installation, support status and
+  limits: `docs/kimi.md`.
 
 - **Review lessons** (M030): a project that runs review roles of its own
   learns from the review-bot findings those roles missed. Skill
@@ -763,6 +771,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.9.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/Yesterday-AI/ytstack/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/Yesterday-AI/ytstack/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.7.0...v0.8.0
