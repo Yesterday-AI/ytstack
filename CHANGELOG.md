@@ -11,8 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `ytstack-pr-watch register --repo OWNER/REPO --all-open` registers every open
   PR of a repository to the current session in one listing call and names the
-  ones another session owns. A coordinator runs it at its start and after a
-  restart (issue #54).
+  ones another session owns. Only the session owning the repository's PRs (a
+  coordinator) runs it, at its start and after a restart; independent sessions
+  register their own PRs with `--pr` (issue #54). `register` now checks the
+  owner after its insert, so a PR the worker registered at the same moment is
+  reported as foreign instead of as registered.
 
 ### Fixed
 
