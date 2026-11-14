@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Review lessons** (M030): a project that runs review roles of its own
+  learns from the review-bot findings those roles missed. Skill
+  `review-lessons` reads a merged pull request with
+  `bin/ytstack-review-escapes`, names the owning role from the role files,
+  records each escape once as a `kind: review` finding
+  (`review:<role>:<class>`) and the check as a `review-checks` line, and at the
+  threshold (second sighting of a class, or the first at critical or high)
+  writes the exact line for the role's file as a question for a person. It
+  never edits a role file. Escapes on files no role reviews are named in the
+  report and not recorded.
+- `bin/ytstack-upkeep`: an eighth section, `review checks`, lists merged pull
+  requests without an escape check when `REVIEW.md` declares own reviewers:
+  merged at or after the first check (the last 14 days before one), one
+  `gh pr list` call per run.
+- PR watch: a merge the worker observes queues one notice to the owning
+  session, "run ytstack:review-lessons for #N", at most once per PR and without
+  a GitHub call of its own.
+- `bin/ytstack-signals review-checked --tally`: caught and escaped bot
+  findings per role on the pull request's `review-checks` line; `check`
+  validates it.
+- `finish-lane` runs `review-lessons` after a merge it made itself; `retro`
+  reports caught, escaped and the escape rate per role for the milestone
+  window from the tallies, read from the signals ledger.
+
 ## [0.8.2] - 2026-11-14
 
 ### Fixed

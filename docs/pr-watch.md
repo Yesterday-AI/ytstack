@@ -15,9 +15,16 @@ Reported to the session that created the PR, once per occurrence:
 - a failed check run or commit status on the current head (checks of the review bots named in the policy excluded)
 - an unresolved review thread whose first comment is from a bot (or a reviewer login from the policy), outdated threads included
 - a merge conflict, when GitHub returns `mergeable: false`
+- a merge, once per PR: "PR merged; if this project declares own reviewers,
+  run ytstack:review-lessons for #N". The worker does not know projects, so
+  the notice is conditional; the session checks `## Own reviewers` in
+  `.ytstack/spec/REVIEW.md` (`docs/ux/review-policy-format.md`, "Escapes").
+  It comes from the read that saw the PR closed as merged, costs no GitHub call
+  of its own and is delivered without the fresh read other notices get, since a
+  merge cannot be undone. A PR closed without a merge gets no notice
 
 Not reported: general bot comments and review summaries, quota notices, human
-threads, waiting, ready and closed states. Those stay visible in
+threads, waiting, ready and closed-unmerged states. Those stay visible in
 `bin/ytstack-pr-watch status`, which also shows a readiness verdict per PR
 (`ready`, `waiting`, `action_required`, `unavailable`) with the missing evidence.
 

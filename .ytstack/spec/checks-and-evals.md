@@ -26,7 +26,7 @@ sources:
   - docs/ux/review-policy-format.md
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
-verified_at: 6ebf767
+verified_at: d6001bb
 ---
 
 # checks-and-evals
@@ -72,9 +72,9 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **`bin/ytstack-signals`: production findings and incident records** (`docs/ux/signal-format.md`)
 
 - `new` records a finding once: a second sighting of the key raises its count, a sighting of a `fixed` one writes a regression with `reopens:`, a `dismissed` one stays dismissed; writes under a noclobber lock. `list`, `set`, `incident new`, `check` (findings and incident records; every mitigation names a handover script that passes `bin/ytstack-handover check` unless declined).
-- `--kind review` records an escaped review-bot finding (key `review:<role>:<class-slug>`) without a "Signals" source; `review-checked` records and asks which merged pull request had its escape check, in `signals/review-checks`.
+- `--kind review` records an escaped review-bot finding (key `review:<role>:<class-slug>`) without a "Signals" source; `review-checked` records and asks which merged pull request had its escape check, in `signals/review-checks`; `--tally` adds caught/escaped per role as a fourth field, which `check` validates.
 
-**`bin/ytstack-upkeep`**: one read-only run over `.ytstack/` with seven counted sections (spec, state, gates, questions, lanes, runtime, review policy); exit 0 with `nothing needs a look`, 10 otherwise. `--question` writes one question file and none while an earlier `Upkeep found ...` is open or asked. `docs/recipes/recurring-upkeep.md` puts it on a schedule.
+**`bin/ytstack-upkeep`**: one read-only run over `.ytstack/` with eight counted sections (spec, state, gates, questions, lanes, runtime, review policy, review checks); exit 0 with `nothing needs a look`, 10 otherwise. `review checks` lists, only when `REVIEW.md` declares own reviewers, the merged pull requests without a line in `signals/review-checks` (merged at or after the earliest time in that file, the last 14 days without one, at most 50), from one `gh pr list --search merged:>=<day>` call (plus one `gh repo view` when `origin` is not a GitHub URL); a failed read is an item, a missing `gh` or `jq` a note. `--question` writes one question file and none while an earlier `Upkeep found ...` is open or asked. `docs/recipes/recurring-upkeep.md` puts it on a schedule.
 
 **`bin/ytstack-brief`: the brief of a dispatched worker and its report**
 

@@ -113,10 +113,14 @@ bin/ytstack-signals new --source review --kind review --key review:<role>:<class
 Which merged pull requests had their escape check is one line each in `.ytstack/signals/review-checks`:
 
 ```
-<owner/name>#<n> <merge sha> <UTC time>
+<owner/name>#<n> <merge sha> <UTC time> [<tally>]
 ```
 
-`bin/ytstack-signals review-checked <owner/name>#<n> <merge sha> [--at <time>]` appends the line and prints `checked <owner/name>#<n>`; a pull request that has its line keeps it and the call prints `already <its line>`. `review-checked <owner/name>#<n>` without a commit asks: exit 0 with the line, 1 without. The reference is written as `gh` prints `nameWithOwner`, the commit as 7 to 40 lowercase hex digits. A pull request without escapes gets its line too: the line says the check ran, not that something was found.
+The tally counts the `fixed` bot findings of the pull request per role: `<role>=<caught>/<escaped>`, comma separated, each role once, `-` for escapes no own role owns (`code=1/2,security=1/0,-=0/3`), or `none` when the pull request had no `fixed` bot finding. A caught finding counts for the role that caught it, an escaped one for the role it was assigned to. It is what `retro` computes the escape rate from. A line without a tally was written before tallies existed; its pull request counts as "not recorded".
+
+`bin/ytstack-signals review-checked <owner/name>#<n> <merge sha> [--at <time>] [--tally <tally>]` appends the line and prints `checked <owner/name>#<n>`; a pull request that has its line keeps it and the call prints `already <its line>`. `review-checked <owner/name>#<n>` without a commit asks: exit 0 with the line, 1 without. The reference is written as `gh` prints `nameWithOwner`, the commit as 7 to 40 lowercase hex digits. A pull request without escapes gets its line too: the line says the check ran, not that something was found.
+
+The skill that writes both is `review-lessons`; the loop from a merge to a proposed line for a role file is `docs/ux/review-policy-format.md`, "The lessons loop". It passes the merge time of the pull request as `--read-at`, so a sighting's time is the time the escape merged.
 
 ## `incidents/` -- the record of an incident
 

@@ -182,6 +182,19 @@ Only a `fixed` and `escaped` line is a lesson. A `rejected` bot finding was a fa
 
 Cost: one GraphQL call per 100 threads, reviews or commits (one for most pull requests), one REST call per commit after the oldest resolved bot thread, and one `gh repo view` when neither `--repo` nor an `origin` on github.com names the repository. An escape is recorded as a finding of `kind: review` (`docs/ux/signal-format.md`).
 
+### The lessons loop
+
+From a merge to a changed role file, end to end:
+
+1. **A pull request merges**, whoever merges it. Three ways lead to the check: with the PR watch on, the worker that sees the merge queues one notice to the owning session ("run ytstack:review-lessons for #N", `docs/pr-watch.md`); `bin/ytstack-upkeep` lists, under `review checks`, every merged pull request without a line in `.ytstack/signals/review-checks` (one `gh pr list` call per run: the merged ones whose merge time is at or after the earliest time in `review-checks`, or the last 14 days without one, at most 50); `finish-lane` invokes the skill itself after a merge it made. The skill also runs on demand.
+2. **`ytstack:review-lessons` reads the pull request** with `bin/ytstack-review-escapes`. Only `fixed` and `escaped` lines go on; `rejected` and `open` ones are counted in its report and recorded nowhere.
+3. **It names the owning role** of each escape from the role files (the `lessons` files of this section): their stated scope, checklist and sources. An escape no role owns, for example on a planning file no role reviews, is recorded nowhere and named in the report: that is a gap in the roles, not a lesson for the nearest one.
+4. **It records the escape** as `review:<role>:<class>` through `bin/ytstack-signals new --kind review`, with the merge time as the read time, and then the check line with `bin/ytstack-signals review-checked <owner/name>#<n> <merge sha> --tally <role>=<caught>/<escaped>,...`: every `fixed` bot thread counted once, a caught one for the role that caught it, an escaped one for the owning role (`-` without one). A class seen before keeps its key; its count rises.
+5. **At the threshold it proposes.** The threshold is the second sighting of a class (count 2 on an `open` finding), the first one at critical or high severity as the bot states it (a Codex `P1` is high, `P0` critical, `P2` medium), or a regression of a class whose lesson was marked fixed. The proposal is a question file under `.ytstack/questions/` (`bin/ytstack-questions new`): the exact checklist line, the role file and the section it goes to, and the escaped threads as evidence. Measured on 30 merged pull requests of the pilot project: 8 bot threads, all `fixed`, 2 caught and 6 escaped, each escape a class of its own; most classes are one-offs, so a single medium escape proposes nothing.
+6. **A person answers.** An accepted line goes through the normal task loop, linked with `bin/ytstack-signals set <F> --state planned --ref <task>`, and the task that adds it sets `fixed`. A rejected one is dismissed by the person (`set <F> --state dismissed`, the reason on stdin); further sightings of the class are counted and never proposed again. No agent writes the role file on its own.
+
+`retro` reports per role, for the milestone window, caught and escaped bot findings and the escape rate (escaped / (caught + escaped)) from the tallies, and the `kind: review` findings with their state, read from the ledger and not from the host. A check line without a tally (written before tallies existed) is reported as "not recorded".
+
 ## Records
 
 A review leaves lines in the plan of what it reviewed (the slice plan for a slice lane, the task plan for a task) under `## Review`:

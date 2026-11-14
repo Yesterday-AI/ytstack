@@ -1,7 +1,7 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T15:30:00Z
+last_updated: 2026-11-14T17:30:00Z
 current_milestone: M030
 active_slice: none
 active_task: none
@@ -9,7 +9,7 @@ active_task: none
 
 # State
 
-**Status (2026-11-14, M030):** Planned and sliced: review lessons from bot findings (3 slices, 9 tasks). Next: `ytstack:plan-task` for M030-S01-T01. The project side is Yesterday-AI/context-mcp#1650.
+**Status (2026-11-14, M030):** Done on branch `m030-review-lessons`, unreleased: `bin/ytstack-review-escapes`, `## Own reviewers` in `REVIEW.md`, signals `kind: review` with per-PR caught/escaped tallies, skill `review-lessons`, triggers after every merge (upkeep by merge date, PR watch merge notice, `finish-lane`), escape rate per role in `retro`. Pilot read on 30 merged context-mcp PRs: 8 bot findings, 2 caught, 6 escaped (5 on bookkeeping files). Not covered: an eval case and a live run of the skill (pilot in Yesterday-AI/context-mcp#1650).
 
 **Status (2026-11-14, M029):** Optional PR watch merged (#45, `05f7fec`) and released as 0.8.0, including the GitHub-quota guard (reserve for agents, settled PRs every 5 minutes): the maintainer's local watcher ported into `tools/pr-watch/`, `bin/ytstack-pr-watch`, opt-in hooks for Claude Code and Codex (`pr_watch=on` in `~/.ytstack/config`), `docs/pr-watch.md`. All suites, checker, Codex tests and plugin validation pass. Not exercised: a real launchd install and real Codex delivery. After the release, the maintainer's live install moves over in one explicit step (unload the old LaunchAgent, `migrate --from ~/.agents/pr-watch --yes`, `install-worker --yes`, `enable`, remove the old hooks from `~/.claude/settings.json`, disable the old Codex plugin).
 

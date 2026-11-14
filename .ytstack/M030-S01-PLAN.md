@@ -3,9 +3,9 @@ milestone: M030
 slice: S01
 project: ytstack
 created: 2026-11-14T15:30:00Z
-status: planned
+status: done
 task_count: 3
-completed_tasks: 0
+completed_tasks: 3
 ---
 
 # M030-S01 -- Slice Plan
@@ -14,9 +14,9 @@ completed_tasks: 0
 
 ## Tasks
 
-- [ ] T01 -- Script skeleton and reads: `--pr N [-C DIR] [--repo OWNER/NAME]`; review threads (GraphQL, paginated: author type and login, path, line range, isResolved, first comment URL and body), the PR's commits after each thread's creation with their changed files and hunks. Bot = author type Bot or a login listed in `REVIEW.md`. Fixtures recorded from real responses (no network in tests).
-- [ ] T02 -- Classification: resolution `fixed` / `rejected` / `open` per bot thread (a later commit touching the thread's file within the line range, with a small margin, is `fixed`); own-role match `caught` / `escaped` (a thread or review-body line carrying a role marker on the same file and overlapping lines, before or on the same head). TSV output, one line per bot thread; exit 0 without escapes, 10 with at least one `fixed` + `escaped`, 2 on usage or read errors.
-- [ ] T03 -- `tests/ytstack-review-escapes.test.sh` (fixtures: fixed+escaped, fixed+caught, rejected, open, a role finding only in the review body, pagination); README tools list, `docs/ux/review-policy-format.md` section "Escapes".
+- [x] T01 -- Script skeleton and reads: `--pr N [-C DIR] [--repo OWNER/NAME]`; review threads (GraphQL, paginated: author type and login, path, line range, isResolved, first comment URL and body), the PR's commits after each thread's creation with their changed files and hunks. Bot = author type Bot or a login listed in `REVIEW.md`. Fixtures recorded from real responses (no network in tests).
+- [x] T02 -- Classification: resolution `fixed` / `rejected` / `open` per bot thread (a later commit touching the thread's file within the line range, with a small margin, is `fixed`); own-role match `caught` / `escaped` (a thread or review-body line carrying a role marker on the same file and overlapping lines, before or on the same head). TSV output, one line per bot thread; exit 0 without escapes, 10 with at least one `fixed` + `escaped`, 2 on usage or read errors.
+- [x] T03 -- `tests/ytstack-review-escapes.test.sh` (fixtures: fixed+escaped, fixed+caught, rejected, open, a role finding only in the review body, pagination); README tools list, `docs/ux/review-policy-format.md` section "Escapes".
 
 ## Done when
 
@@ -25,3 +25,5 @@ All tasks marked `[x]` and verified via `ytstack:summarize-task`.
 ## Notes
 
 - Measure before S03: run the script read-only on recent merged PRs of the pilot project and record how many matches needed the intake's judgement.
+- Measured 2026-11-14 on the last 30 merged PRs of Yesterday-AI/context-mcp (read-only, temporary `REVIEW.md` with its four roles): 8 bot threads, all from `chatgpt-codex-connector`, all `fixed`; 2 `caught` (`security`, `concept`), 6 `escaped`. 5 of the 6 escapes are on planning and bookkeeping files (`.ytstack/ROADMAP.md`, changelog entries, decisions, `plans/`), 1 on `.github/workflows/ci.yaml`; every escape a different class. Cost: about 90 REST and 45 GraphQL calls for the 30 runs.
+- Lead change after the subagent's work: a role marker wins over the author type, so an own role posting through a GitHub App counts as own (red test first).
