@@ -18,9 +18,6 @@
           "completion": "review"
         }
       ],
-      "optional_skipped_checks": [
-        "browser-tests"
-      ],
       "label_required_checks": [
         {
           "label": "preview",

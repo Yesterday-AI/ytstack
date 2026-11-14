@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 import test_findings
 from prwatch import github, hooks, worker
-from prwatch.state import register
+from prwatch.state import enqueue, register
 
 
 def closed(merged):
@@ -16,8 +16,17 @@ class MergeNotice(unittest.TestCase):
     tearDown = test_findings.Findings.tearDown
 
     def observe(self, s, number=1):
+        if s.get('closed') and (s.get('pr') or {}).get('merged_at'):
+            # The notice needs a bot finding the watch saw on the PR (issue #61).
+            self.found(number)
         with patch.object(github, 'snapshot', return_value=s):
             worker.monitor(self.db, self.db.execute('SELECT * FROM watches WHERE number=?', (number,)).fetchone())
+
+    def found(self, number):
+        watch = self.db.execute('SELECT * FROM watches WHERE number=?', (number,)).fetchone()
+        with self.db:
+            enqueue(self.db, f'bot-thread:o/r:{number}:thread1', watch, 'Unresolved bot finding')
+            self.db.execute('UPDATE outbox SET delivered=1 WHERE event_key LIKE ?', (f'bot-thread:o/r:{number}:%',))
 
     def notices(self):
         return self.db.execute("SELECT * FROM outbox WHERE event_key LIKE 'merged:%'").fetchall()
