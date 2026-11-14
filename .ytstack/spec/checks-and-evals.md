@@ -25,7 +25,7 @@ sources:
   - docs/ux/review-policy-format.md
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
-verified_at: 08dab40
+verified_at: 9455f5d
 ---
 
 # checks-and-evals
