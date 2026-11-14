@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The PR watch stays readable under load.** With many open pull requests
+  and background agents, four things made its output hard to act on; now:
+  - a skipped or neutral check that nothing requires (no branch rule, no
+    label, not a review bot's check) no longer turns a pull request into
+    `action_required`; required and review-bot checks still have to pass;
+  - after a push of your own to a watched pull request, its line says
+    `head moved by a push ... ago, not yet polled` instead of repeating the
+    old head's findings (a stale merge conflict, for example), and the worker
+    reads that pull request on its next tick;
+  - the status block appears in Claude Code only when one of its lines
+    changed, or with a notice, instead of on every prompt; a resumed or
+    compacted session sees it once again;
+  - the suggestion to run `review-lessons` after a merge comes only for pull
+    requests where the watch saw a review-bot finding; `ytstack-upkeep` still
+    lists every merged pull request that was not checked.
+
 ## [0.9.2] - 2026-11-14
 
 ### Fixed

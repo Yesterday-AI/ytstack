@@ -78,6 +78,15 @@ def handle(payload, host='codex'):
         tool = payload.get('tool_name', '')
         # Explicit create output gives provenance even for -R/--head and MCP paths.
         create = bool(re.search(r'\bgh\s+(?:[^;&|]*\s)?pr\s+create\b', text)) or 'create_pull_request' in tool
+        if event == 'PostToolUse' and re.search(r'\bgit\s+(?:-C\s+\S+\s+)?push\b', text):
+            # An own push makes the stored head stale: say so, and poll on the next tick.
+            for _, binding in bindings:
+                if binding:
+                    db.execute("UPDATE watches SET pushed_at=? WHERE repo=? AND branch=? AND session=? AND status!='closed'",
+                               (now, *binding, session))
+        if event == 'SessionStart':
+            # A new or compacted context has lost the last status block: show it again.
+            db.execute('DELETE FROM meta WHERE key=?', (claude.surface_key(session),))
         if event == 'PostToolUse' and create:
             for repo, number in PR.findall(json.dumps(payload.get('tool_response', ''))):
                 db.execute('INSERT OR IGNORE INTO candidates VALUES(?,?,?,?,?)',
