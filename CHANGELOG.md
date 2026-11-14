@@ -712,7 +712,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
-[0.8.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.8.0
+[0.8.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.5.0
