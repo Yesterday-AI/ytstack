@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-15
+
 ### Added
 
 - **Standing instructions as one file each** (issue #57): what you asked for
@@ -838,6 +840,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.10.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/Yesterday-AI/ytstack/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/Yesterday-AI/ytstack/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.8.2...v0.9.0

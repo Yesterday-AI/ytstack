@@ -14,7 +14,7 @@ paths:
 sources:
   - docs/codex.md
   - docs/kimi.md
-verified_at: a5ba4f2
+verified_at: a46dd47
 ---
 
 # host-adapters
