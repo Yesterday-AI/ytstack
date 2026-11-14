@@ -69,7 +69,7 @@ JSON object with a `cwd` field. See `docs/statusline.md`.
 | Claude edit/commit quality hooks | Not registered. Follow task scope and verification explicitly; `summarize-task` owns task closure. |
 | Claude Agent Teams and `agents/*.md` roles | Claude-only. The runtime adapter stops this workflow before its capability probe and offers sequential execution. |
 | A Codex worker under an orchestrator on another host | `bin/ytstack-brief render --task <ref>` (or `--slice`) prints a brief that is complete in itself: scope, verification, the work contract (`skills/minimal-code/SKILL.md`) and the report shape. Pipe it into `codex exec -C <a worktree of its own> -`; `bin/ytstack-brief check` validates the worker's report. `--kind` sets what the worker may do: `implement` (the default), `review` (read only, one pinned commit range) or `prepare`, which without `--branch` asks a worker whose sandbox cannot commit for files only and has it list them under `Uncommitted:`. Not exercised in a live run yet. |
-| Claude marketplace dependencies | Not installed by Codex. Optional design or gstack sibling tools must be available separately when needed. |
+| Claude marketplace dependencies | Not installed by Codex. Optional design tools must be available separately when needed. The six skills adapted from gstack ship with ytstack and need no gstack install. |
 
 This is a repository/local plugin distribution. It is not a public OpenAI
 directory submission; packages with lifecycle hooks require manual local
@@ -88,7 +88,7 @@ bash tests/post-tool-use-bash.test.sh
 ```
 
 `ytstack-check` returns 2 for warnings without failures. Existing warnings
-about vendored sibling skills and gstack preambles are documented separately;
+about vendored sibling skills are documented separately;
 they do not mean those optional tools were installed.
 
 The tests execute the configured hook commands against temporary projects,

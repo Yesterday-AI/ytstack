@@ -31,7 +31,6 @@ The lifecycle hooks under `hooks/` and the shared library `hooks/lib/git-ctx.sh`
 - `yt_brownfield_signals` counts up to six signs of an existing codebase and names which file would feed which artifact. The comment above the function lists the counted signals and the hint-only ones.
 - `yt_commit_ref_pattern` renders a task's commit pattern from `commit_ref_pattern` in `PREFERENCES.md`, or from the default. `yt_task_commits` lists commits whose subject matches it. When none match, it falls back to the commits on the current branch after the merge-base with the default branch, and reports which source it used.
 - `yt_find_artifacts` lists artifacts newest first from the flat layout and from the alternative layouts named in its comment. Reading tolerates those layouts. Writing stays flat.
-- `yt_gstack_ctx` reports whether the gstack install and bun meet the pin and the minimum, both constants in the library.
 
 ### STATE lint and progress block
 
@@ -167,4 +166,4 @@ bash tests/ytstack-status.test.sh
 - DECISIONS.md -- "2026-11-11: Status line progress is one optional `progress` block in STATE.md, read by a plugin script (M021, issue #31)"
 - DECISIONS.md -- "2026-11-13: `STATE.md` is a pointer with a size bound; history leaves it through `reconcile`, a closed milestone is folded into the spec (M022-S03)" (lint W8 and W9, the cut excerpt in the injection)
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)" (the closing line of the injection names `spec/SPEC.md`)
-- DECISIONS.md -- "2026-11-07: Vendor strategy -- superpowers stays a subtree tracked at upstream tags; gstack is de-vendored into an installed, tag-pinned dependency" (for `yt_gstack_ctx` and its pin)
+- DECISIONS.md -- "2026-11-14: The six gstack skills become ytstack's own adaptations, synced with upstream; no gstack install" (the library has no gstack functions)

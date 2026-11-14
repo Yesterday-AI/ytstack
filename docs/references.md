@@ -14,8 +14,8 @@ Sources consulted while designing ytstack. Contributors should read these before
 
 ### gstack
 
-- **Upstream:** Garry Tan's framework, distributed via `./setup` into `~/.claude/skills/gstack/` as symlinks per skill folder.
-- **What we take:** planning/decision skills (plan-ceo-review, office-hours, plan-eng-review). Their AskUserQuestion-format contract (Re-ground + Simplify + RECOMMENDATION + Options-with-Completeness-score) is the strongest UX pattern in the Claude Code skill ecosystem and is the direct basis for `docs/ux/askuserquestion-format.md`.
+- **Upstream:** Garry Tan's framework, distributed via `./setup`, which registers every gstack skill in `~/.claude/skills/` (one folder per skill). ytstack does not use that install (since 0.6.0).
+- **What we take:** six skills adapted into ytstack's own (office-hours, plan-ceo-review, plan-eng-review, retro, ship, document-release), synced against upstream tags with `bin/ytstack-gstack-diff`. Their AskUserQuestion-format contract (Re-ground + Simplify + RECOMMENDATION + Options-with-Completeness-score) is the strongest UX pattern in the Claude Code skill ecosystem and is the direct basis for `docs/ux/askuserquestion-format.md`.
 - **What we deliberately leave:** the preamble-tier/`bun run gen:skill-docs` generator pattern -- too heavy for our use case. We write SKILL.md directly and validate via our own `ytstack-skill-check` tool (planned M001).
 - **UX ideas we adopt:** sentinel-files-for-ask-once, cascading-binary-questions, spawned-session-detection, outcome-framing, jargon-gloss-list, em-dash punctuation rule. All in `docs/ux/`. Note: an earlier banned-vocabulary list was rolled back 2026-04-24 as scope-creep (see DECISIONS).
 

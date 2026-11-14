@@ -165,6 +165,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Task plans written before this release have no `## Spec impact` section.
   `summarize-task` then works the impact out at closure instead of refusing.
 
+### Changed (M028, the gstack-derived skills)
+
+- **The six gstack-derived skills ship inside ytstack** (`office-hours`,
+  `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`,
+  `document-release`). Each is ytstack's own adaptation of the gstack skill
+  (MIT): the method carried over, gstack's runtime (Bun preamble, telemetry,
+  gbrain, learnings, Greptile, browser) left out. They run with bash, git
+  and gh; gstack and Bun are no longer needed, and nothing is registered in
+  `~/.claude/skills/`. Each skill records its gstack baseline in
+  `metadata.upstream`: drafted from gstack v1.96.0.0, then synced to
+  v1.99.3.0 with the new diff tool (VERDICT line for subagent second
+  opinions and the adversarial review, plain-language PR titles and
+  CHANGELOG leads, stricter docs-audit result format). The optional outside
+  voice in `plan-ceo-review` / `plan-eng-review` runs as a fresh-context
+  subagent; no external CLI is called.
+- `bin/ytstack-check`: the gstack-wrapper rule is replaced by a
+  self-contained rule for the six skills (no gstack runtime reference,
+  `metadata.upstream` present, no symlinks, no em-dashes in any file of the
+  skill).
+
+### Added (M028)
+
+- `bin/ytstack-gstack-diff`: shows what changed upstream in gstack since
+  each skill's baseline (`--stat`, a target tag, `--source <clone>`); exit 3
+  when a skill is behind. The CONTRIBUTING release checklist runs it before
+  every release; AGENTS.md describes the sync.
+
+### Removed
+
+- `yt_gstack_ctx`, `yt_gstack_skill_ok`, `yt_vergte`, `YT_GSTACK_PIN`,
+  `YT_BUN_MIN` from `hooks/lib/git-ctx.sh`, and `tests/gstack-live.test.sh`.
+
+### Upgrade note
+
+- If gstack was installed only for ytstack, its `./setup` left about 60
+  skill folders in `~/.claude/skills/`. QUICKSTART explains the removal.
+
 ## [0.5.0] - 2026-11-11
 
 ### Added

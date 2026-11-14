@@ -194,41 +194,7 @@ eq "gitignore: node_modules kept"            1         "$(grep -c '^node_modules
 if grep -q 'HANDOFF' "$GI/.gitignore"; then bad "gitignore: HANDOFF.md must not be ignored"; else ok "gitignore: HANDOFF.md not ignored"; fi
 if git -C "$GI" check-ignore -q .ytstack/.local/x; then ok "gitignore: git ignores .ytstack/.local/"; else bad "gitignore: git ignores .ytstack/.local/"; fi
 
-# ---- 11. gstack install context --------------------------------------------
-echo "# gstack ctx"
-GH="$TMP/gshome"; mkdir -p "$GH"
-gs() { ( . "$LIB"; HOME="$1" GSTACK_HOME="${2:-}" yt_gstack_ctx >/dev/null; eval "printf '%s' \"\${$3:-}\"" ); }
-eq "gstack: empty HOME -> not available"      no  "$(gs "$GH" "" YT_GSTACK_AVAILABLE)"
-eq "gstack: empty HOME -> version empty"      ""  "$(gs "$GH" "" YT_GSTACK_VERSION)"
-eq "gstack: empty HOME -> pin not ok"         no  "$(gs "$GH" "" YT_GSTACK_PIN_OK)"
-case "$(gs "$GH" "" YT_GSTACK_INSTALL_CMD)" in *"--branch v1."*"/.claude/skills/gstack"*"./setup --no-browser"*) ok "gstack: install cmd names pin, dir and setup";; *) bad "gstack: install cmd names pin, dir and setup" "$(gs "$GH" "" YT_GSTACK_INSTALL_CMD)";; esac
-GI="$GH/.claude/skills/gstack"; mkdir -p "$GI/office-hours" "$GI/plan-ceo-review" "$GI/plan-eng-review" "$GI/bin"
-printf '1.96.0.0\n' > "$GI/VERSION"; for s in office-hours plan-ceo-review plan-eng-review; do printf -- '---\nname: %s\n---\n' "$s" > "$GI/$s/SKILL.md"; done
-eq "gstack: fake install -> available"        yes "$(gs "$GH" "" YT_GSTACK_AVAILABLE)"
-eq "gstack: version read"                     1.96.0.0 "$(gs "$GH" "" YT_GSTACK_VERSION)"
-eq "gstack: pin ok at exact pin"              yes "$(gs "$GH" "" YT_GSTACK_PIN_OK)"
-eq "gstack: skill ok office-hours"            yes "$( . "$LIB"; HOME="$GH" yt_gstack_ctx >/dev/null; yt_gstack_skill_ok office-hours )"
-eq "gstack: skill ok missing skill -> no"     no  "$( . "$LIB"; HOME="$GH" yt_gstack_ctx >/dev/null; yt_gstack_skill_ok ship )"
-printf '1.95.3.0\n' > "$GI/VERSION"
-eq "gstack: older version -> pin not ok"      no  "$(gs "$GH" "" YT_GSTACK_PIN_OK)"
-eq "gstack: older version -> still available" yes "$(gs "$GH" "" YT_GSTACK_AVAILABLE)"
-ALT="$TMP/gsalt"; mkdir -p "$ALT/office-hours" "$ALT/plan-ceo-review" "$ALT/plan-eng-review"; printf '2.0.0.0\n' > "$ALT/VERSION"
-for s in office-hours plan-ceo-review plan-eng-review; do printf -- '---\nname: %s\n---\n' "$s" > "$ALT/$s/SKILL.md"; done
-eq "gstack: GSTACK_HOME override wins"        2.0.0.0 "$(gs "$GH" "$ALT" YT_GSTACK_VERSION)"
-eq "gstack: GSTACK_HOME dir reported"         "$ALT" "$(gs "$GH" "$ALT" YT_GSTACK_DIR)"
-vg() { ( . "$LIB"; yt_vergte "$1" "$2" && printf yes || printf no ); }
-eq "vergte: equal"                 yes "$(vg 1.96.0.0 1.96.0.0)"
-eq "vergte: numeric not lexical"   yes "$(vg 1.100.0.0 1.96.0.0)"
-eq "vergte: lower"                 no  "$(vg 1.9.0.0 1.96.0.0)"
-eq "vergte: fewer components"      yes "$(vg 2.0 1.96.0.0)"
-eq "vergte: empty lhs -> no"       no  "$(vg '' 1.96.0.0)"
-# bun's launcher needs the real HOME (exit 126 under a foreign HOME), so this case keeps HOME and overrides only GSTACK_HOME.
-if command -v bun >/dev/null 2>&1; then
-  eq "bun: detected on this machine (>= 1.4.2)" yes "$( . "$LIB"; GSTACK_HOME="$ALT" yt_gstack_ctx >/dev/null; printf '%s' "$YT_BUN_OK" )"
-else
-  ok "bun: not installed here -- detection case skipped"
-fi
-eq "bun: absent PATH -> no" no "$( . "$LIB"; PATH=/nonexistent HOME="$GH" yt_gstack_ctx >/dev/null; printf '%s' "$YT_BUN_OK" )"
+# ---- 11. (gstack install context removed 2026-11-14: the six skills ship in ytstack)
 
 # ---- 12. preferences ----------------------------------------------------------
 echo "# preferences"
