@@ -134,7 +134,10 @@ def main():
                     try:
                         register(db, args.repo, number, args.session, cwd)
                     except ValueError:
-                        foreign.append(f'#{number} ({known["session"]})')
+                        # Re-read: the worker may have registered the PR after the lookup above.
+                        owner = db.execute('SELECT session FROM watches WHERE repo=? AND number=?',
+                                           (args.repo, number)).fetchone()
+                        foreign.append(f'#{number} ({owner["session"] if owner else "unknown"})')
                         continue
                     (kept if known else added).append(f'#{number}')
                 print(f'{args.repo}: {len(added)} registered to {args.session}, {len(kept)} already watched by it, '

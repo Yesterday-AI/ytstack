@@ -62,6 +62,22 @@ class RegisterAllOpen(unittest.TestCase):
         self.assertIn('registered: #1 #4', out)
         self.assertIn('#3 (claude:other)', out)
 
+    def test_pr_registered_by_another_process_after_the_lookup_is_skipped(self):
+        real_register = cli.register
+
+        def racing_register(db, repo, number, session, cwd):
+            # The worker registers the PR between the CLI's lookup and its register call.
+            db.execute('INSERT OR IGNORE INTO watches(repo,number,session,cwd) VALUES(?,?,?,?)',
+                       (repo, number, 'claude:worker-found', cwd))
+            return real_register(db, repo, number, session, cwd)
+
+        with patch.object(github, 'open_pulls', return_value=[{'number': 7}]), \
+                patch.object(cli, 'register', side_effect=racing_register):
+            code, out = self.run_cli('register', '--repo', 'o/r', '--all-open',
+                                     '--session', 'claude:coordinator', '--cwd', self.tmp.name)
+        self.assertEqual(code, 0)
+        self.assertIn('#7 (claude:worker-found)', out)
+
     def test_needs_a_session(self):
         with patch.object(github, 'open_pulls', return_value=[]), self.assertRaises(SystemExit):
             with redirect_stdout(io.StringIO()), patch('sys.stderr', io.StringIO()):
