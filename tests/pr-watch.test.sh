@@ -98,6 +98,16 @@ eq "enable creates a missing config" "pr_watch=on" "$(cat "$H/.ytstack/config" 2
 
 # install-worker / uninstall-worker: a fake gh so the plan does not depend on the machine.
 mkdir "$T/fakebin" && printf '#!/bin/sh\nexit 0\n' >"$T/fakebin/gh" && chmod +x "$T/fakebin/gh"
+# A version-manager shim (needs its manager on PATH, like asdf) must be skipped
+# for the real gh behind it: under launchd the shim fails.
+mkdir "$T/shims" && printf '#!/bin/sh\nexec asdf-nowhere exec gh "$@"\n' >"$T/shims/gh" && chmod +x "$T/shims/gh"
+if [ "$(uname -s)" = Darwin ]; then
+  out=$(HOME="$H" PATH="$T/shims:$T/fakebin:$PATH" "$CLI" install-worker 2>&1)
+  has "install-worker skips a gh shim that cannot run alone" "PATH $T/fakebin:" "$out"
+  out=$(HOME="$H" PATH="$T/shims:/usr/bin:/bin" YTSTACK_PYTHON="$PYBIN" "$CLI" install-worker 2>&1); ec=$?
+  eq "install-worker with only a gh shim exits 2" "2" "$ec"
+  has "install-worker names the shim problem" "version-manager shim" "$out"
+fi
 fresh 4
 before=$(count "$H")
 out=$(HOME="$H" PATH="$T/fakebin:$PATH" "$CLI" install-worker 2>&1); ec=$?

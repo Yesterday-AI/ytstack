@@ -108,15 +108,46 @@ def other_agents():
     return sorted(p for p in folder.glob('*pr-watch*.plist') if p.name != own_plist().name)
 
 
+BASE_PATH = ('/usr/bin', '/bin', '/usr/sbin', '/sbin')
+
+
+def runs_alone(binary):
+    """Whether `binary --version` works with nothing but its own directory and
+    the system directories on PATH, as under launchd. A version-manager shim
+    (asdf, mise, pyenv) fails here: it needs the manager itself on PATH."""
+    path = ':'.join([str(Path(binary).parent), *BASE_PATH])
+    try:
+        return subprocess.run([binary, '--version'], capture_output=True, timeout=20,
+                              env={'HOME': str(Path.home()), 'PATH': path}).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def find_gh():
+    """The first `gh` on PATH that runs on its own; shims are skipped."""
+    seen = set()
+    for folder in os.environ.get('PATH', '').split(os.pathsep):
+        candidate = Path(folder or '.') / 'gh'
+        if not (candidate.is_file() and os.access(candidate, os.X_OK)):
+            continue
+        real = str(candidate.resolve())
+        if real in seen:
+            continue
+        seen.add(real)
+        if runs_alone(str(candidate)):
+            return str(candidate)
+    return None
+
+
 def tool_dirs():
-    gh = shutil.which('gh')
+    gh = find_gh()
     dirs = []
     for path in (gh, sys.executable):
         if path:
             folder = str(Path(path).parent)
             if folder not in dirs:
                 dirs.append(folder)
-    for folder in ('/usr/bin', '/bin', '/usr/sbin', '/sbin'):
+    for folder in BASE_PATH:
         if folder not in dirs:
             dirs.append(folder)
     return gh, ':'.join(dirs)
@@ -155,7 +186,9 @@ def install_worker(yes):
         return 2
     gh, path = tool_dirs()
     if not gh:
-        print('gh (GitHub CLI) is not on PATH; the worker reads GitHub through it. Install gh first.', file=sys.stderr)
+        print('No gh (GitHub CLI) on PATH that runs on its own; the worker reads GitHub through it. '
+              'A version-manager shim (asdf, mise) does not work under launchd: install gh from a '
+              'package manager (for example Homebrew) or put the real binary first on PATH.', file=sys.stderr)
         return 2
     state = home()
     config = {'Label': LABEL, 'ProgramArguments': ['/bin/sh', str(launcher()), 'tick'],
