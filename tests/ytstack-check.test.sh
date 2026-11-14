@@ -137,19 +137,23 @@ OUT=$("$CHECK" "$ROOT" 2>&1)
 eq "leaks: note with token + 'resolve under' clears both" 0 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'zz-fixture-wrapper' | grep -c 'inlined vendor text')"
 rm -rf "$FIX_WRAP" "$FAKE_VENDOR"
 
-# ---- 3c. gstack wrapper install contract ------------------------------------
-echo "# gstack wrappers"
+# ---- 3c. skills adapted from gstack: self-contained contract (2026-11-14) ----
+echo "# adapted gstack skills"
 OUT=$("$CHECK" "$ROOT" 2>&1)
-eq "gstack wrappers: real tree passes the contract" 0 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep -c 'gstack wrapper')"
+eq "adapted: real tree passes the contract" 0 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep -c 'adapted from gstack')"
 cp "$ROOT/skills/office-hours/SKILL.md" "$TMP/oh.bak"
-printf '\n```!\ncat "${CLAUDE_SKILL_DIR}/../../vendor/gstack/office-hours/SKILL.md"\n```\n' >> "$ROOT/skills/office-hours/SKILL.md"
+printf '\n```bash\n~/.claude/skills/gstack/bin/gstack-slug\n```\n' >> "$ROOT/skills/office-hours/SKILL.md"
 OUT=$("$CHECK" "$ROOT" 2>&1)
-eq "gstack wrappers: vendor/gstack reference flagged" 1 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'office-hours' | grep -c 'never inlined')"
+eq "adapted: gstack runtime path flagged" 1 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'office-hours' | grep -c 'gstack runtime')"
 cp "$TMP/oh.bak" "$ROOT/skills/office-hours/SKILL.md"
-sed 's/yt_gstack_ctx/yt_nothing/g' "$TMP/oh.bak" > "$ROOT/skills/office-hours/SKILL.md"
+grep -v '^  upstream:' "$TMP/oh.bak" > "$ROOT/skills/office-hours/SKILL.md"
 OUT=$("$CHECK" "$ROOT" 2>&1)
-eq "gstack wrappers: missing precheck flagged" 1 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'office-hours' | grep -c 'yt_gstack_ctx')"
+eq "adapted: missing metadata.upstream flagged" 1 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'office-hours' | grep -c 'metadata.upstream')"
 cp "$TMP/oh.bak" "$ROOT/skills/office-hours/SKILL.md"
+mkdir -p "$ROOT/skills/office-hours/references"; ln -s /etc/hosts "$ROOT/skills/office-hours/references/zz-link.md"
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "adapted: symlink in the skill dir flagged" 1 "$(printf '%s' "$OUT" | grep '\[fail\]' | grep 'office-hours' | grep -c 'symlink')"
+rm -f "$ROOT/skills/office-hours/references/zz-link.md"; rmdir "$ROOT/skills/office-hours/references" 2>/dev/null
 
 # ---- 4. version agreement ---------------------------------------------------
 echo "# versions"

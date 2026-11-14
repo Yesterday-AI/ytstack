@@ -129,10 +129,10 @@ LIFECYCLE_LINES=""
 if [ "${CURRENT_MILESTONE:-none}" != none ]; then
   _rm="$YT_DIR/$CURRENT_MILESTONE-ROADMAP.md"
   if [ -f "$_rm" ] && [ "$(sed -n 's/^status: *//p' "$_rm" | head -1)" = done ] && [ ! -f "$YT_DIR/$CURRENT_MILESTONE-RETRO.md" ]; then
-    LIFECYCLE_LINES="Milestone $CURRENT_MILESTONE is done and has no retro: ytstack:retro (needs gstack), then ytstack:document-release for the version, then ytstack:plan-milestone."
+    LIFECYCLE_LINES="Milestone $CURRENT_MILESTONE is done and has no retro: ytstack:retro, then ytstack:document-release for the version, then ytstack:plan-milestone."
   elif [ "${ACTIVE_SLICE:-none}" != none ] && [ -f "$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-PLAN.md" ] \
        && [ "$(sed -n 's/^status: *//p' "$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-PLAN.md" | head -1)" = done ]; then
-    LIFECYCLE_LINES="Slice $ACTIVE_SLICE is done: ytstack:reassess-roadmap first; then ytstack:finish-branch (merge / PR / keep) or ytstack:ship (gstack release flow) for the branch."
+    LIFECYCLE_LINES="Slice $ACTIVE_SLICE is done: ytstack:reassess-roadmap first; then ytstack:finish-branch (merge / PR / keep) or ytstack:ship (release flow) for the branch."
   fi
 fi
 
