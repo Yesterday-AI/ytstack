@@ -75,7 +75,9 @@ JSON object with a `cwd` field. See `docs/statusline.md`.
 
 The scripts under `bin/` are plain bash (macOS bash 3.2 and Linux, BSD and GNU
 tools, BusyBox) and run the same under either host. Run them from the project
-or pass `-C <dir>`. A skill's own shell blocks go through `bin/ytstack-codex`
+or pass `-C <dir>` as their first argument. `ytstack-handover` is the exception:
+it takes no `-C` and works on the script path you give it (`new <path>`,
+`check <script>`). A skill's own shell blocks go through `bin/ytstack-codex`
 as described above.
 
 | Script | In Codex |
