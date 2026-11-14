@@ -224,7 +224,7 @@ if [ -f "$_YT_DIR/STATE.md" ]; then
 fi
 ```
 
-Library functions available after sourcing: `yt_read_stdin`, `yt_git_ctx`, `yt_resolve_yt_dir`, `yt_state_dir` / `yt_state_wt_dir` / `yt_state_base` (out-of-tree session state), `yt_commit_ref_pattern`, `yt_task_commits`, `yt_ensure_gitignore`, `yt_brownfield_signals <toplevel>` (sets `YT_BROWNFIELD_SIGNALS` + `YT_BROWNFIELD_HINTS`; shared by init-project, adopt-brownfield and session-start), `yt_gstack_ctx`, `yt_jq`, `yt_python`. Functions that set globals must be called directly (`yt_resolve_yt_dir >/dev/null`), not inside `$(...)`. Guard lib-only functions in the fallback branch with `command -v yt_brownfield_signals >/dev/null 2>&1`.
+Library functions available after sourcing: `yt_read_stdin`, `yt_git_ctx`, `yt_resolve_yt_dir`, `yt_state_dir` / `yt_state_wt_dir` / `yt_state_base` (out-of-tree session state), `yt_commit_ref_pattern`, `yt_task_commits`, `yt_ensure_gitignore`, `yt_brownfield_signals <toplevel>` (sets `YT_BROWNFIELD_SIGNALS` + `YT_BROWNFIELD_HINTS`; shared by init-project, adopt-brownfield and session-start), `yt_progress_parse`, `yt_jq`, `yt_python`. Functions that set globals must be called directly (`yt_resolve_yt_dir >/dev/null`), not inside `$(...)`. Guard lib-only functions in the fallback branch with `command -v yt_brownfield_signals >/dev/null 2>&1`.
 
 ## The Procedure (main body)
 

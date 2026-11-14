@@ -27,14 +27,45 @@ modified without extensive eval evidence. ytstack respects this constraint.
 
 ## gstack
 
-Required install, NOT redistributed (since ytstack 0.3.0; it was a git
-subtree at vendor/gstack/ from 0.1.x to 0.2.0). Source repository:
-<https://github.com/garrytan/gstack>
+Adapted, not vendored (since ytstack 0.6.0; a git subtree at vendor/gstack/
+from 0.1.x to 0.2.0, a required install from 0.3.0 to 0.5.0). Source
+repository: <https://github.com/garrytan/gstack>
 
-License: MIT (upstream). ytstack does not ship any gstack file. Three ytstack
-skills (skills/office-hours/, skills/plan-ceo-review/, skills/plan-eng-review/)
-detect a gstack installation under ~/.claude/skills/gstack (tested against
-v1.96.0.0, requires bun >= 1.4.2) and invoke its skills through the Skill tool.
+License: MIT. Copyright (c) 2026 Garry Tan.
+
+Six ytstack skills are adaptations of the gstack skills of the same name:
+skills/office-hours/, skills/plan-ceo-review/, skills/plan-eng-review/,
+skills/retro/, skills/ship/, skills/document-release/. They contain text
+derived from gstack's SKILL.md and sections files, restructured for ytstack
+and stripped of gstack's runtime; each records the gstack release it was
+last synced to in its `metadata.upstream` field. No gstack code, helper or
+binary is shipped.
+
+gstack's own NOTICE.md credits third-party ideas behind some of that text,
+for example pstack (Copyright Lauren Tan, MIT, https://github.com/cursor/plugins)
+for the "design it twice" pass and the design red flags in plan-eng-review.
+Those are ideas restated in gstack's words; ytstack carries no code or text
+copied from them.
+
+MIT License text (gstack):
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 Attribution: gstack originates from Garry Tan's work, shaped around YC-style
 product and engineering review patterns. ytstack also adopted several of its

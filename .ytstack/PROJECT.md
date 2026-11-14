@@ -31,7 +31,7 @@ ytstack is the cleanup: one curated, opinionated Claude Code plugin that takes t
 - Every skill in ytstack follows the UX contract (AskUserQuestion format, writing-style, skill-structure) enforced by CI.
 - An 8-hour milestone can run with minimal user intervention via Agent Teams + ytstack skills, producing committed artifacts at each phase.
 - Zero dependencies on external runtimes (no GSD CLI, no gstack binary).
-- Upstream superpowers and gstack stay vendored via git subtree, updateable via `./sync-upstream.sh`.
+- Upstream superpowers stays vendored via git subtree at a release tag; six gstack skills are adapted into ytstack and re-synced against upstream tags with `bin/ytstack-gstack-diff` (DECISIONS 2026-11-14).
 
 ## Current status
 

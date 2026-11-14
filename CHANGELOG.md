@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The six gstack-derived skills ship inside ytstack** (`office-hours`,
+  `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`,
+  `document-release`). Each is ytstack's own adaptation of the gstack skill
+  (MIT): the method carried over, gstack's runtime (Bun preamble, telemetry,
+  gbrain, learnings, Greptile, browser) left out. They run with bash, git
+  and gh; gstack and Bun are no longer needed, and nothing is registered in
+  `~/.claude/skills/`. Each skill records its gstack baseline in
+  `metadata.upstream` and moves to 1.0.0.
+- `bin/ytstack-check`: the gstack-wrapper rule is replaced by a
+  self-contained rule for the six skills (no gstack runtime reference,
+  `metadata.upstream` present, no symlinks, no em-dashes in any file of the
+  skill).
+
+### Added
+
+- `bin/ytstack-gstack-diff`: shows what changed upstream in gstack since
+  each skill's baseline (`--stat`, a target tag, `--source <clone>`); exit 3
+  when a skill is behind. The CONTRIBUTING release checklist runs it before
+  every release; AGENTS.md describes the sync.
+
+### Removed
+
+- `yt_gstack_ctx`, `yt_gstack_skill_ok`, `yt_vergte`, `YT_GSTACK_PIN`,
+  `YT_BUN_MIN` from `hooks/lib/git-ctx.sh`, and `tests/gstack-live.test.sh`.
+
+### Upgrade note
+
+- If gstack was installed only for ytstack, its `./setup` left about 60
+  skill folders in `~/.claude/skills/`. QUICKSTART explains the removal.
+
 ## [0.5.0] - 2026-11-11
 
 ### Added

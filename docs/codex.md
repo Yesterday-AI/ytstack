@@ -68,7 +68,7 @@ JSON object with a `cwd` field. See `docs/statusline.md`.
 | Resume and handoff without hooks | Explicit `resume-session` and `handoff-session` skills. No automatic journal. |
 | Claude edit/commit quality hooks | Not registered. Follow task scope and verification explicitly; `summarize-task` owns task closure. |
 | Claude Agent Teams and `agents/*.md` roles | Claude-only. The runtime adapter stops this workflow before its capability probe and offers sequential execution. |
-| Claude marketplace dependencies | Not installed by Codex. Optional design or gstack sibling tools must be available separately when needed. |
+| Claude marketplace dependencies | Not installed by Codex. Optional design tools must be available separately when needed. The six skills adapted from gstack ship with ytstack and need no gstack install. |
 
 This is a repository/local plugin distribution. It is not a public OpenAI
 directory submission; packages with lifecycle hooks require manual local
@@ -87,7 +87,7 @@ bash tests/post-tool-use-bash.test.sh
 ```
 
 `ytstack-check` returns 2 for warnings without failures. Existing warnings
-about vendored sibling skills and gstack preambles are documented separately;
+about vendored sibling skills are documented separately;
 they do not mean those optional tools were installed.
 
 The tests execute the configured hook commands against temporary projects,

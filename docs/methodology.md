@@ -63,9 +63,9 @@ The external source distinguishes multiple agent types with specific roles. We d
 - Evidence-before-assertions verification gate
 - SessionStart-hook injection pattern (we adapted the mechanism for our own `using-ytstack` bootstrap)
 
-### gstack (MIT, installed dependency since 0.3.0 -- not vendored)
+### gstack (MIT, six skills adapted since 0.6.0)
 
-The three planning wrappers invoke the gstack skills installed under `~/.claude/skills/gstack` (pinned v1.96.0.0); the procedure text lives upstream. What ytstack adopted as conventions of its own:
+`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship` and `document-release` are ytstack's own adaptations of the gstack skills of the same name: the method (forcing questions, review modes and sections, retro metrics, release steps) carried over, gstack's runtime left out, the upstream baseline recorded in `metadata.upstream` and re-synced with `bin/ytstack-gstack-diff`. What ytstack adopted as conventions of its own:
 
 - AskUserQuestion 4-part format (Re-ground + Simplify + RECOMMENDATION + Options)
 - Sentinel-file-for-ask-once pattern

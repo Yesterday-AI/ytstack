@@ -31,12 +31,12 @@ From `README.md` §opening + PROJECT.md one-liner:
 
 Verbatim facts from `README.md` §"Why it exists":
 
-### 2.1 gstack (Garry Tan) -- installed dependency (since 0.3.0, DECISIONS 2026-11-07)
+### 2.1 gstack (Garry Tan) -- six skills adapted into ytstack (since 0.6.0, DECISIONS 2026-11-14)
 
 - **Strength:** strategy and decision rigor -- CEO / eng-manager / office-hours reviews that force real thinking before code.
 - **Also ships:** 62 skills upstream as of v1.96.0.0 (`ship`, `review`, `qa`, `spec`, `captain`, ...), Bun-based helpers, an optional `gbrain` knowledge layer.
 - **Lacks:** explicit TDD enforcement, structured milestone / slice / task artifact hierarchy.
-- **How ytstack consumes it:** not vendored. gstack's v1.9x skills are skeletons that load `sections/*.md` and run `bin/gstack-skill-start` from `~/.claude/skills/gstack`, and the maintainer deprecated vendored installs; a `cat`-inlined copy no longer renders the procedure. ytstack's three wrappers therefore check the install (`yt_gstack_ctx`: pin v1.96.0.0, bun >= 1.4.2), invoke the installed skill through the Skill tool, and post-process into ytstack artifacts.
+- **How ytstack consumes it:** six skills (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`) are ytstack's own adaptations: the method text of gstack's skill and its sections, rewritten into ytstack's skill structure, without gstack's runtime (Bun preamble, telemetry, gbrain, learnings, external review services). They need no gstack install, so nothing is registered in `~/.claude/skills/`. Each records its upstream baseline in `metadata.upstream`; `bin/ytstack-gstack-diff` shows what changed upstream since, and AGENTS.md makes that check part of every release. 0.3.0 to 0.5.0 called an installed gstack instead; its `./setup` registered every gstack skill globally, which broke the curation.
 - **Upstream:** https://github.com/garrytan/gstack
 
 ### 2.2 superpowers (Jesse Vincent / obra) -- vendored at `vendor/superpowers/`
@@ -70,7 +70,7 @@ Per README comparison table and DECISIONS. Six skills, each with a distinct purp
 #### `plan-ceo-review` (gstack)
 
 **Purpose:** Scope + ambition critique. Challenges an existing plan across four modes: SCOPE EXPANSION, SELECTIVE EXPANSION, HOLD SCOPE, SCOPE REDUCTION. Asks "is this worth building, in the right scope, with the right ambition?"
-**Produces:** annotation block on the reviewed artifact + optional `DECISIONS.md` entry if a scope-change is locked.
+**Produces:** concept mode: review section + `## CEO REVIEW REPORT` appended to the pitch; milestone mode: `.ytstack/M###-CEO-REVIEW.md` (review, decision ledger, report) plus the approved slice changes in `M###-ROADMAP.md`. Optional `DECISIONS.md` entry if a scope-change is locked.
 **Triggers on:** explicit request ("CEO review", "challenge premises", "think bigger", "expand scope"); locked as the concept-mode review step immediately after office-hours in greenfield; optional milestone-mode step between plan-milestone and slice-milestone.
 **Differs from office-hours:** critique vs produce (see above).
 **Differs from plan-eng-review:** WHAT vs HOW. plan-ceo-review asks whether the plan is the right plan; plan-eng-review asks whether the plan's execution approach is technically sound.
@@ -78,7 +78,7 @@ Per README comparison table and DECISIONS. Six skills, each with a distinct purp
 #### `plan-eng-review` (gstack)
 
 **Purpose:** Feasibility + architecture critique. Locks in execution approach: architecture, data flow, edge cases, test coverage, performance, security risks. Asks "given we are building this, is the chosen approach technically sound?"
-**Produces:** annotations on the reviewed artifact (pitch in concept-mode; slice-plans in milestone-mode) + optional `DECISIONS.md` entry if an architectural choice is locked.
+**Produces:** concept mode: annotation at the top of the pitch plus the review appended to it; milestone mode: `.ytstack/M###-ENG-REVIEW.md` (review, decision ledger, test plan, implementation tasks) plus approved edits to the slice plans. Optional `DECISIONS.md` entry if an architectural choice is locked.
 **Triggers on:** explicit request ("engineering review", "architecture review", "lock in the plan"); optional concept-mode step after plan-ceo-review; standard milestone-mode step after slice-milestone before plan-task.
 **Differs from plan-ceo-review:** HOW vs WHAT (see above).
 
@@ -122,9 +122,9 @@ Per README comparison table and DECISIONS. Six skills, each with a distinct purp
 **Triggers on:** "grill me", "poke holes in this", "design before we plan"; between office-hours and plan-milestone.
 **Differs from office-hours:** office-hours validates demand (six forcing questions, gstack); grill shapes the solution. `superpowers:writing-plans` maps to `plan-milestone` + `slice-milestone`.
 
-#### `retro`, `ship`, `document-release` (gstack, installed dependency, M019)
+#### `retro`, `ship`, `document-release` (gstack, adapted, M019; self-contained since 0.6.0)
 
-Same contract as the three planning wrappers (precheck via `yt_gstack_ctx`, HARD-GATE with the install command, Skill-tool invocation of the installed skill). `retro` runs after a milestone closes over its task summaries and writes `M###-RETRO.md` (+ KNOWLEDGE / DECISIONS entries); `ship` runs gstack's release flow (tests, review, commit, push, PR) gated on every task of the slice having a real summary, never merging without instruction; `document-release` writes the CHANGELOG section and release notes for a version from the summaries added since the last tag. `hooks/session-start` prints the lifecycle hint (reassess -> finish-branch / ship; retro -> document-release -> plan-milestone) when it sees a closed slice or milestone.
+Same contract as the three planning skills: ytstack's own adaptation of the gstack skill, self-contained, `metadata.upstream` as the sync baseline. `retro` runs after a milestone closes over its task summaries and writes `M###-RETRO.md` (+ KNOWLEDGE / DECISIONS entries); `ship` runs the release flow (tests, review, commit, push, PR) gated on every task of the slice having a real summary, never merging without instruction; `document-release` writes the CHANGELOG section and release notes for a version from the summaries added since the last tag. `hooks/session-start` prints the lifecycle hint (reassess -> finish-branch / ship; retro -> document-release -> plan-milestone) when it sees a closed slice or milestone.
 
 ### 3.2 Explicitly skipped (verbatim from README §"ytstack is the curation")
 
@@ -148,7 +148,7 @@ Per DECISIONS 2026-04-24 "Wrapper mechanism = shell-exec inject + cross-ref chec
 
 Applies to: `test-driven-development`, `systematic-debugging`, `verification-before-completion` (vendor/superpowers/skills).
 
-**gstack wrappers use a second shape (since 0.3.0):** `plan-ceo-review`, `plan-eng-review`, `office-hours` run the same preamble plus `yt_gstack_ctx`, a `## HARD-GATE: gstack installed?` section, and a `## Procedure` that invokes the installed gstack skill through the Skill tool before applying ytstack post-processing. Nothing is inlined, because gstack's v1.9x skeletons load `sections/*.md` and run Bun helpers from their install dir (see §2.1).
+**The six gstack-derived skills are not wrappers (since 0.6.0):** they carry the adapted procedure in their own `SKILL.md` (plus optional `references/*.md`), run the standard resolver preamble, and post-process into ytstack artifacts. No vendor block, no install check, no Skill-tool call into gstack (see §2.1). 0.3.0 to 0.5.0 used a precheck plus a Skill-tool call into an installed gstack.
 
 **Supersedes:** the earlier 2026-04-23 "Known risk -- superpowers interactive prompts may block Claude Code input" rule that required every superpowers wrapper to pass `YTSTACK_NON_INTERACTIVE=1`. That rule was a defensive workaround for a different wrapper shape (prose indirection telling the agent to "read vendor file and follow it"). Shell-exec-inject sidesteps the interactive-prompt risk because the vendor content is inlined as the same turn's prompt, not re-invoked as a separate Claude Code interaction.
 
