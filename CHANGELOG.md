@@ -132,6 +132,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`PROJECT.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `AGENTS.md`, the wrapper and
   suite counts in README, QUICKSTART, NOTICE and `docs/concept.md`).
 
+### Fixed
+
+- `bin/ytstack-brief` reads a planned path with a space inside its backticks,
+  so the brief names the area file that covers it.
+
 ### Upgrade notes
 
 - Existing projects have no spec yet. Run `/ytstack:adopt-brownfield` once:
