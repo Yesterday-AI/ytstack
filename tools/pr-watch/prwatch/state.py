@@ -70,6 +70,12 @@ def enqueue(db, key, watch, message):
 
 
 def register(db, repo, number, session, cwd):
+    if session.startswith('claude:'):
+        # Heal a watch an older CLI stored under the bare Claude id (taken for a Codex thread).
+        bare = session[len('claude:'):]
+        db.execute('UPDATE watches SET session=? WHERE repo=? AND number=? AND session=?', (session, repo, number, bare))
+        db.execute("UPDATE outbox SET session=?, error='' WHERE repo=? AND number=? AND session=? AND delivered IS NULL",
+                   (session, repo, number, bare))
     # Insert first, then read the owner: a check before the insert races with the worker.
     db.execute('INSERT OR IGNORE INTO watches(repo,number,session,cwd) VALUES(?,?,?,?)',
                (repo, number, session, cwd))
