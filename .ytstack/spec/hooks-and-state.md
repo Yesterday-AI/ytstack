@@ -9,7 +9,8 @@ paths:
 sources:
   - docs/statusline.md
   - docs/pr-watch.md
-verified_at: 4ab539c
+  - docs/kimi.md
+verified_at: 08dab40
 ---
 
 # hooks-and-state
@@ -89,6 +90,11 @@ Every hook except `pr-watch` sources the library and resolves from the payload `
 - `.ytstack` without `STATE.md`: a one-line repair notice.
 - Otherwise a state block, in this order: scope, project, pointer, last update, working tree with the linked-worktree flag, `.ytstack` path, a Next action excerpt, the three newest summary names, a notice when more than one milestone roadmap is `in-progress`, the manual and the latest automatic handoff, a lifecycle hint for a finished slice or a finished milestone without retro, up to five STATE lint findings, the minimal-code line when `minimal_code` is on, and a closing line that names the files as the source of truth. When `spec/SPEC.md` exists, the closing line names it as the place for what applies now.
 - Cap: the hook measures the injection without the host context. Above the guard threshold in the script, which sits just under the host's 10,000-character limit, it cuts the Next action excerpt to what still fits and marks the cut; when less than a useful rest would remain, it replaces the excerpt with a one-line note. If the text is still above the threshold, it warns on stderr and emits the text anyway. Nothing else is dropped.
+- Output is the existing Claude-compatible JSON envelope by default. `YTSTACK_HOOK_FORMAT=plain` emits the raw context instead. Kimi's helper uses this mode only to prepare pending context, not as a claim that SessionStart stdout is consumed.
+
+### Kimi pending bridge
+
+Kimi's native `sessionStart.skill` supplies the static directive. `bin/ytstack-kimi` stores the generated context atomically as `pending-context.md` in the session state directory on SessionStart and PostCompact. UserPromptSubmit renames it before emitting it, so parallel prompts consume it at most once and an absent file produces no output. PreCompact still writes the shared automatic handoff and SessionEnd the shared journal. The host contract and close limits are in `docs/kimi.md` and the `host-adapters` area.
 
 ### Status line segment
 
@@ -96,19 +102,19 @@ See `docs/statusline.md`. It was read against `bin/ytstack-status` at `verified_
 
 ## Interfaces and contracts
 
-- `hooks/hooks.json` registers the nine hooks for Claude Code: event, matcher, timeout. The Codex registration is in the `host-adapters` area.
+- `hooks/hooks.json` registers the nine hooks for Claude Code: event, matcher, timeout. The Codex and Kimi registrations are in the `host-adapters` area.
 - The `YT_*` globals each function sets are named in the comment above that function. Consumers are every hook, the skill preambles and `bin/ytstack-status`.
-- Files other parts read: `HANDOFF.auto.md` and `latest-handoff` (read by `hooks/session-start` and `skills/resume-session/SKILL.md`), draft and auto summaries (replaced by `summarize-task`, listed by `reconcile`).
+- Files other parts read: `HANDOFF.auto.md` and `latest-handoff` (read by `hooks/session-start` and `skills/resume-session/SKILL.md`), draft and auto summaries (replaced by `summarize-task`, listed by `reconcile`). Kimi also reads and removes `pending-context.md` through its helper.
 - The `progress` block and the segment's exit codes: `docs/statusline.md`.
 
 ## Invariants and security boundaries
 
 - No hook resolves its target from `CLAUDE_PROJECT_DIR`. `bin/ytstack-check` fails on that name in a hook script, on `[ -d .git ]` and on a basename slug.
-- Volatile state (automatic handoff, journal) is written outside the tree. The only in-tree location is the `.ytstack/.local` fallback.
+- Volatile state (automatic handoff, journal, Kimi pending context) is written outside the tree. The only in-tree location is the `.ytstack/.local` fallback.
 - No hook creates or changes `.ytstack/HANDOFF.md` or `STATE.md`.
 - Two hooks write deliberate artifacts into the resolved `.ytstack`: `post-tool-use-bash` (the draft stub) and `task-completed` (auto summary, checkbox). Both write into the checkout the payload names, so a session that works in a linked worktree leaves the main checkout unchanged.
-- `session-start`, `stop`, `pre-tool-use-edit`, `task-created` and `teammate-idle` write no files.
-- Files under `sessions/<session-id>/` have one writer. There is no locking.
+- `session-start`, `stop`, `pre-tool-use-edit`, `task-created` and `teammate-idle` write no files. Plain mode does not change this; the Kimi helper owns the pending write.
+- Files under `sessions/<session-id>/` have one writer. There is no locking. Kimi's consume-by-rename is atomic even when two prompt hooks race.
 - The payload is trusted as coming from the host. Its fields are shell-quoted before evaluation, but `session_id` is used as a directory name without sanitising.
 
 ## Error behavior
@@ -140,11 +146,11 @@ See `docs/statusline.md`. It was read against `bin/ytstack-status` at `verified_
 - `hooks/session-start`, `hooks/pre-compact`, `hooks/session-end`, `hooks/stop`, `hooks/pre-tool-use-edit`, `hooks/post-tool-use-bash`, `hooks/task-created`, `hooks/task-completed`, `hooks/teammate-idle`
 - `bin/ytstack-status` -- status line segment
 - `bin/ytstack-check` (`check_resolver_contract`) -- banned patterns
-- Tests: `tests/git-ctx.test.sh`, `tests/hooks-json.test.sh`, `tests/hooks-readonly.test.sh`, `tests/hooks-stop.test.sh`, `tests/hooks-worktree.test.sh`, `tests/hooks-concurrency.test.sh`, `tests/post-tool-use-bash.test.sh`, `tests/pre-compact.test.sh`, `tests/session-end.test.sh`, `tests/ytstack-status.test.sh`
+- Tests: `tests/git-ctx.test.sh`, `tests/hooks-json.test.sh`, `tests/hooks-readonly.test.sh`, `tests/hooks-stop.test.sh`, `tests/hooks-worktree.test.sh`, `tests/hooks-concurrency.test.sh`, `tests/post-tool-use-bash.test.sh`, `tests/pre-compact.test.sh`, `tests/session-end.test.sh`, `tests/ytstack-status.test.sh`, `tests/kimi_lifecycle_test.py`
 
 ## How to verify
 
-Run from the repository root. Each suite ends with a line `<n> passed, 0 failed` and exits 0.
+Run from the repository root. Each shell suite ends with a line `<n> passed, 0 failed` and exits 0.
 
 ```bash
 bash tests/git-ctx.test.sh
@@ -157,12 +163,14 @@ bash tests/post-tool-use-bash.test.sh
 bash tests/pre-compact.test.sh
 bash tests/session-end.test.sh
 bash tests/ytstack-status.test.sh
+python3 -m unittest discover -s tests -p 'kimi_lifecycle_test.py' -v
 ```
 
-`tests/hooks-worktree.test.sh` is the acceptance for the write rule: it fires every hook for three session shapes and compares the checkouts before and after.
+`tests/hooks-worktree.test.sh` is the acceptance for the write rule: it fires every hook for three session shapes and compares the checkouts before and after. At `verified_at`, the nine Kimi lifecycle tests passed; native installation, real-prompt context and interactive close are verified by the live suite in the `host-adapters` area.
 
 ## Decisions that apply now
 
+- DECISIONS.md -- "2026-11-14: Kimi uses native plugin bootstrap and pending lifecycle context (M020)" (plain output is explicit, the helper owns pending context and consumes it once)
 - DECISIONS.md -- "2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)" (`merge_by` and `evidence_dir` in `yt_prefs`)
 - DECISIONS.md -- "2026-11-07: Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree"
 - DECISIONS.md -- "2026-05-31: post-tool-use-bash is stub-once; summarize-task owns commit-to-task linking (M015 / issue #22)". The 2026-11-07 entry above narrows it: the stub appears only in the committing checkout and only for a commit that carries the task ref.

@@ -90,7 +90,7 @@ if [ -n "$_YT_DIR" ]; then
   [ -d "$_YT_DIR/.local" ] && _LOCAL_DIR=yes
   git -C "$_PROJECT_DIR" check-ignore -q "${_YT_DIR#$_PROJECT_DIR/}/.local/x" 2>/dev/null && _LOCAL_IGNORED=yes
 fi
-_count() { local n; n=$(printf '%s' "$1" | grep -c . 2>/dev/null); printf '%s' "${n:-0}"; }
+_count() { local n; n=$(printf '%s' "${1}" | grep -c . 2>/dev/null); printf '%s' "${n:-0}"; }
 
 # STATE.md as a pointer (M022-S03): what the STATE lint reports as W8 / W9.
 _STATE_BYTES=0; _STATE_HIST=0; _STATE_MAX=${YT_STATE_MAX_BYTES:-12000}

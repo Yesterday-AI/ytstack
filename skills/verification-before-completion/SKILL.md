@@ -44,7 +44,7 @@ if [ -f "$_TASK_PLAN" ]; then
   _VERIFICATION=$(awk -v f="$_FENCE" '
     /^## Verification/{in_section=1; next}
     /^## /{in_section=0}
-    in_section && index($0,f)==1 { in_fence=!in_fence; next }
+    in_section && sub("^" f, "") { in_fence=!in_fence; next }
     in_section && in_fence { print }
   ' "$_TASK_PLAN" | head -5)
 fi

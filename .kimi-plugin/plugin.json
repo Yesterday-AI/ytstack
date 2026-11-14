@@ -1,0 +1,55 @@
+{
+  "name": "ytstack",
+  "version": "0.8.2",
+  "description": "BUNDLE: Yesterday Technologies Stack -- opinionated software-development OS for AI agents. Curated superpowers + gstack skills plus Project-OS artifact discipline (PROJECT.md, DECISIONS.md, KNOWLEDGE.md, milestone/slice/task hierarchy), orchestrated via SessionStart hooks.",
+  "author": {
+    "name": "Yesterday",
+    "url": "https://github.com/Yesterday-AI"
+  },
+  "homepage": "https://github.com/Yesterday-AI/ytstack",
+  "repository": "https://github.com/Yesterday-AI/ytstack",
+  "license": "MIT",
+  "keywords": ["kimi-code", "project-management", "development-methodology"],
+  "skills": "./skills/",
+  "systemPromptPath": "./kimi/adapter.md",
+  "sessionStart": {
+    "skill": "using-ytstack"
+  },
+  "hooks": [
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume",
+      "command": "bash \"${KIMI_PLUGIN_ROOT}/bin/ytstack-kimi\" hook session-start",
+      "timeout": 10
+    },
+    {
+      "event": "PreCompact",
+      "matcher": "manual|auto",
+      "command": "bash \"${KIMI_PLUGIN_ROOT}/bin/ytstack-kimi\" hook pre-compact",
+      "timeout": 5
+    },
+    {
+      "event": "PostCompact",
+      "matcher": "manual|auto",
+      "command": "bash \"${KIMI_PLUGIN_ROOT}/bin/ytstack-kimi\" hook post-compact",
+      "timeout": 10
+    },
+    {
+      "event": "UserPromptSubmit",
+      "command": "bash \"${KIMI_PLUGIN_ROOT}/bin/ytstack-kimi\" hook user-prompt-submit",
+      "timeout": 5
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "exit|archive",
+      "command": "bash \"${KIMI_PLUGIN_ROOT}/bin/ytstack-kimi\" hook session-end",
+      "timeout": 3
+    }
+  ],
+  "interface": {
+    "displayName": "ytstack",
+    "shortDescription": "Plan, build, and resume work across sessions",
+    "longDescription": "Keep project decisions and progress on disk. Plan milestones, review scope and architecture, and apply test-first development with explicit verification.",
+    "developerName": "Yesterday"
+  }
+}

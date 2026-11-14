@@ -49,9 +49,13 @@ fi
 # The only no-op case: we cannot prime the agent if the directive is missing.
 [ -z "$USING_YTSTACK_CONTENT" ] && exit 0
 
-# Helper: emit additionalContext JSON with the given string
+# Helper: emit additionalContext JSON, or raw context for a plain-stdout host.
 emit_json() {
   local content="$1" jq_bin py_bin
+  if [ "${YTSTACK_HOOK_FORMAT:-json}" = plain ]; then
+    printf '%s\n' "$content"
+    return 0
+  fi
   jq_bin=$(yt_jq); py_bin=$(yt_python)
   if [ -n "$jq_bin" ]; then
     printf '%s' "$content" | "$jq_bin" -Rs '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: .}}'

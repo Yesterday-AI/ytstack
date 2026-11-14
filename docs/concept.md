@@ -24,7 +24,7 @@ source_articles_analyzed:
 
 From `README.md` §opening + PROJECT.md one-liner:
 
-- **What:** "An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng." A Claude Code plugin that turns multi-session, multi-week projects into something an agent can hold onto. Project memory on disk, curated skill set, parallel execution via native Agent Teams. One install, one namespace.
+- **What:** "An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng." A plugin for Claude Code, Codex and Kimi Code that turns multi-session, multi-week projects into something an agent can hold onto. Project memory on disk, curated skill set, parallel execution via native Agent Teams in Claude Code. One install, one namespace.
 - **Why:** AI coding agents are excellent inside a single session and fall apart between them. Long projects rot; context-window pressure makes the agent forget early decisions. ytstack removes the "remind me what we were working on" ritual.
 
 ## 2. The three upstream sources and their roles
@@ -336,6 +336,8 @@ Install commands:
 `paperclip-companies` ships its skill as part of the `yopstack-internal` bundle until that repo is plugin-ready.
 
 **plugin.json shape (unchanged from 2026-04-24):** minimal -- `name`, `version`, `description`, `author`, `homepage`, `repository`, `license`, `keywords`. The schema also allows an explicit `skills: [...]` field with relative paths, but it has been reverted across-the-board after upstream issue [alirezarezvani/claude-skills#538](https://github.com/alirezarezvani/claude-skills/issues/538) confirmed the explicit field causes duplicate-load errors that override the default `skills/` auto-discovery. Claude Code auto-discovers `skills/`, `agents/`, `commands/`, `hooks/hooks.json` regardless of whether the explicit field is set; the safety goal of "no accidental leakage" is met by naming convention + repo-scoped code review (the auto-discovery walks the plugin root either way).
+
+**Multi-host single source (M020):** Claude Code, Codex and Kimi Code use the same `skills/` and lifecycle source. Kimi adds `.kimi-plugin/plugin.json`, `kimi/adapter.md` and `bin/ytstack-kimi`; skills stay qualified as `ytstack:<name>`. `sessionStart.skill` supplies the static directive. Because Kimi discards SessionStart hook stdout, dynamic project state is stored pending out of tree on SessionStart/PostCompact and consumed once through UserPromptSubmit. Interactive Ctrl+C twice is the verified SessionEnd path; headless and web close limits remain explicit. The six gstack-derived skills are ytstack's own adaptations and need no external installation or cross-plugin call. Native tests cover local 2.5.3 and official 2.6.2 on Linux. See [docs/kimi.md](kimi.md) for installation and support boundaries.
 
 **Why two marketplaces, not one mixed-visibility catalog:** a public marketplace.json that lists private plugins leaks names + descriptions to anyone who adds the marketplace, while users without auth can read but not install. The split was locked in the 2026-04-25 architecture session: each marketplace lists only what it can actually deliver to its audience.
 

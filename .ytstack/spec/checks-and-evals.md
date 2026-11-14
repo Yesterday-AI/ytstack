@@ -93,15 +93,15 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **Shell suites: `tests/*.test.sh`**
 
 - Plain bash, no framework. A suite prints one line per assertion and ends with its pass and fail count; fixtures live in `mktemp` directories. The comment at the top of each file states the contract it pins.
-- `tests/run-all.sh` runs every suite from a neutral temporary directory and prints `PASS` or `FAIL` per suite with that suite's last line. It stops at the first failing suite, prints up to ten of its `FAIL` lines and exits 1. The last line is `ALL SUITES PASSED` or `SUITE FAILURE`.
-- `tests/run-all.sh --linux` runs the same inside an `alpine/git` container with the repository mounted read-only. Without a working Docker daemon it prints a skip line and exits 0.
+- `tests/run-all.sh` runs every suite from a neutral temporary directory and prints `PASS` or `FAIL` per suite with that suite's last line. It stops at the first failing suite, prints up to ten of its `FAIL` lines and exits 1. The last line is `ALL SUITES PASSED` or `SUITE FAILURE`. `--linux` runs the same inside an `alpine/git` container with the repository mounted read-only; without a working Docker daemon it prints a skip line and exits 0.
 - `tests/ytstack-check.test.sh` tests the checker on a copy of the plugin tree. `tests/ytstack-spec.test.sh` tests `bin/ytstack-spec` on fixture repositories, one case per rule. `tests/ytstack-brief.test.sh` does the same for `bin/ytstack-brief` and compares the rendered contract with the real `skills/minimal-code/SKILL.md`. `tests/evidence-rule.test.sh` pins the evidence reuse rule: the verifier, the dispatcher and the skills area reuse a PASS only for the same commit, and its git fixture shows why (an unchanged planned file, a changed imported helper, a failing check).
-
 - `tests/pr-watch.test.sh` runs the PR watch engine's `unittest` suite (`tests/pr_watch/`, standard library, `gh` and the Codex daemon mocked) and then shell cases for `hooks/pr-watch` (off, on, malformed input), `bin/ytstack-pr-watch` (enable/disable, install-worker and migrate plans, migrate copy, the worker launcher's engine choice) under a temporary HOME. The resolver rule of `bin/ytstack-check` exempts `hooks/pr-watch` by name (`_HOOKS_WITHOUT_RESOLVER`).
 
-**Python tests: `tests/codex_plugin_test.py`**
+**Python host tests: `tests/*_test.py`**
 
-- `unittest` on the standard library. Covers the Codex manifests, `bin/ytstack-codex`, the lifecycle hooks as Codex registers them, the wrapper preambles and vendor imports on both hosts, and that there is one skill tree without generated copies. `tests/run-all.sh` does not run it.
+- `unittest` on the standard library. `codex_plugin_test.py` covers the Codex manifests, helper, lifecycle registration, wrapper preambles and vendor imports, and that there is one skill tree without generated copies. `tests/run-all.sh` does not run it.
+- `kimi_plugin_test.py` checks native manifest parity and the shared skill tree, including the six self-contained gstack adaptations. `kimi_lifecycle_test.py` covers plain output, the helper's installed and target roots, pending prepare/consume once, parallel consumption, compaction handoff and journal behavior.
+- `kimi_live_test.py` installs the plugin into an isolated `KIMI_CODE_HOME` through real Kimi processes. It checks every qualified skill, the six adapted-skill paths, project override separation, pending context on real prompts, compaction, resume, interactive close and the placeholder-sensitive preambles. It uses a local fake model and no real credential, skips without a binary and accepts `KIMI_BIN`. It is not a CI job.
 
 **`claude plugin validate .`**
 
@@ -120,12 +120,10 @@ Everything that tells a contributor whether a change is acceptable: the static c
 | File | Job | Runner | Runs |
 |---|---|---|---|
 | `.github/workflows/ci.yml` | `suites` | ubuntu-latest and macos-latest | `bash tests/run-all.sh`, then `python3 bin/ytstack-check .` |
-| `.github/workflows/plugin-check.yml` | `check` | ubuntu-latest | the Python Codex tests, `bash tests/post-tool-use-bash.test.sh`, `bin/ytstack-check` |
+| `.github/workflows/plugin-check.yml` | `check` | ubuntu-latest | the Python Codex tests, Kimi packaging and lifecycle tests, `bash tests/post-tool-use-bash.test.sh`, `bin/ytstack-check` |
 | `.github/workflows/secret-scan.yml` | `secret-scan` | ubuntu-latest | gitleaks over the commits of the pull request or push; the whole tree on a branch-creation push |
 
-- All three run on pull requests and on pushes to `main`.
-- Both checker steps accept exit code 2 and fail on any other non-zero code.
-- The `ci.yml` matrix does not cancel the other runner when one fails.
+- All three run on pull requests and on pushes to `main`. Both checker steps accept exit code 2 and fail on any other non-zero code. The `ci.yml` matrix does not cancel the other runner when one fails.
 
 ## Invariants and security boundaries
 
@@ -142,10 +140,8 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 ## Runtime and deployment assumptions
 
-- The suites run on bash 3.2 (macOS) and bash 5 (Linux). `ci.yml` prints the versions of bash, git, jq and python3 on each runner.
-- `--linux` needs Docker and network access for the image and its packages.
-- `claude plugin validate` and `claude plugin eval` need the Claude Code CLI; the minimum version for evals is in `evals/README.md`.
-- An eval run loads nothing that is installed on the machine. A fixture creates everything a skill reads.
+- The suites run on bash 3.2 (macOS) and bash 5 (Linux). `ci.yml` prints the versions of bash, git, jq and python3 on each runner. `--linux` needs Docker and network access for the image and its packages.
+- `claude plugin validate` and `claude plugin eval` need the Claude Code CLI; the minimum version for evals is in `evals/README.md`. An eval run loads nothing that is installed on the machine. A fixture creates everything a skill reads.
 
 ## Known limits
 
@@ -162,8 +158,8 @@ Everything that tells a contributor whether a change is acceptable: the static c
 - `bin/ytstack-spec` -- the spec tool; `tests/ytstack-spec.test.sh` pins it.
 - `bin/ytstack-brief` -- brief renderer and report check; `tests/ytstack-brief.test.sh` pins it.
 - `bin/ytstack-frontier`, `bin/ytstack-questions`, `bin/ytstack-finish-lane`, `bin/ytstack-handover`, `bin/ytstack-watch` -- the coordinator scripts, each with `tests/<name>.test.sh`.
-- `bin/ytstack-risk`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it).
-- `tests/run-all.sh` -- the suite runner. `tests/*.test.sh` -- the suites. `tests/codex_plugin_test.py` -- the Python tests.
+- `bin/ytstack-risk`, `bin/ytstack-review-escapes`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it).
+- `tests/run-all.sh` -- the suite runner. `tests/*.test.sh` -- the suites. `tests/codex_plugin_test.py`, `kimi_plugin_test.py`, `kimi_lifecycle_test.py`, `kimi_live_test.py` -- the Python host tests.
 - `evals/<case>/` -- the eval cases. `evals/README.md` -- how to run them.
 - `.github/workflows/ci.yml`, `plugin-check.yml`, `secret-scan.yml`.
 - `docs/ux/skill-structure.md`, `docs/ux/agent-structure.md`, `docs/ux/writing-style.md` -- the contracts the checker enforces in part.
@@ -173,15 +169,18 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 Run from the repository root.
 
-- `bin/ytstack-check` -- pass: exit code 0 or 2 and no `[fail]` line. At `verified_at` it exits 2 with `OK (with <n> warning[s])`; every warning is a missing recommended section or a Checklist without "MUST".
+- `bin/ytstack-check` -- pass: exit code 0 or 2 and no `[fail]` line. At `verified_at` it exits 2 with `OK (with 9 warnings)`; every warning is a missing recommended section or a Checklist without "MUST".
 - `bash tests/run-all.sh` -- pass: exit 0, one `PASS` line per file in `tests/*.test.sh`, last line `ALL SUITES PASSED`.
 - `python3 -m unittest discover -s tests -p 'codex*_test.py'` -- pass: last line `OK`.
+- `python3 -m unittest discover -s tests -p 'kimi_plugin_test.py' -v` and the same pattern for `kimi_lifecycle_test.py` -- pass: two and nine tests, each `OK`.
+- `python3 -m unittest discover -s tests -p 'kimi_live_test.py' -v` -- seven native tests on a machine with Kimi; local 2.5.3 and official Linux 2.6.2 each passed without skips at `verified_at`.
 - `claude plugin validate .` -- pass: `✔ Validation passed`, exit 0.
 
-Not covered by these four: `claude plugin eval` (costs money) and `bash tests/run-all.sh --linux` (Docker).
+Not covered by these checks: `claude plugin eval` (costs money). `bash tests/run-all.sh --linux` (Docker) also passed all 26 suites from an export of `verified_at`.
 
 ## Decisions that apply now
 
+- DECISIONS.md -- "2026-11-14: Kimi uses native plugin bootstrap and pending lifecycle context (M020)". Source of the offline Kimi CI checks and the separately run native suite.
 - DECISIONS.md -- "2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)". Source of `bin/ytstack-risk` and the lint rules for `auto_merge` and `REVIEW.md`.
 - DECISIONS.md -- "2026-11-13: `RUNTIME.md` has three sections with a fixed line format, read only through `bin/ytstack-runtime` (M025-S01)"
 - DECISIONS.md -- "2026-11-13: After a merge the release is watched, not driven; upkeep is a script and a recipe, not a skill (M026)". Source of `release` and `bin/ytstack-upkeep`.
