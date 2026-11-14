@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-14
+
 ### Fixed
 
 - PR watch: a Claude Code session that passed its own id to `register` or
@@ -803,6 +805,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.9.2]: https://github.com/Yesterday-AI/ytstack/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/Yesterday-AI/ytstack/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/Yesterday-AI/ytstack/compare/v0.8.1...v0.8.2

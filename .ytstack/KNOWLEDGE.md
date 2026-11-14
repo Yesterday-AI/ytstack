@@ -110,6 +110,8 @@ Patterns, rules, and lessons learned while building ytstack. This file is read b
 
 ## Eval runs (`claude plugin eval`)
 
+- **2026-11-14, release 0.9.2 (`coordinate` 0.2.2), `--case coordinator-resume --ablation none --no-publish`:** 1/1, score 1.00, $0.44, 169 s. Same coverage limit as for 0.9.1: the session spelling is covered by `tests/pr_watch/test_session_spelling.py`.
+
 - **2026-11-14, release 0.9.1 (`coordinate` 0.2.1), `--case coordinator-resume --ablation none --no-publish`:** 1/1, score 1.00, $0.39, 62 s. The case covers resuming the ledger, not the PR watch registration paragraph; that one is covered by `tests/pr_watch/test_register_all.py` only.
 
 - **2026-11-13, Claude Code 2.1.323, M022 + M023, two arms, `--runs 1 --ablation none -j 4 --no-publish`:**
