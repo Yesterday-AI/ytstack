@@ -114,18 +114,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     pull request host or in a real multi-lane run; the suites use a stand-in
     for `gh`.
 
-### Fixed (the adapted gstack skills, #40)
-
-- `retro` counts the milestone's own commits even when the branch has not
-  merged the latest base yet; it reports how many base commits are missing
-  instead of switching the analysis to the base branch.
-- `ship` writes the CHANGELOG entry under the bumped version when the branch
-  already carries it, not under `Unreleased`.
-- `plan-ceo-review` writes `last_updated` in `STATE.md` as a full ISO
-  timestamp, so the STATE lint stays clean.
-- `plan-eng-review` finds the pitch in concept mode when the checkout path
-  contains a space, and picks the newest one.
-
 ### Changed
 
 - `resume-session`, `handoff-session` and the closing line of the
@@ -177,7 +165,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Task plans written before this release have no `## Spec impact` section.
   `summarize-task` then works the impact out at closure instead of refusing.
 
-### Changed (M028, the gstack-derived skills)
+## [0.6.0] - 2026-11-14
+
+### Fixed
+
+- `retro` counts the milestone's own commits even when the branch has not
+  merged the latest base yet; it reports how many base commits are missing
+  instead of switching the analysis to the base branch.
+- `ship` writes the CHANGELOG entry under the bumped version when the branch
+  already carries it, not under `Unreleased`.
+- `plan-ceo-review` writes `last_updated` in `STATE.md` as a full ISO
+  timestamp, so the STATE lint stays clean.
+- `plan-eng-review` finds the pitch in concept mode when the checkout path
+  contains a space, and picks the newest one.
+
+### Changed
 
 - **The six gstack-derived skills ship inside ytstack** (`office-hours`,
   `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`,
@@ -197,7 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `metadata.upstream` present, no symlinks, no em-dashes in any file of the
   skill).
 
-### Added (M028)
+### Added
 
 - `bin/ytstack-gstack-diff`: shows what changed upstream in gstack since
   each skill's baseline (`--stat`, a target tag, `--source <clone>`); exit 3
@@ -610,6 +612,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.6.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.5.0
 [0.4.2]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.4.1
