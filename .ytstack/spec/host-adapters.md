@@ -10,7 +10,7 @@ paths:
   - hooks/hooks.json
 sources:
   - docs/codex.md
-verified_at: 799d6bf
+verified_at: 8939861
 ---
 
 # host-adapters
