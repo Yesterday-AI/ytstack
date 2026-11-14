@@ -367,8 +367,46 @@ eq "supersedes itself -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1555Z-self.md:
 eq "no frontmatter -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1700Z-plain.md: no frontmatter")"
 eq "a name without the UTC prefix -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "Report-Results.md: name is not")"
 eq "the well-formed entries stay quiet" 0 "$(printf '%s' "$OUT" | grep -c "at-most-\(ten\|fifteen\)")"
+# optional seconds: 12:25:30 is newer than 12:25 (Codex finding on PR #63)
+rm -f "$SD"/*.md
+entry 20261114T1225Z-old 2026-11-14T12:25:00Z "x" ""
+entry 20261114T122530Z-new 2026-11-14T12:25:30Z "x" 20261114T1225Z-old
+OUT=$("$CHECK" --standing "$PRJ" 2>&1); EC=$?
+eq "seconds: 12:25:30 may supersede 12:25 -> exit 0" 0 "$EC"
+entry 20261114T1225Z-old 2026-11-14T12:25:00Z "x" 20261114T122530Z-new
+entry 20261114T122530Z-new 2026-11-14T12:25:30Z "x" ""
+OUT=$("$CHECK" --standing "$PRJ" 2>&1)
+eq "seconds: 12:25 superseding 12:25:30 -> newer FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1225Z-old.md: supersedes '20261114T122530Z-new', which is newer")"
+# impossible dates and times, in the name and in given
+rm -f "$SD"/*.md
+entry 20261340T2960Z-bad-name 2026-13-40T29:60Z "x" ""
+entry 20240229T1200Z-leap-day 2024-02-29T12:00:00Z "x" ""
+entry 20250229T1200Z-no-leap-day 2025-02-29T12:00:00Z "x" ""
+entry 20261114T2359Z-bad-given-seconds 2026-11-14T23:59:60Z "x" ""
+entry 20261131T1200Z-november-31 2026-11-31T12:00Z "x" ""
+OUT=$("$CHECK" --standing "$PRJ" 2>&1)
+eq "time: month 13, day 40, hour 29, minute 60 in the name -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "20261340T2960Z-bad-name.md: the time in the name is not a real")"
+eq "time: 29 February of a leap year passes" 0 "$(printf '%s' "$OUT" | grep -c "standing/20240229T1200Z-leap-day.md")"
+eq "time: 29 February of a common year -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "no-leap-day.md: the time in the name is not a real")"
+eq "time: 31 November -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "november-31.md: the time in the name is not a real")"
+eq "time: second 60 in given -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "bad-given-seconds.md: given 2026-11-14T23:59:60Z is not a real")"
+rm -f "$SD"/*.md
+# user scope: no .ytstack in the repository, the entries under ~/.ytstack/projects/<repo key>
+UREPO="$TMP/userscope"; mkdir -p "$UREPO" "$TMP/home"
+( cd "$UREPO" && git init -q ) >/dev/null 2>&1
+UKEY=$(cd "$UREPO" && HOME="$TMP/home" bash -c '. "$1"; yt_git_ctx "$PWD"; printf %s "$YT_REPO_KEY"' x "$SRC/hooks/lib/git-ctx.sh")
+USD="$TMP/home/.ytstack/projects/$UKEY/standing"; mkdir -p "$USD"
+printf -- '---\ngiven: 2026-11-14T12:25:00Z\nscope: x\nsupersedes: 20261114T0900Z-missing\n---\n\nx\n' > "$USD/20261114T1225Z-user.md"
+# the real interpreter: a version-manager shim may not run with another HOME
+PYREAL=$(python3 -c 'import sys; print(sys.executable)')
+OUT=$(cd "$UREPO" && HOME="$TMP/home" "$PYREAL" "$CHECK" --standing 2>&1); EC=$?
+eq "user scope: --standing from the repository finds ~/.ytstack/projects/<key> -> exit 1" 1 "$EC"
+eq "user scope: the broken entry is named" 1 "$(printf '%s' "$OUT" | grep -c "1225Z-user.md: supersedes '20261114T0900Z-missing' names no entry")"
+OUT=$(cd "$TMP/home" && HOME="$TMP/nohome" "$PYREAL" "$CHECK" --standing 2>&1); EC=$?
+eq "no .ytstack anywhere: still exit 0" 0 "$EC"
 # the plugin's own .ytstack/standing/ is part of the full run
 mkdir -p "$ROOT/.ytstack/standing"
+entry 20261114T1500Z-gone 2026-11-14T15:00:00Z "x" 20261114T0900Z-never-written
 cp "$SD/20261114T1500Z-gone.md" "$ROOT/.ytstack/standing/"
 OUT=$("$CHECK" "$ROOT" 2>&1); EC=$?
 eq "full run: a broken own standing entry -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "\[fail\] .ytstack/standing/20261114T1500Z-gone.md: supersedes")"

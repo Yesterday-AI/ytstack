@@ -770,6 +770,19 @@ def _fm_scalar(fm, key):
     return v
 
 
+def _standing_time(groups):
+    """(year, month, day, hour, minute, second-or-None) -> a sortable
+    YYYYMMDDHHMMSS key (missing seconds count as 00), or None when the date
+    or time does not exist (month 13, February 30, hour 24, minute 60)."""
+    import datetime
+    y, mo, d, h, mi, s = (int(g) if g is not None else 0 for g in groups)
+    try:
+        datetime.datetime(y, mo, d, h, mi, s)
+    except ValueError:
+        return None
+    return f"{y:04d}{mo:02d}{d:02d}{h:02d}{mi:02d}{s:02d}"
+
+
 def check_standing(yt_dir):
     """`.ytstack/standing/<YYYYMMDDTHHMMZ>-<slug>.md`, one standing instruction
     per file (docs/ux/coordinator-format.md). Each entry has the frontmatter
@@ -790,22 +803,28 @@ def check_standing(yt_dir):
         if not nm:
             fails.append(f"{rel}: name is not <YYYYMMDDTHHMMZ>-<slug>.md (UTC time, lowercase slug)")
             continue
+        key = _standing_time(nm.groups())
+        if key is None:
+            fails.append(f"{rel}: the time in the name is not a real UTC date and time")
+            continue
         fm, body = parse_frontmatter(p)
         if fm is None:
             fails.append(f"{rel}: no frontmatter (given, scope, supersedes)")
             continue
-        entries[p.name[:-3]] = (rel, fm)
+        entries[p.name[:-3]] = (rel, fm, key)
         given = _fm_scalar(fm, "given") or ""
         gm = _STANDING_GIVEN.match(given)
         if not gm:
             fails.append(f"{rel}: given '{given}' is not an ISO UTC time (YYYY-MM-DDTHH:MMZ or with seconds)")
+        elif _standing_time(gm.groups()) is None:
+            fails.append(f"{rel}: given {given} is not a real UTC date and time")
         elif gm.groups()[:5] != nm.groups()[:5]:
             fails.append(f"{rel}: given {given} and the time in the name differ (newest first reads the name)")
         if not _fm_scalar(fm, "scope"):
             fails.append(f"{rel}: scope is empty (where the instruction applies)")
         if not body.strip():
             fails.append(f"{rel}: no instruction below the frontmatter")
-    for name, (rel, fm) in sorted(entries.items()):
+    for name, (rel, fm, key) in sorted(entries.items()):
         sup = _fm_scalar(fm, "supersedes")
         if sup is None:
             fails.append(f"{rel}: supersedes names one entry, not a list")
@@ -818,19 +837,40 @@ def check_standing(yt_dir):
             fails.append(f"{rel}: supersedes names the entry itself")
         elif sup not in entries:
             fails.append(f"{rel}: supersedes '{sup}' names no entry in .ytstack/standing/")
-        elif sup > name:
+        elif entries[sup][2] > key:
             fails.append(f"{rel}: supersedes '{sup}', which is newer than this entry")
     return fails, []
 
 
+def _resolve_yt_dir(start):
+    """The .ytstack dir the skill preambles resolve for `start`: the shared
+    resolver of hooks/lib/git-ctx.sh (project scope, then user scope under
+    ~/.ytstack/projects/<repo key>). None when it resolves nothing or the
+    library is not reachable."""
+    import subprocess
+    lib = Path(__file__).resolve().parent.parent / "hooks" / "lib" / "git-ctx.sh"
+    if not lib.is_file() or not start.is_dir():
+        return None
+    proc = subprocess.run(
+        ["bash", "-c", '. "$1"; yt_git_ctx "$PWD"; yt_resolve_yt_dir', "ytstack-check", str(lib)],
+        cwd=str(start), capture_output=True, text=True)
+    out = proc.stdout.strip()
+    return Path(out) if out and Path(out).is_dir() else None
+
+
 def standing_main(args):
     """`ytstack-check --standing [<project dir>]`: only the standing entries of
-    a project, for any repository that has `.ytstack/` (no plugin root
-    needed). Exit 0 = pass or no directory, 1 = fail."""
+    a project, for any repository that has `.ytstack/` in project or user
+    scope (resolved like the skill preambles; no plugin root needed). Exit
+    0 = pass or no directory, 1 = fail."""
     path_args = [a for a in args if not a.startswith("--")]
     start = Path(path_args[0] if path_args else Path.cwd()).resolve()
     yt = None
-    for p in [start, *start.parents]:
+    if start.name == ".ytstack" and start.is_dir():
+        yt = start
+    else:
+        yt = _resolve_yt_dir(start)
+    for p in ([] if yt else [start, *start.parents]):
         if p.name == ".ytstack" and p.is_dir():
             yt = p
             break
