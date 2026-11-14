@@ -1,9 +1,9 @@
 ---
 name: reconcile
-description: "Consent-based cleanup of .ytstack/ leftovers: draft summary stubs, unfilled auto-drafts, milestones planned but never sliced, untracked .ytstack files, a .ytstack/.local without gitignore, history that grew inside STATE.md, slice and task files of closed milestones. Use when the SessionStart STATE lint reports warnings, or when the user says reconcile, clean up .ytstack, tidy the artifacts. Never deletes; the only sanctioned way to move .ytstack artifacts."
+description: "Consent-based cleanup of .ytstack/ leftovers: draft summary stubs, unfilled auto-drafts, milestones planned but never sliced, untracked .ytstack files, a .ytstack/.local without gitignore, history that grew inside STATE.md, slice and task files of closed milestones, and a large plan outside .ytstack/ (plans/*.md tables or checklists) that ytstack-frontier cannot see. Use when the SessionStart STATE lint reports warnings, or when the user says reconcile, clean up .ytstack, tidy the artifacts, the frontier shows nothing, map our plans into milestones. Never deletes; the only sanctioned way to move .ytstack artifacts."
 metadata:
   tier: core
-  version: 0.2.0
+  version: 0.3.0
 allowed-tools:
   - Bash
   - Read
@@ -26,8 +26,8 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 
 1. **Run preamble** -- counts and file lists per leftover class
 2. **HARD-GATE** -- `.ytstack` present; nothing to do -> report and stop
-3. **Per class: ask** -- close / archive / keep (one AskUserQuestion per non-empty class)
-4. **Apply** -- moves inside `.ytstack/` only, status edits, gitignore block
+3. **Per class: ask** -- close / archive / keep (one AskUserQuestion per non-empty class); map / leave for an external plan (only if `EXTERNAL_PLAN_OFFER: yes`)
+4. **Apply** -- moves inside `.ytstack/` only, status edits, gitignore block; after a yes to the external plan, its open rows as new milestones and slices
 5. **Write `RECONCILE-<date>.md`** -- what was found, what was chosen
 6. **Report + return**
 
@@ -117,6 +117,15 @@ if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/spec/SPEC.md" ]; then
   done
 fi
 
+# A large plan outside .ytstack/ that ytstack-frontier cannot see (M031-S05).
+_EXT_PLAN="unknown (bin/ytstack-plans not reachable)"; _EXT_OFFER=no
+_PLANS_BIN="${CLAUDE_SKILL_DIR}/../../bin/ytstack-plans"
+if [ -n "$_YT_DIR" ] && [ -f "$_PLANS_BIN" ]; then
+  _EXT_PLAN=$(bash "$_PLANS_BIN" -C "$_PROJECT_DIR" scan 2>/dev/null) && _EXT_OFFER=yes
+fi
+
+echo "BRANCH: $(git branch --show-current 2>/dev/null || echo unknown)"
+echo "PROJECT_SLUG: $_PROJECT_SLUG"
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "DRAFT_STUBS: $(_count "$_DRAFT_STUBS")"
 echo "UNFILLED_DRAFTS: $(_count "$_UNFILLED")"
@@ -125,6 +134,8 @@ echo "UNTRACKED: $(_count "$_UNTRACKED")"
 echo "LOCAL_DIR: $_LOCAL_DIR (gitignored: $_LOCAL_IGNORED)"
 echo "STATE_HISTORY: $_STATE_CLASS ($_STATE_HIST earlier status paragraph(s), $_STATE_BYTES bytes, bound $_STATE_MAX)"
 echo "CLOSED_MILESTONES: $(_count "$_CLOSED_MS")"
+echo "EXTERNAL_PLAN_OFFER: $_EXT_OFFER"
+echo "EXTERNAL_PLAN:"; printf '%s\n' "$_EXT_PLAN" | sed 's/^/  /'
 echo "LISTS_BEGIN"
 [ -n "$_CLOSED_MS" ] && { echo "[closed milestones]"; printf '%s\n' "$_CLOSED_MS"; }
 [ -n "$_DRAFT_STUBS" ] && { echo "[draft stubs]"; printf '%s\n' "$_DRAFT_STUBS" | head -20; }
@@ -138,7 +149,7 @@ echo "LISTS_END"
 
 ### Step 2: HARD-GATE
 
-`HAS_YTSTACK=no`: "Nothing to reconcile: no `.ytstack/` here." STOP. All counts zero, `STATE_HISTORY: no` and `LOCAL_DIR: no` (or gitignored): "`.ytstack/` is clean." STOP.
+`HAS_YTSTACK=no`: "Nothing to reconcile: no `.ytstack/` here." STOP. All counts zero, `STATE_HISTORY: no`, `LOCAL_DIR: no` (or gitignored) and `EXTERNAL_PLAN_OFFER: no`: "`.ytstack/` is clean." STOP.
 
 ### Step 3: Ask per non-empty class
 
@@ -182,18 +193,41 @@ On A: write the archive file first, then remove from `STATE.md` exactly the text
 > A) archive -- move each milestone's `M###-S##-*.md` files to `.ytstack/archive/{YYYY-MM-DD}/M###/`, one `INDEX.md` line per milestone. (Completeness: 9/10, tier: core)
 > B) keep -- no change. (Completeness: 6/10, tier: core)
 
+**External plan** (`EXTERNAL_PLAN_OFFER: yes`), last. A directory such as `plans/` holds tables or checklists of open work, and `ytstack-frontier` reads only milestones and slices inside `.ytstack/`: the lanes for that work get tracked by hand. The rules (what counts, thresholds, the mapping, the pointer back) are in `${CLAUDE_SKILL_DIR}/../../docs/ux/external-plans.md`; read it before you ask. Ask once per directory with `verdict=large answer=none` in `EXTERNAL_PLAN`. First run `"${CLAUDE_SKILL_DIR}/../../bin/ytstack-plans" rows --open {dir}` and count the open rows per file, so the question can name the files.
+
+If `YTSTACK_NON_INTERACTIVE` is set, take the RECOMMENDATION (for B: the file with the most open rows) and log `[ytstack:reconcile] auto-picked {X} for the external plan in {dir} because YTSTACK_NON_INTERACTIVE=true`. Otherwise use AskUserQuestion:
+
+> Reconciling `.ytstack/` for **{PROJECT_SLUG}** on branch `{BRANCH}`. `{dir}/` holds a plan ytstack cannot see: {files} plan files, {open} open rows, {done} done. Most open rows: {up to five files with their open count}.
+>
+> The lane list (`ytstack-frontier`, which says what may start next and who works on what) reads only the milestones and slices inside `.ytstack/`. Your plan lives in `{dir}/`, so the list is empty for that work and lanes get tracked by hand. Mapping writes each open row as a slice or a task with a link back to its line; your plan files stay exactly as they are, and finished rows are only counted.
+>
+> RECOMMENDATION: Choose A when at most five files hold open rows, B otherwise, because a plan directory that grew for months usually holds finished plans whose checklists nobody ticked; mapping those would fill the lane list with work that is done.
+>
+> A) Map all -- one milestone per plan file with open rows, one slice per open work package, `status: planned`; `{dir}/` is not touched
+>    Completeness: 10/10, effort: human: review ~5 min / CC: ~10 min, tier: core
+>
+> B) Map the files I name -- tell me which files; the others stay unmapped
+>    Completeness: 8/10, effort: human: ~2 min / CC: ~5 min, tier: core
+>
+> C) Leave it -- record that you declined; the lane list keeps not seeing this plan
+>    Completeness: 3/10, effort: human: 0 / CC: 0, tier: core
+>
+> (to re-ask later: delete the `external_plans: {dir}` line in `.ytstack/PREFERENCES.md`)
+
+On A or B, map by the document's section "The mapping" and run its "Afterwards" steps, including `ytstack-frontier list --milestone M###` for each new milestone. On C, write only the `PREFERENCES.md` line. Either way the answer is recorded as `external_plans: {dir} mapped|declined {YYYY-MM-DD}`.
+
 ### Step 4: Apply
 
-Moves only inside `.ytstack/` (`git mv` when tracked, `mv` otherwise), edits only to frontmatter `status:`/`closed:` fields and the global `ROADMAP.md` rows. No `rm`. No edits to STATE.md pointer fields. The one edit to the body of `STATE.md` is the history move of the class above, and only after its answer A.
+Moves only inside `.ytstack/` (`git mv` when tracked, `mv` otherwise), edits only to frontmatter `status:`/`closed:` fields and the global `ROADMAP.md` rows. No `rm`. No edits to STATE.md pointer fields. The one edit to the body of `STATE.md` is the history move of the class above, and only after its answer A. The external plan class adds files and changes none: new `M###-CONTEXT.md`, `M###-ROADMAP.md` and `M###-S##-PLAN.md` files, a `ROADMAP.md` row per new milestone and one line in `PREFERENCES.md`. Nothing outside `.ytstack/` is written; the external plan is read only.
 
 ### Step 5: Write the log
 
-`.ytstack/RECONCILE-{YYYY-MM-DD}.md`: per class the items found and the choice made, plus the archive path.
+`.ytstack/RECONCILE-{YYYY-MM-DD}.md`: per class the items found and the choice made, plus the archive path. For the external plan: the directory, the files mapped, and per new milestone its slices with the source file.
 
 ### Step 6: Report + return
 
-> Reconciled `.ytstack/`: {N closed}, {N archived} (-> `archive/{date}/`), {N kept}. Log: `RECONCILE-{date}.md`.
+> Reconciled `.ytstack/`: {N closed}, {N archived} (-> `archive/{date}/`), {N kept}{, external plan `{dir}/`: {M} milestones with {S} slices mapped (`M###`..`M###`), the frontier lists them | declined}. Log: `RECONCILE-{date}.md`.
 
 ## Terminal State
 
-Return control after the report. Suggest `ytstack:reassess-roadmap` only when a milestone's status changed. Do NOT auto-invoke anything.
+Return control after the report. Suggest `ytstack:reassess-roadmap` only when a milestone's status changed. After a mapping, say that `STATE.md` still names the old current milestone and that the user picks which mapped milestone becomes current. Do NOT auto-invoke anything.
