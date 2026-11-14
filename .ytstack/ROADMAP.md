@@ -46,6 +46,7 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M026 | After the merge -- `bin/ytstack-watch release` and its step in `finish-lane`; `bin/ytstack-upkeep` and `docs/recipes/recurring-upkeep.md`. Never run against a real target or on a schedule | **done** | 5 | 5 |
 | M027 | Production -- `bin/ytstack-signals` (findings once, regressions, incident records), skills `signal-intake` and `incident` (read only, mitigations as handover scripts a person runs) | **done** | 5 | 5 |
 | M028 | Ship the six gstack skills as ytstack's own adaptations (DECISIONS 2026-11-14) -- self-contained `office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release` (no gstack install, nothing in `~/.claude/skills/`), `metadata.upstream` baselines, `bin/ytstack-gstack-diff` + release-checklist step, synced to gstack v1.99.3.0. Done 2026-11-14 (3 slices, 11 tasks); released in 0.6.0 (PRs #39, #40). M022-M024 merged with #37; M025-M027 are carried by PR #38. | **done** | 11 | 11 |
+| M029 | Optional PR watch (DECISIONS 2026-11-14 "PR watch ships inside ytstack as an optional, opt-in tool") -- engine in `tools/pr-watch/`, `bin/ytstack-pr-watch` (enable/disable, install-worker, migrate), Claude Code and Codex hooks that exit at once unless `pr_watch=on`, `docs/pr-watch.md`. Done 2026-11-14 (3 slices); unreleased. | **done** | 3 | 3 |
 
 **Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 done (6/6, 2026-11-07); M011 task count pending milestone planning.
 

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **PR watch, optional** (M029, DECISIONS 2026-11-14 "PR watch ships inside
+  ytstack as an optional, opt-in tool"): the session that opened a pull request
+  hears about red CI, unresolved bot review threads and merge conflicts without
+  polling. Engine in `tools/pr-watch/` (Python 3.9+, stdlib), CLI
+  `bin/ytstack-pr-watch` (`enable` / `disable`, `install-worker` /
+  `uninstall-worker` for a 60-second macOS LaunchAgent, `migrate --from` for an
+  existing local install, plus `status`, `register`, `create`, `inspect`,
+  `pause`, `resume`, `tick`), state in `~/.ytstack/pr-watch/`. Hook
+  `hooks/pr-watch` is registered for Claude Code (SessionStart,
+  UserPromptSubmit, PreToolUse, PostToolUse) and Codex (SessionStart,
+  PreToolUse, PostToolUse, Stop) and exits at once unless `~/.ytstack/config`
+  has `pr_watch=on`. Claude Code pulls notices with the next prompt; Codex
+  threads are woken when idle. Tests: `tests/pr_watch/` (unittest) and
+  `tests/pr-watch.test.sh`. Reference: `docs/pr-watch.md`.
+
 ## [0.7.0] - 2026-11-14
 
 ### Added

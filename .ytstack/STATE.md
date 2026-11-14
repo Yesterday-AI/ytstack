@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T11:00:00Z
+last_updated: 2026-11-14T12:30:00Z
 current_milestone: none
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-11-14, M029):** Optional PR watch on branch `pr-watch`: the maintainer's local watcher ported into `tools/pr-watch/`, `bin/ytstack-pr-watch`, opt-in hooks for Claude Code and Codex (`pr_watch=on` in `~/.ytstack/config`), `docs/pr-watch.md`. All suites, checker, Codex tests and plugin validation pass. Not exercised: a real launchd install and real Codex delivery. After the release, the maintainer's live install moves over in one explicit step (unload the old LaunchAgent, `migrate --from ~/.agents/pr-watch --yes`, `install-worker --yes`, `enable`, remove the old hooks from `~/.claude/settings.json`, disable the old Codex plugin).
 
 **Status (2026-11-14, 0.7.0):** M022-M027 released as 0.7.0: #37 (`a410fff`: technical spec, bounded work, coordinator mode, the six Codex review fixes) and #38 (`ff34592`: risk gate, product per worktree, release watch, upkeep, signal intake, incidents, the workflow diagrams) on top of 0.6.0. Research notes on a published software factory and on mattpocock/skills under `docs/research/`; the status line research is issue #42. Decided: models work autonomously, no skill gets `disable-model-invocation`.
 
