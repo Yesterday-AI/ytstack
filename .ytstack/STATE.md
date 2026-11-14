@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T21:30:00Z
+last_updated: 2026-11-15T00:30:00Z
 current_milestone: none
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-11-15, 0.10.0):** Release of issue #57 (PR #63, `38486b8`: `.ytstack/standing/` one file per instruction, `yt_standing`, `ytstack-check --standing`, `ytstack-risk` rule document, `coordinate` 0.3.0) and the main points of issue #61 (PRs #62, #64: skipped checks, head moved after own push, status block only on change, merge suggestion only after a bot finding). Open next: from #61 the "plugin updated, reload skills" notice and a one-step coordinator rotation; then plan the rest of #54, #53 and #55.
 
 **Status (2026-11-14, 0.9.2):** Patch release for the #54 field run (PR #59, `c737d84`): the PR watch CLI qualifies the current Claude session's bare id, `register` heals watches stored under it, `coordinate` 0.2.2 leaves `--session` out. The context-mcp coordinator needs a restart (its hooks are still 0.7.0), then `register --all-open` without `--session`.
 

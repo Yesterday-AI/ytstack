@@ -110,6 +110,8 @@ Patterns, rules, and lessons learned while building ytstack. This file is read b
 
 ## Eval runs (`claude plugin eval`)
 
+- **2026-11-15, release 0.10.0 (`coordinate` 0.3.0, `signal-intake` 0.1.1, `finish-lane`, `handover-step`, `review-lessons` text only), `--ablation none --no-publish`:** `coordinator-resume` 1/1, score 1.00, $0.38; `signal-intake` 1/1, score 1.00, $0.49. A repeated `--case` flag ran only the last case: run one case per invocation. No case covers `finish-lane`, `handover-step` or `review-lessons`; the standing directory is covered by the shell suites (git-ctx, ytstack-check, ytstack-risk, skill-preambles).
+
 - **2026-11-14, release 0.9.2 (`coordinate` 0.2.2), `--case coordinator-resume --ablation none --no-publish`:** 1/1, score 1.00, $0.44, 169 s. Same coverage limit as for 0.9.1: the session spelling is covered by `tests/pr_watch/test_session_spelling.py`.
 
 - **2026-11-14, release 0.9.1 (`coordinate` 0.2.1), `--case coordinator-resume --ablation none --no-publish`:** 1/1, score 1.00, $0.39, 62 s. The case covers resuming the ledger, not the PR watch registration paragraph; that one is covered by `tests/pr_watch/test_register_all.py` only.
