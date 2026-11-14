@@ -113,16 +113,27 @@ runs under your login: the worker, every `gh` call of your agents, scripts. One
 PR snapshot costs about eight calls, so a worker that read ten PRs every minute
 would use nearly the whole hour on its own. The worker therefore:
 
-- reads a PR every minute only while something moves (`registered`,
-  `waiting`); a PR that is `ready`, blocked (`action_required`) or
-  `unavailable` every 5 minutes; a closed one every 30 minutes (it can be
-  reopened); a merged one never again;
+- reads a PR every minute only while something moves: right after it was
+  registered, and while it is `waiting` within 30 minutes of its last head or
+  status change. Every other open PR (`ready`, blocked, `unavailable`, or a
+  `waiting` that never ends, such as a repository without a review policy) is
+  read every 5 minutes;
+- never takes a snapshot of a closed PR. A closed, unmerged PR can be
+  reopened, so for 7 days after closing the worker lists the repository's open
+  PRs once every 30 minutes (one call per 100 open PRs, however many closed
+  watches the repository has) and takes a reopened one back. Merged PRs and
+  older closed ones are not looked at again;
 - asks GitHub for the remaining quota before each tick (`gh api rate_limit`,
   which GitHub does not count) and keeps a reserve for your agents: 30% of the
   hourly quota by default, `rate_limit_reserve` (0 to 0.9) in the `defaults` of
   `policy.json`. At or below the reserve the tick reads nothing and `status`
   shows `health.rate_limited` with the reset time; above it, each snapshot is
-  paid from what is left and the least recently read PRs go first.
+  paid from what is left and the least recently read PRs go first. Open PRs
+  are paid before reopen checks.
+
+As a measure: 13 open PRs in which nothing moves cost about 1,250 calls an
+hour, a quarter of the quota; ten active ones read every minute would cost
+about 4,800.
 
 ## Policy
 
@@ -191,9 +202,9 @@ remaining steps, which are yours to run:
   deliberately avoids the tooling.
 - The worker runs while you are logged in. After sleep, logout or network loss
   it resumes with the next tick. 24/7 coverage needs a host that is always on.
-- A closed PR stays watched: the worker looks at it again every 30 minutes and
-  picks it up when it was reopened; registering it again does the same at
-  once. A merged PR is not checked again.
+- A PR reopened within 7 days of closing is picked up within 30 minutes;
+  registering it again picks it up at once. A PR reopened later, or a merged
+  one, needs an explicit `register`.
 - A settled PR is read every 5 minutes, so a red check on it can take that
   long to show up; below the quota reserve nothing is read until the reset.
 - GitHub and the agent cannot be read atomically. A finding can resolve right

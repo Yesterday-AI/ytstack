@@ -5,7 +5,9 @@ import time
 import uuid
 
 REOPEN_CHECK = 1800   # seconds between rechecks of a closed, unmerged PR
-QUIET_INTERVAL = 300  # seconds between reads of a ready, blocked or unavailable PR
+REOPEN_WINDOW = 7 * 86400  # how long after closing a PR is rechecked for reopening
+QUIET_INTERVAL = 300  # seconds between reads of a PR in which nothing moved lately
+FAST_WINDOW = 1800    # after a head or status change, a waiting PR is read every tick for this long
 SNAPSHOT_COST = 10    # REST calls one snapshot may take (8 for a one-page PR, plus pagination)
 RATE_RESERVE = 0.3    # share of the hourly REST quota left to the user's agents (policy: rate_limit_reserve)
 from datetime import datetime
@@ -105,8 +107,13 @@ def monitor(db, watch):
             for row in db.execute("SELECT event_key FROM outbox WHERE repo=? AND number=? AND cancelled IS NULL AND (event_key LIKE 'bot-thread:%' OR event_key LIKE 'ci:%' OR event_key LIKE 'conflict:%')", (repo, number)).fetchall():
                 if row['event_key'] not in active and not conflict_unknown(s, row['event_key'], repo, number):
                     db.execute('UPDATE outbox SET cancelled=? WHERE event_key=?', (time.time(), row['event_key']))
-        db.execute('UPDATE watches SET head=?,status=?,detail=?,updated=? WHERE repo=? AND number=?',
-                   (head, status, json.dumps(details), time.time(), repo, number))
+        now = time.time()
+        # SET expressions see the old row: changed_at moves only when head or status changed.
+        db.execute('UPDATE watches SET head=?,status=?,detail=?,updated=?,'
+                   "closed_at=CASE WHEN ?='closed' THEN COALESCE(closed_at, ?) ELSE NULL END,"
+                   'changed_at=CASE WHEN head IS NOT ? OR status IS NOT ? THEN ? ELSE changed_at END '
+                   'WHERE repo=? AND number=?',
+                   (head, status, json.dumps(details), now, status, now, head, status, now, repo, number))
 
 
 def refresh_findings(db, rows):
@@ -222,7 +229,7 @@ def tick(send=True, reconcile=True):
                 with db:
                     db.execute("DELETE FROM meta WHERE key='discovery_error'")
         now = time.time()
-        for watch in db.execute("SELECT * FROM watches WHERE paused=0 ORDER BY updated").fetchall():
+        for watch in db.execute("SELECT * FROM watches WHERE paused=0 AND status!='closed' ORDER BY updated").fetchall():
             if not due(watch, now):
                 continue
             if budget is not None:
@@ -230,6 +237,7 @@ def tick(send=True, reconcile=True):
                     break
                 budget -= SNAPSHOT_COST
             monitor(db, watch)
+        reopen_checks(db, now, budget)
         if send:
             deliver(db)
         with db:
@@ -238,15 +246,49 @@ def tick(send=True, reconcile=True):
 
 
 def due(watch, now):
-    """Whether a watch is read this tick. Moving PRs every tick, settled ones
-    every QUIET_INTERVAL, closed unmerged ones every REOPEN_CHECK (they can be
-    reopened), merged ones never."""
+    """Whether a watch is read this tick. A new registration, and a PR whose
+    head or status changed within FAST_WINDOW while it is still `waiting`,
+    every tick; every other open PR every QUIET_INTERVAL (a `waiting` that
+    never ends, such as a repository without a review policy, settles there);
+    closed ones never (reopen_checks() brings a reopened one back)."""
     status, age = watch['status'], now - (watch['updated'] or 0)
     if status == 'closed':
-        return '"merged"' not in (watch['detail'] or '') and age >= REOPEN_CHECK
-    if status in ('registered', 'waiting'):
+        return False
+    if status == 'registered':
+        return True
+    changed = watch['changed_at'] if 'changed_at' in watch.keys() else None
+    if status == 'waiting' and changed is not None and now - changed < FAST_WINDOW:
         return True
     return age >= QUIET_INTERVAL
+
+
+def reopen_checks(db, now, budget):
+    """A closed, unmerged PR can be reopened on GitHub. Instead of one snapshot
+    per closed watch, read the open PRs once per repository (one call per 100
+    open PRs) every REOPEN_CHECK, for watches closed within REOPEN_WINDOW, and
+    put a reopened one back to `registered`. Returns the budget left."""
+    repos = [r['repo'] for r in db.execute(
+        "SELECT DISTINCT repo FROM watches WHERE paused=0 AND status='closed' AND closed_at IS NOT NULL "
+        "AND closed_at > ? AND detail NOT LIKE '%\"merged\"%'", (now - REOPEN_WINDOW,))]
+    for repo in repos:
+        key = f'reopen_check:{repo}'
+        last = db.execute('SELECT value FROM meta WHERE key=?', (key,)).fetchone()
+        if last and now - float(last['value']) < REOPEN_CHECK:
+            continue
+        if budget is not None:
+            if budget < 1:
+                break
+            budget -= 1
+        try:
+            open_numbers = {pr['number'] for pr in github.open_pulls(repo)}
+        except (github.APIError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
+            continue
+        with db:
+            db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (key, str(now)))
+            for number in open_numbers:
+                db.execute("UPDATE watches SET status='registered', updated=0, closed_at=NULL "
+                           "WHERE repo=? AND number=? AND status='closed'", (repo, number))
+    return budget
 
 
 def spendable(db):
