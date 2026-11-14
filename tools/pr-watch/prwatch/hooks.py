@@ -44,6 +44,17 @@ def git_binding(cwd):
     return match[1], branch
 
 
+def remote_head(cwd, branch):
+    """The SHA a push left in the remote-tracking ref of `branch` (local, no GitHub call). A clone
+    with a narrow fetch refspec has no such ref even after a push; then the local branch head."""
+    for ref in (f'refs/remotes/origin/{branch}', f'refs/heads/{branch}'):
+        p = subprocess.run(['git', '-C', cwd, 'rev-parse', '--verify', '-q', ref],
+                           capture_output=True, text=True, timeout=3)
+        if p.returncode == 0 and p.stdout.strip():
+            return p.stdout.strip()
+    return ''
+
+
 def handle(payload, host='codex'):
     session = payload.get('session_id')
     if not session:
@@ -79,11 +90,16 @@ def handle(payload, host='codex'):
         # Explicit create output gives provenance even for -R/--head and MCP paths.
         create = bool(re.search(r'\bgh\s+(?:[^;&|]*\s)?pr\s+create\b', text)) or 'create_pull_request' in tool
         if event == 'PostToolUse' and re.search(r'\bgit\s+(?:-C\s+\S+\s+)?push\b', text):
-            # An own push makes the stored head stale: say so, and poll on the next tick.
-            for _, binding in bindings:
+            # An own push makes the stored head stale: say so, and poll on the next tick. The
+            # command text alone does not say which ref moved (`git push origin other` from a
+            # checked-out `feat`), so compare the remote-tracking ref with the stored head.
+            for cwd, binding in bindings:
                 if binding:
-                    db.execute("UPDATE watches SET pushed_at=? WHERE repo=? AND branch=? AND session=? AND status!='closed'",
-                               (now, *binding, session))
+                    pushed = remote_head(cwd, binding[1])
+                    if pushed:
+                        db.execute("UPDATE watches SET pushed_at=? WHERE repo=? AND branch=? AND session=? "
+                                   "AND status!='closed' AND head!='' AND head!=?",
+                                   (now, *binding, session, pushed))
         if event == 'SessionStart':
             # A new or compacted context has lost the last status block: show it again.
             db.execute('DELETE FROM meta WHERE key=?', (claude.surface_key(session),))
