@@ -3,7 +3,7 @@ name: init-project
 description: "Scaffolds .ytstack/ (PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES) for a new project from a validated pitch. Use after office-hours wrote OFFICE-HOURS.md, or when the user says init ytstack, set up ytstack, start a ytstack project in a fresh repo. Not for unvalidated ideas (office-hours first) and not for mature codebases with docs and commits but no .ytstack/ (adopt-brownfield; init-project routes there by itself)."
 metadata:
   tier: core
-  version: 0.2.0
+  version: 0.2.1
   triggers:
     - init ytstack
     - setup ytstack
@@ -315,7 +315,21 @@ Services, APIs, env vars, and ports used by {PROJECT_NAME}.
 ## Deploy target
 
 (Where this deploys to, if applicable.)
+
+## Run
+
+(How the product starts in a worktree. Replace this line with `- start:`, `- ports:` and `- ready:` lines once it can be started.)
+
+## Release
+
+(Where the deployed commit can be read after a merge: a `- deployed:` line, a command that only reads.)
+
+## Signals
+
+(Where production reports errors: one `- <name> | read: <command> | kind: errors` line per source. Names of credentials, never values.)
 ```
+
+The sections "Run", "Release" and "Signals" have a fixed line format (`docs/ux/runtime-format.md` in the ytstack plugin). Write them exactly as above: a section without a list line counts as absent, so the file passes `bin/ytstack-runtime check` as it is. Do not fill in a command the pitch does not state.
 
 #### STATE.md
 

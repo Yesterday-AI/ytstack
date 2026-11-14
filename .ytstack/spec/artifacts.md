@@ -15,8 +15,11 @@ sources:
   - docs/ux/skill-structure.md
   - docs/ux/spec-format.md
   - docs/ux/coordinator-format.md
+  - docs/ux/review-policy-format.md
+  - docs/ux/runtime-format.md
+  - docs/ux/signal-format.md
   - docs/statusline.md
-verified_at: 799d6bf
+verified_at: 1ae7f2c
 ---
 
 # artifacts
@@ -38,7 +41,12 @@ The `.ytstack/` artifact model: the Markdown files that hold a project's memory 
 
 | File | Created by | Changed afterwards by |
 |---|---|---|
-| `PROJECT.md`, `RUNTIME.md`, `PREFERENCES.md` | `init-project` or `adopt-brownfield` | the user; no skill step edits them |
+| `PROJECT.md`, `PREFERENCES.md` | `init-project` or `adopt-brownfield` | the user; no skill step edits them |
+| `RUNTIME.md` | `init-project` or `adopt-brownfield`, with the headings "Run", "Release" and "Signals" and one line of free text each | the user; key lines in the three sections follow `docs/ux/runtime-format.md` and are read only through `bin/ytstack-runtime`; `adopt-brownfield` writes a key line only for a command a document or script of the project states and names that source. "Release" is run by `bin/ytstack-watch release`, "Signals" by `signal-intake` and `incident` |
+| `spec/REVIEW.md` | a person (optional), linked from `SPEC.md` | a person; four sections (Always a person, Never low, Lenses, Size); a change to it always goes to a person |
+| `evidence/<lane>/<short sha>/<lens>/` with `MANIFEST` (`evidence_dir` of `PREFERENCES.md`) | `visual-review`, in the main checkout of the repository; `bin/ytstack-risk manifest` writes hash and name per image | -- ; a process record; committing it is the project's choice |
+| `signals/F###-<slug>.md` | `bin/ytstack-signals new` (from `signal-intake`) | `bin/ytstack-signals new` (a second sighting: count, last seen), `set` (state, ref); format `docs/ux/signal-format.md` |
+| `incidents/<date>-<slug>.md` | `bin/ytstack-signals incident new` (from `incident`) | `incident`: facts with read times, the timeline (append-only), hypotheses, mitigations with their handover scripts, the person's decisions in own words |
 | `DECISIONS.md` | `init-project` or `adopt-brownfield` | appends by `plan-ceo-review`, `plan-eng-review`, `systematic-debugging`, `code-review`, `retro`, `grill`, `reassess-roadmap` |
 | `KNOWLEDGE.md` | `init-project` or `adopt-brownfield` | appends by `systematic-debugging`, `test-driven-development`, `code-review`, `retro` |
 | `STATE.md` | `init-project` or `adopt-brownfield` | see "STATE.md" |
@@ -55,7 +63,7 @@ The `.ytstack/` artifact model: the Markdown files that hold a project's memory 
 | `spec/SPEC.md`, `spec/<area>.md` | `init-project` (every area `planned`), `adopt-brownfield` (pointer-only over existing documents; also for a project that has `.ytstack/` and no spec) | the task that changes the area, in its own commits; `reassess-roadmap` sets `verified_at` when it answers the drift report |
 | `HANDOFF.md` | `handoff-session` | the user; no hook writes it |
 | `LANES.md` | `bin/ytstack-frontier claim` (first claim) | `bin/ytstack-frontier` (`set`, `release`), one row per call; called by `spawn-milestone-team`, `coordinate`, `finish-lane` |
-| `questions/Q###-<slug>.md` | `bin/ytstack-questions new` (from `coordinate`, `reassess-roadmap`) | the agent fills Context, Options, Recommendation; `ask` and `answer` change the state; the answer text is the human's |
+| `questions/Q###-<slug>.md` | `bin/ytstack-questions new` (from `coordinate`, `reassess-roadmap`, and from `bin/ytstack-upkeep --question`, which keeps at most one open or asked file titled `Upkeep found ...`) | the agent fills Context, Options, Recommendation; `ask` and `answer` change the state; the answer text is the human's |
 | `STANDING.md` | `coordinate`, when the human gives an instruction that holds beyond the task | appended; an overtaken line is struck through and dated, not removed |
 | `handover/<date>-<slug>.sh` and its receipt | `handover-step` through `bin/ytstack-handover new`; the receipt by the script when the human runs it | a script that ran is not edited |
 | `retro/LANES-<date>.md` | `lane-retro` | appended on a second run of the same day |
@@ -94,7 +102,8 @@ The frontmatter and section template of each file is in the `SKILL.md` of the sk
 - A task plan's `## Verification` section holds the command and a line `Runs: <n>. Environment: <where>.`, with `Sample:` and a reason when the check covers a sample. A summary's Verification line records the check, the commit it ran on and the environment, and is followed by `Not checked:`.
 - `## Gates` in a slice plan or task plan holds one line per gate: `- [ ] G## -- <what> | decides: <who> | how: <how> | lapses: <when>`. `- [x]` with `| given: <date> <who>` is a gate a person gave, `- [-]` with `| lapsed: <date> <reason>` one that lapsed. Only `reassess-roadmap` changes the box, and only to what the human answered.
 - `**Blocked by:**` under a slice plan's goal (and optionally under a task plan's summary) names what has to be finished first; `bin/ytstack-frontier` reads it.
-- `## Review` in a task plan holds one line per review round: `- Round <n>: <base>..<head> -- <verdict>; blocking: <n>; follow-ups: <n>`. `code-review` appends it and counts the lines.
+- `## Review` in a task plan (in a slice plan for a slice lane) holds one line per review round: `- Round <n>: <base>..<head> -- <verdict>; blocking: <n>; follow-ups: <n>; risk: <class>; invariants: none | <text>; by: <reviewer>`, and one line per lens: `- Lens <name>: <head> -- pass | fail | not run; by: <reviewer>; evidence: <dir> (<n> images) | none`. `code-review` and `finish-lane` append them; `code-review` counts the round lines, `bin/ytstack-risk route` reads the newest of each (`docs/ux/review-policy-format.md`, "Records"). A line without the three new fields is a round without a stated risk.
+- An area file may carry `auto_merge: none | low | normal`, the highest class that may merge into the area without a person; no field is `none`.
 - `summarize-task` runs `bin/ytstack-spec impact` in its preamble. A named area is satisfied when its area file or one of its `sources` changed in the task's commits or the working tree. Otherwise the task is not closed. The summary records the result under `## Spec`. A plan that says `none` closes without a spec edit. With the spec in user scope, an area file lies outside the repository: `impact` reports it as unverifiable (exit 4) with its modification time against the task's first commit, and `summarize-task` records that line when the file was modified after that commit, or asks the person once.
 
 ### Commits and tasks
@@ -129,7 +138,10 @@ Automatic handoffs and the session journal are not artifacts. `hooks/pre-compact
 - `HANDOFF.md` is written by a person or by `handoff-session`, never by a hook.
 - Hooks write into `.ytstack/` in two cases only: the draft summary stub, and the auto summary with its checkbox for an Agent Teams task.
 - No state lives in `~/.ytstack/.<name>` sentinel files. An ask-once answer is recorded in the artifact it concerns (`docs/ux/skill-structure.md`, "Ask-once answers").
-- `RUNTIME.md` written by `adopt-brownfield` records environment variable names, never values.
+- `RUNTIME.md` written by `adopt-brownfield` records environment variable names, never values. The three sections of `RUNTIME.md` hold names of credentials, never values; `bin/ytstack-runtime check` fails on a token-looking string there. In those sections only list lines are read; a section without a list line counts as absent.
+- The commands under "Release" and "Signals" of `RUNTIME.md` only read. No skill and no script runs a command that changes a target; a mitigation is a handover script a person runs.
+- A change to `spec/REVIEW.md`, `DECISIONS.md`, `STANDING.md`, `PREFERENCES.md`, an instruction file, the frontmatter of an area file (a `verified_at` stamp on its own excepted) or its sections "Invariants and security boundaries" and "Decisions that apply now" always goes to a person (`bin/ytstack-risk floor`).
+- `## Decisions` of an incident record holds only what a person ordered, in own words.
 
 ## Error behavior
 
@@ -170,6 +182,9 @@ Automatic handoffs and the session journal are not artifacts. `hooks/pre-compact
 
 ## Decisions that apply now
 
+- DECISIONS.md -- "2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)" (`REVIEW.md`, `auto_merge`, the extended review lines, the evidence directory)
+- DECISIONS.md -- "2026-11-13: `RUNTIME.md` has three sections with a fixed line format, read only through `bin/ytstack-runtime` (M025-S01)"
+- DECISIONS.md -- "2026-11-13: Production findings and incidents are skill work on read-only access; a mitigation is a handover script a person runs (M027)" (`signals/`, `incidents/`)
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)"
 - DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)" (the `Runs:` line, `## Gates`, `## Review`, the evidence fields of a summary)
 - DECISIONS.md -- "2026-11-13: `STATE.md` is a pointer with a size bound; history leaves it through `reconcile`, a closed milestone is folded into the spec (M022-S03)"

@@ -207,6 +207,15 @@ eq "team pref: default off"            "off|"  "$(team_pref "$TP")"
 printf 'team: on\n' > "$TP/PREFERENCES.md";   eq "team pref: on"   "on|"  "$(team_pref "$TP")"
 printf 'team: true\n' > "$TP/PREFERENCES.md"; eq "team pref: true -> on" "on|" "$(team_pref "$TP")"
 printf 'team: maybe\n' > "$TP/PREFERENCES.md"; case "$(team_pref "$TP")" in "off|team: 'maybe'"*) ok "team pref: invalid -> off + warning";; *) bad "team pref: invalid -> off + warning" "$(team_pref "$TP")";; esac
+# merge_by and evidence_dir (M025, docs/ux/review-policy-format.md)
+merge_pref() { ( . "$LIB"; yt_prefs "$1" >/dev/null; printf '%s|%s|%s' "$YT_PREF_MERGE_BY" "$YT_PREF_EVIDENCE_DIR" "${YT_PREF_WARNINGS:-}" ); }
+MP="$TMP/mergeprefs"; mkdir -p "$MP"
+eq "merge_by: default risk; evidence_dir: default .ytstack/evidence" "risk|.ytstack/evidence|" "$(merge_pref "$MP")"
+for v in human coordinator risk; do
+  printf 'merge_by: %s\n' "$v" > "$MP/PREFERENCES.md"; eq "merge_by: $v" "$v|.ytstack/evidence|" "$(merge_pref "$MP")"
+done
+printf 'merge_by: robot\nevidence_dir: shots/\n' > "$MP/PREFERENCES.md"
+eq "merge_by: invalid -> human + warning; evidence_dir without the trailing slash" "human|shots|merge_by: 'robot' is not human|coordinator|risk (using human)" "$(merge_pref "$MP")"
 eq "pref: absent file -> default"            task "$(pref "$PY" granularity task)"
 eq "pref: absent file, no default -> empty"  ""   "$(pref "$PY" granularity)"
 eq "prefs: defaults without file"            "task|loop|on|on|" "$(prefs "$PY")"

@@ -14,12 +14,25 @@
 #             failed polls in a row end it with 1
 #   usage     no --pr, a value that is no number, --interval below 20: exit 64
 #   no state  nothing is written into the repository
+#   release   reads "Release" of RUNTIME.md through bin/ytstack-runtime; asks
+#             `deployed` until its output names the commit (full or short SHA,
+#             in either direction, seven characters at least), then `healthy`
+#             for the settle time; a line only when something changes; one
+#             receipt (Target, Commit, Arrived, Health, Result) with read
+#             times; exit 0 released or no health command, 2 not arrived,
+#             3 unhealthy, 4 no "Release" section, 1 a RUNTIME.md that fails
+#             check, 64 usage; an attempt that hangs is stopped; no gh call
 #
 # No network and no real gh: a fake `gh` first in PATH answers `pr view N` from
 # $FIX/now/N.json (or fails when $FIX/now/N.err exists) and applies the --jq
 # expression with the local jq. The watcher's sleep is replaced through
 # YTSTACK_WATCH_SLEEP by a script that copies the next step's fixtures into
 # place, so a run of several polls takes no wall time.
+#
+# The release cases run in real time (about ten seconds): the `deployed` and
+# `healthy` commands of the fixture are two small scripts that count their
+# calls and answer from a file, one line per call; one case appends to that
+# file in the background while the watcher runs.
 #
 # Run: /bin/bash tests/ytstack-watch.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -274,6 +287,193 @@ eq "gh ran in that directory" "$REPO" "$(cat "$FIX/cwd")"
 # ---- 5. nothing is written into the repository ----------------------------------
 echo "# no state in the repository"
 eq "the repository is clean after every run above" "" "$(git -C "$REPO" status --porcelain)"
+
+# ---- 6. release -------------------------------------------------------------------
+echo "# release"
+OLD=0123456789abcdef0123456789abcdef01234567   # what the target serves before the rollout
+# target <name> [<RUNTIME.md line>...]: a project whose "Release" section holds
+# the lines (default: target, deployed, healthy, settle 0). Sets D and S.
+#   deployed.sh  prints line <call> of state/deployed.seq, the last line once
+#                the calls run past it; a line "!<text>" goes to stderr, exit 7
+#   healthy.sh   the same from state/healthy.seq; exit 0 only for the line "ok"
+target() {
+  D="$TMP/rel/$1"; S="$D/state"; shift
+  mkdir -p "$D/.ytstack" "$S"
+  [ $# -gt 0 ] || set -- "- target: staging (fixture)" "- deployed: sh ./deployed.sh" "- healthy: sh ./healthy.sh" "- settle: 0"
+  { printf '# Runtime\n\nNotes about the product.\n\n## Release\n\nThe version endpoint is public.\n\n'; printf '%s\n' "$@"; } > "$D/.ytstack/RUNTIME.md"
+  cat > "$D/deployed.sh" <<'EOF'
+echo x >> state/deployed.calls
+n=$(awk 'END { print NR }' state/deployed.calls)
+v=$(awk -v n="$n" '{ l = $0 } NR == n { exit } END { print l }' state/deployed.seq)
+case "$v" in "!"*) echo "${v#!}" >&2; exit 7 ;; esac
+printf '%s\n' "$v"
+EOF
+  cat > "$D/healthy.sh" <<'EOF'
+echo x >> state/healthy.calls
+n=$(awk 'END { print NR }' state/healthy.calls)
+v=$(awk -v n="$n" '{ l = $0 } NR == n { exit } END { print l }' state/healthy.seq)
+[ "$v" = ok ]
+EOF
+  echo ok > "$S/healthy.seq"
+}
+# calls <deployed|healthy>: how often the command ran
+calls() { if [ -f "$S/$1.calls" ]; then awk 'END { print NR }' "$S/$1.calls"; else echo 0; fi; }
+# rel <args...>: `release` on the project D, started elsewhere, with the fake gh
+# in PATH; sets OUT (stdout), ERRS (stderr) and EC
+rel() {
+  OUT=$(cd "$TMP" && FIX="$FIX" PATH="$FAKE:$PATH" "$BASH" "$BIN" release -C "$D" "$@" 2>"$TMP/stderr"); EC=$?
+  ERRS=$(cat "$TMP/stderr")
+}
+fresh
+
+# The commit arrives after a moment: the line is appended in the background,
+# after the watcher asked for the first time.
+target arrives "- target: staging (fixture)" "- deployed: sh ./deployed.sh" "- healthy: sh ./healthy.sh" "- settle: 1"
+echo "{\"commit\":\"$OLD\"}" > "$S/deployed.seq"
+( i=0; while [ ! -s "$S/deployed.calls" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
+  echo "{\"commit\":\"$A\"}" >> "$S/deployed.seq" ) &
+rel --commit "$A" --interval 1 --timeout 20
+wait
+eq "the commit arrives and the target stays healthy: exit 0" 0 "$EC"
+like "while waiting: what the target printed, with the read time" "^$STAMP deployed: \{\"commit\":\"$OLD\"\}\$" "$(L 1)"
+like "then the arrival" "^$STAMP arrived: $A \(the target printed $A\)\$" "$(L 2)"
+like "then the health, once while it does not change" "^$STAMP healthy: ok\$" "$(L 3)"
+eq "the receipt names the target" "Target: staging (fixture)" "$(L 4)"
+eq "the commit" "Commit: $A" "$(L 5)"
+like "the arrival with its read time" "^Arrived: yes, the target printed $A, read $STAMP\$" "$(L 6)"
+like "how often the health was asked and failed, with the read time" "^Health: asked [1-9], failed 0, last read $STAMP\$" "$(L 7)"
+eq "and the result" "Result: released" "$(L 8)"
+eq "three lines while waiting, five lines of receipt" 8 "$(lines "$OUT")"
+eq "the receipt counts the calls of the health command" "asked $(calls healthy)," "$(L 7 | awk '{ print $2, $3 }')"
+eq "nothing on stderr" "" "$ERRS"
+eq "release makes no gh call" "" "$(cat "$FIX/calls")"
+eq "the project holds what it held, and the calls the commands counted" ".ytstack deployed.sh healthy.sh state" "$(ls -A "$D" | sort | tr '\n' ' ' | sed 's/ $//')"
+
+# The commit never arrives. The first call fails, the later ones print the old commit.
+target never
+printf '!curl: (7) Failed to connect to staging\n{"commit":"%s"}\n' "$OLD" > "$S/deployed.seq"
+rel --commit "$A" --interval 1 --timeout 3
+eq "the commit never arrives: exit 2" 2 "$EC"
+like "a failed call is a line, with its exit code" "^$STAMP deployed: curl: \(7\) Failed to connect to staging \(exit 7\)\$" "$(L 1)"
+like "a changed answer is a line" "^$STAMP deployed: \{\"commit\":\"$OLD\"\}\$" "$(L 2)"
+eq "an answer that repeats is none" 1 "$(printf '%s\n' "$OUT" | grep -c "deployed: {\"commit\":\"$OLD\"}\$")"
+if [ "$(calls deployed)" -ge 2 ]; then ok "the command was asked more than once"; else bad "the command was asked more than once" "$(calls deployed) call(s)"; fi
+like "the receipt says that it never arrived and what the target printed last" \
+  "^Arrived: no, not within 3 seconds; the target printed last: \{\"commit\":\"$OLD\"\}, read $STAMP\$" "$OUT"
+like "the health was not asked" "^Health: not asked\$" "$OUT"
+eq "the result" "Result: not arrived" "$(printf '%s\n' "$OUT" | tail -1)"
+eq "the health command did not run" 0 "$(calls healthy)"
+
+# The commit is there, and the target turns unhealthy during the settle time.
+target unhealthy "- target: staging (fixture)" "- deployed: sh ./deployed.sh" "- healthy: sh ./healthy.sh" "- settle: 3"
+echo "$A" > "$S/deployed.seq"
+printf 'ok\nbad\nok\n' > "$S/healthy.seq"
+rel --commit "$A" --interval 1
+eq "one failed health call: exit 3" 3 "$EC"
+like "the first answer" "^$STAMP healthy: ok\$" "$(L 2)"
+like "the failure is a line when it happens" "^$STAMP healthy: failed \(exit 1\)\$" "$(L 3)"
+like "the receipt says how often it failed and when first" "^Health: asked [2-9], failed 1, first failure read $STAMP, last read $STAMP\$" "$OUT"
+eq "the result" "Result: unhealthy" "$(printf '%s\n' "$OUT" | tail -1)"
+like "the commit did arrive" "^Arrived: yes, " "$OUT"
+
+# Short and full SHA, in either direction.
+target sha
+echo "rev a1b2c3d built 2026-11-13" > "$S/deployed.seq"
+rel --commit "$A"
+eq "the target prints a short SHA, the caller passes the full one: exit 0" 0 "$EC"
+like "the receipt names what the target printed" "^Arrived: yes, the target printed a1b2c3d, read " "$OUT"
+like "settle 0 asks the health once" "^Health: asked 1, failed 0, " "$OUT"
+echo "$A" > "$S/deployed.seq"
+rel --commit a1b2c3d;      eq "the target prints the full SHA, the caller passes seven characters" 0 "$EC"
+echo "v1.4.2-3-ga1b2c3d4e5f6" > "$S/deployed.seq"
+rel --commit a1b2c3d4e;    eq "twelve characters in a describe string against nine" 0 "$EC"
+echo "REVISION=A1B2C3D4" > "$S/deployed.seq"
+rel --commit "$A";         eq "upper case in the output" 0 "$EC"
+rel --commit A1B2C3D4E5;   eq "upper case in --commit" 0 "$EC"
+echo "rev a1b2c3" > "$S/deployed.seq"
+rel --commit "$A" --timeout 0
+eq "six characters name no commit: exit 2" 2 "$EC"
+echo "rev a1b2c3dffff" > "$S/deployed.seq"
+rel --commit "$A" --timeout 0
+eq "another commit that starts alike: exit 2" 2 "$EC"
+echo "rev $B" > "$S/deployed.seq"
+rel --commit "$A" --timeout 0
+eq "another commit: exit 2" 2 "$EC"
+: > "$S/deployed.seq"
+rel --commit "$A" --timeout 0
+like "a target that prints nothing" "the target printed last: \(no output\), read " "$OUT"
+
+# No health command.
+target nohealth "- deployed: sh ./deployed.sh"
+echo "$A" > "$S/deployed.seq"
+rel --commit "$A"
+eq "no health command: exit 0" 0 "$EC"
+eq "a target without a name" "Target: (not named)" "$(L 2)"
+like "the receipt says that nothing was asked" "^Health: not asked: the \"Release\" section names no healthy command\$" "$OUT"
+eq "the result says so too" "Result: no health command" "$(printf '%s\n' "$OUT" | tail -1)"
+
+# No "Release" section: one line, nothing runs.
+target nosection "(Where the deployed commit can be read.)"
+echo "$A" > "$S/deployed.seq"
+rel --commit "$A"
+eq "a \"Release\" heading without a list line: exit 4" 4 "$EC"
+eq "one line" 1 "$(lines "$OUT$ERRS")"
+has "it names the format document" "docs/ux/runtime-format.md" "$OUT"
+eq "nothing ran" 0 "$(calls deployed)"
+target nodeployed "- target: staging" "- healthy: sh ./healthy.sh"
+rel --commit "$A"
+eq "a section without deployed: exit 4" 4 "$EC"
+eq "the health command did not run" 0 "$(calls healthy)"
+D="$TMP/rel/nofile"; mkdir -p "$D/.ytstack"
+rel --commit "$A"; eq "no RUNTIME.md: exit 4" 4 "$EC"
+D="$TMP/rel/bare"; mkdir -p "$D"
+rel --commit "$A"; eq "no .ytstack directory: exit 4" 4 "$EC"
+
+# A RUNTIME.md that fails `ytstack-runtime check` is not run.
+target broken "- deployed: sh ./deployed.sh" "- settle: soon"
+echo "$A" > "$S/deployed.seq"
+rel --commit "$A"
+eq "a RUNTIME.md that fails check: exit 1" 1 "$EC"
+has "the problem is named" "settle" "$ERRS"
+eq "nothing ran" 0 "$(calls deployed)"
+
+# A command that hangs is stopped, with its children, and counts as failed.
+target hangs "- deployed: sh ./deployed.sh" "- healthy: echo \$\$ > state/pid; sleep 60 & echo \$! > state/child; wait" "- settle: 0"
+echo "$A" > "$S/deployed.seq"
+OUT=$(cd "$TMP" && YTSTACK_WATCH_ATTEMPT_MAX=1 "$BASH" "$BIN" release -C "$D" --commit "$A" 2>"$TMP/stderr"); EC=$?
+eq "a health command that hangs: exit 3" 3 "$EC"
+like "the line says that it was stopped" "^$STAMP healthy: failed \(stopped after 1 seconds\)\$" "$OUT"
+for f in pid child; do
+  if kill -0 "$(cat "$S/$f")" 2>/dev/null; then bad "the command is gone ($f)"; else ok "the command is gone ($f)"; fi
+done
+
+# The commands run in the root of the checkout, also from a subdirectory.
+target root "- deployed: sh ./deployed.sh"
+echo "$A" > "$S/deployed.seq"
+( cd "$D" && git init -q && mkdir -p sub ) >/dev/null 2>&1
+OUT=$(cd "$D/sub" && "$BASH" "$BIN" release --commit "$A" 2>&1); EC=$?
+eq "from a subdirectory of the checkout, without -C: exit 0" 0 "$EC"
+OUT=$(cd "$TMP" && "$BASH" "$BIN" -C "$D" release --commit "$A" 2>&1); EC=$?
+eq "-C in front of the subcommand: exit 0" 0 "$EC"
+
+# Usage.
+target usage
+echo "$A" > "$S/deployed.seq"
+rel;                                  eq "release without --commit: exit 64" 64 "$EC"
+has "the usage names the subcommand" "ytstack-watch release --commit SHA" "$ERRS"
+rel --commit a1b2c3;                  eq "--commit with six characters: exit 64" 64 "$EC"
+rel --commit "a1b2c3d;id";            eq "--commit that is no SHA: exit 64" 64 "$EC"
+rel --commit "$A" --interval 0;       eq "--interval 0: exit 64" 64 "$EC"
+rel --commit "$A" --timeout soon;     eq "--timeout that is no number: exit 64" 64 "$EC"
+rel --commit "$A" --once;             eq "a flag of the other mode: exit 64" 64 "$EC"
+rel --commit;                         eq "--commit without a value: exit 64" 64 "$EC"
+D="$TMP/rel/nowhere"
+rel --commit "$A";                    eq "-C that is no directory: exit 64" 64 "$EC"
+D="$TMP/rel/usage"
+eq "no command ran for a usage error" 0 "$(calls deployed)"
+rel --help
+eq "release --help exits 0" 0 "$EC"
+has "the usage says what release does not do" "deploys nothing and rolls nothing back" "$OUT"
 
 echo
 echo "$PASS passed, $FAIL failed"

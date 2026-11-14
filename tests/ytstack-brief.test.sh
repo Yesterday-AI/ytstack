@@ -13,13 +13,24 @@
 #   render --kind   "## Kind" says what the worker may do: implement (the
 #                   default) commits with the prefix; review is read only, pins
 #                   the range from --head (a commit hash, required) and --base,
-#                   and has no Git section; prepare commits nothing
+#                   has no Git section and asks for the class of the change
+#                   (Risk, Severity, Reach, Invariants touched); prepare
+#                   commits nothing
+#   render --lens   a review brief with a section "Lens": the lens line of the
+#                   REVIEW.md at --head, its reads documents, the rules of
+#                   every lens; for "evidence: visual" the evidence rules, the
+#                   evidence directory under the main checkout and the skill
+#                   to load; no class is asked. A lens the policy does not
+#                   define and a reads document that is not at --head: exit 1,
+#                   no brief
 #   failures        no plan, no Files section, no contract: exit 1, no brief;
 #                   usage errors: exit 64
 #   check           a complete report passes; a missing or empty label, a
 #                   "Checks run:" without an exit code, a "Status:" outside the
 #                   three values and one that contradicts "Blockers:" are
-#                   named, exit 1
+#                   named, exit 1; the four labels of a review stand together,
+#                   and "Risk:" is low, normal or high; "Lens:" and "Evidence:"
+#                   stand together and have their two forms
 #
 # Run: /bin/bash tests/ytstack-brief.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -215,6 +226,13 @@ has "review: the pinned range" 'review exactly the range `def5678..abc1234`' "$K
 has "review: read only" "Change nothing: no file, no commit, no branch." "$K"
 has "review: how findings are reported" "per finding a concrete case and what happens if it is skipped" "$K"
 has "review: the verdict goes into Outcome" '`Outcome:` carries the verdict (`approved` or `changes requested`) and the reviewed commit.' "$K"
+has "review: the reviewer is not the author and states the class" "You are not the author of this change, and you state its class; its author never does." "$K"
+has "review: the four labels" 'four more labels, each at the start of a line: `Risk: <low | normal | high>`, `Severity: <' "$K"
+has "review: the last of the four" '`Invariants touched: <none | area: the invariant or decision, in its own words>`' "$K"
+has "review: what makes a change high" '`high`: the change touches an invariant or a decision that applies now' "$K"
+has "review: the change is read against invariants and decisions" '"Invariants and security boundaries" and "Decisions that apply now" of every area file under "Read for context"' "$K"
+has "review: a rule shifted in code alone is named" "also when the change edits only code and leaves the document alone" "$K"
+hasnt "an implementer is not asked for the class" "Invariants touched" "$DEFAULT"
 hasnt "review: no commit rule" "Commit each task" "$OUT"
 hasnt "review: no Git section, even with --branch" "## Git" "$OUT"
 has "review: the work contract is included" "## Work contract" "$OUT"
@@ -246,7 +264,86 @@ has "prepare with --branch: the checkout stays" "git checkout -B work main" "$G"
 has "prepare with --branch: the commit sentence is replaced" "Commit nothing. Do not merge or push." "$G"
 hasnt "prepare: no commit prefix anywhere" "Commit each task" "$OUT"
 
-# ---- 4. failures --------------------------------------------------------------
+# ---- 4. render --lens ---------------------------------------------------------
+echo "# render --lens"
+# A policy with a visual lens, a lens without evidence that names a skill, and
+# a lens whose document was never committed.
+R=$(new_repo lens); plan "$R/.ytstack/M001-S01-T01-PLAN.md" "Login accepts a token"
+mkdir -p "$R/.ytstack/spec" "$R/docs"
+echo design > "$R/docs/design.md"; echo product > "$R/docs/product.md"; echo auth > "$R/docs/auth.md"
+printf '# Review policy\n\n## Lenses\n\n- ui | applies: src/ui/**, **/*.css | reads: docs/design.md, docs/product.md | evidence: visual\n- security | applies: src/auth/** | reads: docs/auth.md | evidence: none | skill: acme:threat-model\n- ghost | applies: src/** | reads: docs/gone.md | evidence: none\n' > "$R/.ytstack/spec/REVIEW.md"
+( cd "$R" && git add -A && git commit -qm "policy" ) >/dev/null 2>&1
+H=$(git -C "$R" rev-parse HEAD); H7=${H:0:7}
+
+run "$R" render --task M001-S01-T01 --kind review --lens ui --head "$H7"
+eq "a lens brief renders" 0 "$EC"
+eq "with the section Lens after Kind" "Outcome,Kind,Lens,Scope,Read for context,Verification,Spec impact,Work contract,Report," \
+  "$(printf '%s\n' "$OUT" | sed -n 's/^## //p' | tr '\n' ',')"
+K=$(part Kind)
+has "lens: Kind pins the commit, read only" "review exactly the commit \`$H7\`" "$K"
+has "lens: Kind says what kind of review this is" 'This is a lens review: a second, independent review with one question' "$K"
+has "lens: the verdict has three values" 'Its verdict is `pass`, `fail` or `not run` and stands under `Lens:`.' "$K"
+hasnt "lens: no class is asked" "Invariants touched" "$K"
+hasnt "lens: no approving verdict is asked" 'changes requested' "$K"
+L=$(part Lens)
+has "lens: the line of REVIEW.md" '    - ui | applies: src/ui/**, **/*.css | reads: docs/design.md, docs/product.md | evidence: visual' "$L"
+has "lens: its documents as a list" '- `docs/design.md`
+- `docs/product.md`' "$L"
+has "lens: nothing else is reviewed against" "and against nothing else:" "$L"
+has "lens: the reviewer is not the author" "You are not the author of this change and you start with a fresh context" "$L"
+has "lens: not run is no pass" '`not run` never counts as `pass`, and a partial look is no pass.' "$L"
+has "lens: a document that cannot be read" 'means the lens cannot run: `not run`.' "$L"
+has "visual: the skill to load" 'Load the skill `ytstack:visual-review` and follow it' "$L"
+has "visual: the file of that skill, for a host without a skill tool" "\`$ROOT/skills/visual-review/SKILL.md\`" "$L"
+has "visual: the reviewer starts the product itself" 'through `bin/ytstack-runtime up`, and operate it in a browser' "$L"
+has "visual: the author's images do not count" "Images from the author do not count. Reading code or the DOM does not count as this lens." "$L"
+has "visual: where the images go" "under \`.ytstack/evidence/M001-S01-T01/$H7/ui\`" "$L"
+has "visual: the path starts at the main checkout" "the root of the main checkout of the repository (\`$R\`), not at your worktree" "$L"
+has "visual: the three ways to not run" 'no browser tool that renders the page and returns a screenshot you can look at: the verdict is `not run`.' "$L"
+has "lens: the two labels of the report" '`Lens: ui -- <pass | fail | not run>` and `Evidence: <directory> (<n> images)`' "$L"
+hasnt "lens: template markers are filled" "{{" "$L"
+has "lens: the report shape and the contract stay" "## Work contract" "$OUT"
+
+printf 'evidence_dir: review/shots/\n' > "$R/.ytstack/PREFERENCES.md"
+git -C "$R" worktree add -q -b lens-wt "$TMP/lens-wt" >/dev/null 2>&1
+cp "$R/.ytstack/PREFERENCES.md" "$TMP/lens-wt/.ytstack/PREFERENCES.md"
+run "$TMP/lens-wt" render --task M001-S01-T01 --kind review --lens ui --head "$H" --base "$H7"
+L=$(part Lens)
+has "visual: evidence_dir from PREFERENCES, the short commit from a full one" "under \`review/shots/M001-S01-T01/$H7/ui\`" "$L"
+has "visual: from a linked worktree the root is still the main checkout" "(\`$R\`), not at your worktree" "$L"
+rm -f "$R/.ytstack/PREFERENCES.md"
+
+run "$R" render --task M001-S01-T01 --kind review --lens security --head "$H7"
+eq "a lens without evidence renders" 0 "$EC"
+L=$(part Lens)
+has "none: the report says so" 'This lens asks for no evidence: the report says `Evidence: none`.' "$L"
+has "none: the project's skill for the lens" 'load `acme:threat-model` before you start' "$L"
+hasnt "none: no visual rules" "visual-review" "$L"
+run "$R" render --task M001-S01-T01 --kind review --head "$H7"
+hasnt "a review without --lens has no Lens section" "## Lens" "$OUT"
+
+run "$R" render --task M001-S01-T01 --kind review --lens motion --head "$H7"
+eq "a lens the policy does not define: exit 1" 1 "$EC"
+has "names the lens and the commit" "no lens 'motion' in .ytstack/spec/REVIEW.md at $H7" "$OUT"
+eq "and prints no brief" "" "$(bash "$BIN" -C "$R" render --task M001-S01-T01 --kind review --lens motion --head "$H7" 2>/dev/null)"
+echo later > "$R/docs/gone.md"
+run "$R" render --task M001-S01-T01 --kind review --lens ghost --head "$H7"
+eq "a reads document that is not at the reviewed commit: exit 1" 1 "$EC"
+has "names the document" "lens ghost reads docs/gone.md, which does not exist at $H7: the lens cannot run" "$OUT"
+eq "and prints no brief" "" "$(bash "$BIN" -C "$R" render --task M001-S01-T01 --kind review --lens ghost --head "$H7" 2>/dev/null)"
+rm -f "$R/docs/gone.md"
+run "$R" render --task M001-S01-T01 --kind review --lens ui --head abc1234
+eq "a head that is no commit of the repository: exit 1" 1 "$EC"
+R2=$(new_repo nolens); plan "$R2/.ytstack/M001-S01-T01-PLAN.md" "x"
+( cd "$R2" && git add -A && git commit -qm plan ) >/dev/null 2>&1
+run "$R2" render --task M001-S01-T01 --kind review --lens ui --head "$(git -C "$R2" rev-parse --short=7 HEAD)"
+eq "a project without REVIEW.md has no lens: exit 1" 1 "$EC"
+run "$R" render --task M001-S01-T01 --lens ui
+eq "--lens without --kind review: exit 64" 64 "$EC"
+run "$R" render --task M001-S01-T01 --kind review --lens 'UI kit' --head "$H7"
+eq "a lens name that is no lowercase slug: exit 64" 64 "$EC"
+
+# ---- 5. failures --------------------------------------------------------------
 echo "# failures"
 run "$R" render --task M001-S01-T09
 eq "no plan: exit 1" 1 "$EC"
@@ -278,8 +375,12 @@ grep -v '^<!-- kind-review: ' "$ROOT/skills/spawn-milestone-team/brief-template.
 OUT=$(bash "$T/bin/ytstack-brief" -C "$R" render --task M001-S01-T01 --kind review --head abc1234 2>&1); EC=$?
 eq "a template without the kind's sentences: exit 1" 1 "$EC"
 has "names the kind" "no 'kind-review' sentences" "$OUT"
+grep -v '^<!-- round-review: ' "$ROOT/skills/spawn-milestone-team/brief-template.md" > "$T/skills/spawn-milestone-team/brief-template.md"
+OUT=$(bash "$T/bin/ytstack-brief" -C "$R" render --task M001-S01-T01 --kind review --head abc1234 2>&1); EC=$?
+eq "a template that does not ask a reviewer for the class: exit 1" 1 "$EC"
+has "names what is missing" "no 'round-review' sentences" "$OUT"
 
-# ---- 5. check -----------------------------------------------------------------
+# ---- 6. check -----------------------------------------------------------------
 echo "# check"
 GOOD='Task: M001-S01-T01
 Status: complete
@@ -349,6 +450,43 @@ def5678 two/')"
 eq "a value on the lines after its label counts" "report ok" "$OUT"
 chk "$(printf '%s\n' "$GOOD" | sed 's/^Task:/- **Task:**/')"
 eq "a label that does not start its line is missing" "missing: Task" "$OUT"
+
+# The class of a change: what a reviewer adds after the eleven labels.
+REVIEW="$GOOD
+Risk: high
+Severity: archived rows reach a customer's export
+Reach: one area, stored data
+Invariants touched: export: archived rows are never exported"
+chk "$REVIEW"
+eq "a review report with the four labels passes" "report ok" "$OUT"
+chk "$(printf '%s\n' "$REVIEW" | sed 's/^Risk:.*/Risk: medium/')"
+eq "a Risk outside the three classes fails" 1 "$EC"
+eq "and is quoted" 'Risk: "medium" is not low, normal or high' "$OUT"
+chk "$(printf '%s\n' "$REVIEW" | grep -v '^Invariants touched:')"
+eq "three of the four labels: the fourth is named" "missing: Invariants touched" "$OUT"
+chk "$(printf '%s\n' "$REVIEW" | sed 's/^Reach:.*/Reach:/')"
+eq "one of the four without a value is named" "empty: Reach" "$OUT"
+chk "$GOOD
+Severity: a wrong total on one invoice"
+eq "one of the four alone: the other three are named" "missing: Risk
+missing: Reach
+missing: Invariants touched" "$OUT"
+
+# The verdict of a lens and its evidence.
+LENS="$GOOD
+Lens: ui -- pass
+Evidence: .ytstack/evidence/M001-S01/abc1234/ui (5 images)"
+chk "$LENS"
+eq "a lens report with its two labels passes" "report ok" "$OUT"
+chk "$(printf '%s\n' "$LENS" | sed -e 's/^Lens:.*/Lens: ui -- not run/' -e 's/^Evidence:.*/Evidence: none/')"
+eq "a lens that did not run, without evidence, passes the check" "report ok" "$OUT"
+chk "$(printf '%s\n' "$LENS" | sed 's/^Lens:.*/Lens: ui -- looks fine/')"
+eq "a verdict outside the three fails" 1 "$EC"
+eq "and is quoted" 'Lens: "ui -- looks fine" is not "<name> -- pass", "<name> -- fail" or "<name> -- not run"' "$OUT"
+chk "$(printf '%s\n' "$LENS" | grep -v '^Evidence:')"
+eq "a verdict without the evidence label fails" "missing: Evidence" "$OUT"
+chk "$(printf '%s\n' "$LENS" | sed 's/^Evidence:.*/Evidence: five screenshots, attached/')"
+eq "evidence that is neither none nor a directory with a count fails" 'Evidence: "five screenshots, attached" is neither "none" nor "<directory> (<n> images)"' "$OUT"
 
 # The report shape in the brief and the checker know the same eleven labels:
 # the checker misses none in the shape, and the shape has no twelfth.

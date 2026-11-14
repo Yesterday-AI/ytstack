@@ -45,7 +45,8 @@ Skills you might need (consult each skill's description, not this list, for the 
 - Planning reviews: `office-hours`, `plan-ceo-review`, `plan-eng-review`
 - Execution discipline: `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `quick-task` (one-sentence changes when PREFERENCES `quick_lane` is on)
 - Review + release: `code-review` (after a task's commits, before summarize-task), `finish-branch` (merge / PR / keep once the slice is closed on paper), `ship` (release flow: tests, review, version, changelog, PR), `retro` (after a milestone closes), `document-release` (changelog + release notes for a version), `grill` (question an idea between office-hours and plan-milestone)
-- Orchestration: `spawn-milestone-team`
+- Orchestration: `spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`, `visual-review` (a lens reviewer of a UI change)
+- Production: `signal-intake` (record what production reports), `incident` (production is broken now: mitigation before cause, before `systematic-debugging`)
 
 The selection mechanism is **semantic, not phrase-based**. New user phrasings (different language, paraphrase, domain-specific vocabulary) should still trigger the right skill as long as the intent is covered by a description.
 

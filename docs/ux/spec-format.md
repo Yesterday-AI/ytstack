@@ -7,6 +7,7 @@ It lives at the same paths in every ytstack project:
 ```
 .ytstack/spec/SPEC.md        entry point, one page
 .ytstack/spec/<area>.md      one file per system area
+.ytstack/spec/REVIEW.md      the review policy, optional
 ```
 
 `bin/ytstack-spec` checks the format (`lint`), reports areas whose code moved on without their description (`drift`) and checks a task's documentation impact at closure (`impact`). The skills that write and maintain the spec are `init-project`, `adopt-brownfield`, `plan-task`, `summarize-task`, `code-review` and `reassess-roadmap`.
@@ -84,6 +85,7 @@ paths:
 sources:
   - <path of an existing document that stays authoritative for this area; optional>
 verified_at: <commit the description was last checked against, or none>
+auto_merge: none | low | normal    # optional
 ---
 ```
 
@@ -95,6 +97,7 @@ verified_at: <commit the description was last checked against, or none>
 | `paths` | Git pathspec globs, relative to the repository root. `**` crosses directories. They decide which area a change belongs to. |
 | `sources` | Existing documents that hold the description: an architecture guide, an ADR folder, an API reference. They keep their authority (see "Pointer-only"). |
 | `verified_at` | A commit, short or full. It is set by whoever read the code against the description, never by a scaffold. |
+| `auto_merge` | Optional. The highest risk class that may merge into this area without a person. No field means `none`. See `docs/ux/review-policy-format.md`, "Ceilings". |
 
 `status` is about the code and the description. It is never raised because a plan was approved, a pull request merged or a deployment happened.
 
@@ -121,6 +124,10 @@ Names and order are fixed. Four sections are in every area file: **Purpose**, **
 Where a project already has an authoritative document for an area, the area file does not repeat it. It holds the frontmatter with `sources`, the four required sections and whatever the source lacks. "Purpose" then says in one line that the description lives in the source.
 
 Updating the source satisfies a documentation impact. The area file changes only when the pointer itself becomes wrong: a new source, a moved path, a section the source dropped.
+
+## `REVIEW.md`
+
+The project's review policy lives beside the area files at `.ytstack/spec/REVIEW.md`. It is optional, and it is not an area file: it has no area frontmatter and none of the fixed sections, and `drift`, `impact` and `areas` do not read it. When it exists, `SPEC.md` links it. Its format and its checks are in `docs/ux/review-policy-format.md`.
 
 ## Maintenance rules
 
@@ -184,6 +191,8 @@ A new `DECISIONS.md` entry that changes what applies in an area is added to that
 - `status: implemented` with a `paths` glob that matches files at HEAD and none at `verified_at`: the stamp names a commit that lacks the code it claims was checked
 - an area file that `SPEC.md` does not list, or a listed file that does not exist
 - a `SPEC.md` without the sections "Areas" and "Keeping this true"
+- an `auto_merge` that is not `none`, `low` or `normal`
+- a `REVIEW.md` that `SPEC.md` does not link, and every line `bin/ytstack-risk check` prints about it
 
 It warns on an area file above 200 lines, a `SPEC.md` above 80 and a `verified_at` that names no commit in the repository.
 

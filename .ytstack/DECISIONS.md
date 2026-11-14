@@ -913,6 +913,62 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 
 **Supersedes:** None. Uses the brief, the report, the gates and the review rounds of M023 and the pointer rule of M022-S03.
 
+## 2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)
+
+**Context:** The comparison with a published agentic software factory (`docs/research/2026-11-13-openai-software-factory.md`) showed one step where ytstack was furthest away: a project-wide `merge_by: human` sends every change, a typo included, to a person, so the throughput of the agents ends at that person's day. The operator set the direction: the decision falls per change, by severity and reach; a person is the exception path; a user interface change needs an independent, truly visual review against the project's guidelines; a change that touches a conceptual rule of the project goes to a person, whether it edits the rule's document or only the code.
+
+**Chose:**
+- `bin/ytstack-risk floor` computes the lowest class from the diff. Rule documents, the invariant and decision sections and the frontmatter of area files (a `verified_at` stamp alone excepted), CI files and paths no area covers are always a person; dependency manifests, migrations, infrastructure and large changes are never low. The project can extend the lists in `spec/REVIEW.md`, never shorten them, and `REVIEW.md` is itself always a person.
+- The class is stated by a reviewer that is not the author, with severity, reach and the invariants and decisions the change touches; touching one is `high`. `by: self` counts as the author.
+- An area file sets its ceiling with `auto_merge`; no field is `none`.
+- A lens is a second review a kind of change requires, defined by the documents it reads. `evidence: visual` means the reviewer starts the product itself and takes its own screenshots (`visual-review`); `not run` never counts as a pass.
+- `merge_by: risk` is the default and merges only when the route is `unattended` and the host's gates hold. A merge without a person is reported in one line.
+
+**Reason:** The person's attention is the scarcest resource, and most changes do not need it. But a route without a person is only as good as its conditions, so the conditions are checked by a script against the commit, and every undeclared case falls back to the person. Lenses are defined by documents, not by role descriptions, because a "specialist" prompt without the specialist's material reviews like a generic one.
+
+**How to apply:**
+- A project that wants changes merged without a person sets `auto_merge` on the areas where that is safe; nothing else changes.
+- The policy is read at the base commit: a change cannot relax the rules it is checked against.
+- `merge_by: human` stays available and wins together with a standing instruction that a person merges.
+
+**Supersedes:** Narrows the 2026-11-13 coordinator-mode entry ("`merge_by` ... `human` by default"): the default is now `risk`, which behaves as `human` until an area declares a ceiling.
+
+## 2026-11-13: `RUNTIME.md` has three sections with a fixed line format, read only through `bin/ytstack-runtime` (M025-S01)
+
+**Context:** Verifiers and implementers checked tests and commands; nobody could start the product of a project, and a visual review needs it running at the reviewed commit. A release watch and signal intake need to know which command reads a target.
+
+**Chose:** "Run", "Release" and "Signals" in `RUNTIME.md` with `- key: value` lines (`docs/ux/runtime-format.md`). `bin/ytstack-runtime` is the only reader; `up` starts the product per worktree on a port of its own, outside the checkout's state. The rest of the file stays free text.
+
+**Reason:** A fixed format is what lets an unattended agent start a product without guessing a command. One reader keeps the parsing in one place.
+
+**How to apply:** Names of credentials, never values. Commands under "Release" and "Signals" only read. A skill that needs a missing section says so and stops.
+
+**Supersedes:** None.
+
+## 2026-11-13: After a merge the release is watched, not driven; upkeep is a script and a recipe, not a skill (M026)
+
+**Context:** A merged change was nobody's concern until a person looked at the target, and the upkeep of `.ytstack/` (drift, lapsed gates, waiting questions, stale lanes) happened only when a session happened to look.
+
+**Chose:** `bin/ytstack-watch release` waits until the target serves the merge commit and stays healthy and prints a receipt; `finish-lane` runs it after every merge. `bin/ytstack-upkeep` collects what needs a look in one read-only run and leaves at most one question; `docs/recipes/recurring-upkeep.md` schedules it, by default without a model.
+
+**Reason:** Observing is safe to automate; deploying and rolling back are not ytstack's to own. Not every host has scheduled runs, so the schedule is a recipe and the work a script.
+
+**How to apply:** The watch deploys nothing and rolls nothing back; a bad result is reported at once. The upkeep run never changes a product file and never merges.
+
+**Supersedes:** None.
+
+## 2026-11-13: Production findings and incidents are skill work on read-only access; a mitigation is a handover script a person runs (M027)
+
+**Context:** What production reports did not reach the plan, and an outage had no procedure: `systematic-debugging` looks for the cause first, while an incident needs the mitigation first.
+
+**Chose:** `bin/ytstack-signals` records a finding once and notices a regression. `signal-intake` reads the "Signals" sources and records findings. `incident` keeps a record with read times, proposes mitigations as handover scripts and hands the cause to `systematic-debugging`. ytstack ships no service: the trigger comes from the host, the read access from the project.
+
+**Reason:** The procedure is the part that can be written down once; the access and the trigger differ per project and host. An order to change production is a person's.
+
+**How to apply:** Read only. `incident` never picks a mitigation without a person, not in a run nobody watches either. Answering in an incident channel is a host integration and stays out.
+
+**Supersedes:** None.
+
 ---
 
 ## 2026-11-14: The six gstack skills become ytstack's own adaptations, synced with upstream; no gstack install

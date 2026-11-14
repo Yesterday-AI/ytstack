@@ -6,7 +6,7 @@ paths:
   - bin/ytstack-status
 sources:
   - docs/statusline.md
-verified_at: 799d6bf
+verified_at: 1ae7f2c
 ---
 
 # hooks-and-state
@@ -27,7 +27,8 @@ The lifecycle hooks under `hooks/` and the shared library `hooks/lib/git-ctx.sh`
 - `yt_resolve_yt_dir` finds the `.ytstack` directory: `<toplevel>/.ytstack` first (scope `project`), else `~/.ytstack/projects/<repo-key>` (scope `user`), else none. A linked worktree uses its own copy, not the main checkout's.
 - Volatile state lives outside the tree under `<base>/repos/<repo-key>/worktrees/<worktree-key>/sessions/<session-id>/`. `yt_state_base` defines the order of candidate bases. A missing session id becomes `nosession`.
 - If the base cannot be created, the state directory falls back to `<toplevel>/.ytstack/.local` when the checkout has a `.ytstack`, else to a per-user temp directory. `yt_ensure_gitignore` adds the ignore line for that fallback. Skills call it, hooks do not.
-- `yt_pref` reads one key from `PREFERENCES.md` (`key: value` or `key=value`; quotes and a trailing comment are stripped). `yt_prefs` reads the ceremony dials. An invalid value is replaced by its default and reported in `YT_PREF_WARNINGS`.
+- `yt_pref` reads one key from `PREFERENCES.md` (`key: value` or `key=value`; quotes and a trailing comment are stripped). `yt_prefs` reads the ceremony dials and sets `YT_PREF_MERGE_BY` (default `risk`) and `YT_PREF_EVIDENCE_DIR` (default `.ytstack/evidence`). An invalid value is replaced by its default and reported in `YT_PREF_WARNINGS`; an invalid `merge_by` is replaced by `human`, so that a typo never merges without a person.
+- `yt_epoch` turns an ISO time into seconds with BSD `date -j`, GNU `date -d`, or, for BusyBox, `date -d` on the form `YYYY-MM-DD HH:MM:SS`.
 - `yt_brownfield_signals` counts up to six signs of an existing codebase and names which file would feed which artifact. The comment above the function lists the counted signals and the hint-only ones.
 - `yt_commit_ref_pattern` renders a task's commit pattern from `commit_ref_pattern` in `PREFERENCES.md`, or from the default. `yt_task_commits` lists commits whose subject matches it. When none match, it falls back to the commits on the current branch after the merge-base with the default branch, and reports which source it used.
 - `yt_find_artifacts` lists artifacts newest first from the flat layout and from the alternative layouts named in its comment. Reading tolerates those layouts. Writing stays flat.
@@ -157,6 +158,7 @@ bash tests/ytstack-status.test.sh
 
 ## Decisions that apply now
 
+- DECISIONS.md -- "2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)" (`merge_by` and `evidence_dir` in `yt_prefs`)
 - DECISIONS.md -- "2026-11-07: Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree"
 - DECISIONS.md -- "2026-05-31: post-tool-use-bash is stub-once; summarize-task owns commit-to-task linking (M015 / issue #22)". The 2026-11-07 entry above narrows it: the stub appears only in the committing checkout and only for a commit that carries the task ref.
 - DECISIONS.md -- "2026-04-24: Add `using-ytstack` skill + SessionStart-hook-injected directive for agent-driven skill selection". Only the injection pattern is in force; "2026-04-24: Skill selection is semantic (description-based), not keyword-based" retired its trigger map.

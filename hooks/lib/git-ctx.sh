@@ -294,6 +294,10 @@ yt_pref() {
 #   YT_PREF_QUICK_LANE    on | off                   (default on)
 #   YT_PREF_MINIMAL_CODE  on | off                   (default on)
 #   YT_PREF_COMMIT_REF_PATTERN  passthrough (empty when unset)
+#   YT_PREF_MERGE_BY      human | coordinator | risk (default risk; an invalid
+#                         value reads as human, see below)
+#   YT_PREF_EVIDENCE_DIR  where a visual review stores its screenshots
+#                         (default .ytstack/evidence)
 #   YT_PREF_WARNINGS      one line per invalid value (reset to default)
 yt_prefs() {
   local ytd="$1"
@@ -319,15 +323,27 @@ yt_prefs() {
   case "$YT_PREF_TEAM" in on|true) YT_PREF_TEAM=on ;; off|false) YT_PREF_TEAM=off ;; *)
     YT_PREF_WARNINGS="${YT_PREF_WARNINGS:+$YT_PREF_WARNINGS
 }team: '$YT_PREF_TEAM' is not on|off (using off)"; YT_PREF_TEAM=off ;; esac
+  # merge_by: who merges a finished lane (M025, docs/ux/review-policy-format.md
+  # "The route"). An invalid value reads as human, not as the default: a typo
+  # never lets a change merge without a person.
+  YT_PREF_MERGE_BY=$(yt_pref "$ytd" merge_by risk)
+  case "$YT_PREF_MERGE_BY" in human|coordinator|risk) ;; *)
+    YT_PREF_WARNINGS="${YT_PREF_WARNINGS:+$YT_PREF_WARNINGS
+}merge_by: '$YT_PREF_MERGE_BY' is not human|coordinator|risk (using human)"; YT_PREF_MERGE_BY=human ;; esac
+  YT_PREF_EVIDENCE_DIR=$(yt_pref "$ytd" evidence_dir .ytstack/evidence)
+  case "$YT_PREF_EVIDENCE_DIR" in ?*/) YT_PREF_EVIDENCE_DIR=${YT_PREF_EVIDENCE_DIR%/} ;; esac
   return 0
 }
 
 # yt_epoch <YYYY-MM-DDTHH:MM:SSZ> -> seconds since epoch ("" when unparsable).
-# macOS: date -j -f; GNU: date -d.
+# macOS: date -j -f; GNU: date -d; BusyBox (alpine without coreutils): date -d
+# takes "YYYY-MM-DD HH:MM:SS" and not the ISO form.
 yt_epoch() {
-  local iso="$1" e=""
+  local iso="$1" e="" plain
   case "$iso" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) ;; *) printf ''; return 0 ;; esac
-  e=$(TZ=UTC date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$iso" +%s 2>/dev/null) || e=$(date -u -d "$iso" +%s 2>/dev/null) || e=""
+  plain="${iso%Z}"; plain="${plain%T*} ${plain#*T}"
+  e=$(TZ=UTC date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$iso" +%s 2>/dev/null) || e=$(date -u -d "$iso" +%s 2>/dev/null) \
+    || e=$(date -u -d "$plain" +%s 2>/dev/null) || e=""
   printf '%s' "$e"
 }
 

@@ -246,6 +246,9 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - Per-pitch (greenfield input): `OFFICE-HOURS.md` (pre-init) -> `OFFICE-HOURS-<slug>.md` (post-init, moved into `.ytstack/`)
 - Technical spec (M022, DECISIONS 2026-11-13): `spec/SPEC.md` (entry point, one page) and `spec/<area>.md` (one per system area). They say what applies now; plans and summaries stay the history. Written by `init-project` (every area `planned`) and `adopt-brownfield` (pointer-only over existing documents, also for an initialized project without a spec), kept true by `plan-task` ("Spec impact"), `summarize-task` (closure check), `code-review`, the verifier and `reassess-roadmap` (drift answer). Format and maintenance rules: `docs/ux/spec-format.md`; checked by `bin/ytstack-spec`.
 - Coordinator mode (M024, DECISIONS 2026-11-13; formats in `docs/ux/coordinator-format.md`): `LANES.md` (one row per delegated lane, written through `bin/ytstack-frontier`), `questions/Q###-<slug>.md` (one file per question for the human: open, asked, answered), `STANDING.md` (instructions that hold beyond the task), `handover/` (staged scripts for human-only steps and their receipts), `retro/LANES-<date>.md` (lane retro candidates). Skills: `coordinate`, `finish-lane`, `handover-step`, `lane-retro`. Host facts (pull request state, checks, deployed build) are never stored there as current.
+- Risk gate (M025, DECISIONS 2026-11-13; format `docs/ux/review-policy-format.md`): `spec/REVIEW.md` (the project's floor extensions and lenses), `auto_merge` per area file, the extended `## Review` lines (class, invariants, reviewer; one line per lens), `evidence/` (screenshots of a visual review with a hashed `MANIFEST`). `bin/ytstack-risk` decides the route; `merge_by: risk` (default) merges without a person only when it says `unattended`. Skill: `visual-review`.
+- `RUNTIME.md` sections "Run", "Release", "Signals" (M025-S01; format `docs/ux/runtime-format.md`), read through `bin/ytstack-runtime`; `bin/ytstack-watch release` and `bin/ytstack-upkeep` (M026).
+- Production (M027; format `docs/ux/signal-format.md`): `signals/F###-<slug>.md` (one finding each, written through `bin/ytstack-signals`), `incidents/<date>-<slug>.md`. Skills: `signal-intake`, `incident`. Read only; a mitigation is a handover script a person runs.
 - `STATE.md` is a pointer (M022-S03): the lint reports a file above 12,000 bytes and status paragraphs beside the current one; `reconcile` moves that history to `archive/` with consent; `reassess-roadmap` folds a closed milestone into the spec.
 - Brownfield import (adopt-brownfield): `codebase/{stack,architecture,conventions,concerns}.md`, optional `backlog/README.md`; `STATE.md` frontmatter `tracker:` (`none | linear | github-projects | paperclip | jira`) read by plan-milestone / reassess-roadmap
 
@@ -255,7 +258,7 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - `session-end` -- appends one JSON line to the per-session `session.jsonl` out of tree (no `.ytstack/journal/`)
 - `teammate-idle`, `task-created`, `task-completed` -- Agent Teams coordination (resolved per checkout)
 - `pre-tool-use-edit` (advisory, exit 0), `post-tool-use-bash` (draft summary stub, once, only in the committing checkout and only for commits carrying the task ref) -- quality / safety gates
-- Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (21 suites incl. the #26 acceptance and concurrency suites)
+- Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (25 suites incl. the #26 acceptance and concurrency suites)
 
 #### `quick-task` (execution: quick lane, M018)
 

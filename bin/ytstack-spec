@@ -58,6 +58,7 @@ TOP="$YT_TOPLEVEL"
 SPEC_DIR="${YT_DIR:+$YT_DIR/spec}"
 
 # fm <file>: frontmatter as "key<TAB>value" lines; list items repeat the key.
+# bin/ytstack-risk carries a copy of this reader: keep the two in step.
 fm() {
   awk '
     NR == 1 { if ($0 != "---") exit; next }
@@ -90,11 +91,13 @@ headings() {
   ' "$1"
 }
 
+# area_files: every *.md beside SPEC.md, except the review policy (REVIEW.md,
+# docs/ux/review-policy-format.md), which is no area.
 area_files() {
   [ -d "$SPEC_DIR" ] || return 0
   for f in "$SPEC_DIR"/*.md; do
     [ -f "$f" ] || continue
-    [ "$(basename "$f")" = SPEC.md ] || printf '%s\n' "$f"
+    case "$(basename "$f")" in SPEC.md|REVIEW.md) ;; *) printf '%s\n' "$f" ;; esac
   done
 }
 
@@ -142,7 +145,7 @@ status_paths() {
 
 # ---- lint ----------------------------------------------------------------------
 cmd_lint() {
-  local fails=0 warns=0 f name area status ver n h last idx p s
+  local fails=0 warns=0 f name area status ver am n h last idx p s
   fail() { fails=$((fails + 1)); echo "FAIL $1"; }
   warn() { warns=$((warns + 1)); echo "warn $1"; }
 
@@ -165,6 +168,15 @@ cmd_lint() {
   done <<EOF
 $(grep -oE '\]\([a-z0-9][a-z0-9-]*\.md\)' "$SPEC_DIR/SPEC.md" | sed 's/^](//; s/)$//' | sort -u)
 EOF
+  if [ -f "$SPEC_DIR/REVIEW.md" ]; then
+    grep -qF "](REVIEW.md)" "$SPEC_DIR/SPEC.md" || fail "REVIEW.md: not linked from SPEC.md"
+    # The policy has its own checker; each line it prints is a failure here.
+    if ! s=$(bash "$(dirname "${BASH_SOURCE[0]}")/ytstack-risk" -C "$DIR" check 2>&1); then
+      while IFS= read -r h; do [ -z "$h" ] || fail "$h"; done <<EOF
+$s
+EOF
+    fi
+  fi
 
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -208,6 +220,9 @@ EOF
         fi ;;
       *) fail "$name.md: status '$status' is not planned, partial or implemented" ;;
     esac
+    am=$(fm_get "$f" auto_merge)
+    case "$am" in ""|none|low|normal) ;; *)
+      fail "$name.md: auto_merge '$am' is not none, low or normal" ;; esac
     while IFS= read -r s; do
       [ -n "$s" ] || continue
       [ -e "$TOP/$s" ] || fail "$name.md: sources entry '$s' does not exist"

@@ -72,7 +72,7 @@ A claim is written before the work is dispatched: `ytstack-frontier claim <lane>
 | Kind | The worker | Its report |
 |---|---|---|
 | `implement` | changes files inside the brief's scope and commits with the task prefix | as below |
-| `review` | reads only; reviews one commit range that the brief pins (`--head <sha>`); findings follow `code-review` ("Bounded review") | `Outcome:` carries the verdict (`approved` or `changes requested`) and the reviewed commit |
+| `review` | changes no product file and commits nothing; reviews one commit range that the brief pins (`--head <sha>`); findings follow `code-review` ("Bounded review"). A lens reviewer (`--lens <name>`, `docs/ux/review-policy-format.md`) with `evidence: visual` writes its screenshots into the evidence directory and nothing else | `Outcome:` carries the verdict (`approved` or `changes requested`) and the reviewed commit; a review states `Risk:`, `Severity:`, `Reach:` and `Invariants touched:`, a lens adds `Lens:` and `Evidence:` |
 | `prepare` | writes files and commits nothing: for a sandbox that cannot take the git index lock, and for research | `Uncommitted:` lists every file it left |
 
 ## The report

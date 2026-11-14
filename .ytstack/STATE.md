@@ -1,7 +1,7 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T10:00:00Z
+last_updated: 2026-11-14T10:30:00Z
 current_milestone: none
 active_slice: none
 active_task: none
@@ -9,7 +9,7 @@ active_task: none
 
 # State
 
-**Status (2026-11-14):** `main` carries 0.6.0 (M028, #39, #40, #41: the six gstack skills as ytstack's own adaptations). This branch merges it with M022-M024; the spec areas say what applies after both.
+**Status (2026-11-14):** M025 (risk gate and the product per worktree), M026 (release watch, upkeep) and M027 (signal intake, incidents) are built on the branch `risk-gate` (worktree `.claude/worktrees/risk-gate`), stacked on `spec-and-bounded-work`, from the research note `docs/research/2026-11-13-openai-software-factory.md`. Checked: 24 suites `ALL SUITES PASSED` on macOS bash 3.2, on `ubuntu:26.04` and on plain alpine (BusyBox only); checker without failure; 13 Codex tests OK; `claude plugin validate .` passed; eval run of the four new cases in `KNOWLEDGE.md` ("Eval runs"). Not run: any of it in a real session or against a real target (no change merged without a person, no real visual review, release watch or incident yet). No milestone is in flight. M022-M024 are merged into `main` with #37 (`a410fff`).
 
 **Status (2026-11-14, M028):** M028 DONE, merged (PRs #39 and #40 with the review fixes) and released as 0.6.0: the six gstack skills are ytstack's own self-contained adaptations (no gstack install, nothing registered in `~/.claude/skills/`), each with a `metadata.upstream` baseline, synced to gstack v1.99.3.0 with the new `bin/ytstack-gstack-diff`; the sync check is part of every release (AGENTS.md, CONTRIBUTING). 13 suites green, checker without failures, Codex tests OK, `claude plugin validate .` passed. Release check: `bin/ytstack-gstack-diff --stat` against the live upstream exit 0 (gstack v1.99.3.0 is the newest tag). The adapted skills have not yet run end to end in a real session. `current_milestone: none` on this branch because M022-M027 (open PRs #37/#38) and M020 (main checkout) are on other lines.
 
@@ -90,6 +90,8 @@ M009 Docs & Community            [####]   4/4  DONE
 ```
 
 ## Next action
+
+**Operator actions for M025 / M026 / M027:** the branch `risk-gate` sits on top of `spec-and-bounded-work` (pull request 37) and is reviewed after it. To use the risk gate in a project: set `auto_merge` on the areas where a change may merge without a person, optionally write `spec/REVIEW.md` (a `ui` lens that reads the design guidelines), fill the "Run" section of `RUNTIME.md`; nothing else changes, and a project that declares nothing sends every change to a person as before. **Then:** the first real lane through the route (`finish-lane`) and the first real visual review and incident are the evidence still missing.
 
 **Operator actions for M022 / M023 / M024:** review the branch `spec-and-bounded-work` and merge it (pull request or fast-forward); release; `/plugin update`. In each consumer project run `/ytstack:adopt-brownfield` once: it adds only `.ytstack/spec/`. Run `/ytstack:reconcile` here to move this file's history out. Merging meets the uncommitted M020 planning in the main checkout in `STATE.md`, `DECISIONS.md`, `ROADMAP.md` and `hooks/session-start`: keep both sides. **Then:** the first lane of a consumer project finished with `finish-lane` against GitHub closes gate G01 of M024-S02; M020 (Kimi adapter) continues in the main checkout.
 

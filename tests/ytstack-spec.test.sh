@@ -5,7 +5,10 @@
 #   lint    a well-formed spec passes; each format rule fails on its own;
 #           oversize files warn (exit 2); no spec is a failure; an
 #           implemented area fails when a paths glob matches files at HEAD and
-#           none at verified_at (the stamp names code that was not there)
+#           none at verified_at (the stamp names code that was not there);
+#           auto_merge takes none, low or normal; REVIEW.md is no area file,
+#           has to be linked from SPEC.md, and every line of
+#           `ytstack-risk check` on it is a failure
 #   drift   an area is listed when its paths changed after the description (or
 #           its source) was last touched, and only then; a re-stamped
 #           verified_at quiets it; planned areas are skipped; exit 0 unless
@@ -133,6 +136,29 @@ area "$R" auth implemented "$V" "src/auth/**" "docs/auth.md"
 
 area "$R" billing planned none "src/future/**"
 run "$R" lint;                eq "planned area may name paths that do not exist yet" 0 "$EC"
+
+# auto_merge and the review policy (docs/ux/review-policy-format.md)
+with_am() { # <value>: auth.md with an auto_merge line after status
+  area "$R" auth implemented "$V" "src/auth/**" "docs/auth.md"
+  awk -v v="$1" '{ print } /^status: / { print "auto_merge: " v }' "$R/.ytstack/spec/auth.md" > "$R/.ytstack/spec/auth.tmp"
+  mv "$R/.ytstack/spec/auth.tmp" "$R/.ytstack/spec/auth.md"
+}
+for v in none low normal; do
+  with_am "$v"; run "$R" lint; eq "auto_merge: $v passes" 0 "$EC"
+done
+with_am high;                 lint_fails "auto_merge outside the three values" "auto_merge 'high' is not none, low or normal"
+printf '# Review policy\n' > "$R/.ytstack/spec/REVIEW.md"
+lint_fails "REVIEW.md that SPEC.md does not link" "REVIEW.md: not linked from SPEC.md"
+printf '\nReview policy: [REVIEW.md](REVIEW.md)\n' >> "$R/.ytstack/spec/SPEC.md"
+run "$R" lint;                eq "a linked REVIEW.md passes" 0 "$EC"
+has "REVIEW.md is not counted as an area file" "2 area file(s), 0 failure(s)" "$OUT"
+run "$R" areas --names src/auth/login.sh
+eq "areas does not read REVIEW.md" "auth" "$OUT"
+printf '# Review policy\n\n## Reviewers\n\n- x\n\n## Lenses\n\n- ui | applies: src/** | evidence: none\n' > "$R/.ytstack/spec/REVIEW.md"
+run "$R" lint;                eq "a malformed REVIEW.md fails lint" 1 "$EC"
+has "with the lines of ytstack-risk check" "FAIL REVIEW.md: section '## Reviewers' is not one of" "$OUT"
+has "each line is one failure" "2 area file(s), 2 failure(s)" "$OUT"
+rm -f "$R/.ytstack/spec/REVIEW.md"; spec "$R" auth billing
 
 NOSPEC="$TMP/nospec"; mkdir -p "$NOSPEC/.ytstack"
 run "$NOSPEC" lint;           eq "no spec is a failure" 1 "$EC"

@@ -2,7 +2,7 @@
 name: verification-before-completion
 metadata:
   tier: core
-  version: 0.2.0
+  version: 0.3.0
 description: "Evidence before any done claim, through the vendored superpowers verification-before-completion procedure with the current task's verification command injected. Use before a commit, before a PR, before summarize-task, before telling the user that something works. Not a substitute for test-first work during implementation (test-driven-development)."
 allowed-tools:
   - Bash
@@ -59,6 +59,11 @@ _RUNS_LINE=""
 [ -f "$_TASK_PLAN" ] && _RUNS_LINE=$(awk '/^## Verification/{on=1; next} /^## /{on=0} on && /^Runs:/{print; exit}' "$_TASK_PLAN")
 echo "RUNS_LINE: ${_RUNS_LINE:-Runs: once. Environment: local checkout. (plan states nothing)}"
 echo "HEAD: $(git rev-parse --short HEAD 2>/dev/null || echo none)"
+# The product in this worktree (M025): where the script is, and whether RUNTIME.md says how to start it.
+_RT="${CLAUDE_SKILL_DIR}/../../bin/ytstack-runtime"
+[ -f "$_RT" ] || _RT=$(command -v ytstack-runtime 2>/dev/null)
+echo "RUNTIME_TOOL: ${_RT:-unavailable}"
+echo "RUN_SECTION: $([ -n "$_RT" ] && "$_RT" get run start >/dev/null 2>&1 && echo yes || echo no)"
 ```
 
 ## ytstack invocation notes
@@ -73,6 +78,7 @@ HARD-GATE: if `TASK_PLAN_EXISTS=no` or `VERIFICATION_CMD_FOUND=no`, abort with: 
 - Evidence is the check, the commit and the environment together. Note `git rev-parse --short HEAD` with the output. The vendored rule "run it fresh before you claim" means: for the commit you are claiming about. A result for this commit in this environment, with output you can cite (your own earlier run in this session, a verifier verdict, CI for this SHA), is fresh; a new context alone does not expire it. A result for an older commit is not, and neither is a claim without output.
 - A check the project requires for every change (CI on the current head, a deployment check) stays required; a result for an earlier head does not count.
 - If the result does not establish what the task claims, say what is missing. Do not answer doubt with a second identical run.
+- A check at the running product: when the plan's `Environment:` names an instance (`instance from bin/ytstack-runtime up`), run `RUNTIME_TOOL up`, check against the `URL:` it prints, note its `COMMIT:` line with the output, then run `RUNTIME_TOOL down`. With `RUN_SECTION: no`, or when `up` fails, the check at the running product was not possible: report that with the script's message. Do not start the product another way and do not claim the result.
 
 After the vendored procedure completes:
 - If verification passed: the user may now run `ytstack:summarize-task`.
