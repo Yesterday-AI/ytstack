@@ -102,6 +102,24 @@ rel() { case "$1" in "$TOP"/*) printf '%s' "${1#"$TOP"/}" ;; *) printf '%s' "$1"
 
 is_commit() { git -C "$TOP" rev-parse --verify --quiet "$1^{commit}" >/dev/null 2>&1; }
 
+# in_tree <commit> <glob>: does a paths glob match a file of that commit? Only
+# the glob's literal leading directory is listed, so the check stays cheap.
+# Matching as in `areas` (a case pattern, `*` also crosses "/"); a glob without
+# wildcards also matches as a directory prefix, like a git pathspec.
+in_tree() {
+  local c="$1" g="$2" pre pat p
+  pre=${g%%[*?[]*}
+  if [ "$pre" != "$g" ]; then case "$pre" in */*) pre=${pre%/*} ;; *) pre="" ;; esac; fi
+  pat=${g//\*\*\//*}; pat=${pat//\*\*/*}
+  while IFS= read -r p; do
+    # shellcheck disable=SC2254
+    case "$p" in $pat|$pat/*) return 0 ;; esac
+  done <<EOT
+$(git -C "$TOP" ls-tree -r --name-only -z "$c" -- ${pre:+"$pre"} 2>/dev/null | nul_paths)
+EOT
+  return 1
+}
+
 # nul_paths: NUL-delimited git path records on stdin, one path per line out.
 # `git log -z --format=` may start a commit's names with a newline.
 nul_paths() {
@@ -166,6 +184,18 @@ EOF
           warn "$name.md: verified_at '$ver' is not a commit in this repository; set it to the commit you check against"
         fi
         [ -n "$(fm_list "$f" paths)" ] || fail "$name.md: status $status needs paths"
+        if [ "$status" = implemented ] && [ "$YT_IS_GIT" = yes ] && is_commit "$ver"; then
+          # verified_at is the commit whose code was read against the
+          # description: code that only exists after it was not read there.
+          while IFS= read -r p; do
+            [ -n "$p" ] || continue
+            if ! in_tree "$ver" "$p" && in_tree HEAD "$p"; then
+              fail "$name.md: paths entry '$p' matches no file at verified_at $ver but files at HEAD; set verified_at to the commit whose code you checked"
+            fi
+          done <<EOF
+$(fm_list "$f" paths)
+EOF
+        fi
         if [ "$YT_IS_GIT" = yes ]; then
           while IFS= read -r p; do
             [ -n "$p" ] || continue

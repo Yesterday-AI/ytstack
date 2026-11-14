@@ -16,7 +16,7 @@ sources:
   - docs/ux/spec-format.md
   - docs/ux/coordinator-format.md
   - docs/statusline.md
-verified_at: f4f54ab
+verified_at: 030d254
 ---
 
 # artifacts
@@ -95,7 +95,7 @@ The frontmatter and section template of each file is in the `SKILL.md` of the sk
 - `## Gates` in a slice plan or task plan holds one line per gate: `- [ ] G## -- <what> | decides: <who> | how: <how> | lapses: <when>`. `- [x]` with `| given: <date> <who>` is a gate a person gave, `- [-]` with `| lapsed: <date> <reason>` one that lapsed. Only `reassess-roadmap` changes the box, and only to what the human answered.
 - `**Blocked by:**` under a slice plan's goal (and optionally under a task plan's summary) names what has to be finished first; `bin/ytstack-frontier` reads it.
 - `## Review` in a task plan holds one line per review round: `- Round <n>: <base>..<head> -- <verdict>; blocking: <n>; follow-ups: <n>`. `code-review` appends it and counts the lines.
-- `summarize-task` runs `bin/ytstack-spec impact` in its preamble. A named area is satisfied when its area file or one of its `sources` changed in the task's commits or the working tree. Otherwise the task is not closed. The summary records the result under `## Spec`. A plan that says `none` closes without a spec edit.
+- `summarize-task` runs `bin/ytstack-spec impact` in its preamble. A named area is satisfied when its area file or one of its `sources` changed in the task's commits or the working tree. Otherwise the task is not closed. The summary records the result under `## Spec`. A plan that says `none` closes without a spec edit. With the spec in user scope, an area file lies outside the repository: `impact` reports it as unverifiable (exit 4) with its modification time against the task's first commit, and `summarize-task` records that line when the file was modified after that commit, or asks the person once.
 
 ### Commits and tasks
 

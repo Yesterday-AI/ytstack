@@ -3,7 +3,9 @@
 #
 # Contract:
 #   lint    a well-formed spec passes; each format rule fails on its own;
-#           oversize files warn (exit 2); no spec is a failure
+#           oversize files warn (exit 2); no spec is a failure; an
+#           implemented area fails when a paths glob matches files at HEAD and
+#           none at verified_at (the stamp names code that was not there)
 #   drift   an area is listed when its paths changed after the description (or
 #           its source) was last touched, and only then; a re-stamped
 #           verified_at quiets it; planned areas are skipped; exit 0 unless
@@ -101,6 +103,15 @@ mkdir -p "$R/src/new"; echo n > "$R/src/new/n.sh"
 area "$R" auth implemented "$V" "src/new/**"
 run "$R" lint;                eq "paths may name a new file that is not committed yet" 0 "$EC"
 rm -rf "$R/src/new"; area "$R" auth implemented "$V" "src/auth/**" "docs/auth.md"
+# verified_at names the commit whose code was checked: an implemented area
+# whose paths have files at HEAD and none at verified_at was not checked there
+mkdir -p "$R/src/new"; echo n > "$R/src/new/n.sh"; ( cd "$R" && git add src/new && git commit -qm "add new" ) >/dev/null 2>&1
+area "$R" auth implemented "$V" "src/new/**";                lint_fails "implemented, paths absent at verified_at but present at HEAD" "matches no file at verified_at $V but files at HEAD"
+area "$R" auth partial "$V" "src/new/**"
+run "$R" lint;                eq "a partial area may stamp a commit before its code" 0 "$EC"
+area "$R" auth implemented "$(head_of "$R")" "src/new/**"
+run "$R" lint;                eq "stamped with a commit that has the code: passes" 0 "$EC"
+area "$R" auth implemented "$V" "src/auth/**" "docs/auth.md"
 area "$R" auth implemented "$V" "src/auth/**" "docs/gone.md"; lint_fails "source missing" "does not exist"
 area "$R" auth implemented "$V" "src/auth/**" "" '## History\n\nx\n\n'; lint_fails "section outside the fixed list" "not one of the fixed sections"
 area "$R" auth implemented "$V" "src/auth/**"

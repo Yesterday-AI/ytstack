@@ -17,7 +17,7 @@ sources:
   - evals/README.md
   - docs/ux/spec-format.md
   - docs/ux/coordinator-format.md
-verified_at: f4f54ab
+verified_at: 030d254
 ---
 
 # checks-and-evals

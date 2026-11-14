@@ -134,6 +134,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `verified_at` names the commit whose code was checked, never the branch
+  base; the advice to stamp an older commit is gone from the format and
+  `adopt-brownfield`. `bin/ytstack-spec lint` fails on an implemented area
+  whose `paths` match files at HEAD and none at `verified_at`. This
+  repository's six area files are stamped with the commit they were checked
+  against.
 - `.ytstack/spec/SPEC.md` no longer says hooks write nothing into the
   checkout: it separates volatile state (outside the tree) from the two
   deliberate artifact writers, `post-tool-use-bash` and `task-completed`.

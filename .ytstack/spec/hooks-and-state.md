@@ -6,7 +6,7 @@ paths:
   - bin/ytstack-status
 sources:
   - docs/statusline.md
-verified_at: f4f54ab
+verified_at: 030d254
 ---
 
 # hooks-and-state
