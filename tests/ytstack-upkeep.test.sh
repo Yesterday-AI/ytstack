@@ -381,10 +381,21 @@ has "the newer unchecked one is an item" "  - acme/shop#15: merged $M15 at ffff0
 has "a tab in a title becomes a space" "  - acme/shop#13: merged $M13 at dddd00001111, no escape check: Fix the cart" "$OUT"
 has "an old number merged after the first check is listed" "  - acme/shop#8: merged $M8 at 888800001111" "$OUT"
 hasnt "a checked pull request is not listed" "acme/shop#12:" "$OUT"
-hasnt "one merged before the earliest check is not listed" "acme/shop#10" "$OUT"
-eq "one gh call, searched from the day of the earliest check, with the repository from origin" \
-  "pr list -R acme/shop --state merged --search merged:>=${CHECKED%%T*} --limit 50 --json number,mergedAt,mergeCommit,title" "$(cat "$GHLOG")"
+hasnt "one merged more than 14 days before the earliest check is not listed" "acme/shop#10" "$OUT"
+eq "one gh call, searched from 14 days before the earliest check, with the repository from origin" \
+  "pr list -R acme/shop --state merged --search merged:>=$(ago $((3 * DAY - HOUR + 14 * DAY)) | cut -c1-10) --limit 500 --json number,mergedAt,mergeCommit,title" "$(cat "$GHLOG")"
 eq "nothing was written" "$BEFORE" "$(snap)"
+# A run that checks only the newest pull request writes a later check time;
+# the window stays anchored, so the older unchecked ones are still listed.
+echo "acme/shop#15 ffff000011112222333344445555666677778888 $(ago 60) code=0/0" >> "$Y/signals/review-checks"
+run "$D"
+has "after checking the newest: #13 still listed" "acme/shop#13: merged" "$OUT"
+has "after checking the newest: #8 still listed" "acme/shop#8: merged" "$OUT"
+hasnt "and #15 is gone" "acme/shop#15:" "$OUT"
+# At MERGED_LIMIT the list is cut, and the report says so.
+jq '[range(500) as $i | .[0] + {number: (1000 + $i)}]' "$GHJSON" > "$TMP/many.json"
+GHJSON="$TMP/many.json" run "$D"
+has "a list cut at the limit is named" "500 merged pull requests since" "$OUT"
 rm -f "$Y/signals/review-checks"
 : > "$GHLOG"
 run "$D"

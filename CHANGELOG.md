@@ -21,8 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   report and not recorded.
 - `bin/ytstack-upkeep`: an eighth section, `review checks`, lists merged pull
   requests without an escape check when `REVIEW.md` declares own reviewers:
-  merged at or after the first check (the last 14 days before one), one
-  `gh pr list` call per run.
+  the window opens 14 days before the first check (or 14 days ago) and never
+  further back than 90 days, so checking a newer PR never hides an older
+  unchecked one; one `gh pr list` per run (one call per 100 merged PRs, cut at
+  500 with a notice).
 - PR watch: a merge the worker observes queues one notice to the owning
   session, "run ytstack:review-lessons for #N", at most once per PR and without
   a GitHub call of its own.

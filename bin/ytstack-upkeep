@@ -53,8 +53,9 @@ bad_usage() { [ $# -eq 0 ] || echo "ytstack-upkeep: $*" >&2; usage >&2; exit 64;
 die() { echo "ytstack-upkeep: $*" >&2; exit 1; }
 
 DIR="$PWD"; QUESTION=no; OPEN_DAYS=3; ASKED_DAYS=7; LANE_HOURS=24
-MERGED_LIMIT=50   # merged pull requests one run lists (one gh call)
-MERGED_DAYS=14    # the window without any review-checks line
+MERGED_LIMIT=500  # merged pull requests one run lists (gh pages: one call per 100)
+MERGED_DAYS=14    # lookback before the first review-checks line (and without one)
+MERGED_MAX_DAYS=90  # the window never reaches further back than this
 while [ $# -gt 0 ]; do
   case "$1" in
     --question) QUESTION=yes; shift; continue ;;
@@ -211,8 +212,9 @@ section "review policy" "$POLICY" "$POLICY_NOTE"
 
 # ---- review checks -----------------------------------------------------------------
 # Merged pull requests without an escape check (M030), only for a project whose
-# REVIEW.md declares own reviewers. One `gh pr list` call (and one `gh repo
-# view` when origin names no GitHub repository); a failed read is an item.
+# REVIEW.md declares own reviewers. One `gh pr list` (gh pages it: one call per
+# 100 merged pull requests in the window) and one `gh repo view` when origin
+# names no GitHub repository; a failed read is an item.
 items=""; note=""
 RV=""
 [ ! -x "$BIN/ytstack-risk" ] || RV=$("$BIN/ytstack-risk" -C "$DIR" reviewers 2>/dev/null) || RV=""
@@ -232,14 +234,16 @@ else
   if [ -z "$repo" ]; then
     items="check: cannot tell the GitHub repository of $DIR"
   elif ! {
-    # The window opens at the earliest check time in review-checks: what merged
-    # before it predates the loop. Without a line, the last MERGED_DAYS days.
-    # The search works on days; the exact time is applied to mergedAt below.
-    since=$(awk 'NF >= 3 && $3 ~ /^[0-9][0-9][0-9][0-9]-/ { if (s == "" || $3 < s) s = $3 } END { print s }' "$YT_DIR/signals/review-checks" 2>/dev/null)
-    if [ -z "$since" ]; then
-      e=$((NOW - MERGED_DAYS * 86400))
-      since=$(date -u -r "$e" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$e" +%Y-%m-%dT%H:%M:%SZ)
-    fi
+    # The window is anchored, not moved by checks: it opens MERGED_DAYS before
+    # the earliest check time in review-checks (the lookback the loop started
+    # with), or MERGED_DAYS ago without a line, and never further back than
+    # MERGED_MAX_DAYS. A check of a newer pull request therefore never hides an
+    # older unchecked one. The search works on days; the exact time is applied
+    # to mergedAt below.
+    first=$(awk 'NF >= 3 && $3 ~ /^[0-9][0-9][0-9][0-9]-/ { if (s == "" || $3 < s) s = $3 } END { print s }' "$YT_DIR/signals/review-checks" 2>/dev/null)
+    e=$NOW; [ -z "$first" ] || e=$(yt_epoch "$first"); [ -n "$e" ] || e=$NOW
+    e=$((e - MERGED_DAYS * 86400)); [ "$e" -ge $((NOW - MERGED_MAX_DAYS * 86400)) ] || e=$((NOW - MERGED_MAX_DAYS * 86400))
+    since=$(date -u -r "$e" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$e" +%Y-%m-%dT%H:%M:%SZ)
     out=$(gh pr list -R "$repo" --state merged --search "merged:>=${since%%T*}" --limit "$MERGED_LIMIT" --json number,mergedAt,mergeCommit,title 2>&1)
   }; then
     items="check: gh could not list the merged pull requests of $repo: $(printf '%s\n' "$out" | sed -n 1p)"
@@ -254,7 +258,11 @@ else
            [ -n "$pr" ] || continue
            awk -v pr="$pr" '$1 == pr { f = 1 } END { exit !f }' "$YT_DIR/signals/review-checks" 2>/dev/null && continue
            echo "$pr: merged $at at $sha, no escape check: $title"
-         done) ;;
+         done)
+         # Cut at MERGED_LIMIT: unchecked pull requests beyond it are not listed.
+         if [ "$(printf '%s' "$out" | jq 'length' 2>/dev/null)" = "$MERGED_LIMIT" ]; then
+           items="${items:+$items$NL}check: $MERGED_LIMIT merged pull requests since ${since%%T*}, the list is cut there; older unchecked ones are not shown"
+         fi ;;
     esac
   fi
 fi
