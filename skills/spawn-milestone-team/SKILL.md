@@ -295,7 +295,7 @@ Under merge policy B the next action of a verified lane is "left for the user to
 
 A `fail` sends the slice back: re-dispatch the implementer on the same branch with the verifier's output appended to the rendered brief. The lane is still held by that implementer, so there is no new claim. Two consecutive fails: stop and report to the user.
 
-After a fix, the next verifier gets the earlier verdict in its prompt (task, commit, result). It runs again only the checks of tasks whose files changed since that commit, and cites the earlier verdict for the rest: evidence for the same commit, environment and check stands (`ytstack:minimal-code`, "Evidence").
+After a fix, the next verifier gets the earlier verdict in its prompt (task, commit, result). A fix makes a new commit, so it runs every task's check again on that commit: a check also reads files its plan does not name (an imported helper, a configuration, a fixture), and unchanged planned files do not carry an earlier PASS over. It cites an earlier verdict only for the same commit, environment and command (`ytstack:minimal-code`, "Evidence").
 
 ### Step 8: Merge accepted slices, look at the frontier again
 

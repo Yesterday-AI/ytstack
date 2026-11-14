@@ -12,7 +12,11 @@
 # Exit codes
 #   lint    0 clean, 2 warnings only, 1 failures (or no spec)
 #   drift   0 always; with --exit-code 2 when an area is listed
-#   impact  0 satisfied or "none", 1 not satisfied, 3 the plan states no impact
+#   impact  0 satisfied or "none", 1 not satisfied, 3 the plan states no impact,
+#           4 unverifiable: an area file lies outside the repository (user
+#           scope, ~/.ytstack/projects/<key>/) and no source of it changed;
+#           the line says whether the file was modified after the task's
+#           first commit, the caller records that or asks the person
 #   areas   0 when every path has an area, 1 otherwise
 #
 # drift reports a POSSIBLE documentation impact: paths changed, the description
@@ -101,6 +105,44 @@ rel() { case "$1" in "$TOP"/*) printf '%s' "${1#"$TOP"/}" ;; *) printf '%s' "$1"
 
 is_commit() { git -C "$TOP" rev-parse --verify --quiet "$1^{commit}" >/dev/null 2>&1; }
 
+# in_tree <commit> <glob>: does a paths glob match a file of that commit? Only
+# the glob's literal leading directory is listed, so the check stays cheap.
+# Matching as in `areas` (a case pattern, `*` also crosses "/"); a glob without
+# wildcards also matches as a directory prefix, like a git pathspec.
+in_tree() {
+  local c="$1" g="$2" pre pat p
+  pre=${g%%[*?[]*}
+  if [ "$pre" != "$g" ]; then case "$pre" in */*) pre=${pre%/*} ;; *) pre="" ;; esac; fi
+  pat=${g//\*\*\//*}; pat=${pat//\*\*/*}
+  while IFS= read -r p; do
+    # shellcheck disable=SC2254
+    case "$p" in $pat|$pat/*) return 0 ;; esac
+  done <<EOT
+$(git -C "$TOP" ls-tree -r --name-only -z "$c" -- ${pre:+"$pre"} 2>/dev/null | nul_paths)
+EOT
+  return 1
+}
+
+# nul_paths: NUL-delimited git path records on stdin, one path per line out.
+# `git log -z --format=` may start a commit's names with a newline.
+nul_paths() {
+  local p
+  while IFS= read -r -d '' p; do
+    p=${p#$'\n'}
+    [ -z "$p" ] || printf '%s\n' "$p"
+  done
+}
+# status_paths: `git status --porcelain -z` records, one path per line out. A
+# rename or copy ("R  new" NUL "old") carries its origin as a record of its own.
+status_paths() {
+  local r
+  while IFS= read -r -d '' r; do
+    [ -n "$r" ] || continue
+    printf '%s\n' "${r:3}"
+    case "${r:0:2}" in *R*|*C*) IFS= read -r -d '' r && printf '%s\n' "$r" ;; esac
+  done
+}
+
 # ---- lint ----------------------------------------------------------------------
 cmd_lint() {
   local fails=0 warns=0 f name area status ver am n h last idx p s
@@ -154,6 +196,18 @@ EOF
           warn "$name.md: verified_at '$ver' is not a commit in this repository; set it to the commit you check against"
         fi
         [ -n "$(fm_list "$f" paths)" ] || fail "$name.md: status $status needs paths"
+        if [ "$status" = implemented ] && [ "$YT_IS_GIT" = yes ] && is_commit "$ver"; then
+          # verified_at is the commit whose code was read against the
+          # description: code that only exists after it was not read there.
+          while IFS= read -r p; do
+            [ -n "$p" ] || continue
+            if ! in_tree "$ver" "$p" && in_tree HEAD "$p"; then
+              fail "$name.md: paths entry '$p' matches no file at verified_at $ver but files at HEAD; set verified_at to the commit whose code you checked"
+            fi
+          done <<EOF
+$(fm_list "$f" paths)
+EOF
+        fi
         if [ "$YT_IS_GIT" = yes ]; then
           while IFS= read -r p; do
             [ -n "$p" ] || continue
@@ -251,7 +305,7 @@ EOF
 
 # ---- impact --------------------------------------------------------------------
 cmd_impact() {
-  local plan="" pat="" base="" body first line area f changed committed fails=0 hit how s
+  local plan="" pat="" base="" body first line area f changed committed fails=0 unver=0 hit how s first_ct=""
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || { echo "impact: $1 needs a value" >&2; return 64; }
     case "$1" in
@@ -281,23 +335,55 @@ cmd_impact() {
   # What the task changed: commits whose subject matches --grep, else
   # --base..HEAD, plus the working tree (a summary is often written before the
   # commit that carries it).
+  # Paths come as NUL-delimited records (-z): the plain output quotes a name
+  # with a space or a non-ASCII byte, and a quoted name never equals the path
+  # a plan or an area file names.
   committed=""
   if [ "$YT_IS_GIT" = yes ]; then
-    [ -z "$pat" ] || committed=$(git -C "$TOP" log --no-merges -E --grep "$pat" --name-only --pretty=format: 2>/dev/null)
-    if [ -z "$committed" ] && [ -n "$base" ]; then
-      committed=$(git -C "$TOP" diff --name-only "$base..HEAD" 2>/dev/null)
+    if [ -n "$pat" ]; then
+      committed=$(git -C "$TOP" log --no-merges -E --grep "$pat" --name-only -z --format= 2>/dev/null | nul_paths)
+      first_ct=$(git -C "$TOP" log --no-merges -E --grep "$pat" --format='%ct %h' 2>/dev/null | tail -1)
     fi
-    changed=$(git -C "$TOP" status --porcelain --untracked-files=all 2>/dev/null | sed 's/^...//; s/.* -> //')
+    if [ -z "$committed" ] && [ -n "$base" ]; then
+      committed=$(git -C "$TOP" diff --name-only -z "$base..HEAD" 2>/dev/null | nul_paths)
+      first_ct=$(git -C "$TOP" log --format='%ct %h' "$base..HEAD" 2>/dev/null | tail -1)
+    fi
+    changed=$(git -C "$TOP" status --porcelain -z --untracked-files=all 2>/dev/null | status_paths)
   else
     changed=""
   fi
 
-  # touched <path>: "committed", "uncommitted" or nothing. A directory matches by prefix.
-  touched() {
-    local re; re="^$(printf '%s' "${1%/}" | sed 's/[][\.*^$+?(){}|]/\\&/g')(/|\$)"
-    if printf '%s\n' "$committed" | grep -E "$re" >/dev/null; then echo committed
-    elif printf '%s\n' "$changed" | grep -E "$re" >/dev/null; then echo uncommitted
+  # outside_when <file>: the file's modification time against the task's first
+  # commit ("after" includes the same second: commit times have no finer grain).
+  outside_when() {
+    local mt ct sha
+    # GNU `stat -f` prints filesystem info to stdout, so `-c` goes first.
+    mt=$(stat -c %Y "$1" 2>/dev/null) || mt=$(stat -f %m "$1" 2>/dev/null) || mt=""
+    if [ -z "$first_ct" ]; then echo "no task commit to compare its modification time against"; return; fi
+    ct=${first_ct%% *}; sha=${first_ct#* }
+    case "$mt" in ''|*[!0-9]*) echo "its modification time is unreadable"; return ;; esac
+    if [ "$mt" -ge "$ct" ]; then
+      echo "modified after the task's first commit $sha ($(utc "$mt") >= $(utc "$ct"))"
+    else
+      echo "not modified since the task's first commit $sha ($(utc "$mt") < $(utc "$ct"))"
     fi
+  }
+  utc() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "@$1"; }
+
+  # touched <path>: "committed", "uncommitted" or nothing. A directory matches
+  # by prefix. Compared as literal strings, not as patterns.
+  touched() {
+    local s="${1%/}" p
+    while IFS= read -r p; do
+      case "$p" in "$s"|"$s"/*) echo committed; return ;; esac
+    done <<EOT
+$committed
+EOT
+    while IFS= read -r p; do
+      case "$p" in "$s"|"$s"/*) echo uncommitted; return ;; esac
+    done <<EOT
+$changed
+EOT
   }
 
   while IFS= read -r line; do
@@ -320,6 +406,12 @@ $(fm_list "$f" sources)
 EOS
     if [ -n "$hit" ]; then
       echo "ok   $area: $hit changed ($how)"
+    elif [ "$(rel "$f")" = "$f" ]; then
+      # User scope: the area file is outside the repository, git has no record
+      # of its edit. Say so, with the one fact at hand: its modification time
+      # against the task's first commit. Never counted as satisfied here.
+      echo "UNVERIFIABLE $area: $f lies outside the repository, git cannot see its edit; $(outside_when "$f")"
+      unver=$((unver + 1))
     else
       echo "FAIL $area: neither $(rel "$f") nor its sources ($(fm_list "$f" sources | tr '\n' ' ' | sed 's/ $//; s/^$/none/')) changed in this task"
       fails=$((fails + 1))
@@ -328,6 +420,7 @@ EOS
 $body
 EOF
   [ "$fails" -eq 0 ] || return 1
+  [ "$unver" -eq 0 ] || return 4
   return 0
 }
 

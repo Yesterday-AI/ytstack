@@ -3,17 +3,23 @@
 #
 # Contract:
 #   lint    a well-formed spec passes; each format rule fails on its own;
-#           oversize files warn (exit 2); no spec is a failure; auto_merge
-#           takes none, low or normal; REVIEW.md is no area file, has to be
-#           linked from SPEC.md, and every line of `ytstack-risk check` on it
-#           is a failure
+#           oversize files warn (exit 2); no spec is a failure; an
+#           implemented area fails when a paths glob matches files at HEAD and
+#           none at verified_at (the stamp names code that was not there);
+#           auto_merge takes none, low or normal; REVIEW.md is no area file,
+#           has to be linked from SPEC.md, and every line of
+#           `ytstack-risk check` on it is a failure
 #   drift   an area is listed when its paths changed after the description (or
 #           its source) was last touched, and only then; a re-stamped
 #           verified_at quiets it; planned areas are skipped; exit 0 unless
 #           --exit-code
 #   impact  "none" closes; a named area is satisfied by a change to the area
 #           file OR to one of its sources, committed or not; nothing changed
-#           fails; a plan without the section exits 3
+#           fails; a plan without the section exits 3; file names git quotes
+#           (a space, a non-ASCII byte, a rename) compare as the real names;
+#           a user-scope area file (outside the repository) is never git
+#           evidence: exit 4 "UNVERIFIABLE" with its modification time against
+#           the task's first commit, unless a source in the repository changed
 #   areas   names the area whose paths cover a path
 #
 # Run: /bin/bash tests/ytstack-spec.test.sh   (exit 0 = all pass; macOS bash 3.2)
@@ -100,6 +106,15 @@ mkdir -p "$R/src/new"; echo n > "$R/src/new/n.sh"
 area "$R" auth implemented "$V" "src/new/**"
 run "$R" lint;                eq "paths may name a new file that is not committed yet" 0 "$EC"
 rm -rf "$R/src/new"; area "$R" auth implemented "$V" "src/auth/**" "docs/auth.md"
+# verified_at names the commit whose code was checked: an implemented area
+# whose paths have files at HEAD and none at verified_at was not checked there
+mkdir -p "$R/src/new"; echo n > "$R/src/new/n.sh"; ( cd "$R" && git add src/new && git commit -qm "add new" ) >/dev/null 2>&1
+area "$R" auth implemented "$V" "src/new/**";                lint_fails "implemented, paths absent at verified_at but present at HEAD" "matches no file at verified_at $V but files at HEAD"
+area "$R" auth partial "$V" "src/new/**"
+run "$R" lint;                eq "a partial area may stamp a commit before its code" 0 "$EC"
+area "$R" auth implemented "$(head_of "$R")" "src/new/**"
+run "$R" lint;                eq "stamped with a commit that has the code: passes" 0 "$EC"
+area "$R" auth implemented "$V" "src/auth/**" "docs/auth.md"
 area "$R" auth implemented "$V" "src/auth/**" "docs/gone.md"; lint_fails "source missing" "does not exist"
 area "$R" auth implemented "$V" "src/auth/**" "" '## History\n\nx\n\n'; lint_fails "section outside the fixed list" "not one of the fixed sections"
 area "$R" auth implemented "$V" "src/auth/**"
@@ -258,6 +273,82 @@ eq "a flag without a value is a usage error, not a hang" 64 "$EC"
 plan "- auth: Behavior -- a\n- billing: Known limits -- b"
 run "$R" impact --plan "$P" --base "$BASE"
 eq "two areas, both satisfied" 0 "$EC"
+
+# Filenames git quotes in its plain output (a space, a non-ASCII byte) are
+# compared as the real names: the records are read NUL-delimited.
+# srcarea <name> <source>: an implemented area whose one source has a space or
+# a non-ASCII byte in its name (the area() helper splits sources on spaces).
+srcarea() {
+  printf -- '---\narea: %s\nstatus: implemented\npaths:\n  - docs/**\nsources:\n  - %s\nverified_at: %s\n---\n\n# %s\n\n## Purpose\n\nx\n\n## Where implemented\n\nx\n\n## How to verify\n\nx\n\n## Decisions that apply now\n\nnone\n' \
+    "$1" "$2" "$V" "$1" > "$R/.ytstack/spec/$1.md"
+}
+echo v1 > "$R/docs/Architecture Overview.md"; echo v1 > "$R/docs/Übersicht.md"
+srcarea arch "docs/Architecture Overview.md"; srcarea intro "docs/Übersicht.md"
+spec "$R" auth billing arch intro
+commit "$R" "add spaced and non-ASCII sources"; BASE2=$(head_of "$R")
+run "$R" lint;                eq "spaced and non-ASCII sources pass lint" 0 "$EC"
+plan "- arch: Behavior -- new overview"
+echo v2 > "$R/docs/Architecture Overview.md"
+run "$R" impact --plan "$P" --grep '^M001-S01-T03:'
+eq "an uncommitted source with a space in its name satisfies impact" 0 "$EC"
+has "and is named unquoted" "arch: docs/Architecture Overview.md changed (uncommitted)" "$OUT"
+commit "$R" "M001-S01-T03: overview"
+plan "- intro: Behavior -- new intro"
+echo v2 > "$R/docs/Übersicht.md"; commit "$R" "M001-S01-T04: intro"
+run "$R" impact --plan "$P" --grep '^M001-S01-T04:'
+eq "a committed source git quotes (non-ASCII) satisfies impact" 0 "$EC"
+has "and is named as the real file name" "intro: docs/Übersicht.md changed (committed)" "$OUT"
+run "$R" impact --plan "$P" --grep '^none-such:' --base "$BASE2"
+eq "the --base range reads quoted names too" 0 "$EC"
+has "and names the real file" "intro: docs/Übersicht.md changed (committed)" "$OUT"
+( cd "$R" && git mv "docs/Übersicht.md" "docs/Intro neu.md" ) >/dev/null 2>&1
+run "$R" impact --plan "$P" --grep '^none-such:'
+eq "an uncommitted rename counts for its origin" 0 "$EC"
+has "the origin is read from its own record" "intro: docs/Übersicht.md changed (uncommitted)" "$OUT"
+( cd "$R" && git mv "docs/Intro neu.md" "docs/Übersicht.md" ) >/dev/null 2>&1
+
+# User scope: the spec lives in ~/.ytstack/projects/<key>/, outside the
+# repository, so git cannot see an edit of the area file. HOME is a temporary
+# directory; the real home is never read or written.
+H="$TMP/home"; mkdir -p "$H"
+U="$TMP/userscope"; mkdir -p "$U/src/auth" "$U/docs"
+( cd "$U" && git init -q -b main && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false )
+echo a > "$U/src/auth/login.sh"; echo d > "$U/docs/auth.md"; commit "$U" "base"
+KEY=$(HOME="$H" bash -c '. "$1/hooks/lib/git-ctx.sh"; yt_git_ctx "$2"; printf %s "$YT_REPO_KEY"' _ "$ROOT" "$U")
+UD="$H/.ytstack/projects/$KEY"; mkdir -p "$UD/spec"
+runh() { local d="$1"; shift; OUT=$(HOME="$H" bash "$BIN" -C "$d" "$@" 2>&1); EC=$?; }
+# the area/spec helpers write to <dir>/.ytstack/spec: point one at the user-scope spec
+mkdir -p "$TMP/uwrap/.ytstack"; ln -s "$UD/spec" "$TMP/uwrap/.ytstack/spec"
+R="$TMP/uwrap"; V=$(head_of "$U")
+area "$R" auth implemented "$V" "src/auth/**"
+area "$R" docs implemented "$V" "docs/auth.md" "docs/auth.md"
+spec "$R" auth docs
+UP="$UD/M001-S01-T01-PLAN.md"
+printf -- '# plan\n\n## Spec impact\n\n- auth: Behavior -- token login\n' > "$UP"
+runh "$U" lint;               eq "user scope: the spec outside the repository passes lint" 0 "$EC"
+runh "$U" impact --plan "$UP" --grep '^M001-S01-T01:'
+eq "user scope, no task commit: unverifiable (exit 4)" 4 "$EC"
+has "says the area file is outside the repository" "UNVERIFIABLE auth: $UD/spec/auth.md lies outside the repository" "$OUT"
+has "says there is no commit to compare with" "no task commit to compare its modification time against" "$OUT"
+echo a2 > "$U/src/auth/login.sh"; commit "$U" "M001-S01-T01: token login"
+touch -t 202001010000 "$UD/spec/auth.md"
+runh "$U" impact --plan "$UP" --grep '^M001-S01-T01:'
+eq "user scope, area file older than the task: still exit 4, not a pass" 4 "$EC"
+has "says it was not modified since the first commit" "not modified since the task's first commit" "$OUT"
+printf '\ntoken login\n' >> "$UD/spec/auth.md"
+runh "$U" impact --plan "$UP" --grep '^M001-S01-T01:'
+eq "user scope, area file edited after the commit: exit 4 (recorded, not claimed as git evidence)" 4 "$EC"
+has "says it was modified after the first commit" "modified after the task's first commit" "$OUT"
+hasnt "no in-repository edit is claimed" "ok   auth" "$OUT"
+printf -- '# plan\n\n## Spec impact\n\n- docs: Behavior -- docs\n' > "$UP"
+echo d2 > "$U/docs/auth.md"; commit "$U" "M001-S01-T02: docs"
+runh "$U" impact --plan "$UP" --grep '^M001-S01-T02:'
+eq "user scope, a source in the repository changed: satisfied by git" 0 "$EC"
+has "names the source" "docs: docs/auth.md changed (committed)" "$OUT"
+printf -- '# plan\n\n## Spec impact\n\n- auth: Behavior -- x\n- ghost: Behavior -- y\n' > "$UP"
+runh "$U" impact --plan "$UP" --grep '^M001-S01-T01:'
+eq "a failure outranks unverifiable (exit 1)" 1 "$EC"
+R="$TMP/impact"
 
 # ---- 4. areas -----------------------------------------------------------------
 echo "# areas"

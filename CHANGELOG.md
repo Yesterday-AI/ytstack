@@ -198,6 +198,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`PROJECT.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `AGENTS.md`, the wrapper and
   suite counts in README, QUICKSTART, NOTICE and `docs/concept.md`).
 
+### Fixed
+
+- `verified_at` names the commit whose code was checked, never the branch
+  base; the advice to stamp an older commit is gone from the format and
+  `adopt-brownfield`. `bin/ytstack-spec lint` fails on an implemented area
+  whose `paths` match files at HEAD and none at `verified_at`. This
+  repository's six area files are stamped with the commit they were checked
+  against.
+- `.ytstack/spec/SPEC.md` no longer says hooks write nothing into the
+  checkout: it separates volatile state (outside the tree) from the two
+  deliberate artifact writers, `post-tool-use-bash` and `task-completed`.
+- The verifier and `spawn-milestone-team` reuse an earlier PASS only for
+  the same commit, environment and command. On another commit the check runs
+  again: unchanged planned files do not cover a changed import, configuration
+  or fixture. `tests/evidence-rule.test.sh` pins the rule.
+- A spec in user scope (`~/.ytstack/projects/<key>/`) no longer blocks
+  `summarize-task`: `bin/ytstack-spec impact` reports its area as
+  unverifiable (exit 4) with the area file's modification time against the
+  task's first commit, and the skill records that or asks the person once.
+- `bin/ytstack-spec impact` reads git's path records NUL-delimited, so a
+  source with a space or a non-ASCII byte in its name counts as changed,
+  committed or not.
+- `bin/ytstack-brief` reads a planned path with a space inside its backticks,
+  so the brief names the area file that covers it.
+
 ### Upgrade notes
 
 - Existing projects have no spec yet. Run `/ytstack:adopt-brownfield` once:

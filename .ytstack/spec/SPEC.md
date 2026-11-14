@@ -25,7 +25,7 @@ This spec says what applies now. `STATE.md` says where the work stands, `DECISIO
 ## Invariants that hold everywhere
 
 - `vendor/**` is never edited. Different behaviour goes into a ytstack wrapper (`AGENTS.md`, "Never modify vendored content").
-- Hooks write nothing into the checkout. Volatile state lives outside the tree ([hooks-and-state.md](hooks-and-state.md)).
+- Volatile state (automatic handoff, journal) lives outside the tree; the only in-tree place for it is the `.ytstack/.local` fallback ([hooks-and-state.md](hooks-and-state.md)). Two hooks write deliberate artifacts into the resolved `.ytstack`: `post-tool-use-bash` a draft task summary once, `task-completed` an auto summary and the slice-plan checkbox ([artifacts.md](artifacts.md), [hooks-and-state.md](hooks-and-state.md), "Invariants and security boundaries"). No hook writes `HANDOFF.md` or `STATE.md`.
 - `.ytstack/` artifacts are user-owned. Only `ytstack:reconcile` archives, and it asks first ([artifacts.md](artifacts.md)).
 - Every skill follows the contracts under `docs/ux/`; `bin/ytstack-check` enforces the mechanical part.
 - No em-dash in prose; own wording only, concepts from third parties, never their text (`AGENTS.md`).

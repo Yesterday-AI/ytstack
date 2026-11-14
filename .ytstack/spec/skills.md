@@ -8,7 +8,7 @@ sources:
   - docs/ux/skill-structure.md
   - docs/ux/askuserquestion-format.md
   - docs/ux/agent-structure.md
-verified_at: f4f54ab
+verified_at: 030d254
 ---
 
 # skills
@@ -96,7 +96,7 @@ No other skill reads the flag.
 - **Plan.** A task plan's Verification section names the command, `Runs:` and `Environment:`. What work cannot produce is a gate line under `## Gates` (what, who decides, how, when it lapses). A gate never holds a task open.
 - **Slice boundary.** `reassess-roadmap` collects the open gates of the milestone and work that repeats without advancing (three or more review rounds on a task), puts them to the human in one question, records only what was answered, and reports two numbers: slices closed by work and slices accepted. In non-interactive mode it asks nothing and records nothing.
 - **Review.** `code-review` counts rounds from the `## Review` lines in the task plan. Round 1 reviews the whole change, round 2 the fix, and from round 3 no reviewer is dispatched: the skill diagnoses scope, conflicting rules or solution and asks the human. The reviewer states the assumed load, gives a concrete case and "If skipped" per finding and follows the project's severity policy.
-- **Evidence.** A result is a check on a commit in an environment. `verification-before-completion` runs the plan's command as often as the plan says and notes the commit. The verifier makes one independent run per commit and cites an earlier verdict when the task's files are unchanged since. `summarize-task` records check, commit and environment and does not run the check again.
+- **Evidence.** A result is a check on a commit in an environment. `verification-before-completion` runs the plan's command as often as the plan says and notes the commit. The verifier makes one independent run per commit and cites an earlier verdict only for the same commit, environment and command; on another commit it runs again, because a check reads files its plan does not name. `summarize-task` records check, commit and environment and does not run the check again.
 - **Tests.** The TDD wrapper writes a failing test first for logic and bug fixes; a trivial change gets none. `systematic-debugging` treats a test that fails only sometimes as a question of whose defect it is: reproduced on the base commit it becomes a tracked follow-up, otherwise it is the change's defect; the required check still has to turn green.
 - **The running product.** A plan whose result shows only at the running product names `Environment: instance from bin/ytstack-runtime up` (`plan-task`). `verification-before-completion`, the implementer and the verifier start the instance with `up`, check against its `URL:`, note its `COMMIT:` line and stop it with `down`. Without a "Run" section, or when `up` fails, the check is reported as not possible and never claimed; the verifier gives such a task no PASS.
 - **Handoff.** `handoff-session` points instead of copying and names under "Suggested skills" the one or two skills the next session should start with.

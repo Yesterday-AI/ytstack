@@ -155,6 +155,8 @@ One line per area: `- <area>: <section> -- <what changes>`. The reason after `no
 
 `summarize-task` runs `bin/ytstack-spec impact` on the plan and the task's commits. For each area the plan names, the impact is satisfied when the task's commits changed **the area file or one of its `sources`**. It is not satisfied by a sentence in the summary. A plan with `none` closes without any spec edit.
 
+A spec in user scope (`~/.ytstack/projects/<key>/spec/`) lies outside the repository, and git has no record of an edit there. When no source of a named area changed in the repository, `impact` exits 4 and reports the area as **unverifiable**, with the area file's modification time against the task's first commit. `summarize-task` records that line when the file was modified after the first commit, and otherwise asks the person once whether the area file was updated. It never counts the edit as git evidence.
+
 The summary records what was updated under `## Spec`: the area, the file and section, or `none` with the plan's reason.
 
 ### Drift
@@ -166,7 +168,7 @@ The two valid answers:
 1. The contract changed: update the area file or its source.
 2. The contract did not change: set `verified_at` to the commit you checked. That one-line edit records that somebody looked, and it is the touch that quiets the report.
 
-`verified_at` names a commit that stays in the history. On a branch that will be squash-merged, use the commit the branch started from or the head of the default branch; `lint` warns about a stamp that names no commit.
+`verified_at` names the commit whose code was read against the description, and no other: never an older commit such as the branch base, which lacks the code the description is about. A squash merge can drop that commit from the history. Such a stamp is tolerated: `lint` warns that it names no commit, `drift` does not read it, and the next check sets a new one.
 
 Nobody edits a description only to quiet the report, and no task is held open by it. The natural moment to answer it is the slice boundary (`reassess-roadmap`), once per area, not once per task.
 
@@ -186,6 +188,7 @@ A new `DECISIONS.md` entry that changes what applies in an area is added to that
 - a missing required section, a section name outside the fixed list, sections out of order
 - `status: implemented` or `partial` with `verified_at: none` or without `paths`
 - a `sources` entry that does not exist, or a `paths` glob that matches no file in the repository (a `planned` area may name paths that do not exist yet)
+- `status: implemented` with a `paths` glob that matches files at HEAD and none at `verified_at`: the stamp names a commit that lacks the code it claims was checked
 - an area file that `SPEC.md` does not list, or a listed file that does not exist
 - a `SPEC.md` without the sections "Areas" and "Keeping this true"
 - an `auto_merge` that is not `none`, `low` or `normal`

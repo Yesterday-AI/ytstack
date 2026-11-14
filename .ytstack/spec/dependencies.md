@@ -7,7 +7,7 @@ paths:
   - NOTICE
   - hooks/lib/git-ctx.sh
   - tests/gstack-live.test.sh
-verified_at: f4f54ab
+verified_at: 030d254
 ---
 
 # dependencies

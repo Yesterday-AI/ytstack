@@ -510,7 +510,7 @@ On B, take the edited list from the user's answer, turn every name into a lowerc
 
 `planned` after an honest attempt is a correct result. Raising a status to make the table look finished is not.
 
-`verified_at` has to name a commit that stays in the history (format document, "Drift"). On a branch that will be squash-merged, stamp the commit the branch started from when the area's `paths` are unchanged since then (`git diff --quiet <start> HEAD -- <paths>` exits 0). When they changed, keep `{HEAD_SHORT}` and name the area in the report as one to stamp again after the merge.
+`verified_at` is `{HEAD_SHORT}`, the commit whose code you read, never an older one such as the commit the branch started from (format document, "Drift"). On a branch that will be squash-merged, name the area in the report as one to stamp again after the merge; until then `lint` warns about the orphaned stamp, and `drift` does not read it.
 
 **7d. Write `.ytstack/spec/SPEC.md`.** At most 80 lines. The section "Keeping this true" is copied verbatim; it is what a session without hooks finds in the repository.
 

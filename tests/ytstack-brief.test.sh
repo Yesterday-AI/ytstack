@@ -162,6 +162,16 @@ has "Context: the spec entry point" '- `.ytstack/spec/SPEC.md`' "$C"
 has "Context: the area that covers the files (line range ignored)" '- `.ytstack/spec/auth.md`' "$C"
 hasnt "Context: no other area" "billing.md" "$C"
 
+# a planned path with a space inside the backticks still reaches the area lookup
+printf -- '---\narea: pay\nstatus: planned\npaths:\n  - src/pay/**\n---\n' > "$R/.ytstack/spec/pay.md"
+P2="$R/.ytstack/M001-S01-T02-PLAN.md"; plan "$P2" "Spaced file"
+awk '{ sub(/`src\/auth\/login\.sh:10-20`/, "`src/pay/login page.sh:3-4`"); print }' "$P2" > "$P2.tmp" && mv "$P2.tmp" "$P2"
+run "$R" render --task M001-S01-T02
+C=$(part "Read for context")
+has "Context: the area of a spaced filename (line range ignored)" '- `.ytstack/spec/pay.md`' "$C"
+hasnt "Context: no unrelated area for the spaced filename" "auth.md" "$C"
+rm -f "$P2" "$R/.ytstack/spec/pay.md"
+
 mkdir -p "$R/.ytstack/milestones/M002"
 plan "$R/.ytstack/milestones/M002/M002-S01-T01-PLAN.md" "Nested layout"
 run "$R" render --task M002-S01-T01

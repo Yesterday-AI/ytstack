@@ -19,7 +19,7 @@ sources:
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
   - docs/statusline.md
-verified_at: f4f54ab
+verified_at: 030d254
 ---
 
 # artifacts
@@ -104,7 +104,7 @@ The frontmatter and section template of each file is in the `SKILL.md` of the sk
 - `**Blocked by:**` under a slice plan's goal (and optionally under a task plan's summary) names what has to be finished first; `bin/ytstack-frontier` reads it.
 - `## Review` in a task plan (in a slice plan for a slice lane) holds one line per review round: `- Round <n>: <base>..<head> -- <verdict>; blocking: <n>; follow-ups: <n>; risk: <class>; invariants: none | <text>; by: <reviewer>`, and one line per lens: `- Lens <name>: <head> -- pass | fail | not run; by: <reviewer>; evidence: <dir> (<n> images) | none`. `code-review` and `finish-lane` append them; `code-review` counts the round lines, `bin/ytstack-risk route` reads the newest of each (`docs/ux/review-policy-format.md`, "Records"). A line without the three new fields is a round without a stated risk.
 - An area file may carry `auto_merge: none | low | normal`, the highest class that may merge into the area without a person; no field is `none`.
-- `summarize-task` runs `bin/ytstack-spec impact` in its preamble. A named area is satisfied when its area file or one of its `sources` changed in the task's commits or the working tree. Otherwise the task is not closed. The summary records the result under `## Spec`. A plan that says `none` closes without a spec edit.
+- `summarize-task` runs `bin/ytstack-spec impact` in its preamble. A named area is satisfied when its area file or one of its `sources` changed in the task's commits or the working tree. Otherwise the task is not closed. The summary records the result under `## Spec`. A plan that says `none` closes without a spec edit. With the spec in user scope, an area file lies outside the repository: `impact` reports it as unverifiable (exit 4) with its modification time against the task's first commit, and `summarize-task` records that line when the file was modified after that commit, or asks the person once.
 
 ### Commits and tasks
 
