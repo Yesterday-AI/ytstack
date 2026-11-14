@@ -1,0 +1,10 @@
+{
+  "sha": "2222222222222222222222222222222222222222",
+  "files": [
+    {
+      "filename": "src/app.ts",
+      "status": "modified",
+      "patch": "@@ -9,5 +9,5 @@ export function checkout() {\n line9\n line10\n-line11\n+line11 guarded\n line12\n line13\n@@ -40,4 +40,4 @@\n line40\n line41\n-line42\n+line42 checked\n line43"
+    }
+  ]
+}

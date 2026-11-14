@@ -1,0 +1,128 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xNFQxMzozMjozOVrOt3jwuw=="
+          },
+          "nodes": [
+            {
+              "isResolved": true,
+              "path": "tools/pr-watch/prwatch/worker.py",
+              "line": null,
+              "startLine": null,
+              "originalLine": 290,
+              "originalStartLine": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "chatgpt-codex-connector"
+                    },
+                    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Keep expired watches out of reopen updates**\n\nWhen a repository has any eligible recently closed watch, this update revives every closed watch whose number appears in the open-PR listing. Consequently, a PR reopened after the documented seven-day window is silently re-registered whenever another PR in the same repository closed recently, potentially resuming polling and notifications to an old session. Add the same `closed_at` window and paused/merged eligibility predicates used by the repository query to this update.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->",
+                    "url": "https://github.com/Yesterday-AI/ytstack/pull/47#discussion_r4573672843",
+                    "createdAt": "2026-11-14T13:32:39Z",
+                    "originalCommit": {
+                      "oid": "9f5dc7381d57b6596dbe838b43479a55c3b2e16b"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "isResolved": true,
+              "path": "tools/pr-watch/prwatch/worker.py",
+              "line": null,
+              "startLine": null,
+              "originalLine": 283,
+              "originalStartLine": 281,
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "chatgpt-codex-connector"
+                    },
+                    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Charge the quota for every paginated reopen request**\n\nFor repositories with more than 100 open PRs, this reserves only one REST call before `github.open_pulls()` invokes `gh api --paginate`. The inspected `gh api --help` explicitly states that pagination makes additional HTTP requests to fetch all pages, so this operation can cross the configured quota reserve by one call per additional page -- the boundary this release is intended to preserve. Account for all pages or avoid fetching pages once the remaining budget is exhausted.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->",
+                    "url": "https://github.com/Yesterday-AI/ytstack/pull/47#discussion_r4573672845",
+                    "createdAt": "2026-11-14T13:32:39Z",
+                    "originalCommit": {
+                      "oid": "9f5dc7381d57b6596dbe838b43479a55c3b2e16b"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "reviews": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "Y3Vyc29yOnYyOpO0MjAyNi0xMS0xNFQxMzo0MzozOVq0MjAyNi0xMS0xNFQxMzo0MzozOVrPAAAAAV_wvLk="
+          },
+          "nodes": [
+            {
+              "author": {
+                "__typename": "Bot",
+                "login": "chatgpt-codex-connector"
+              },
+              "body": "<!-- codex-review-receipt:v1 -->\n\n\n### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `9f5dc7381d`\n    \n\n<details> <summary>ℹ️ About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with 👍.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+              "url": "https://github.com/Yesterday-AI/ytstack/pull/47#pullrequestreview-5904539543",
+              "createdAt": "2026-11-14T13:32:39Z",
+              "commit": {
+                "oid": "9f5dc7381d57b6596dbe838b43479a55c3b2e16b"
+              }
+            },
+            {
+              "author": {
+                "__typename": "User",
+                "login": "lx-0"
+              },
+              "body": "",
+              "url": "https://github.com/Yesterday-AI/ytstack/pull/47#pullrequestreview-5904579630",
+              "createdAt": "2026-11-14T13:43:36Z",
+              "commit": {
+                "oid": "9f5dc7381d57b6596dbe838b43479a55c3b2e16b"
+              }
+            },
+            {
+              "author": {
+                "__typename": "User",
+                "login": "lx-0"
+              },
+              "body": "",
+              "url": "https://github.com/Yesterday-AI/ytstack/pull/47#pullrequestreview-5904579769",
+              "createdAt": "2026-11-14T13:43:39Z",
+              "commit": {
+                "oid": "2f3e1b8f026fb28badee7cc474a22fcccc23bdf1"
+              }
+            }
+          ]
+        },
+        "commits": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "Mg"
+          },
+          "nodes": [
+            {
+              "commit": {
+                "oid": "9f5dc7381d57b6596dbe838b43479a55c3b2e16b",
+                "committedDate": "2026-11-14T13:30:47Z"
+              }
+            },
+            {
+              "commit": {
+                "oid": "2f3e1b8f026fb28badee7cc474a22fcccc23bdf1",
+                "committedDate": "2026-11-14T13:43:34Z"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

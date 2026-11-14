@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+# ytstack review escapes: which findings of a review bot on a pull request the
+# project's own reviewers missed (M030). Format: docs/ux/review-policy-format.md,
+# "Escapes".
+#
+#   ytstack-review-escapes [-C DIR] --pr N [--repo OWNER/NAME]
+#
+# DIR is a directory of the repository (default: $PWD). Its working tree gives
+# the own reviewers ("## Own reviewers" in .ytstack/spec/REVIEW.md, read through
+# `ytstack-risk reviewers`); --repo defaults to the GitHub repository of its
+# `origin` remote, else to `gh repo view`. Everything on the host is read
+# through `gh`, read-only.
+#
+# A bot thread is a review thread whose first comment is by an author of type
+# Bot, by a login ending in "[bot]", or by a login a "bots:" list of REVIEW.md
+# names, and whose text carries no role marker: a marker wins over the author
+# type, since an own role may post through a GitHub App. Per bot thread:
+#   resolution  fixed     a commit of the pull request after the thread's commit
+#                         changed the thread's file on a line within MARGIN
+#                         lines of the thread's range
+#               rejected  resolved, and no such commit
+#               open      not resolved
+#   match       caught    an own finding (below) on the same file overlaps the
+#                         thread's range widened by MARGIN, at the same or an
+#                         earlier head
+#               escaped   none does
+# An own finding is either a review thread or a line of a review body whose
+# text carries the marker of an own reviewer, whoever posted it. A
+# body line has no anchor of its own: it counts only with a cited
+# `<path>:<line>` or `<path>:<start>-<end>` on the thread's file (the path as
+# written, or a tail of it after a slash). A body line without a cited line
+# matches nothing. A thread without a line (a comment on a whole file) is
+# fixed by any later change of the file and caught by any own finding on it.
+# Lines are those of the commit a thread was written on; commits in between
+# can shift them, MARGIN absorbs small shifts. "Earlier head" compares the
+# positions of the two commits in the pull request; when one of them is no
+# longer part of it (a force push), the creation times decide.
+#
+# Output: TSV with a header line, one line per bot thread:
+#   bot  resolution  match  role  path  lines  url  title
+# role is the own reviewer that caught it, or "-"; lines is "<n>", "<a>-<b>"
+# or "-"; title is the first line of the bot comment, badges and emphasis
+# removed, at most 100 characters.
+#
+# Cost per run (the REST quota is shared): one GraphQL call per page of 100
+# threads, reviews or commits (one call for most pull requests), one REST call
+# (`repos/{repo}/commits/{sha}`) per commit that follows the oldest resolved
+# bot thread, and one `gh repo view` when neither --repo nor an `origin` on
+# github.com names the repository. A commit with more than 300 changed files
+# is read with its first 300.
+#
+# Exit codes
+#   0   no bot thread is both fixed and escaped
+#   10  at least one is
+#   1   REVIEW.md declares no own reviewers (one line of hint)
+#   2   usage, a broken "Own reviewers" section, or a read that failed
+
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+MARGIN=3      # lines a fixing change or an own finding may lie outside a bot thread's range
+MAX_PAGES=50  # GraphQL pages per run; a guard against a cursor that never ends
+
+usage() { sed -n '6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+die() { echo "ytstack-review-escapes: $*" >&2; exit 2; }
+
+DIR="$PWD"; PR=""; REPO=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    -C|--pr|--repo)
+      [ $# -ge 2 ] || { usage >&2; exit 2; }
+      case "$1" in -C) DIR=$2 ;; --pr) PR=$2 ;; --repo) REPO=$2 ;; esac
+      shift 2 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+case "$PR" in ""|*[!0-9]*) usage >&2; exit 2 ;; esac
+[ -d "$DIR" ] || die "-C '$DIR' is not a directory"
+command -v jq >/dev/null 2>&1 || die "jq is missing"
+
+# ---- own reviewers (no network) -----------------------------------------------
+RV=$(bash "$ROOT/bin/ytstack-risk" -C "$DIR" reviewers 2>&1) || { printf '%s\n' "$RV" >&2; die "REVIEW.md: the \"Own reviewers\" section does not pass; run 'ytstack-risk check'"; }
+if [ -z "$RV" ]; then
+  echo "ytstack-review-escapes: REVIEW.md declares no own reviewers; add \"## Own reviewers\" to .ytstack/spec/REVIEW.md (docs/ux/review-policy-format.md)"
+  exit 1
+fi
+ROLES=$(printf '%s\n' "$RV" | jq -R -s -c '
+  split("\n") | map(select(length > 0) | split("\t")
+    | { role: .[0], marker: .[1], lessons: .[2], bots: ((.[3] // "") | split(",") | map(select(length > 0))) })')
+
+# ---- the repository -----------------------------------------------------------
+command -v gh >/dev/null 2>&1 || die "gh is missing"
+if [ -z "$REPO" ]; then
+  url=$(git -C "$DIR" remote get-url origin 2>/dev/null || true)
+  case "$url" in
+    git@github.com:*|ssh://git@github.com/*|https://github.com/*|http://github.com/*)
+      REPO=$(printf '%s' "$url" | sed -E 's#^(git@github\.com:|ssh://git@github\.com/|https?://github\.com/)##; s#\.git$##; s#/$##') ;;
+  esac
+  case "$REPO" in */*/*|/*|*/) REPO="" ;; */*) ;; *) REPO="" ;; esac
+  [ -n "$REPO" ] || REPO=$(cd "$DIR" && gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) \
+    || die "cannot tell the repository of $DIR; pass --repo OWNER/NAME"
+fi
+case "$REPO" in [!/]*/[!/]*) ;; *) die "--repo takes OWNER/NAME" ;; esac
+case "$REPO" in */*/*) die "--repo takes OWNER/NAME" ;; esac
+OWNER=${REPO%%/*}; NAME=${REPO#*/}
+
+W=$(mktemp -d "${TMPDIR:-/tmp}/ytescapes.XXXXXX") || die "no temporary directory"
+trap 'rm -rf "$W"' EXIT
+
+# ---- reads: threads, reviews, commits (GraphQL, paginated) ----------------------
+# One query pages through all three connections at once; a connection that has
+# no further page is left out of the next call with @include.
+Q='query($owner:String!,$name:String!,$pr:Int!,$t:Boolean!,$r:Boolean!,$c:Boolean!,$tc:String,$rc:String,$cc:String){
+  repository(owner:$owner,name:$name){ pullRequest(number:$pr){
+    reviewThreads(first:100,after:$tc) @include(if:$t){ pageInfo{hasNextPage endCursor}
+      nodes{ isResolved path line startLine originalLine originalStartLine
+        comments(first:1){ nodes{ author{ __typename login } body url createdAt originalCommit{ oid } } } } }
+    reviews(first:100,after:$rc) @include(if:$r){ pageInfo{hasNextPage endCursor}
+      nodes{ author{ __typename login } body url createdAt commit{ oid } } }
+    commits(first:100,after:$cc) @include(if:$c){ pageInfo{hasNextPage endCursor}
+      nodes{ commit{ oid committedDate } } }
+  } } }'
+t=true; r=true; c=true; tc=""; rc=""; cc=""; page=0
+while [ "$t$r$c" != falsefalsefalse ]; do
+  page=$((page + 1))
+  [ "$page" -le "$MAX_PAGES" ] || die "more than $MAX_PAGES GraphQL pages for #$PR; stopped"
+  set -- api graphql -f query="$Q" -F owner="$OWNER" -F name="$NAME" -F pr="$PR" -F t="$t" -F r="$r" -F c="$c"
+  [ -z "$tc" ] || set -- "$@" -f tc="$tc"
+  [ -z "$rc" ] || set -- "$@" -f rc="$rc"
+  [ -z "$cc" ] || set -- "$@" -f cc="$cc"
+  f=$(printf '%s/page%03d.json' "$W" "$page")
+  gh "$@" > "$f" 2> "$W/err" || die "gh cannot read #$PR of $REPO: $(sed -n 1p "$W/err")"
+  next=$(jq -r '
+    .data.repository.pullRequest as $p
+    | if $p == null then "missing" else
+        [$p.reviewThreads, $p.reviews, $p.commits]
+        | map(if . != null and .pageInfo.hasNextPage then "true " + .pageInfo.endCursor else "false -" end)
+        | join(" ")
+      end' "$f" 2>/dev/null) || die "gh gave no JSON for #$PR of $REPO"
+  [ "$next" != missing ] || die "no pull request #$PR in $REPO"
+  # shellcheck disable=SC2086
+  set -- $next
+  t=$1; tc=$2; r=$3; rc=$4; c=$5; cc=$6
+  [ "$tc" != - ] || tc=""; [ "$rc" != - ] || rc=""; [ "$cc" != - ] || cc=""
+done
+jq -s '{
+  threads: [.[].data.repository.pullRequest.reviewThreads.nodes // [] | .[]],
+  reviews: [.[].data.repository.pullRequest.reviews.nodes // [] | .[]],
+  commits: [.[].data.repository.pullRequest.commits.nodes // [] | .[]]
+}' "$W"/page*.json > "$W/pr.json" || die "cannot merge the pages"
+
+# ---- the classification -----------------------------------------------------------
+# One jq program, two modes: "need" prints the commits whose changes are needed,
+# "rows" prints the TSV with the changed files of those commits in $files.
+JQ='
+def unbot: sub("\\[bot\\]$"; "");
+($roles | map(.bots[] | unbot)) as $botlist
+| (.commits | to_entries | map({ key: .value.commit.oid, value: { idx: .key, date: .value.commit.committedDate } }) | from_entries) as $pos
+| def isbot($a): $a != null and ($a.__typename == "Bot" or (($a.login // "") | test("\\[bot\\]$")) or ((($a.login // "") | unbot) as $l | $botlist | index([$l]) != null));
+  def role_of($s): first($roles[] | select(.marker as $m | $s | contains($m)) | .role) // null;
+  def at($oid): if $oid == null then null else $pos[$oid].idx end;
+  def range: if .originalLine != null then [(.originalStartLine // .originalLine), .originalLine]
+             elif .line != null then [(.startLine // .line), .line] else [null, null] end;
+  # The threads with their first comment, normalised.
+  [ .threads[] | .comments.nodes[0] as $c | select($c != null) | range as $rg
+    | { path, start: $rg[0], end: $rg[1], resolved: .isResolved,
+        login: (($c.author.login // "ghost") | unbot),
+        # A role marker wins over the author type: an own role may post through a GitHub App.
+        bot: (isbot($c.author) and (role_of($c.body // "") == null)),
+        body: ($c.body // ""), url: $c.url, created: $c.createdAt, pos: at($c.originalCommit.oid) } ] as $threads
+  # The own findings: threads, and review body lines with a cited line.
+  | ( [ $threads[] | select(.bot | not) | role_of(.body) as $ro | select($ro != null) | . + { role: $ro } ]
+    + [ .reviews[] | . as $rv | (.body // "") | split("\n")[]
+        | role_of(.) as $ro | select($ro != null)
+        | capture("(?<p>[A-Za-z0-9_][A-Za-z0-9_./-]*):(?<a>[0-9]+)(-(?<b>[0-9]+))?"; "g")
+        | { role: $ro, path: .p, start: (.a | tonumber), end: ((.b // .a) | tonumber),
+            created: $rv.createdAt, pos: at($rv.commit.oid) } ] ) as $own
+  | .commits as $commits
+  # Parameters are $-bound: a plain filter parameter would be evaluated against
+  # the input where it is used, not where it was passed.
+  | def later($th): [ $commits[] | .commit | select(if $th.pos != null then $pos[.oid].idx > $th.pos else .committedDate > $th.created end) | .oid ];
+    def samefile($a; $b): $a == $b or ($a | endswith("/" + $b));
+    def changed: reduce (split("\n")[]) as $l ({ o: 0, out: [] };
+        if ($l | startswith("@@")) then .o = ($l | capture("^@@ -(?<a>[0-9]+)").a | tonumber)
+        elif ($l | startswith("-")) then .out += [.o] | .o += 1
+        elif ($l | startswith("+")) then .out += [.o]
+        elif ($l | startswith("\\")) then .
+        else .o += 1 end) | .out;
+    def fixed($th):
+      any(later($th)[] as $sha | ($files[$sha] // [])[]
+          | select(.filename == $th.path or .previous_filename == $th.path);
+          $th.start == null or .patch == null
+          or any(.patch | changed[]; . >= $th.start - $margin and . <= $th.end + $margin));
+    def caught($th): first($own[] | select(samefile($th.path; .path))
+          | select($th.start == null or (.start != null and .start <= $th.end + $margin and .end >= $th.start - $margin))
+          | select(if .pos != null and $th.pos != null then .pos <= $th.pos else .created <= $th.created end) | .role) // null;
+    def title: (.body | split("\n") | map(select(test("[^ \t\r]"))) | (.[0] // ""))
+      | gsub("!\\[(?<x>[^\\]]*?) Badge\\]\\([^)]*\\)"; "\(.x)") | gsub("</?sub>"; "") | gsub("\\*\\*"; "")
+      | gsub("[ \t\r]+"; " ") | sub("^ "; "") | sub(" $"; "") | .[0:100];
+  if $mode == "need" then
+    [ $threads[] | select(.bot and .resolved) | later(.)[] ] | unique | .[]
+  else
+    "bot\tresolution\tmatch\trole\tpath\tlines\turl\ttitle",
+    ( $threads[] | select(.bot) | caught(.) as $ro
+      | [ .login,
+          (if .resolved | not then "open" elif fixed(.) then "fixed" else "rejected" end),
+          (if $ro == null then "escaped" else "caught" end), ($ro // "-"), .path,
+          (if .start == null then "-" elif .start == .end then "\(.end)" else "\(.start)-\(.end)" end),
+          .url, title ] | join("\t") )
+  end
+'
+need=$(jq -r --argjson roles "$ROLES" --argjson margin "$MARGIN" --argjson files '{}' --arg mode need "$JQ" "$W/pr.json") \
+  || die "cannot read the answer for #$PR"
+
+# ---- reads: the changes of the commits after a resolved bot thread (REST) -----------
+printf '{}' > "$W/files.json"
+for sha in $need; do
+  gh api "repos/$REPO/commits/$sha" > "$W/c.json" 2> "$W/err" || die "gh cannot read commit $sha of $REPO: $(sed -n 1p "$W/err")"
+  jq --arg sha "$sha" --slurpfile c "$W/c.json" '. + { ($sha): [ $c[0].files[]? | { filename, previous_filename, patch } ] }' \
+    "$W/files.json" > "$W/files.tmp" && mv "$W/files.tmp" "$W/files.json" || die "gh gave no JSON for commit $sha"
+done
+
+out=$(jq -r --argjson roles "$ROLES" --argjson margin "$MARGIN" --slurpfile f "$W/files.json" --arg mode rows \
+  "\$f[0] as \$files | $JQ" "$W/pr.json") || die "cannot classify #$PR"
+printf '%s\n' "$out"
+if printf '%s\n' "$out" | awk -F'\t' 'NR > 1 && $2 == "fixed" && $3 == "escaped" { f = 1 } END { exit !f }'; then exit 10; fi
+exit 0

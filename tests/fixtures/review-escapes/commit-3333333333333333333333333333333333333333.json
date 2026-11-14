@@ -1,0 +1,14 @@
+{
+  "sha": "3333333333333333333333333333333333333333",
+  "files": [
+    {
+      "filename": "src/db.ts",
+      "status": "modified",
+      "patch": "@@ -20,3 +20,3 @@\n line20\n-line21\n+line21 counted\n line22"
+    },
+    {
+      "filename": "assets/logo.png",
+      "status": "modified"
+    }
+  ]
+}

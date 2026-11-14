@@ -1,0 +1,136 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "T7"
+          },
+          "nodes": [
+            {
+              "isResolved": true,
+              "path": "src/app.ts",
+              "line": null,
+              "startLine": null,
+              "originalLine": 39,
+              "originalStartLine": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "greptile-apps"
+                    },
+                    "body": "**logic:** `total` can be undefined\tbefore the check",
+                    "url": "https://github.com/acme/shop/pull/101#discussion_r3",
+                    "createdAt": "2026-11-10T10:06:00Z",
+                    "originalCommit": {
+                      "oid": "1111111111111111111111111111111111111111"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "isResolved": true,
+              "path": "src/db.ts",
+              "line": null,
+              "startLine": null,
+              "originalLine": 20,
+              "originalStartLine": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "__typename": "User",
+                      "login": "cursor"
+                    },
+                    "body": "### Bug: retry loop never ends\n\nThe counter is not increased.",
+                    "url": "https://github.com/acme/shop/pull/101#discussion_r4",
+                    "createdAt": "2026-11-10T11:06:00Z",
+                    "originalCommit": {
+                      "oid": "2222222222222222222222222222222222222222"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "isResolved": true,
+              "path": "src/db.ts",
+              "line": null,
+              "startLine": null,
+              "originalLine": 80,
+              "originalStartLine": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "chatgpt-codex-connector"
+                    },
+                    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Close the connection**",
+                    "url": "https://github.com/acme/shop/pull/101#discussion_r5",
+                    "createdAt": "2026-11-10T10:07:00Z",
+                    "originalCommit": {
+                      "oid": "1111111111111111111111111111111111111111"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "isResolved": false,
+              "path": "src/app.ts",
+              "line": null,
+              "startLine": null,
+              "originalLine": 100,
+              "originalStartLine": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "chatgpt-codex-connector"
+                    },
+                    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Log the failed payment**",
+                    "url": "https://github.com/acme/shop/pull/101#discussion_r6",
+                    "createdAt": "2026-11-10T11:07:00Z",
+                    "originalCommit": {
+                      "oid": "2222222222222222222222222222222222222222"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "isResolved": false,
+              "path": "README.md",
+              "line": null,
+              "startLine": null,
+              "originalLine": null,
+              "originalStartLine": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "__typename": "User",
+                      "login": "docs-helper[bot]"
+                    },
+                    "body": "The README does not mention the new flag.",
+                    "url": "https://github.com/acme/shop/pull/101#discussion_r7",
+                    "createdAt": "2026-11-10T12:07:00Z",
+                    "originalCommit": {
+                      "oid": "3333333333333333333333333333333333333333"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
