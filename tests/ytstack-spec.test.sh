@@ -11,7 +11,10 @@
 #   impact  "none" closes; a named area is satisfied by a change to the area
 #           file OR to one of its sources, committed or not; nothing changed
 #           fails; a plan without the section exits 3; file names git quotes
-#           (a space, a non-ASCII byte, a rename) compare as the real names
+#           (a space, a non-ASCII byte, a rename) compare as the real names;
+#           a user-scope area file (outside the repository) is never git
+#           evidence: exit 4 "UNVERIFIABLE" with its modification time against
+#           the task's first commit, unless a source in the repository changed
 #   areas   names the area whose paths cover a path
 #
 # Run: /bin/bash tests/ytstack-spec.test.sh   (exit 0 = all pass; macOS bash 3.2)
@@ -266,6 +269,49 @@ run "$R" impact --plan "$P" --grep '^none-such:'
 eq "an uncommitted rename counts for its origin" 0 "$EC"
 has "the origin is read from its own record" "intro: docs/Übersicht.md changed (uncommitted)" "$OUT"
 ( cd "$R" && git mv "docs/Intro neu.md" "docs/Übersicht.md" ) >/dev/null 2>&1
+
+# User scope: the spec lives in ~/.ytstack/projects/<key>/, outside the
+# repository, so git cannot see an edit of the area file. HOME is a temporary
+# directory; the real home is never read or written.
+H="$TMP/home"; mkdir -p "$H"
+U="$TMP/userscope"; mkdir -p "$U/src/auth" "$U/docs"
+( cd "$U" && git init -q -b main && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false )
+echo a > "$U/src/auth/login.sh"; echo d > "$U/docs/auth.md"; commit "$U" "base"
+KEY=$(HOME="$H" bash -c '. "$1/hooks/lib/git-ctx.sh"; yt_git_ctx "$2"; printf %s "$YT_REPO_KEY"' _ "$ROOT" "$U")
+UD="$H/.ytstack/projects/$KEY"; mkdir -p "$UD/spec"
+runh() { local d="$1"; shift; OUT=$(HOME="$H" bash "$BIN" -C "$d" "$@" 2>&1); EC=$?; }
+# the area/spec helpers write to <dir>/.ytstack/spec: point one at the user-scope spec
+mkdir -p "$TMP/uwrap/.ytstack"; ln -s "$UD/spec" "$TMP/uwrap/.ytstack/spec"
+R="$TMP/uwrap"; V=$(head_of "$U")
+area "$R" auth implemented "$V" "src/auth/**"
+area "$R" docs implemented "$V" "docs/auth.md" "docs/auth.md"
+spec "$R" auth docs
+UP="$UD/M001-S01-T01-PLAN.md"
+printf -- '# plan\n\n## Spec impact\n\n- auth: Behavior -- token login\n' > "$UP"
+runh "$U" lint;               eq "user scope: the spec outside the repository passes lint" 0 "$EC"
+runh "$U" impact --plan "$UP" --grep '^M001-S01-T01:'
+eq "user scope, no task commit: unverifiable (exit 4)" 4 "$EC"
+has "says the area file is outside the repository" "UNVERIFIABLE auth: $UD/spec/auth.md lies outside the repository" "$OUT"
+has "says there is no commit to compare with" "no task commit to compare its modification time against" "$OUT"
+echo a2 > "$U/src/auth/login.sh"; commit "$U" "M001-S01-T01: token login"
+touch -t 202001010000 "$UD/spec/auth.md"
+runh "$U" impact --plan "$UP" --grep '^M001-S01-T01:'
+eq "user scope, area file older than the task: still exit 4, not a pass" 4 "$EC"
+has "says it was not modified since the first commit" "not modified since the task's first commit" "$OUT"
+printf '\ntoken login\n' >> "$UD/spec/auth.md"
+runh "$U" impact --plan "$UP" --grep '^M001-S01-T01:'
+eq "user scope, area file edited after the commit: exit 4 (recorded, not claimed as git evidence)" 4 "$EC"
+has "says it was modified after the first commit" "modified after the task's first commit" "$OUT"
+hasnt "no in-repository edit is claimed" "ok   auth" "$OUT"
+printf -- '# plan\n\n## Spec impact\n\n- docs: Behavior -- docs\n' > "$UP"
+echo d2 > "$U/docs/auth.md"; commit "$U" "M001-S01-T02: docs"
+runh "$U" impact --plan "$UP" --grep '^M001-S01-T02:'
+eq "user scope, a source in the repository changed: satisfied by git" 0 "$EC"
+has "names the source" "docs: docs/auth.md changed (committed)" "$OUT"
+printf -- '# plan\n\n## Spec impact\n\n- auth: Behavior -- x\n- ghost: Behavior -- y\n' > "$UP"
+runh "$U" impact --plan "$UP" --grep '^M001-S01-T01:'
+eq "a failure outranks unverifiable (exit 1)" 1 "$EC"
+R="$TMP/impact"
 
 # ---- 4. areas -----------------------------------------------------------------
 echo "# areas"

@@ -12,7 +12,11 @@
 # Exit codes
 #   lint    0 clean, 2 warnings only, 1 failures (or no spec)
 #   drift   0 always; with --exit-code 2 when an area is listed
-#   impact  0 satisfied or "none", 1 not satisfied, 3 the plan states no impact
+#   impact  0 satisfied or "none", 1 not satisfied, 3 the plan states no impact,
+#           4 unverifiable: an area file lies outside the repository (user
+#           scope, ~/.ytstack/projects/<key>/) and no source of it changed;
+#           the line says whether the file was modified after the task's
+#           first commit, the caller records that or asks the person
 #   areas   0 when every path has an area, 1 otherwise
 #
 # drift reports a POSSIBLE documentation impact: paths changed, the description
@@ -256,7 +260,7 @@ EOF
 
 # ---- impact --------------------------------------------------------------------
 cmd_impact() {
-  local plan="" pat="" base="" body first line area f changed committed fails=0 hit how s
+  local plan="" pat="" base="" body first line area f changed committed fails=0 unver=0 hit how s first_ct=""
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || { echo "impact: $1 needs a value" >&2; return 64; }
     case "$1" in
@@ -291,14 +295,35 @@ cmd_impact() {
   # a plan or an area file names.
   committed=""
   if [ "$YT_IS_GIT" = yes ]; then
-    [ -z "$pat" ] || committed=$(git -C "$TOP" log --no-merges -E --grep "$pat" --name-only -z --format= 2>/dev/null | nul_paths)
+    if [ -n "$pat" ]; then
+      committed=$(git -C "$TOP" log --no-merges -E --grep "$pat" --name-only -z --format= 2>/dev/null | nul_paths)
+      first_ct=$(git -C "$TOP" log --no-merges -E --grep "$pat" --format='%ct %h' 2>/dev/null | tail -1)
+    fi
     if [ -z "$committed" ] && [ -n "$base" ]; then
       committed=$(git -C "$TOP" diff --name-only -z "$base..HEAD" 2>/dev/null | nul_paths)
+      first_ct=$(git -C "$TOP" log --format='%ct %h' "$base..HEAD" 2>/dev/null | tail -1)
     fi
     changed=$(git -C "$TOP" status --porcelain -z --untracked-files=all 2>/dev/null | status_paths)
   else
     changed=""
   fi
+
+  # outside_when <file>: the file's modification time against the task's first
+  # commit ("after" includes the same second: commit times have no finer grain).
+  outside_when() {
+    local mt ct sha
+    # GNU `stat -f` prints filesystem info to stdout, so `-c` goes first.
+    mt=$(stat -c %Y "$1" 2>/dev/null) || mt=$(stat -f %m "$1" 2>/dev/null) || mt=""
+    if [ -z "$first_ct" ]; then echo "no task commit to compare its modification time against"; return; fi
+    ct=${first_ct%% *}; sha=${first_ct#* }
+    case "$mt" in ''|*[!0-9]*) echo "its modification time is unreadable"; return ;; esac
+    if [ "$mt" -ge "$ct" ]; then
+      echo "modified after the task's first commit $sha ($(utc "$mt") >= $(utc "$ct"))"
+    else
+      echo "not modified since the task's first commit $sha ($(utc "$mt") < $(utc "$ct"))"
+    fi
+  }
+  utc() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "@$1"; }
 
   # touched <path>: "committed", "uncommitted" or nothing. A directory matches
   # by prefix. Compared as literal strings, not as patterns.
@@ -336,6 +361,12 @@ $(fm_list "$f" sources)
 EOS
     if [ -n "$hit" ]; then
       echo "ok   $area: $hit changed ($how)"
+    elif [ "$(rel "$f")" = "$f" ]; then
+      # User scope: the area file is outside the repository, git has no record
+      # of its edit. Say so, with the one fact at hand: its modification time
+      # against the task's first commit. Never counted as satisfied here.
+      echo "UNVERIFIABLE $area: $f lies outside the repository, git cannot see its edit; $(outside_when "$f")"
+      unver=$((unver + 1))
     else
       echo "FAIL $area: neither $(rel "$f") nor its sources ($(fm_list "$f" sources | tr '\n' ' ' | sed 's/ $//; s/^$/none/')) changed in this task"
       fails=$((fails + 1))
@@ -344,6 +375,7 @@ EOS
 $body
 EOF
   [ "$fails" -eq 0 ] || return 1
+  [ "$unver" -eq 0 ] || return 4
   return 0
 }
 

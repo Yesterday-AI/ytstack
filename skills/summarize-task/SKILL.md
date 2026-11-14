@@ -234,6 +234,7 @@ The technical spec under `.ytstack/spec/` says what applies now (format: `docs/u
 |---|---|---|
 | `0` | The plan says `none`, or every area it names was updated: the area file **or a source it names** changed with the task. | Keep the printed lines as `_SPEC_RECORD`. Continue. |
 | `1` | The plan names an area, and neither its area file nor its sources changed. | STOP. Do not write the summary. See below. |
+| `4` | The spec lives in user scope, outside the repository: git cannot see an edit of the area file, and no source of it changed. Each such area has an `UNVERIFIABLE` line. | Every line says `modified after the task's first commit`: keep the printed lines as `_SPEC_RECORD` and continue. Any other line: ask the person once (below). |
 | `3` | The plan has no `## Spec impact` section (it was written before the field existed). | Decide now with the rule of `ytstack:plan-task` Step 7. An area changed: update it first, then continue. Otherwise `_SPEC_RECORD` is `none -- <reason>`. |
 | `not-run` with `HAS_SPEC=no` | The project has no technical spec. | `_SPEC_RECORD` is `none -- the project has no technical spec`. Continue. |
 | `not-run` with `HAS_SPEC=yes` | The script was not reachable on this host. | Do the check by hand: for each area in the plan's `## Spec impact`, the task's commits (`git log --name-only` for the commits listed above) or the working tree must contain a change to `.ytstack/spec/<area>.md` or to a path under its `sources`. Then treat the result like `0` or `1`. |
@@ -242,6 +243,22 @@ On `1` there are two honest ways forward, and no third:
 
 - **The task did change that contract.** Update the area file, or the authoritative source it names, in the task's commits. Then re-run this skill. Updating the source is enough; a pointer that is still correct is not edited.
 - **The plan was wrong and the contract did not change.** Correct the plan's `## Spec impact` to `none -- <reason>` and record the correction under Deviations in Step 5's answer. Then re-run this skill.
+
+On `4` with a line that does not say `modified after the task's first commit`, ask once with AskUserQuestion; `{BRANCH}` is the output of `git branch --show-current`, `{AREA_FILES}` the paths from the `UNVERIFIABLE` lines. With `YTSTACK_NON_INTERACTIVE: true` nobody can answer: STOP like exit `1` and report the `UNVERIFIABLE` lines.
+
+> Closing {CURRENT_MILESTONE}-{ACTIVE_SLICE}-{ACTIVE_TASK} of {PROJECT_NAME} on branch `{BRANCH}`. Its plan says the task changes spec areas whose files live in your home directory, outside the repository: {AREA_FILES}.
+>
+> Git only sees files inside the repository, so it cannot show whether those descriptions were updated. You know whether you edited them.
+>
+> RECOMMENDATION: Choose B unless you edited those files for this task, because a summary that claims an update nobody made misleads every later session.
+>
+> A) Yes, the files describe the change now -- recorded as confirmed by you
+>    Completeness: 9/10, effort: human: 0 / CC: 0, tier: task
+>
+> B) No, not yet -- the task stays open until they are updated
+>    Completeness: 10/10, effort: human: ~5m / CC: ~2m, tier: task
+
+On A, `_SPEC_RECORD` is the printed lines plus `confirmed by the person: the area file was updated`. On B, STOP like exit `1`. Do not edit a file inside the repository to produce git evidence for an edit outside it.
 
 A sentence in the summary does not satisfy the check, and neither does an edit that changes no statement. A task whose plan says `none` closes without any spec edit: a bug fix that restores the described behaviour, a refactoring and a trivial change need none.
 
@@ -366,6 +383,7 @@ Valid terminal states:
 - Abort on HARD-GATE failure (no active task / missing plan file)
 - Abort on verification failure (C in Step 7) -- task stays open
 - Abort on an unmet spec impact (Step 8) -- task stays open until the area file or its source is updated, or the plan's impact is corrected
+- Abort on an unverifiable user-scope area the person did not confirm (Step 8, exit `4`, answer B or non-interactive)
 
 Do NOT invoke `plan-task`, `reassess-roadmap`, or `plan-milestone` automatically -- except under `AUTONOMY: loop` (PREFERENCES default, M018): when the slice still has unplanned or open tasks, continue with `ytstack:plan-task` for the next one without asking; when this summary closed the slice's last task, stop and recommend `ytstack:reassess-roadmap` (slice boundary). With `AUTONOMY: step` return control after the report.
 

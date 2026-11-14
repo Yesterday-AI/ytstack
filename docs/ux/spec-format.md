@@ -148,6 +148,8 @@ One line per area: `- <area>: <section> -- <what changes>`. The reason after `no
 
 `summarize-task` runs `bin/ytstack-spec impact` on the plan and the task's commits. For each area the plan names, the impact is satisfied when the task's commits changed **the area file or one of its `sources`**. It is not satisfied by a sentence in the summary. A plan with `none` closes without any spec edit.
 
+A spec in user scope (`~/.ytstack/projects/<key>/spec/`) lies outside the repository, and git has no record of an edit there. When no source of a named area changed in the repository, `impact` exits 4 and reports the area as **unverifiable**, with the area file's modification time against the task's first commit. `summarize-task` records that line when the file was modified after the first commit, and otherwise asks the person once whether the area file was updated. It never counts the edit as git evidence.
+
 The summary records what was updated under `## Spec`: the area, the file and section, or `none` with the plan's reason.
 
 ### Drift

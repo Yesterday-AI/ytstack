@@ -134,6 +134,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A spec in user scope (`~/.ytstack/projects/<key>/`) no longer blocks
+  `summarize-task`: `bin/ytstack-spec impact` reports its area as
+  unverifiable (exit 4) with the area file's modification time against the
+  task's first commit, and the skill records that or asks the person once.
 - `bin/ytstack-spec impact` reads git's path records NUL-delimited, so a
   source with a space or a non-ASCII byte in its name counts as changed,
   committed or not.
