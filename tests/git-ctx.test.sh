@@ -373,6 +373,10 @@ eq "standing: in force, newest first, superseded skipped, README ignored" \
 printf -- '---\ngiven: 2026-11-14T15:00:00Z\nscope: x\nsupersedes: "20261114T1300Z-results-only.md"\n---\n\nStatus at slice boundaries.\n' > "$ST/standing/20261114T1500Z-boundaries.md"
 eq "standing: supersedes with quotes and .md also skips" 2 "$(st "$ST" | grep -c .)"
 case "$(st "$ST")" in *results-only*) bad "standing: the quoted supersedes target is gone";; *) ok "standing: the quoted supersedes target is gone";; esac
+ST2="$TMP/st2/.ytstack"; mkdir -p "$ST2/standing"
+printf -- '---\ngiven: 2026-11-14T12:25:00Z\nscope: x\nsupersedes:\n---\n\nOld.\n' > "$ST2/standing/20261114T1225Z-old.md"
+printf -- '---\ngiven: 2026-11-14T12:25:30Z\nscope: x\nsupersedes:\n---\n\nNew.\n' > "$ST2/standing/20261114T122530Z-new.md"
+eq "standing: optional seconds sort as :00 (12:25:30 before 12:25)" "20261114T122530Z-new.md 20261114T1225Z-old.md" "$(st "$ST2" | cut -f1 | tr '\n' ' ' | sed 's/ $//')"
 
 echo
 echo "$PASS passed, $FAIL failed"
