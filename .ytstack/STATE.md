@@ -1,8 +1,8 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T19:00:00Z
-current_milestone: M030
+last_updated: 2026-11-14T19:10:00Z
+current_milestone: none
 active_slice: none
 active_task: none
 ---
