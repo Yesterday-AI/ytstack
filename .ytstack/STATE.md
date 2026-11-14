@@ -1,7 +1,7 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T09:20:00Z
+last_updated: 2026-11-14T09:38:41Z
 current_milestone: none
 active_slice: none
 active_task: none
@@ -9,7 +9,7 @@ active_task: none
 
 # State
 
-**Status (2026-11-14):** M028 DONE on branch `gstack-inline`: the six gstack skills are ytstack's own self-contained adaptations (no gstack install, nothing registered in `~/.claude/skills/`), each with a `metadata.upstream` baseline, synced to gstack v1.99.3.0 with the new `bin/ytstack-gstack-diff`; the sync check is part of every release (AGENTS.md, CONTRIBUTING). 13 suites green, checker without failures, Codex tests OK, `claude plugin validate .` passed. Unreleased; the adapted skills have not yet run end to end in a real session. `current_milestone: none` on this branch because M022-M027 (open PRs #37/#38) and M020 (main checkout) are on other lines.
+**Status (2026-11-14):** M028 DONE, merged (PRs #39 and #40 with the review fixes) and released as 0.6.0: the six gstack skills are ytstack's own self-contained adaptations (no gstack install, nothing registered in `~/.claude/skills/`), each with a `metadata.upstream` baseline, synced to gstack v1.99.3.0 with the new `bin/ytstack-gstack-diff`; the sync check is part of every release (AGENTS.md, CONTRIBUTING). 13 suites green, checker without failures, Codex tests OK, `claude plugin validate .` passed. Release check: `bin/ytstack-gstack-diff --stat` against the live upstream exit 0 (gstack v1.99.3.0 is the newest tag). The adapted skills have not yet run end to end in a real session. `current_milestone: none` on this branch because M022-M027 (open PRs #37/#38) and M020 (main checkout) are on other lines.
 
 **Previous status (2026-11-11):** M021 DONE and merged as `b9daa42` (PR #32, issue #31 closed; review follow-up for ref selection and the `set -e` snippet in the next PR): `bin/ytstack-status` status line segment, optional `progress` block in the STATE frontmatter, `yt_progress_parse` + lint W7, upkeep in `summarize-task` / `quick-task`, `docs/statusline.md`. 13 suites green on macOS, checker 27 warnings as on `main`, `claude plugin validate .` passed. CI green on `main` (macOS and ubuntu). Released as 0.5.0 (manifests, badge and CHANGELOG in the follow-up PR; tag `v0.5.0` on its merge commit). M020 (Kimi adapter, issue #30) is planned in the main checkout and uncommitted there; it is the next pointer once both lines meet.
 
