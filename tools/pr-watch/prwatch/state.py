@@ -74,7 +74,44 @@ def enqueue(db, key, watch, message):
                (key, watch['repo'], watch['number'], watch['session'], message, time.time()))
 
 
+def handover_key(session):
+    return f'handover:{session}'
+
+
+def successor(db, session):
+    """The session a handover moved `session` to, followed to its end; `session` itself without one."""
+    seen = {session}
+    while True:
+        row = db.execute('SELECT value FROM meta WHERE key=?', (handover_key(session),)).fetchone()
+        if not row or row['value'] in seen:
+            return session
+        session = row['value']
+        seen.add(session)
+
+
+def handover(db, source, target):
+    """Hand every watch of `source` to `target`, with its undelivered notices, branch bindings and
+    candidates, and forward later registrations for `source` to `target` (a rotating coordinator
+    whose subagents still run). Returns the moved watches and the number of moved notices."""
+    moved = [(r['repo'], r['number']) for r in db.execute(
+        'SELECT repo, number FROM watches WHERE session=? ORDER BY repo, number', (source,))]
+    db.execute('UPDATE watches SET session=? WHERE session=?', (target, source))
+    # A Codex notice with a dispatch_id may already have started a turn: it stays (never sent twice).
+    notices = db.execute("UPDATE outbox SET session=?, error='' WHERE session=? AND delivered IS NULL "
+                         "AND cancelled IS NULL AND dispatch_id IS NULL", (target, source)).rowcount
+    for table in ('bindings', 'candidates'):
+        db.execute(f'UPDATE OR IGNORE {table} SET session=? WHERE session=?', (target, source))
+        db.execute(f'DELETE FROM {table} WHERE session=?', (source,))
+    # The target is live again (handing back), the source points at it.
+    db.execute('DELETE FROM meta WHERE key=?', (handover_key(target),))
+    db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (handover_key(source), target))
+    # The successor's next prompt shows the status block.
+    db.execute('DELETE FROM meta WHERE key=?', (f'surface:{target}',))
+    return moved, notices
+
+
 def register(db, repo, number, session, cwd):
+    session = successor(db, session)
     if session.startswith('claude:'):
         # Heal a watch an older CLI stored under the bare Claude id (taken for a Codex thread).
         bare = session[len('claude:'):]

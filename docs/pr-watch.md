@@ -70,6 +70,7 @@ Code, Codex and the worker, and stays the same across plugin updates.
 bin/ytstack-pr-watch create --repo OWNER/REPO --session SESSION_ID --cwd WORKTREE -- --title "..." --body-file body.md
 bin/ytstack-pr-watch register --repo OWNER/REPO --pr 123 --session SESSION_ID --cwd WORKTREE
 bin/ytstack-pr-watch register --repo OWNER/REPO --all-open   # every open PR, for this session
+bin/ytstack-pr-watch handover --from OLD_SESSION_ID          # take over another session's watches
 bin/ytstack-pr-watch pause --repo OWNER/REPO --pr 123     # and resume
 bin/ytstack-pr-watch inspect --repo OWNER/REPO --pr 123   # read only, registers nothing
 bin/ytstack-pr-watch status
@@ -97,6 +98,29 @@ are keyed by host: a bare id is a Codex thread, so a Claude id without its
 `claude:` prefix was once stored as one and its notices never arrived. The CLI
 now qualifies the current Claude session's bare id, and `register` moves a
 watch stored under that bare id, with its undelivered notices, to `claude:<id>`.
+
+### Handing the watches to a successor session
+
+`register` refuses a PR another session owns, so a coordinator that rotates to
+a fresh session would leave its watches behind: the successor's
+`register --all-open` skips every one of them by name. The successor takes
+them over in one call instead:
+
+```bash
+bin/ytstack-pr-watch handover --from claude:<old session id>   # --to defaults to this session
+```
+
+It moves every watch of the old session to the new one, together with the
+notices not delivered yet (a Codex notice whose turn may already have started
+stays, so it is never sent twice), the branch bindings and the candidates, and
+resets the new session's status fingerprint so its next prompt shows the block.
+It also records the new session as the successor of the old one: a PR that a
+still-running subagent of the old session opens later is registered to the new
+session, and so is an explicit `register` for the old one. Handovers chain
+(old to new to third), and a handover back to an earlier session makes it the
+owner again. The old session's id is in its SessionStart context ("This session
+is ...") and in `status`; a coordinator writes it into its handoff when it
+rotates (`skills/coordinate/SKILL.md`, Step 12).
 
 ## Delivery: Claude Code pulls, Codex is woken
 

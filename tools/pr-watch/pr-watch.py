@@ -16,7 +16,7 @@ if sys.version_info < (3, 9):
 
 from prwatch import admin, claude, github
 from prwatch.hooks import handle
-from prwatch.state import cli, connect, register, policy
+from prwatch.state import cli, connect, handover, register, policy, successor
 from prwatch.worker import tick
 
 
@@ -47,6 +47,10 @@ def main():
     create.add_argument('--session', default=default_session)
     create.add_argument('--cwd', default=os.getcwd())
     create.add_argument('gh_args', nargs=argparse.REMAINDER)
+    move_to = sub.add_parser('handover', help='Hand every watch of a session to its successor (a rotating '
+                                              'coordinator); later registrations for it follow')
+    move_to.add_argument('--from', dest='source', required=True, metavar='SESSION')
+    move_to.add_argument('--to', dest='session', default=default_session, metavar='SESSION')
     for command in ('pause', 'resume'):
         p = sub.add_parser(command, help=f'{command.capitalize()} notices for a watched PR')
         p.add_argument('--repo', required=True)
@@ -68,6 +72,8 @@ def main():
     own = os.environ.get('CLAUDE_CODE_SESSION_ID')
     if own and getattr(args, 'session', None) == own:
         args.session = claude.qualify(own)
+    if own and getattr(args, 'source', None) == own:
+        args.source = claude.qualify(own)
     if args.command == 'hook':
         try:
             result = handle(json.load(sys.stdin), args.host)
@@ -125,7 +131,20 @@ def main():
     else:
         db = connect()
         with db:
-            if args.command == 'register' and args.all_open:
+            if args.command == 'register' and args.session:
+                # A session that was handed over registers for its successor; say so in the output.
+                args.session = successor(db, args.session)
+            if args.command == 'handover':
+                if not args.session:
+                    parser.error('--to or CODEX_THREAD_ID required')
+                if args.source == args.session:
+                    parser.error('--from and --to name the same session')
+                moved, notices = handover(db, args.source, args.session)
+                print(f'{len(moved)} watches handed over from {args.source} to {args.session}'
+                      + (': ' + ' '.join(f'{repo}#{number}' for repo, number in moved) if moved else ''))
+                print(f'{notices} pending notice{"" if notices == 1 else "s"} moved; '
+                      f'later registrations for {args.source} go to {args.session}')
+            elif args.command == 'register' and args.all_open:
                 if not args.session:
                     parser.error('--session or CODEX_THREAD_ID required')
                 # One paginated list call (one REST call per 100 open PRs).

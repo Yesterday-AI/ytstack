@@ -6,6 +6,7 @@
 #   ytstack-pr-watch install-worker [--yes]           60-second background worker (macOS launchd)
 #   ytstack-pr-watch uninstall-worker [--yes]         remove the worker, keep state
 #   ytstack-pr-watch migrate --from DIR [--yes]       copy the state of an existing local install
+#   ytstack-pr-watch handover --from SESSION [--to SESSION]   hand a session's watches to its successor
 #   ytstack-pr-watch status | register | create | inspect | pause | resume | tick | hook
 #
 # Without --yes the setup commands print their plan and write nothing.
