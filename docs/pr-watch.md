@@ -15,8 +15,10 @@ Reported to the session that created the PR, once per occurrence:
 - a failed check run or commit status on the current head (checks of the review bots named in the policy excluded)
 - an unresolved review thread whose first comment is from a bot (or a reviewer login from the policy), outdated threads included
 - a merge conflict, when GitHub returns `mergeable: false`
-- a merge, once per PR: "PR merged; if this project declares own reviewers,
-  run ytstack:review-lessons for #N". The worker does not know projects, so
+- a merge, once per PR, when the watch saw at least one bot finding on it:
+  "PR merged; if this project declares own reviewers, run
+  ytstack:review-lessons for #N". A PR without a bot finding has nothing an
+  own reviewer could have missed, so it gets no suggestion. The worker does not know projects, so
   the notice is conditional; the session checks `## Own reviewers` in
   `.ytstack/spec/REVIEW.md` (`docs/ux/review-policy-format.md`, "Escapes").
   It comes from the read that saw the PR closed as merged, costs no GitHub call
@@ -106,6 +108,15 @@ worker tick old and the agent re-reads GitHub before acting. A session that
 owns no open watch gets no output. A red check therefore reaches the agent with
 the next prompt, not on its own.
 
+The status block is injected only when one of its lines changed since the last
+injection in that session (ages do not count), or with a pending notice; a
+session that gets many prompts from background agents sees it once per change,
+not once per prompt. SessionStart (start, resume, compaction) resets this, so
+the next prompt shows the block again. When the session pushes to a watched
+PR's branch (`git push` seen by the PostToolUse hook in a bound worktree), the
+line says `head moved by a push ... ago, not yet polled` instead of the old
+head's findings, and the worker reads that PR on its next tick.
+
 **Codex.** The worker talks to the running Codex app server over its local
 socket and starts a turn in the owning thread when that thread is idle, after a
 fresh GitHub read and a second idle check. Busy or unloaded threads keep the
@@ -182,7 +193,6 @@ finish before a PR counts as ready. Start from
         {"login": "cursor", "app": "cursor", "check": "Cursor Bugbot"},
         {"login": "greptile-apps", "completion": "review"}
       ],
-      "optional_skipped_checks": ["browser-tests"],
       "label_required_checks": [{"label": "preview", "name": "Build preview"}]
     }
   }
@@ -191,14 +201,14 @@ finish before a PR counts as ready. Start from
 
 - A reviewer with `check` and `app` is done when that check run succeeded on the current head.
 - A reviewer with `completion: "review"` is done when it submitted a review on the current head that is not a quota or failure notice.
-- `optional_skipped_checks`: a skipped check that is not required does not block.
+- A skipped or neutral check run that is neither required (branch rules or a label) nor a review bot's check does not block: workflows that skip jobs by change class report their normal green state that way. A required check or a review bot's check that was skipped still blocks. The older key `optional_skipped_checks` is no longer needed and is ignored.
 - `label_required_checks`: with the label set, the check must exist and pass.
 
 Without a policy entry a repository still gets notices, but its PRs stay
 `waiting` ("Expected review bots not configured"). An explicit empty
 `reviewers` list with `review_policy_configured: true` means no bot review.
-Neutral results, quota notices, missing checks and API errors never count as
-green.
+Neutral or skipped results of required and review-bot checks, quota notices,
+missing checks and API errors never count as green.
 
 ## Migrating from a local install
 
