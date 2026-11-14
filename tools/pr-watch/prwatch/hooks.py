@@ -45,10 +45,14 @@ def git_binding(cwd):
 
 
 def remote_head(cwd, branch):
-    """The SHA a push left in the remote-tracking ref of `branch`, or '' (local, no GitHub call)."""
-    p = subprocess.run(['git', '-C', cwd, 'rev-parse', '--verify', '-q', f'refs/remotes/origin/{branch}'],
-                       capture_output=True, text=True, timeout=3)
-    return p.stdout.strip() if p.returncode == 0 else ''
+    """The SHA a push left in the remote-tracking ref of `branch` (local, no GitHub call). A clone
+    with a narrow fetch refspec has no such ref even after a push; then the local branch head."""
+    for ref in (f'refs/remotes/origin/{branch}', f'refs/heads/{branch}'):
+        p = subprocess.run(['git', '-C', cwd, 'rev-parse', '--verify', '-q', ref],
+                           capture_output=True, text=True, timeout=3)
+        if p.returncode == 0 and p.stdout.strip():
+            return p.stdout.strip()
+    return ''
 
 
 def handle(payload, host='codex'):

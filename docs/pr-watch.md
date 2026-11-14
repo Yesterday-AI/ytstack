@@ -114,7 +114,8 @@ session that gets many prompts from background agents sees it once per change,
 not once per prompt. SessionStart (start, resume, compaction) resets this, so
 the next prompt shows the block again. When the session pushes to a watched
 PR's branch (`git push` seen by the PostToolUse hook in a bound worktree, and
-the branch's remote-tracking ref then differs from the watched head), the
+the branch's remote-tracking ref, or the local branch where a narrow fetch
+refspec keeps none, then differs from the watched head), the
 line says `head moved by a push ... ago, not yet polled` instead of the old
 head's findings, and the worker reads that PR on its next tick.
 

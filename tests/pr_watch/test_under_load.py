@@ -89,6 +89,19 @@ class UnderLoad(unittest.TestCase):
         self.push('echo "git push later"', remote='')
         self.assertIsNone(self.watch_row()['pushed_at'])
 
+    def test_remote_head_falls_back_to_the_local_branch_without_a_tracking_ref(self):
+        # A --single-branch clone keeps no refs/remotes/origin/<new branch> after `git push -u`.
+        import subprocess, tempfile as tf
+        with tf.TemporaryDirectory() as repo:
+            git = lambda *a: subprocess.run(['git', '-C', repo, *a], capture_output=True, text=True, check=True).stdout.strip()
+            git('init', '-q', '-b', 'feat')
+            git('-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false',
+                'commit', '-q', '--allow-empty', '-m', 'x')
+            self.assertEqual(hooks.remote_head(repo, 'feat'), git('rev-parse', 'HEAD'))
+            git('update-ref', 'refs/remotes/origin/feat', 'HEAD')
+            self.assertEqual(hooks.remote_head(repo, 'feat'), git('rev-parse', 'HEAD'))
+            self.assertEqual(hooks.remote_head(repo, 'nope'), '')
+
     def test_push_of_another_bound_branch_changes_nothing(self):
         self.start()
         payload = {'session_id': 'abc', 'hook_event_name': 'PostToolUse', 'cwd': '/tmp', 'tool_name': 'Bash',
