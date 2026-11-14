@@ -145,9 +145,38 @@ Rules:
 
 `bin/ytstack-questions list` prints the open and asked ones; `check` validates the files.
 
-## `STANDING.md` -- what the human asked for once and for all
+## `standing/` -- what the human asked for once and for all
 
 An instruction that holds beyond the task at hand ("never merge without my word", "status only at slice boundaries") is written down when it is given, because a summary after a compaction does not keep it.
+
+One file per instruction: `.ytstack/standing/<YYYYMMDDTHHMMZ>-<slug>.md`, the UTC time it was given and a lowercase slug. Two pull requests that each add an instruction add two files and never touch the same line.
+
+```markdown
+---
+given: 2026-11-13T09:05:00Z
+scope: every lane of this project
+supersedes: 20261112T1640Z-review-every-push
+---
+
+One review per lane, a second only for the fix.
+```
+
+| Key | Holds |
+|---|---|
+| `given` | The UTC time, ISO (`YYYY-MM-DDTHH:MMZ`, seconds optional). The same minute as the file name, whose time orders the entries; missing seconds count as `00`. |
+| `scope` | Where the instruction applies. Not empty. |
+| `supersedes` | Empty, or the file name (without `.md`) of the earlier entry this one replaces. |
+
+Rules:
+
+- Own words, never a quotation. The body is the instruction.
+- An entry is not edited after it is written and nothing is deleted. An instruction that replaces another is a new file whose `supersedes` names the old one; from then on the old one no longer holds.
+- Readers take the entries newest first and skip every entry that another entry supersedes. `yt_standing` in `hooks/lib/git-ctx.sh` prints them; the preambles of `coordinate`, `finish-lane` and `signal-intake` list them between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END`. The coordinator reads every listed file at every start and after every compaction, before it acts.
+- A `README.md` in the directory is a note for people and is not an entry.
+
+### `STANDING.md`
+
+The single file of earlier versions stays valid. A project without `standing/` keeps it as it was: one line per instruction, time, the instruction, its scope; a replaced line is struck through and dated.
 
 ```markdown
 # Standing instructions
@@ -156,7 +185,7 @@ An instruction that holds beyond the task at hand ("never merge without my word"
 - 2026-11-12T16:40Z -- ~~Reviews run on every push.~~ Superseded 2026-11-13T09:05Z: one review per lane, a second only for the fix.
 ```
 
-Own words, never a quotation. One line each: time, the instruction, its scope. The coordinator reads the file at every start and after every compaction, before it acts.
+Where both exist, both are read: `STANDING.md` may be a short index that points at the directory, and lines it still holds keep holding. New instructions go into `standing/`; the coordinator appends to `STANDING.md` only in a project that has no `standing/` directory yet.
 
 ## Checked mechanically
 
@@ -164,3 +193,4 @@ Own words, never a quotation. One line each: time, the instruction, its scope. T
 - `bin/ytstack-questions check`: ids are unique and match the file name, `state` holds a listed value, `asked` and `answered` are set exactly when the state says so, an answered file has text under `## Answer`.
 - `bin/ytstack-brief check`: the report labels, the three `Status:` values and their consistency with `Blockers:`.
 - `bin/ytstack-handover check`: the staged script of a human-only step (see `skills/handover-step/SKILL.md`).
+- `bin/ytstack-check --standing [<project dir>]`: every entry in `standing/` has a name of the form above with a date and time that exist, `given` as an existing ISO UTC time in the minute of its name, a `scope` and a body, and every `supersedes` names an earlier entry that exists (missing seconds count as `00`). Without a directory argument it resolves `.ytstack` like the skill preambles, user scope included.

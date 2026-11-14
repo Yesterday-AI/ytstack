@@ -3,7 +3,7 @@ name: handover-step
 description: "Prepares a step that only the human may perform (a production action, a check in a GUI application, anything behind their credentials or their eyes) as one staged script they start with one short command. Use when the plan, a gate or a standing instruction reserves a step for the human, or when the user says hand this over, prepare the production step, give me a script for it. Not for a step the agent may do itself, and not for a decision only the human can take (that is a question file under .ytstack/questions/, written with bin/ytstack-questions)."
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.1.1
 allowed-tools:
   - Bash
   - Read
@@ -131,7 +131,7 @@ echo "HANDOVER_FILES_END"
 
 ### Step 2: Establish the step
 
-Read the plan that names the step (the task plan, the slice plan with its `## Gates`, `DECISIONS.md`, `.ytstack/STANDING.md` when it exists). Write down, in one sentence each, what the step is and why it is the human's. It is the human's when one of these holds:
+Read the plan that names the step (the task plan, the slice plan with its `## Gates`, `DECISIONS.md`, the standing instructions: the files in `.ytstack/standing/` that no other entry supersedes and `.ytstack/STANDING.md`, where they exist). Write down, in one sentence each, what the step is and why it is the human's. It is the human's when one of these holds:
 
 - the plan, a gate or a standing instruction reserves it ("never deploy without me");
 - it needs credentials you do not hold and must not be given;

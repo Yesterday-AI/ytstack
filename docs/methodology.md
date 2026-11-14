@@ -87,7 +87,7 @@ The external source distinguishes multiple agent types with specific roles. We d
 
 Coordinator mode (`coordinate`, `finish-lane`, `handover-step`, `lane-retro`, `bin/ytstack-frontier`, `bin/ytstack-questions`, `docs/ux/coordinator-format.md`) adapts concepts from that collection, reviewed at `4ae2317`:
 
-- A coordinating session whose memory outlives it, written as history (`LANES.md`, `STANDING.md`)
+- A coordinating session whose memory outlives it, written as history (`LANES.md`, the standing instructions in `standing/`)
 - Blocking edges and a frontier of ready work, a claim before any work
 - A brief with checkable completion criteria (`bin/ytstack-brief`)
 - A staged script for a step only the human may perform (`handover-step`)

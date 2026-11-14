@@ -370,7 +370,7 @@ Milestone states are data, not prose: `planned`, `in-progress`, `done`, `dropped
 | `ytstack:visual-review` | the lens reviewer of a user interface change: starts the product at the reviewed commit, operates it in a browser, its own screenshots against your guidelines; `not run` when it cannot, never a pass |
 | `ytstack:handover-step`, `bin/ytstack-handover` | a step only you may perform arrives as one staged script with read-only checks, a confirmation before every change and a receipt; the agent checks it and never runs it |
 | `.ytstack/questions/`, `bin/ytstack-questions` | one file per question for you, asked once, decision-ready |
-| `.ytstack/STANDING.md` | what you asked for once and for all, written down when you say it |
+| `.ytstack/standing/`, `bin/ytstack-check --standing` | what you asked for once and for all, written down when you say it: one file per instruction, a newer one supersedes an older one by name; `.ytstack/STANDING.md` alone stays valid |
 | `bin/ytstack-watch` | polls pull requests outside the model and prints a line only when something changed; `release --commit <sha>` follows a merged commit until the target serves it and stays healthy, and prints one receipt |
 | `ytstack:lane-retro` | samples finished lanes; a mechanical mistake becomes a check that replaces an instruction line |
 | `bin/ytstack-upkeep` | one read-only run over `.ytstack/` that lists what needs a look (spec, STATE, gates, questions, lanes, runtime, review policy); `--question` leaves one question file. On a schedule: [`docs/recipes/recurring-upkeep.md`](./docs/recipes/recurring-upkeep.md) |

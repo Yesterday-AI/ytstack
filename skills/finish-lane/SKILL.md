@@ -3,7 +3,7 @@ name: finish-lane
 description: "Takes a delegated lane from the worker's report to a pull request merged at the reviewed commit, with every gate read from the host. Use in the coordinating session when a lane reported and its work has to become a merged pull request, or when the user says finish the lane, land this lane, get this lane merged. Not for the session's own branch (finish-branch), not for a release (ship) and not for the worker of the lane."
 metadata:
   tier: task
-  version: 0.3.0
+  version: 0.3.1
 allowed-tools:
   - Bash
   - Read
@@ -137,6 +137,12 @@ echo "FINISH_TOOL: ${_TOOL:-missing}"
 echo "MERGE_BY: $_MERGE_BY"
 [ -n "$_MERGE_BY_NOTE" ] && echo "MERGE_BY_NOTE: $_MERGE_BY_NOTE"
 echo "STANDING: $([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STANDING.md" ] && echo "$_YT_DIR/STANDING.md" || echo none)"
+# One file per standing instruction (.ytstack/standing/): the ones in force, newest first.
+echo "STANDING_ENTRIES_BEGIN"
+if [ -n "$_YT_DIR" ] && [ -d "$_YT_DIR/standing" ]; then
+  command -v yt_standing >/dev/null 2>&1 && yt_standing "$_YT_DIR" || echo "list $_YT_DIR/standing/ yourself: newest first, skip superseded"
+fi
+echo "STANDING_ENTRIES_END"
 # Own reviewers in REVIEW.md (M030): after its own merge this skill runs the escape check.
 _RISK="${CLAUDE_SKILL_DIR}/../../bin/ytstack-risk"; [ -f "$_RISK" ] || _RISK=$(command -v ytstack-risk 2>/dev/null)
 echo "OWN_REVIEWERS: $([ -n "$_RISK" ] && [ -n "$(bash "$_RISK" -C "$_PROJECT_DIR" reviewers 2>/dev/null)" ] && echo yes || echo no)"
@@ -165,7 +171,7 @@ In the calls below `{WT}` is the lane's worktree: the `Worktree` cell of its row
 
 `MERGE_BY` is the project's `merge_by:` in `PREFERENCES.md`: `risk` (the default), `human` or `coordinator`. Step 11 says what each means.
 
-If `STANDING` names a file, read it in full now, before anything is pushed. Its lines are what the human asked for once and for all; they override the defaults of this skill: who merges, when a status is due, a cap on open pull requests.
+Read the standing instructions in full now, before anything is pushed: every file listed between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END` (newest first; superseded entries are not listed) and the file `STANDING` names, if any. They are what the human asked for once and for all; they override the defaults of this skill: who merges, when a status is due, a cap on open pull requests.
 
 ### Step 3: Read the report, commit leftovers
 

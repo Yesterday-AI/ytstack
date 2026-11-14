@@ -1061,3 +1061,26 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** SessionStart and PostCompact prepare pending context; UserPromptSubmit emits and removes it at most once. PreCompact and SessionEnd delegate to the shared scripts. Document the tested versions and host limits, including headless SessionEnd #4380, interactive Ctrl+C-twice close and unverified web close paths. Do not add a Kimi `extra_skill_dirs` requirement or external gstack install.
 
 **Supersedes:** The user-level setup proposed in issue #30. The 2026-11-09 shared-source rule and the 2026-11-14 in-tree gstack adaptations remain in force.
+
+---
+
+## 2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/`; `STANDING.md` stays valid (issue #57)
+
+**Context:** In a busy repository almost every coordinator pull request appended a line to `STANDING.md`. The appends land at the end of the same file, so parallel pull requests conflicted there, and a private repository on the Team plan has no merge queue to absorb it. A consumer (meinKontext) had already moved its instructions to `.ytstack/standing/<YYYYMMDDTHHMMZ>-<slug>.md` with the frontmatter `given`, `scope`, `supersedes` and kept `STANDING.md` as an index, while `coordinate` still read only `STANDING.md`.
+
+**Options considered:**
+- A) Keep the single file and rely on a merge queue or on rebasing each pull request.
+- B) One file per instruction in `.ytstack/standing/`, the shape `questions/` already has, with `STANDING.md` still read where it exists.
+- C) One file per instruction and `STANDING.md` rendered from them on demand.
+
+**Chose:** B, in the consumer's format, so that its files pass unchanged. Name `<YYYYMMDDTHHMMZ>-<slug>.md` (UTC, seconds optional, lowercase slug). Frontmatter `given` (ISO UTC in the minute of the name), `scope` (not empty), `supersedes` (empty, or the name of an earlier entry without `.md`). The body is the instruction. An entry is never edited; a replacement is a new file that supersedes the old one.
+
+**Reason:** Two pull requests that each add an instruction add two files and cannot conflict. Superseding by name keeps the history that a struck-through line kept, without editing an old line. A rendered `STANDING.md` (C) would bring the conflict back on every render.
+
+**How to apply:**
+- Readers (`coordinate`, `finish-lane`, `signal-intake`, `handover-step`, `review-lessons`) take the entries newest first and skip every superseded one (`yt_standing` in `hooks/lib/git-ctx.sh`), and still read `STANDING.md` where it exists, also when it is only an index.
+- `coordinate` writes a new instruction as a new file, also in a project that has neither form yet. It appends to `STANDING.md` only in a project that has `STANDING.md` and no `standing/` directory.
+- `bin/ytstack-risk` routes a change under `.ytstack/standing/` to a person, like `STANDING.md`.
+- `bin/ytstack-check --standing [<project dir>]` validates the names, the frontmatter and that every `supersedes` names an earlier existing entry; the full run checks the plugin's own directory.
+
+**Supersedes:** None. Extends the 2026-11-13 coordinator-mode entry: `STANDING.md` is no longer the only place for standing instructions.

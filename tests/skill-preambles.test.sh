@@ -245,6 +245,20 @@ for s in $SKILLS; do
       run_pre "$P" "$WT"
       has "$s: task-ref commit -> COMMITS_SOURCE task-ref" "$OUT" "COMMITS_SOURCE: task-ref"
       case "$OUT" in *"BASE_SHA: none"*) bad "$s: task-ref commit -> BASE_SHA resolved";; *) ok "$s: task-ref commit -> BASE_SHA resolved";; esac ;;
+    coordinate)
+      # standing instructions, one file per entry (issue #57); STANDING.md alone stays valid
+      has "$s: no standing directory" "$OUT" "STANDING: no"
+      has "$s: and no entries" "$OUT" "no standing directory"
+      mkdir -p "$WT/.ytstack/standing"
+      printf -- '---\ngiven: 2026-11-14T12:25:00Z\nscope: every author\nsupersedes:\n---\n\nAt most 10.\n' > "$WT/.ytstack/standing/20261114T1225Z-at-most-ten.md"
+      printf -- '---\ngiven: 2026-11-14T14:36:00Z\nscope: every lane\nsupersedes: 20261114T1225Z-at-most-ten\n---\n\nAt most 15.\n' > "$WT/.ytstack/standing/20261114T1436Z-at-most-fifteen.md"
+      printf '# Standing instructions\n\nSee standing/.\n' > "$WT/.ytstack/STANDING.md"
+      run_pre "$P" "$WT"
+      has "$s: STANDING.md as an index is still named" "$OUT" "STANDING: yes"
+      has "$s: the entry in force is listed" "$OUT" "STANDING_ENTRIES_BEGIN
+20261114T1436Z-at-most-fifteen.md	2026-11-14T14:36:00Z	every lane
+STANDING_ENTRIES_END"
+      rm -rf "$WT/.ytstack/standing" "$WT/.ytstack/STANDING.md" ;;
     finish-lane)
       # who merges (M025): risk unless PREFERENCES says otherwise; a typo reads as human
       has "$s: no merge_by in PREFERENCES -> risk" "$OUT" "MERGE_BY: risk"

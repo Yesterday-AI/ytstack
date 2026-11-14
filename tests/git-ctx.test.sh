@@ -355,6 +355,29 @@ eq "find: backlog subdirs"      1 "$(fa "$FA" 'item.md' | grep -c .)"
 eq "find: specific plan missing -> empty" "" "$(fa "$FA" 'M009-S01-T01-PLAN.md')"
 eq "find: missing dir -> empty" "" "$(fa "$TMP/nope" '*.md')"
 
+# ---- yt_standing: one file per standing instruction (issue #57) ----
+echo "# standing entries"
+ST="$TMP/st/.ytstack"; mkdir -p "$ST/standing"
+TAB=$(printf '\t')
+st() { ( . "$LIB"; yt_standing "$1" ); }
+eq "standing: no directory -> empty" "" "$(st "$TMP/nope")"
+eq "standing: empty directory -> empty" "" "$(st "$ST")"
+printf -- '---\ngiven: 2026-11-14T12:25:00Z\nscope: every author\nsupersedes:\n---\n\nAt most 10 open pull requests.\n' > "$ST/standing/20261114T1225Z-at-most-ten.md"
+printf -- '---\ngiven: 2026-11-14T13:00:00Z\nscope: "every message"\nsupersedes:\n---\n\nReport results only.\n' > "$ST/standing/20261114T1300Z-results-only.md"
+printf -- '---\ngiven: 2026-11-14T14:36:00Z\nscope: every lane\nsupersedes: 20261114T1225Z-at-most-ten\n---\n\nAt most 15.\n' > "$ST/standing/20261114T1436Z-at-most-fifteen.md"
+printf '# Standing\n\nOne file per instruction.\n' > "$ST/standing/README.md"
+OUT=$(st "$ST")
+eq "standing: in force, newest first, superseded skipped, README ignored" \
+  "20261114T1436Z-at-most-fifteen.md${TAB}2026-11-14T14:36:00Z${TAB}every lane
+20261114T1300Z-results-only.md${TAB}2026-11-14T13:00:00Z${TAB}every message" "$OUT"
+printf -- '---\ngiven: 2026-11-14T15:00:00Z\nscope: x\nsupersedes: "20261114T1300Z-results-only.md"\n---\n\nStatus at slice boundaries.\n' > "$ST/standing/20261114T1500Z-boundaries.md"
+eq "standing: supersedes with quotes and .md also skips" 2 "$(st "$ST" | grep -c .)"
+case "$(st "$ST")" in *results-only*) bad "standing: the quoted supersedes target is gone";; *) ok "standing: the quoted supersedes target is gone";; esac
+ST2="$TMP/st2/.ytstack"; mkdir -p "$ST2/standing"
+printf -- '---\ngiven: 2026-11-14T12:25:00Z\nscope: x\nsupersedes:\n---\n\nOld.\n' > "$ST2/standing/20261114T1225Z-old.md"
+printf -- '---\ngiven: 2026-11-14T12:25:30Z\nscope: x\nsupersedes:\n---\n\nNew.\n' > "$ST2/standing/20261114T122530Z-new.md"
+eq "standing: optional seconds sort as :00 (12:25:30 before 12:25)" "20261114T122530Z-new.md 20261114T1225Z-old.md" "$(st "$ST2" | cut -f1 | tr '\n' ' ' | sed 's/ $//')"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

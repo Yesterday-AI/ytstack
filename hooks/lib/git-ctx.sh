@@ -609,6 +609,42 @@ yt_find_artifacts() {
   return 0
 }
 
+# ---- standing instructions, one file per entry (issue #57) --------------------
+# yt_standing <yt_dir> -> the standing entries in force, newest first, one per
+# line: <file name> TAB <given> TAB <scope>. Entries live in
+# <yt_dir>/standing/<YYYYMMDDTHHMMZ>-<slug>.md (docs/ux/coordinator-format.md);
+# the time in the name orders them (missing seconds count as 00). An entry that another entry names in `supersedes`
+# is skipped. Prints nothing when the directory does not exist; STANDING.md
+# is read by the caller as before.
+yt_standing() {
+  local sd="$1/standing" names
+  [ -n "$1" ] && [ -d "$sd" ] || return 0
+  names=$(ls "$sd" 2>/dev/null | grep -E '^[0-9]{8}T[0-9]{4}([0-9]{2})?Z-[A-Za-z0-9._-]+\.md$')
+  [ -n "$names" ] || return 0
+  # shellcheck disable=SC2086  # the names match the pattern above: no spaces
+  ( cd "$sd" && awk -v q="'" '
+    function clean(v,  f) {
+      gsub(/^[ \t]+|[ \t]+$/, "", v)
+      f = substr(v, 1, 1)
+      if (length(v) >= 2 && (f == q || f == "\"") && substr(v, length(v)) == f) v = substr(v, 2, length(v) - 2)
+      return v
+    }
+    # Sort key YYYYMMDDHHMMSS: a name without seconds counts as :00, so that
+    # 20261114T1225Z sorts before 20261114T122530Z.
+    function out(  k) { k = substr(fn, 1, 8) substr(fn, 10, 4) (substr(fn, 14, 1) == "Z" ? "00" : substr(fn, 14, 2)); print k "\t" fn "\t" g "\t" s "\t" u }
+    FNR == 1 { if (fn != "") out(); fn = FILENAME; infm = ($0 == "---"); g = ""; s = ""; u = ""; next }
+    infm && /^---[ \t]*$/ { infm = 0; next }
+    infm && /^given:/      { g = clean(substr($0, 7)) }
+    infm && /^scope:/      { s = clean(substr($0, 7)) }
+    infm && /^supersedes:/ { u = clean(substr($0, 12)); sub(/\.md$/, "", u) }
+    END { if (fn != "") out() }
+  ' $names ) | sort -r | awk -F '\t' '
+    { n[NR] = $2; l[NR] = $2 "\t" $3 "\t" $4; if ($5 != "" && $5 != "none" && $5 != "None" && $5 != "-") sup[$5] = 1 }
+    END { for (i = 1; i <= NR; i++) { b = n[i]; sub(/\.md$/, "", b); if (!(b in sup)) print l[i] } }
+  '
+  return 0
+}
+
 # yt_resolve_yt_dir -> the .ytstack dir for the resolved toplevel: project
 # scope (<toplevel>/.ytstack) first, then user scope keyed by YT_REPO_KEY.
 # Sets YT_DIR and YT_SCOPE (project|user|none). No basename slugs.

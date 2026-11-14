@@ -26,7 +26,7 @@ sources:
   - docs/ux/review-policy-format.md
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
-verified_at: 1b7bfc8
+verified_at: 851b2f4
 ---
 
 # checks-and-evals
@@ -40,6 +40,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **`bin/ytstack-check`: static contracts**
 
 - A Python script on the standard library. It finds the plugin root by walking up to `.claude-plugin/plugin.json`; an optional path argument sets where it starts.
+- `check_standing` validates `.ytstack/standing/` (`docs/ux/coordinator-format.md`): the name `<YYYYMMDDTHHMMZ>-<slug>.md` with a date and time that exist, `given` as an existing ISO UTC time in the minute of the name, a `scope`, a body, and a `supersedes` that names an earlier existing entry (missing seconds count as `00`). The full run checks the plugin's own directory; `--standing [<project dir>]` runs only this check in any project with `.ytstack/`, resolved through `hooks/lib/git-ctx.sh` like the preambles (user scope included), and needs no plugin root (exit 0 or 1).
 - It reads `skills/*/SKILL.md`, `agents/*.md`, the scripts in `hooks/`, both manifests in `.claude-plugin/` and this repository's own `.ytstack/spec/`. One function per contract: `check_skill`, `check_agent`, `check_cross_refs`, `check_vendor_sibling_refs`, `check_resolver_contract`, `check_inline_leaks`, `check_gstack_adapted`, `check_spec`, `check_keeping_block`. Those functions are the complete rule list; the two groups below summarize them.
 - `check_spec` runs `bin/ytstack-spec lint` and `drift` on the plugin root and is skipped when the tree has no `.ytstack/spec/`. A format error is a failure; an area whose paths changed after its description is a warning to look. `check_keeping_block` fails when the "Keeping this true" block in `skills/init-project/SKILL.md` or `skills/adopt-brownfield/SKILL.md` differs from the one in `docs/ux/spec-format.md`.
 - Failures (`[fail]`): skill frontmatter missing, `name` different from the directory, no description or one over the length limit; a procedure skill without `## Checklist` or `## Terminal State`; an agent file that breaks `docs/ux/agent-structure.md` (required fields, examples, existing `ytstack:` skills, hard line limit); a role named in `skills/spawn-milestone-team/SKILL.md` without `agents/<role>.md`; a wrapper naming a vendored `SKILL.md` that does not exist; a banned shell pattern (`_BANNED`) in a skill or hook; a preamble or hook that does not source `hooks/lib/git-ctx.sh`; inlined vendor text without a covering `## Namespace note`; an adapted gstack skill without `metadata.upstream`, with a gstack runtime reference, a symlink or an em-dash.
@@ -173,10 +174,10 @@ Run from the repository root.
 - `bash tests/run-all.sh` -- pass: exit 0, one `PASS` line per file in `tests/*.test.sh`, last line `ALL SUITES PASSED`.
 - `python3 -m unittest discover -s tests -p 'codex*_test.py'` -- pass: last line `OK`.
 - `python3 -m unittest discover -s tests -p 'kimi_plugin_test.py' -v` and the same pattern for `kimi_lifecycle_test.py` -- pass: two and nine tests, each `OK`.
-- `python3 -m unittest discover -s tests -p 'kimi_live_test.py' -v` -- seven native tests on a machine with Kimi; local 2.5.3 and official Linux 2.6.2 each passed without skips at `verified_at`.
+- `python3 -m unittest discover -s tests -p 'kimi_live_test.py' -v` -- seven native tests on a machine with Kimi; local 2.5.3 and official Linux 2.6.2 each passed without skips at `1b7bfc8`.
 - `claude plugin validate .` -- pass: `✔ Validation passed`, exit 0.
 
-Not covered by these checks: `claude plugin eval` (costs money). `bash tests/run-all.sh --linux` (Docker) also passed all 26 suites from an export of `verified_at`.
+Not covered by these checks: `claude plugin eval` (costs money). `bash tests/run-all.sh --linux` (Docker) also passed all 26 suites from an export of `1b7bfc8`.
 
 ## Decisions that apply now
 
@@ -187,7 +188,7 @@ Not covered by these checks: `claude plugin eval` (costs money). `bash tests/run
 - DECISIONS.md -- "2026-11-13: Production findings and incidents are skill work on read-only access; a mitigation is a handover script a person runs (M027)". Source of `bin/ytstack-signals`.
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)". Source of `bin/ytstack-spec` and the two spec checks.
 - DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)". Source of `bin/ytstack-brief`.
-- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)". Source of the five coordinator scripts; the pipeline and the watcher support GitHub through `gh` only.
+- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)". Source of the five coordinator scripts; the pipeline and the watcher support GitHub through `gh` only. Extended by "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/`; `STANDING.md` stays valid (issue #57)", the source of `check_standing`.
 - DECISIONS.md -- "2026-04-23: UX contracts enforced by CI, not convention"
 - DECISIONS.md -- "2026-05-31: Add `kind: reference` skill class (exempt from procedure-section contract)"
 - DECISIONS.md -- "2026-11-07: Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree". Source of the banned shell patterns and the shared-resolver rule in the checker.

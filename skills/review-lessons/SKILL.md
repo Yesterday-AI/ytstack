@@ -3,7 +3,7 @@ name: review-lessons
 description: "Looks at the review-bot findings of merged pull requests that the project's own review roles missed and turns repeated or severe ones into a proposed line for the owning role's file, as a question for a person. Use after a pull request merged in a project whose REVIEW.md declares own reviewers, when PR watch or bin/ytstack-upkeep says a merged pull request has no escape check, or when the user says what did the bots catch that our reviewers missed, review lessons, learn from the bot findings. Not for reviewing a change before it merges (code-review) and not for what production reports (signal-intake)."
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.1.1
 allowed-tools:
   - Bash
   - Read
@@ -274,7 +274,7 @@ Then put the question id into the finding's `## Next`: `Proposed as Q###. After 
 cd "{PROJECT_DIR}" && bash "{SIGNALS_TOOL}" check && bash "{QUESTIONS_TOOL}" check
 ```
 
-A problem in a file you wrote in this run: fix it and check again. A problem in an older file: leave it and put the line into the report. Commit only when the prompt, the schedule or `STANDING.md` says that this run commits; then exactly `.ytstack/signals/` and `.ytstack/questions/`, with the message `chore: review lessons {date}`. Never push.
+A problem in a file you wrote in this run: fix it and check again. A problem in an older file: leave it and put the line into the report. Commit only when the prompt, the schedule or a standing instruction (`.ytstack/standing/`, newest first and not superseded, or `STANDING.md`) says that this run commits; then exactly `.ytstack/signals/` and `.ytstack/questions/`, with the message `chore: review lessons {date}`. Never push.
 
 ### Step 9: Report
 
