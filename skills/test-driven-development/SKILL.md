@@ -2,7 +2,7 @@
 name: test-driven-development
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.1.1
 description: "Test-first implementation of the current task through the vendored superpowers test-driven-development procedure, with the task plan's files and verification command injected. Use during task execution for any feature, bugfix or refactor, before writing implementation code. Not without a task plan (plan-task or quick-task first)."
 allowed-tools:
   - Bash
@@ -51,6 +51,8 @@ echo "TASK_PLAN_EXISTS: $([ -f "$_TASK_PLAN" ] && echo yes || echo no)"
 You are invoked inside a ytstack project. The work unit is the current task (`_M-_S-_T` above) whose plan file at `TASK_PLAN` contains the `## Files` section (what to touch) and `## Verification` section (how to know it passes). The vendored TDD procedure uses these: the RED test targets the behavior described in the task-plan body; the verification command is the one specified in the plan's Verification section.
 
 HARD-GATE: if `HAS_YTSTACK=no` or `TASK_PLAN_EXISTS=no`, abort with: "Run `ytstack:plan-task` first to produce the task-plan." Do not invoke the vendored procedure; TDD without a target task-plan is guessing.
+
+**Which changes get a new test (ytstack).** The vendored procedure writes a failing test first; that holds for every change with logic in it: a branch, a loop, a parser, money, permissions, a bug fix (the test reproduces the bug). A trivial change gets no new test: a rename, a constant, a text, a config value, a moved line. For those the RED step is the plan's verification command failing or an existing test covering the line, and you write no test to look thorough (`ytstack:minimal-code`, "Never cut"). Where the vendored text and this paragraph differ, this paragraph applies. Run the suite the plan names, not every suite in the repository.
 
 After the vendored procedure completes (test passes + refactor done):
 - Do NOT run `ytstack:summarize-task` automatically; the user triggers that when ready.

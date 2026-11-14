@@ -146,7 +146,7 @@ Per DECISIONS 2026-04-24 "Wrapper mechanism = shell-exec inject + cross-ref chec
 
 **Vendor is the single source of truth.** Subtree pulls to a release tag flow through without manual adaptation; no fork divergence possible by construction.
 
-Applies to: `test-driven-development`, `systematic-debugging`, `verification-before-completion` (vendor/superpowers/skills).
+Applies to: `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill` (vendor/superpowers/skills).
 
 **The six gstack-derived skills are not wrappers (since 0.6.0):** they carry the adapted procedure in their own `SKILL.md` (plus optional `references/*.md`), run the standard resolver preamble, and post-process into ytstack artifacts. No vendor block, no install check, no Skill-tool call into gstack (see §2.1). 0.3.0 to 0.5.0 used a precheck plus a Skill-tool call into an installed gstack.
 
@@ -244,6 +244,9 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - Per-slice: `M###-S##-PLAN.md`
 - Per-task: `M###-S##-T##-PLAN.md`, `M###-S##-T##-SUMMARY.md`
 - Per-pitch (greenfield input): `OFFICE-HOURS.md` (pre-init) -> `OFFICE-HOURS-<slug>.md` (post-init, moved into `.ytstack/`)
+- Technical spec (M022, DECISIONS 2026-11-13): `spec/SPEC.md` (entry point, one page) and `spec/<area>.md` (one per system area). They say what applies now; plans and summaries stay the history. Written by `init-project` (every area `planned`) and `adopt-brownfield` (pointer-only over existing documents, also for an initialized project without a spec), kept true by `plan-task` ("Spec impact"), `summarize-task` (closure check), `code-review`, the verifier and `reassess-roadmap` (drift answer). Format and maintenance rules: `docs/ux/spec-format.md`; checked by `bin/ytstack-spec`.
+- Coordinator mode (M024, DECISIONS 2026-11-13; formats in `docs/ux/coordinator-format.md`): `LANES.md` (one row per delegated lane, written through `bin/ytstack-frontier`), `questions/Q###-<slug>.md` (one file per question for the human: open, asked, answered), `STANDING.md` (instructions that hold beyond the task), `handover/` (staged scripts for human-only steps and their receipts), `retro/LANES-<date>.md` (lane retro candidates). Skills: `coordinate`, `finish-lane`, `handover-step`, `lane-retro`. Host facts (pull request state, checks, deployed build) are never stored there as current.
+- `STATE.md` is a pointer (M022-S03): the lint reports a file above 12,000 bytes and status paragraphs beside the current one; `reconcile` moves that history to `archive/` with consent; `reassess-roadmap` folds a closed milestone into the spec.
 - Brownfield import (adopt-brownfield): `codebase/{stack,architecture,conventions,concerns}.md`, optional `backlog/README.md`; `STATE.md` frontmatter `tracker:` (`none | linear | github-projects | paperclip | jira`) read by plan-milestone / reassess-roadmap
 
 **Hooks** (under `hooks/`, registered in `hooks/hooks.json`; all source `hooks/lib/git-ctx.sh` and resolve the checkout from the payload `cwd`, never `CLAUDE_PROJECT_DIR` -- DECISIONS 2026-11-07):
@@ -252,7 +255,7 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 - `session-end` -- appends one JSON line to the per-session `session.jsonl` out of tree (no `.ytstack/journal/`)
 - `teammate-idle`, `task-created`, `task-completed` -- Agent Teams coordination (resolved per checkout)
 - `pre-tool-use-edit` (advisory, exit 0), `post-tool-use-bash` (draft summary stub, once, only in the committing checkout and only for commits carrying the task ref) -- quality / safety gates
-- Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (10 suites incl. the #26 acceptance and concurrency suites)
+- Contract enforced by `bin/ytstack-check` (banned patterns) and `tests/run-all.sh` (21 suites incl. the #26 acceptance and concurrency suites)
 
 #### `quick-task` (execution: quick lane, M018)
 
@@ -266,9 +269,9 @@ Lifecycle + artifact + orchestration pieces that GSD inspired but we re-implemen
 **Triggers on:** "reconcile", "clean up .ytstack", a `STATE lint` warning at session start.
 **Differs from everything else:** the only skill allowed to move `.ytstack` artifacts; agents never delete or revert them on their own (using-ytstack rule).
 
-#### `minimal-code` (directive, injected when `minimal_code: on`, M018)
+#### `minimal-code` (directive, injected when `minimal_code: on`, M018; the work contract since M023)
 
-**Purpose:** six-rung ladder (needed at all? exists in the codebase? stdlib? dependency? one line? minimum that passes) plus the never-cut list and `shortcut:` markers; concept adapted from ponytail (NOTICE), prose ytstack's own. Under 60 lines; the SessionStart hook injects a six-line pointer, the TDD wrapper references it for the GREEN step.
+**Purpose:** the one work contract: smallest complete change (reach before size, the six-rung ladder: needed at all? exists in the codebase? stdlib? dependency? one line? minimum that passes; the never-cut list; `shortcut:` markers that name their limit) and smallest sufficient evidence (run what the plan's Verification names as often as it says; evidence is a check on a commit in an environment; a verdict only a person can give is never recorded as given; every report says under "Not checked:" what was left out). Concepts adapted from ponytail (NOTICE), prose ytstack's own. The SessionStart hook injects a pointer, the TDD wrapper references it for the GREEN step, and `bin/ytstack-brief render` includes its body verbatim in every dispatched brief, so a worker has it without loading a skill (DECISIONS 2026-11-13 "Verification, review and orchestration work are bounded like code").
 
 **Ceremony dials and states (M018):** `PREFERENCES.md` `granularity` / `autonomy` / `quick_lane` / `minimal_code` (read via `yt_prefs`), milestone states `planned | in-progress | done | dropped | shipped-informally` (`docs/ux/skill-structure.md` "Artifact states"), STATE pointer lint (`yt_state_lint`, injected by `session-start`, enforced by `plan-task` / `summarize-task`), read-side layout tolerance (`yt_find_artifacts`).
 

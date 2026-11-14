@@ -1,0 +1,458 @@
+#!/usr/bin/env bash
+# ytstack finish-lane: the steps between "the worker reported" and "merged at
+# the reviewed commit" (M024, issue #34). One step per call. Every step prints
+# what it did or what it read, and refuses instead of assuming.
+#
+#   ytstack-finish-lane leftovers  [--scope PATH ...]
+#   ytstack-finish-lane commit     --message MSG [--scope PATH ...]
+#   ytstack-finish-lane push
+#   ytstack-finish-lane open-pr    --title T --body-file F [--base B]
+#   ytstack-finish-lane wait-head  --pr N [--timeout SECONDS]
+#   ytstack-finish-lane body-check --pr N | --body-file F [--base B]
+#   ytstack-finish-lane gates      --pr N --reviewed-head SHA [--max-open N]
+#                                  [--verdict-pattern ERE] [--allow-no-checks]
+#   ytstack-finish-lane merge      --pr N --at SHA [--method squash|merge|rebase]
+#                                  [--max-open N] [--verdict-pattern ERE] [--allow-no-checks]
+#
+# All commands take -C DIR first: the lane's worktree (default: $PWD). A
+# relative --body-file is read from where the command was started.
+#
+# The host is GitHub, reached through `gh` only (its own JSON filter, no other
+# tool). No other host is supported. Nothing is written into .ytstack/.
+#
+# leftovers   what the worker left uncommitted, in three groups (what git
+#             ignores is not a leftover). Junk: .env* (not the templates
+#             .env.example, .env.sample, .env.template), *.log, .DS_Store,
+#             anything under node_modules/, an untracked file above 1 MB. A
+#             --scope PATH is a file, a directory or a shell
+#             pattern, relative to the worktree's root; without --scope nothing
+#             is out of scope.
+# commit      stages the in-scope files by name and commits them. Refuses while
+#             junk, out-of-scope files or unmerged paths exist; nothing is
+#             staged then. The repository's signing settings apply unchanged.
+# push        the current branch to origin, with upstream. A rejected push
+#             stays rejected: the script has no way to overwrite the remote.
+# open-pr     opens the pull request for the current branch; prints its number.
+# wait-head   polls until the pull request's head on the host is the local
+#             tip (default 120 s). A review starts only after this passed.
+# body-check  backticked paths in the body (the pull request's, or a file's)
+#             against the head: one line per path that is not there, with
+#             "removed by the diff" when the base still had it. A token counts
+#             as a path when the base had it, or when it has a slash and its
+#             first directory exists at the head or the base. Fenced blocks
+#             are not read. With --body-file the head is the local tip and the
+#             base is origin/B (no --base: no "removed by" detail).
+# gates       reads the host now and prints one line per gate, then the UTC
+#             time of the read:
+#               head       the host's head is the reviewed commit
+#               checks     every check on the head concluded with success,
+#                          neutral or skipped; none at all fails unless
+#                          --allow-no-checks
+#               review     no reviewer's newest review on the head requests
+#                          changes; with --verdict-pattern the newest review
+#                          on the head must also match it (grep -E, per line)
+#               threads    no unresolved review thread
+#               mergeable  open and without a conflict
+#               open-prs   with --max-open: at most N open pull requests
+# merge       runs gates for --at SHA, merges only when all hold, pinned to
+#             that commit on the host's side, and reads the state back. No
+#             auto-merge, no administrator override.
+#
+# Exit codes: 0 done; 1 refused or a gate does not hold (the reason is
+# printed); 64 usage.
+
+set -uo pipefail
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+
+usage() { sed -n '6,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+bad_usage() { [ $# -eq 0 ] || echo "ytstack-finish-lane: $*" >&2; usage >&2; exit 64; }
+die() { echo "ytstack-finish-lane: $*" >&2; exit 1; }
+is_int() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; }
+is_sha() { case "$1" in *[!0-9a-f]*) return 1 ;; esac; [ ${#1} -ge 7 ] && [ ${#1} -le 40 ]; }
+abs() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s' "$PWD/$1" ;; esac; }
+
+# enter: run from the root of the lane's worktree
+enter() {
+  [ -d "$DIR" ] || bad_usage "-C '$DIR' is not a directory"
+  TOP=$(git -C "$DIR" rev-parse --show-toplevel 2>/dev/null) || die "'$DIR' is not inside a git worktree"
+  cd "$TOP" || die "cannot enter $TOP"
+}
+need_gh() { command -v gh >/dev/null 2>&1 || die "gh is not on PATH; the host is reached through gh only"; }
+# rows <text> <key>: the values of the "key<TAB>value" lines of a host answer
+rows() { printf '%s\n' "$1" | awk -v k="$2" 'index($0, k "\t") == 1 { print substr($0, length(k) + 2) }'; }
+at() { git cat-file -e "$1:$2" 2>/dev/null; }
+
+# ---- leftovers, commit ---------------------------------------------------------
+SCOPE=(); IN=(); ADD=(); OUT=(); JUNK=()
+
+# take_scope "$@": the paths after --scope, up to the next option; sets TAKEN
+take_scope() {
+  TAKEN=0
+  while [ $# -gt 0 ]; do
+    case "$1" in --*) break ;; esac
+    local s="${1#./}"
+    SCOPE[${#SCOPE[@]}]="${s%/}"; TAKEN=$((TAKEN + 1)); shift
+  done
+  [ "$TAKEN" -gt 0 ] || bad_usage "--scope needs at least one path"
+}
+in_scope() {
+  local s
+  [ ${#SCOPE[@]} -gt 0 ] || return 0
+  for s in "${SCOPE[@]}"; do
+    # shellcheck disable=SC2254
+    case "$1" in $s|$s/*) return 0 ;; esac
+  done
+  return 1
+}
+junk_reason() { # <path> <untracked: yes|no>
+  case "/$1" in */node_modules/*) echo "node_modules/"; return ;; esac
+  case "${1##*/}" in
+    .env.example|.env.sample|.env.template) ;;   # committed templates, keys without values
+    .env*) echo ".env*"; return ;;
+    *.log) echo "*.log"; return ;;
+    .DS_Store) echo ".DS_Store"; return ;;
+  esac
+  if [ "$2" = yes ] && [ -f "$1" ] && [ "$(wc -c < "$1" | tr -d ' ')" -gt 1048576 ]; then echo "untracked, above 1 MB"; fi
+}
+# classify <path> <untracked: yes|no> <needs staging: yes|no>
+classify() {
+  local r; r=$(junk_reason "$1" "$2")
+  if [ -n "$r" ]; then JUNK[${#JUNK[@]}]="$1 ($r)"
+  elif in_scope "$1"; then
+    IN[${#IN[@]}]="$1"
+    [ "$3" = no ] || ADD[${#ADD[@]}]="$1"
+  else OUT[${#OUT[@]}]="$1"
+  fi
+}
+# scan: every changed or untracked path of the worktree into IN, OUT or JUNK.
+# A path whose change is already staged in full (second status column blank:
+# a staged deletion, the old name of a staged rename) is listed but not staged
+# again: git has no file left to add for it.
+scan() {
+  local entry xy
+  while IFS= read -r -d '' entry; do
+    xy="${entry:0:2}"
+    classify "${entry:3}" "$([ "$xy" = '??' ] && echo yes || echo no)" "$([ "${xy:1:1}" = ' ' ] && echo no || echo yes)"
+    case "$xy" in
+      R*|?R) IFS= read -r -d '' entry || break; classify "$entry" no no ;;
+      C*|?C) IFS= read -r -d '' entry || break ;;   # the source of a copy did not change
+    esac
+  done < <(git status --porcelain=v1 -z --untracked-files=all)
+}
+group() { # <title> <items...>
+  local t="$1"; shift
+  echo "$t: $#"
+  [ $# -eq 0 ] || printf '  %s\n' "$@"
+}
+
+cmd_leftovers() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --scope) shift; take_scope "$@"; shift "$TAKEN" ;;
+      *) bad_usage "leftovers: unknown argument '$1'" ;;
+    esac
+  done
+  enter; scan
+  group "in scope" ${IN[@]+"${IN[@]}"}
+  group "out of scope" ${OUT[@]+"${OUT[@]}"}
+  group "junk" ${JUNK[@]+"${JUNK[@]}"}
+}
+
+cmd_commit() {
+  local msg=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --message) [ $# -ge 2 ] || bad_usage "--message needs a value"; msg="$2"; shift 2 ;;
+      --scope) shift; take_scope "$@"; shift "$TAKEN" ;;
+      *) bad_usage "commit: unknown argument '$1'" ;;
+    esac
+  done
+  [ -n "$msg" ] || bad_usage "commit needs --message"
+  enter
+  [ -z "$(git ls-files -u)" ] || die "unmerged paths in $TOP (an unfinished merge or rebase); nothing was staged"
+  scan
+  if [ ${#JUNK[@]} -gt 0 ] || [ ${#OUT[@]} -gt 0 ]; then
+    group "out of scope" ${OUT[@]+"${OUT[@]}"}
+    group "junk" ${JUNK[@]+"${JUNK[@]}"}
+    die "refused: files that do not belong into this commit; nothing was staged"
+  fi
+  [ ${#IN[@]} -gt 0 ] || die "nothing to commit in $TOP"
+  if [ ${#ADD[@]} -gt 0 ]; then
+    git add -- "${ADD[@]}" || die "git add failed; look at the index of $TOP before the next step"
+  fi
+  git commit -q -m "$msg" || die "git commit failed; the files stay staged, nothing was committed"
+  echo "committed $(git rev-parse --short HEAD) on $(git branch --show-current): ${#IN[@]} file(s)"
+}
+
+# ---- push, open-pr, wait-head --------------------------------------------------
+current_branch() {
+  BRANCH=$(git branch --show-current)
+  [ -n "$BRANCH" ] || die "no current branch in $TOP (detached HEAD)"
+}
+
+cmd_push() {
+  [ $# -eq 0 ] || bad_usage "push takes no arguments"
+  enter; current_branch
+  git push -q -u origin "$BRANCH" || die "git push of $BRANCH failed; origin was not changed"
+  echo "pushed $BRANCH at $(git rev-parse HEAD) to origin"
+}
+
+cmd_open_pr() {
+  local title="" body="" base="" out n
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || bad_usage "$1 needs a value"
+    case "$1" in
+      --title) title="$2" ;;
+      --body-file) body=$(abs "$2") ;;
+      --base) base="$2" ;;
+      *) bad_usage "open-pr: unknown argument '$1'" ;;
+    esac
+    shift 2
+  done
+  [ -n "$title" ] && [ -n "$body" ] || bad_usage "open-pr needs --title and --body-file"
+  [ -r "$body" ] && [ ! -d "$body" ] || bad_usage "cannot read body file '$body'"
+  enter; need_gh; current_branch
+  set -- pr create --title "$title" --body-file "$body" --head "$BRANCH"
+  [ -z "$base" ] || set -- "$@" --base "$base"
+  out=$(gh "$@") || die "gh pr create failed for $BRANCH"
+  n=$(printf '%s\n' "$out" | tail -1); n="${n##*/}"
+  is_int "$n" || die "gh pr create did not end with a pull request URL: $out"
+  echo "$n"
+}
+
+cmd_wait_head() {
+  local pr="" timeout=120 tip host="" left nap
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || bad_usage "$1 needs a value"
+    case "$1" in
+      --pr) pr="$2" ;;
+      --timeout) timeout="$2" ;;
+      *) bad_usage "wait-head: unknown argument '$1'" ;;
+    esac
+    shift 2
+  done
+  is_int "$pr" && is_int "$timeout" || bad_usage "wait-head needs --pr N; --timeout is a number of seconds"
+  enter; need_gh
+  tip=$(git rev-parse HEAD) || die "no commit in $TOP"
+  left=$timeout   # the seconds still to wait; the time a request takes is not counted
+  while :; do
+    host=$(gh pr view "$pr" --json headRefOid --jq .headRefOid) || die "gh pr view $pr failed; the host's head is unknown"
+    if [ "$host" = "$tip" ]; then echo "pull request $pr shows the local head $tip"; return 0; fi
+    [ "$left" -gt 0 ] || break
+    nap=$((left < 3 ? left : 3)); sleep "$nap"; left=$((left - nap))
+  done
+  echo "host head:  ${host:-none}"
+  echo "local head: $tip"
+  die "pull request $pr did not show the local head within ${timeout}s"
+}
+
+# ---- body-check ----------------------------------------------------------------
+cmd_body_check() {
+  local pr="" file="" base="" head body out mb="" toks tok p n=0 stale=0
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || bad_usage "$1 needs a value"
+    case "$1" in
+      --pr) pr="$2" ;;
+      --body-file) file=$(abs "$2") ;;
+      --base) base="$2" ;;
+      *) bad_usage "body-check: unknown argument '$1'" ;;
+    esac
+    shift 2
+  done
+  if [ -n "$pr" ]; then
+    [ -z "$file" ] && [ -z "$base" ] && is_int "$pr" || bad_usage "body-check takes --pr N alone, or --body-file F [--base B]"
+    enter; need_gh
+    out=$(gh pr view "$pr" --json headRefOid,baseRefName,body \
+      --jq '"head\t" + .headRefOid, "base\t" + .baseRefName, ((.body // "") | split("\n")[] | "body\t" + .)') \
+      || die "gh pr view $pr failed; the body was not read"
+    head=$(rows "$out" head); base=$(rows "$out" base); body=$(rows "$out" body)
+    git cat-file -e "$head^{commit}" 2>/dev/null || die "the host's head ${head:-none} is not in this checkout; fetch it first"
+  else
+    [ -n "$file" ] || bad_usage "body-check needs --pr N or --body-file F"
+    [ -r "$file" ] && [ ! -d "$file" ] || bad_usage "cannot read body file '$file'"
+    enter
+    head=$(git rev-parse HEAD) || die "no commit in $TOP"
+    body=$(cat "$file")
+  fi
+  if [ -n "$base" ]; then
+    git rev-parse --verify --quiet "refs/remotes/origin/$base^{commit}" >/dev/null \
+      || die "origin/$base is not in this checkout; run: git fetch origin $base"
+    mb=$(git merge-base "refs/remotes/origin/$base" "$head" 2>/dev/null)
+  fi
+  # What the body names in backticks, outside fenced blocks.
+  # shellcheck disable=SC2016
+  toks=$(printf '%s\n' "$body" | tr -d '\r' | awk '/^[ \t]*(```|~~~)/ { f = !f; next } !f' | grep -oE '`[^`]+`' | tr -d '`' | sort -u)
+  while IFS= read -r tok; do
+    p=$(printf '%s' "$tok" | sed -E 's/:[0-9]+(-[0-9]+)?$//; s|^\./||; s|/+$||')
+    case "$p" in ''|*[!A-Za-z0-9_./@+-]*) continue ;; esac
+    if at "$head" "$p"; then n=$((n + 1)); continue; fi
+    if [ -n "$mb" ] && at "$mb" "$p"; then
+      echo "stale: \`$p\` -- removed by the diff against $base"
+    elif case "$p" in */*) at "$head" "${p%%/*}" || { [ -n "$mb" ] && at "$mb" "${p%%/*}"; } ;; *) false ;; esac; then
+      echo "stale: \`$p\` -- not at ${head:0:7}"
+    else
+      continue   # not a path of this repository: a command, a branch, a name
+    fi
+    n=$((n + 1)); stale=$((stale + 1))
+  done <<EOF
+$toks
+EOF
+  [ "$stale" -eq 0 ] || exit 1
+  echo "body ok: $n path(s) checked at ${head:0:7}"
+}
+
+# ---- gates, merge --------------------------------------------------------------
+PR=""; SHA=""; MAX_OPEN=""; PATTERN=""; ALLOW_NONE=no; METHOD=squash; HOST_HEAD=""; GATES_HOLD=yes
+
+# One answer per line, "key<TAB>value": the pull request with its checks and
+# the reviews on its head, read in one request so that they describe one commit.
+# shortcut: two runs of one check on the same commit are both counted, so an
+# older failed run keeps the gate closed; upgrade to "newest run per check and
+# event" if a repository triggers one workflow twice per commit.
+# shellcheck disable=SC2016
+VIEW_JQ='
+  "state\t\(.state)", "head\t\(.headRefOid)", "mergeable\t\(.mergeable)",
+  ((.statusCheckRollup // [])[] |
+    if .__typename == "StatusContext" then
+      [ (if .state == "SUCCESS" then "pass" else "open" end), .context, .state ]
+    else
+      [ (if .status == "COMPLETED" and (.conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED") then "pass" else "open" end),
+        .name, (if .status == "COMPLETED" then .conclusion else .status end) ]
+    end | "check\t" + (map(tostring) | join("\t"))),
+  (.headRefOid as $h | [ (.reviews // [])[] | select(.commit.oid == $h and .state != "PENDING") ] |
+    (group_by(.author.login)[] | max_by(.submittedAt) | "review\t\(.state)\t\(.author.login)"),
+    (max_by(.submittedAt) // empty | "newest\t\(.author.login)", ((.body // "") | split("\n")[] | "body\t" + .)))
+'
+# shortcut: the first 100 review threads; more than that fails the gate instead
+# of being paged through.
+# shellcheck disable=SC2016
+THREADS_QUERY='query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequests(states: OPEN) { totalCount } pullRequest(number: $number) { reviewThreads(first: 100) { totalCount pageInfo { hasNextPage } nodes { isResolved } } } } }'
+THREADS_JQ='.data.repository | "open\t\(.pullRequests.totalCount)",
+  (.pullRequest.reviewThreads | "threads\t\([ .nodes[] | select(.isResolved | not) ] | length)\t\(.totalCount)\t\(.pageInfo.hasNextPage)")'
+
+gate() { # <ok|FAIL> <gate> <detail>
+  if [ "$1" = ok ]; then printf 'ok   %s: %s\n' "$2" "$3"; else printf 'FAIL %s: %s\n' "$2" "$3"; GATES_HOLD=no; fi
+}
+
+# gate_args <gates|merge> "$@": the options both commands share
+gate_args() {
+  local mode="$1"; shift
+  while [ $# -gt 0 ]; do
+    if [ "$1" = --allow-no-checks ]; then ALLOW_NONE=yes; shift; continue; fi
+    [ $# -ge 2 ] || bad_usage "$1 needs a value"
+    case "$mode:$1" in
+      *:--pr) PR="$2" ;;
+      gates:--reviewed-head|merge:--at) SHA="$2" ;;
+      *:--max-open) MAX_OPEN="$2"; is_int "$MAX_OPEN" || bad_usage "--max-open is a number" ;;
+      *:--verdict-pattern)
+        PATTERN="$2"
+        [ -n "$PATTERN" ] || bad_usage "--verdict-pattern is empty"
+        printf '\n' | grep -E -- "$PATTERN" >/dev/null
+        [ $? -le 1 ] || bad_usage "--verdict-pattern is not a valid extended regular expression" ;;
+      merge:--method) METHOD="$2" ;;
+      *) bad_usage "$mode: unknown argument '$1'" ;;
+    esac
+    shift 2
+  done
+  is_int "$PR" || bad_usage "$mode needs --pr N"
+  is_sha "$SHA" || bad_usage "$mode needs the reviewed commit as 7 to 40 hex digits"
+  case "$METHOD" in squash|merge|rebase) ;; *) bad_usage "--method is squash, merge or rebase" ;; esac
+}
+
+# read_gates: one read of the host, one line per gate, the time of the read.
+# Returns 0 when every gate holds; sets HOST_HEAD.
+read_gates() {
+  local v g t short checks n open state m reviews newest unresolved total more count
+  v=$(gh pr view "$PR" --json state,headRefOid,mergeable,statusCheckRollup,reviews --jq "$VIEW_JQ") \
+    && g=$(gh api graphql -f query="$THREADS_QUERY" -F owner='{owner}' -F repo='{repo}' -F number="$PR" --jq "$THREADS_JQ")
+  # shellcheck disable=SC2181
+  if [ $? -ne 0 ]; then
+    gate FAIL host "gh could not read pull request $PR; no gate was evaluated"
+    echo "read $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    return 1
+  fi
+  t=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+  HOST_HEAD=$(rows "$v" head); short="${HOST_HEAD:0:7}"
+  case "$HOST_HEAD" in
+    "$SHA"*) gate ok head "$short is the reviewed commit" ;;
+    *) gate FAIL head "the host shows ${short:-no head}, the review saw ${SHA:0:7}" ;;
+  esac
+
+  checks=$(rows "$v" check)
+  n=$(printf '%s' "$checks" | grep -c .)
+  open=$(printf '%s\n' "$checks" | awk -F'\t' '$1 == "open" { printf "%s%s (%s)", sep, $2, $3; sep = ", " }')
+  if [ "$n" -eq 0 ] && [ "$ALLOW_NONE" = yes ]; then gate ok checks "none on $short (--allow-no-checks)"
+  elif [ "$n" -eq 0 ]; then gate FAIL checks "none on $short"
+  elif [ -n "$open" ]; then gate FAIL checks "not successful on $short: $open"
+  else gate ok checks "$n concluded successfully on $short"
+  fi
+
+  reviews=$(rows "$v" review); newest=$(rows "$v" newest)
+  m=$(printf '%s\n' "$reviews" | awk -F'\t' '$1 == "CHANGES_REQUESTED" { printf "%s%s", sep, $2; sep = ", " }')
+  if [ -n "$m" ]; then gate FAIL review "changes requested by $m on $short"
+  elif [ -z "$PATTERN" ] && [ -z "$newest" ]; then gate ok review "none on $short"
+  elif [ -z "$PATTERN" ]; then gate ok review "no changes requested on $short (newest by $newest)"
+  elif [ -z "$newest" ]; then gate FAIL review "none on $short, nothing to match '$PATTERN'"
+  elif rows "$v" body | tr -d '\r' | grep -E -- "$PATTERN" >/dev/null; then gate ok review "the newest on $short (by $newest) matches '$PATTERN'"
+  else gate FAIL review "the newest on $short (by $newest) does not match '$PATTERN'"
+  fi
+
+  IFS=$'\t' read -r unresolved total more <<EOF
+$(rows "$g" threads)
+EOF
+  if [ "${unresolved:-x}" != 0 ]; then gate FAIL threads "${unresolved:-unknown} unresolved of ${total:-unknown}"
+  elif [ "$more" = true ]; then gate FAIL threads "$total threads, only the first 100 were read"
+  else gate ok threads "0 unresolved of $total"
+  fi
+
+  state=$(rows "$v" state); m=$(rows "$v" mergeable)
+  if [ "$state" != OPEN ]; then gate FAIL mergeable "the pull request is ${state:-in an unknown state}"
+  elif [ "$m" = MERGEABLE ]; then gate ok mergeable "no conflict with the base"
+  elif [ "$m" = CONFLICTING ]; then gate FAIL mergeable "conflict with the base"
+  else gate FAIL mergeable "the host has not decided yet (${m:-no answer}); read again"
+  fi
+
+  if [ -n "$MAX_OPEN" ]; then
+    count=$(rows "$g" open)
+    if is_int "$count" && [ "$count" -le "$MAX_OPEN" ]; then gate ok open-prs "$count open, limit $MAX_OPEN"
+    else gate FAIL open-prs "${count:-unknown} open, limit $MAX_OPEN"
+    fi
+  fi
+
+  echo "read $t"
+  [ "$GATES_HOLD" = yes ]
+}
+
+cmd_gates() {
+  gate_args gates "$@"
+  enter; need_gh
+  read_gates || exit 1
+}
+
+cmd_merge() {
+  local state
+  gate_args merge "$@"
+  enter; need_gh
+  read_gates || die "not merged: a gate does not hold for pull request $PR at ${SHA:0:7}"
+  gh pr merge "$PR" "--$METHOD" --match-head-commit "$HOST_HEAD" >&2 || die "gh pr merge failed; pull request $PR was not merged"
+  state=$(gh pr view "$PR" --json state --jq .state) || die "gh accepted the merge of pull request $PR, but its state could not be read back"
+  [ "$state" = MERGED ] || die "gh accepted the merge of pull request $PR at $HOST_HEAD, but the host reports $state (a merge queue?); not merged yet"
+  echo "merged #$PR at $HOST_HEAD ($METHOD)"
+}
+
+case "$CMD" in
+  leftovers)  cmd_leftovers "$@" ;;
+  commit)     cmd_commit "$@" ;;
+  push)       cmd_push "$@" ;;
+  open-pr)    cmd_open_pr "$@" ;;
+  wait-head)  cmd_wait_head "$@" ;;
+  body-check) cmd_body_check "$@" ;;
+  gates)      cmd_gates "$@" ;;
+  merge)      cmd_merge "$@" ;;
+  -h|--help|help) usage ;;
+  *) bad_usage ;;
+esac

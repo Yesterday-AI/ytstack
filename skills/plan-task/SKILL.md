@@ -3,7 +3,7 @@ name: plan-task
 description: "Turns the next task of the current slice into M###-S##-T##-PLAN.md with exact files and a verification command, and sets STATE active_task. Use after slice-milestone, before executing a task, or when the user says plan the task, next task, detail the task. Not for one-sentence changes (quick-task) and not for closing a task (summarize-task)."
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.3.1
   triggers:
     - plan task
     - detail next task
@@ -42,11 +42,12 @@ You MUST create a TodoWrite task for each of these items:
 3. **Confirm task selection** -- show the task line from slice-plan, confirm it's next
 4. **Ask file list** -- exact paths to create / modify / delete
 5. **Ask task body** -- what the code does, in prose + pseudocode
-6. **Ask verification** -- 1-2 commands that prove done
-7. **Ask fits-one-context-window check** -- sanity-check or split
-8. **Write `M###-S##-T##-PLAN.md`**
-9. **Update STATE.md** -- `active_task: T##`
-10. **Report + return** -- task ready to execute or dispatch to subagent
+6. **Ask verification** -- 1-2 commands that prove done, how often and where they run; what work cannot produce is a gate
+7. **Determine spec impact** -- which area of `.ytstack/spec/` the task changes, or `none`
+8. **Ask fits-one-context-window check** -- sanity-check or split
+9. **Write `M###-S##-T##-PLAN.md`**
+10. **Update STATE.md** -- `active_task: T##`
+11. **Report + return** -- task ready to execute or dispatch to subagent
 
 ## Preamble
 
@@ -115,6 +116,8 @@ echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "ACTIVE_SLICE: $_ACTIVE_SLICE"
 echo "SLICE_PLAN: $_SLICE_PLAN"
 echo "NEXT_TASK: ${_NEXT_TASK:-none}"
+echo "HAS_SPEC: $([ -f "$_YT_DIR/spec/SPEC.md" ] && echo yes || echo no)"
+echo "SPEC_TOOL: ${CLAUDE_SKILL_DIR}/../../bin/ytstack-spec"
 ```
 
 ## Procedure
@@ -173,10 +176,40 @@ Use AskUserQuestion (open-ended):
 > Good: `bun test test/auth/signup.test.ts` or `curl -X POST localhost:3000/api/signup -d '{"email":"a@b.c","password":"test1234"}'`
 >
 > Bad: "manual test" or "check it works" -- those aren't falsifiable.
+>
+> One pass in the local checkout is the default. If the check needs several passes, a sample, or another environment (CI, a preview, a device), say how many, where, and why.
 
-Remember as `_VERIFICATION`.
+Remember as `_VERIFICATION`, plus `_RUNS` (default `once`), `_ENVIRONMENT` (default `local checkout`) and, only when the check covers a sample, `_SAMPLE` (`<n> of <m>, because <reason>`). A number above one, and a sample, carry their reason in the plan.
 
-### Step 7: Fits-one-context-window check
+What this section says is all the evidence the task owes. Execution does not add passes, scenarios, suites or environments, and it does not drop any (`ytstack:minimal-code`, "Evidence").
+
+**Not a verification step: a gate.** Something that work in this task cannot produce is not written as a verification command: a person's verdict, an approval, a measurement on a system this task does not control. If the task has one, remember it as `_GATES`, one line each:
+
+```
+- [ ] G01 -- <what must hold or be given> | decides: <who> | how: <how the verdict is obtained> | lapses: <when it stops holding the row>
+```
+
+Fill all three fields from what the user and the slice plan say; write `unknown` for a field nobody stated, do not invent it. A gate does not hold the task open: the task closes on its verification, and `ytstack:reassess-roadmap` takes every open gate to the human in one question. Most tasks have none.
+
+### Step 7: Determine spec impact
+
+Not a question to the user: work it out. The technical spec under `.ytstack/spec/` says what applies now, one file per area (format: `docs/ux/spec-format.md`). A plan names the part of it that the task makes false.
+
+If `HAS_SPEC=no`: the impact is `none -- the project has no technical spec`. Skip the rest of this step.
+
+Otherwise:
+
+1. Find the areas of the files from Step 4: run `"{SPEC_TOOL}" areas <path> <path> ...` in a Bash call. If the script is not reachable, read the `paths` in the frontmatter of each `.ytstack/spec/<area>.md` yourself.
+2. Read the area file of each hit (and the `sources` it names for the section in question). Read nothing else of the spec.
+3. Compare the task body from Step 5 with what the area file says. Decide per area:
+   - The task changes behaviour, an interface, an invariant, an error path, a limit or where the area is implemented: one line `- <area>: <section> -- <what changes>`.
+   - The task restores what the area file already describes (a bug fix), or changes no behaviour and no contract (refactoring, rename, formatting): no line for that area.
+4. No line at all: `none -- <reason>`, with the reason in a few words (`restores the described behaviour`, `no behaviour or contract changes`, `not covered by an area`).
+5. A file with `no area` and a change that is not trivial: say so in the Step 11 report and name the area that should cover it. Do not create an area file from inside this skill.
+
+Remember as `_SPEC_IMPACT`. A named area is a promise: `ytstack:summarize-task` closes the task only when that area file, or a source it names, changed with the task.
+
+### Step 8: Fits-one-context-window check
 
 Use AskUserQuestion (multi-choice):
 
@@ -194,7 +227,9 @@ If B: ask user to confirm before proceeding (don't silently overlook the risk).
 
 If A: proceed.
 
-### Step 8: Write `M###-S##-T##-PLAN.md`
+### Step 9: Write `M###-S##-T##-PLAN.md`
+
+Write the `**Blocked by:**` line only when this task cannot start without the result of another task of the slice (`T01`, or `T01, T03`); the order of the task list alone is not a reason, and without such a task the line is left out.
 
 ```markdown
 ---
@@ -210,6 +245,9 @@ status: planned
 
 **Summary:** {TASK_DESCRIPTION}
 
+{Only when the task needs another task's result:}
+**Blocked by:** T##
+
 ## Files
 
 {FILE_LIST}
@@ -218,20 +256,31 @@ status: planned
 
 {TASK_BODY}
 
+## Spec impact
+
+{SPEC_IMPACT}
+
 ## Verification
 
 ```bash
 {VERIFICATION}
 ```
 
+Runs: {RUNS}. Environment: {ENVIRONMENT}.{ Sample: {SAMPLE}. -- only when set}
+
 Success: command exits 0 and shows expected output. Failure: re-read plan, check if spec drifted.
+
+{Only when the task has gates:}
+## Gates
+
+{GATES}
 
 ## Done signal
 
 Run `/ytstack:summarize-task` after execution to mark complete and advance STATE.md.
 ```
 
-### Step 9: Update STATE.md
+### Step 10: Update STATE.md
 
 Use Edit tool. If `YTSTACK_NON_INTERACTIVE` is `false` (i.e. `CLAUDE_AGENT_TEAM_MEMBER` is unset):
 - Change `active_slice: <old>` → `active_slice: {ACTIVE_SLICE}`
@@ -246,13 +295,15 @@ Update Status line: `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} / {NEXT_TA
 
 **Milestone state (M018):** if `{CURRENT_MILESTONE}-ROADMAP.md` still says `status: planned`, flip it to `status: in-progress` (Edit) and mirror the global `ROADMAP.md` row -- the first planned task is where work starts. States are the enum in `docs/ux/skill-structure.md` ("Artifact states").
 
-### Step 10: Report + return
+### Step 11: Report + return
 
 Report:
 
 > Task **{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{NEXT_TASK}** planned.
 >
 > File: `{SLICE_PLAN_DIR}/{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{NEXT_TASK}-PLAN.md`
+>
+> Spec impact: {SPEC_IMPACT}
 >
 > STATE.md: `active_slice = {ACTIVE_SLICE}`, `active_task = {NEXT_TASK}`.
 > (Skipped if running as swarm teammate.)
@@ -264,10 +315,10 @@ Report:
 Valid terminal states:
 - Return after writing task-plan file + updating STATE.md
 - Abort if gates fail (HAS_YTSTACK / CURRENT_MILESTONE / ACTIVE_SLICE / NEXT_TASK unresolved)
-- Abort if user picks C in Step 7 (task too big, split needed)
+- Abort if user picks C in Step 8 (task too big, split needed)
 
 Do NOT invoke `ytstack:summarize-task` automatically -- the user / subagent must execute the task first. Do NOT start writing code from within this skill -- that's the execution phase, a separate concern.
 
 **Autonomy (M018):** with `AUTONOMY: loop` (PREFERENCES default) continue now with the execution of the planned task (`ytstack:test-driven-development`, then `ytstack:verification-before-completion`, then `ytstack:summarize-task`) without asking; stop at the slice boundary (`ytstack:reassess-roadmap`) and at any HARD-GATE. With `AUTONOMY: step` return control after this report. This is the one sanctioned exception to "never auto-chain", scoped to steps inside a slice.
 
-**Granularity (M018):** with `GRANULARITY: slice` the unit planned here is the whole slice: append `## Files`, `## What this does`, `## Verification` to `M###-S##-PLAN.md` instead of writing a `T##-PLAN.md`, set `active_task: all`, and skip Step 7. With `GRANULARITY: milestone` do the same at `M###-ROADMAP.md` level with `active_slice: all`, `active_task: all`.
+**Granularity (M018):** with `GRANULARITY: slice` the unit planned here is the whole slice: append `## Files`, `## What this does`, `## Spec impact`, `## Verification` to `M###-S##-PLAN.md` instead of writing a `T##-PLAN.md`, set `active_task: all`, and skip Step 8. With `GRANULARITY: milestone` do the same at `M###-ROADMAP.md` level with `active_slice: all`, `active_task: all`.

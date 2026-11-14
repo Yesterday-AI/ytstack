@@ -278,6 +278,16 @@ write_state_prog '  label: V2\n  done: 3\n  total: 7\n'
 eq "lint: valid progress block -> 0 warnings" "0|" "$(lint "$SL/.ytstack")"
 write_state_prog '  label: V2\n  done: 9\n  total: 7\n'
 case "$(lint "$SL/.ytstack")" in 1\|*"progress: done 9 is greater than total 7"*) ok "lint: malformed progress block reported (W7)";; *) bad "lint: W7" "$(lint "$SL/.ytstack")";; esac
+# lint W8 / W9 (M022-S03): STATE.md is a pointer, not a ledger or a history
+write_state "$NOW" M003 S01 T02
+printf '\n**Status:** M003 / S01 / T02 planned.\n\n## Next action\n\nExecute T02.\n' >> "$SL/.ytstack/STATE.md"
+eq "lint: one status paragraph and a next action -> 0 warnings" "0|" "$(lint "$SL/.ytstack")"
+printf '\n**Previous status:** M002 done.\n\n**Status (2026-01-01):** M001 done.\n' >> "$SL/.ytstack/STATE.md"
+case "$(lint "$SL/.ytstack")" in 1\|*"carries 2 earlier status paragraph(s)"*) ok "lint: earlier status paragraphs counted (W9)";; *) bad "lint: W9" "$(lint "$SL/.ytstack")";; esac
+write_state "$NOW" M003 S01 T02
+i=0; while [ $i -lt 260 ]; do echo "| AV-$i | a ledger row that belongs in its own file | done |" >> "$SL/.ytstack/STATE.md"; i=$((i+1)); done
+case "$(lint "$SL/.ytstack")" in 1\|*"bytes; a pointer stays under 12000"*) ok "lint: oversize STATE.md reported (W8)";; *) bad "lint: W8" "$(lint "$SL/.ytstack")";; esac
+write_state "$NOW" M003 S01 T02
 
 # ---- 14. brownfield signals (M010, issue #18) --------------------------------
 echo "# brownfield signals"

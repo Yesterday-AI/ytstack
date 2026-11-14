@@ -308,6 +308,26 @@ OUT=$("$CHECK" "$ROOT" 2>&1)
 eq "real agents: implementer runs in a worktree (no warning)" 0 "$(printf '%s' "$OUT" | grep -c 'implementer should run with isolation')"
 eq "real agents: zero isolation/memory fails" 0 "$(printf '%s' "$OUT" | grep -c "agents/.*\(isolation\|memory\) '")"
 
+# ---- technical spec (M022): own spec linted, "Keeping this true" copies in sync
+echo "# technical spec"
+eq "no .ytstack/spec in the tree: spec check skipped" 0 "$(printf '%s' "$OUT" | grep -c '\] spec:')"
+eq "scaffold skills carry the maintenance block verbatim" 0 "$(printf '%s' "$OUT" | grep -c "'Keeping this true' block differs")"
+mkdir -p "$ROOT/.ytstack/spec"
+printf -- '---\nproject: fx\n---\n\n# fx\n\n## Areas\n\n| Area | Covers | Status | File |\n|---|---|---|---|\n| core | x | planned | [core.md](core.md) |\n\n## Keeping this true\n\n- x\n' > "$ROOT/.ytstack/spec/SPEC.md"
+printf -- '---\narea: core\nstatus: planned\npaths: []\nverified_at: none\n---\n\n## Purpose\n\nx\n\n## Where implemented\n\nx\n\n## How to verify\n\nx\n\n## Decisions that apply now\n\nx\n' > "$ROOT/.ytstack/spec/core.md"
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "well-formed own spec: no spec finding" 0 "$(printf '%s' "$OUT" | grep -c '\] spec:')"
+printf '\n## History\n\nx\n' >> "$ROOT/.ytstack/spec/core.md"
+OUT=$("$CHECK" "$ROOT" 2>&1); EC=$?
+eq "own spec with a format error -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "\[fail\] spec: core.md: section '## History'")"
+eq "own spec with a format error -> exit 1" 1 "$EC"
+rm -rf "$ROOT/.ytstack"
+cp "$ROOT/skills/init-project/SKILL.md" "$TMP/init.bak"
+sed 's/^- A task plan names its \*\*Spec impact\*\*.*/- A task plan may name a spec impact./' "$TMP/init.bak" > "$ROOT/skills/init-project/SKILL.md"
+OUT=$("$CHECK" "$ROOT" 2>&1)
+eq "a drifted copy of the maintenance block -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "init-project/SKILL.md: the 'Keeping this true' block differs")"
+cp "$TMP/init.bak" "$ROOT/skills/init-project/SKILL.md"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

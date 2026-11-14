@@ -88,6 +88,13 @@ Claude's edit/commit hooks and Agent Teams events are not registered in Codex.
 Check task scope before editing, run the verification command, and use
 `summarize-task` to close work; no automatic draft summary is created on commit.
 
+A prompt that starts with `# Brief:` is a rendered ytstack brief
+(`bin/ytstack-brief render`). It is complete in itself: scope, verification,
+the work contract and the shape of the report. Follow it without loading a
+skill, stay inside its Scope section, do only what its Kind section allows, and
+end with the report lines it asks for. An orchestrator on another host can start a Codex worker with it:
+`ytstack-brief render --slice M###-S## --branch <branch> | codex exec -C <a worktree of its own> -`.
+
 `spawn-milestone-team` remains a Claude Code workflow. In Codex, stop before its
 capability probe or spawn procedure and explain the limitation.
 Suggest the sequential `plan-task` -> implementation ->

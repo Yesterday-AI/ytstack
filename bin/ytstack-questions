@@ -1,0 +1,240 @@
+#!/usr/bin/env bash
+# ytstack questions: the queue of what only the human can decide.
+# Format: docs/ux/coordinator-format.md ("questions/").
+#
+#   ytstack-questions [-C DIR] list [--state open|asked|answered]
+#   ytstack-questions [-C DIR] next
+#   ytstack-questions [-C DIR] new --question TEXT --decides WHO [--blocks REFS]
+#   ytstack-questions [-C DIR] ask <id>
+#   ytstack-questions [-C DIR] answer <id>
+#   ytstack-questions [-C DIR] check
+#
+# The files are questions/Q###-<slug>.md inside the .ytstack directory of DIR
+# (default: $PWD). ask and answer change the frontmatter only; the text of an
+# answer is written into the file by whoever heard it, never by this script.
+#
+# Exit codes
+#   list    0; one line per file: id, state, decides, blocks, question (tab
+#           separated); without --state the open and the asked ones
+#   next    0 "<id><TAB><path>" of the oldest open question; 1 none is open
+#   new     0 the path of the new file; 1 no .ytstack directory; 64 usage
+#   ask     0; 1 unknown id, or the state is not open (a question is asked once)
+#   answer  0; 1 unknown id, already answered, or no text under "## Answer"
+#   check   0 clean, or "no questions" without the directory; 1 one line per problem
+
+set -uo pipefail
+
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hooks/lib/git-ctx.sh"
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+
+usage() { sed -n '5,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+die() { echo "ytstack-questions: $*" >&2; exit 1; }
+case "$CMD" in list|next|new|ask|answer|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+# The resolver falls back to $PWD for a missing directory: refuse it here.
+[ -d "$DIR" ] || { echo "ytstack-questions: -C '$DIR' is not a directory" >&2; exit 64; }
+
+yt_git_ctx "$DIR"
+yt_resolve_yt_dir >/dev/null
+QDIR="${YT_DIR:+$YT_DIR/questions}"
+
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+oneline() { printf '%s' "$1" | tr '\n\r\t' '   ' | sed 's/  */ /g; s/^ //; s/ $//'; }
+is_set() { [ -n "$1" ] && [ "$1" != none ]; }
+
+# qfiles: the question files, in id order.
+qfiles() {
+  local f
+  [ -n "$QDIR" ] || return 0
+  for f in "$QDIR"/Q[0-9][0-9][0-9]-*.md; do
+    [ ! -f "$f" ] || printf '%s\n' "$f"
+  done
+}
+# fm <file> <key>: the value of one frontmatter line.
+fm() {
+  awk -v k="$2" '
+    NR == 1 { if ($0 != "---") exit; next }
+    $0 == "---" { exit }
+    index($0, k ":") == 1 { v = substr($0, length(k) + 2); gsub(/^[ \t]+|[ \t]+$/, "", v); print v; exit }
+  ' "$1"
+}
+# setfm <file> <key> <value> <key> <value>: rewrite two frontmatter lines; a
+# missing one is added before the closing "---". Nothing else changes.
+setfm() {
+  local new
+  new=$(awk -v k1="$2" -v v1="$3" -v k2="$4" -v v2="$5" '
+    NR == 1 && $0 == "---" { fm = 1; print; next }
+    fm && $0 == "---" {
+      if (!s1) print k1 ": " v1
+      if (!s2) print k2 ": " v2
+      fm = 0
+    }
+    fm && index($0, k1 ":") == 1 { print k1 ": " v1; s1 = 1; next }
+    fm && index($0, k2 ":") == 1 { print k2 ": " v2; s2 = 1; next }
+    { print }
+  ' "$1") || return 1
+  [ -n "$new" ] || return 1
+  printf '%s\n' "$new" > "$1"
+}
+# title <file>: the question, from "# Q### -- <question>".
+title() { awk '/^# Q[0-9][0-9][0-9] -- / { sub(/^# Q[0-9][0-9][0-9] -- /, ""); print; exit }' "$1"; }
+# answer_text <file>: what stands under "## Answer"; blank lines and a
+# "<placeholder>" line are not an answer.
+answer_text() {
+  awk '
+    /^```/ { fence = !fence }
+    !fence && /^## / { on = ($0 ~ /^## Answer[ \t]*$/); next }
+    on && NF && $0 !~ /^[ \t]*<.*>[ \t]*$/ { print }
+  ' "$1"
+}
+# find_q <id>: the one file of a question, or a message and status 1.
+find_q() {
+  local f hit="" n=0
+  case "$1" in Q[0-9][0-9][0-9]) ;; *) echo "ytstack-questions: '$1' is not an id (Q###)" >&2; return 1 ;; esac
+  for f in "${QDIR:-/nonexistent}"/"$1"-*.md; do
+    [ -f "$f" ] || continue
+    hit="$f"; n=$((n + 1))
+  done
+  [ "$n" -ne 0 ] || { echo "ytstack-questions: no question $1 in ${QDIR:-<no .ytstack>}" >&2; return 1; }
+  [ "$n" -eq 1 ] || { echo "ytstack-questions: $n files carry the id $1; run check" >&2; return 1; }
+  printf '%s' "$hit"
+}
+
+# ---- list ----------------------------------------------------------------------
+cmd_list() {
+  local want="" f s
+  if [ $# -gt 0 ]; then
+    { [ "$1" = "--state" ] && [ $# -eq 2 ]; } || { usage >&2; return 64; }
+    case "$2" in open|asked|answered) want="$2" ;; *) usage >&2; return 64 ;; esac
+  fi
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    s=$(fm "$f" state)
+    # Without --state everything that is not answered: a file with a broken state stays visible.
+    if [ -n "$want" ]; then [ "$s" = "$want" ] || continue; else [ "$s" != answered ] || continue; fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "$(fm "$f" id)" "$s" "$(fm "$f" decides)" "$(fm "$f" blocks)" "$(title "$f")"
+  done <<EOF
+$(qfiles)
+EOF
+}
+
+# ---- next ----------------------------------------------------------------------
+cmd_next() {
+  local f o best="" hit=""
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    [ "$(fm "$f" state)" = open ] || continue
+    o=$(fm "$f" opened)
+    # Oldest by "opened"; files come in id order, so the lower id wins a tie.
+    if [ -z "$hit" ] || [ "$o" \< "$best" ]; then best="$o"; hit="$f"; fi
+  done <<EOF
+$(qfiles)
+EOF
+  [ -n "$hit" ] || return 1
+  printf '%s\t%s\n' "$(fm "$hit" id)" "$hit"
+}
+
+# ---- new -----------------------------------------------------------------------
+cmd_new() {
+  local q="" who="" blocks="" n=0 f id slug
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { usage >&2; return 64; }
+    case "$1" in
+      --question) q=$(oneline "$2") ;;
+      --decides)  who=$(oneline "$2") ;;
+      --blocks)   blocks=$(oneline "$2") ;;
+      *) usage >&2; return 64 ;;
+    esac
+    shift 2
+  done
+  [ -n "$q" ] && [ -n "$who" ] || { usage >&2; return 64; }
+  [ -n "$QDIR" ] || die "no .ytstack directory for $DIR"
+  mkdir -p "$QDIR" || die "cannot create $QDIR"
+  # The next id follows the highest one in use; a gap is not filled.
+  for f in "$QDIR"/Q[0-9][0-9][0-9]-*; do
+    [ -e "$f" ] || continue
+    id=$(basename "$f"); id=$((10#${id:1:3}))
+    [ "$id" -le "$n" ] || n=$id
+  done
+  [ "$n" -lt 999 ] || die "Q999 is in use; the id has three digits"
+  id=$(printf 'Q%03d' $((n + 1)))
+  slug=$(printf '%s' "$q" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C tr -c 'a-z0-9' '-' | sed 's/--*/-/g; s/^-//' | cut -c1-48 | sed 's/-$//')
+  f="$QDIR/$id-${slug:-question}.md"
+  printf -- '---\nid: %s\nstate: open\ndecides: %s\nopened: %s\nasked: none\nanswered: none\nblocks: %s\n---\n\n# %s -- %s\n\n## Context\n\n## Options\n\n## Recommendation\n\n## Answer\n' \
+    "$id" "$who" "$(now)" "${blocks:-none}" "$id" "$q" > "$f" || die "cannot write $f"
+  printf '%s\n' "$f"
+}
+
+# ---- ask / answer --------------------------------------------------------------
+cmd_ask() {
+  [ $# -eq 1 ] || { usage >&2; return 64; }
+  local f s
+  f=$(find_q "$1") || return 1
+  s=$(fm "$f" state)
+  if [ "$s" != open ]; then
+    echo "ytstack-questions: $1 is '$s', not open; a question is asked once" >&2; return 1
+  fi
+  setfm "$f" state asked asked "$(now)" || die "cannot write $f"
+  echo "$1 asked"
+}
+
+cmd_answer() {
+  [ $# -eq 1 ] || { usage >&2; return 64; }
+  local f s
+  f=$(find_q "$1") || return 1
+  s=$(fm "$f" state)
+  case "$s" in
+    open|asked) ;;
+    *) echo "ytstack-questions: $1 is '$s'; only an open or asked question is answered, and only once" >&2; return 1 ;;
+  esac
+  if [ -z "$(answer_text "$f")" ]; then
+    echo "ytstack-questions: $1 has no text under '## Answer'; write the answer the human gave into $f first" >&2; return 1
+  fi
+  setfm "$f" state answered answered "$(now)" || die "cannot write $f"
+  echo "$1 answered"
+}
+
+# ---- check ---------------------------------------------------------------------
+cmd_check() {
+  local f name id s asked answered n=0 bad=0 ids=" "
+  problem() { bad=$((bad + 1)); echo "$1"; }
+  if [ -z "$QDIR" ] || [ ! -d "$QDIR" ]; then echo "no questions"; return 0; fi
+  for f in "$QDIR"/*.md; do
+    [ -f "$f" ] || continue
+    n=$((n + 1)); name=$(basename "$f")
+    case "$name" in Q[0-9][0-9][0-9]-?*.md) ;; *) problem "$name: the name is not Q###-<slug>.md"; continue ;; esac
+    id=${name%%-*}
+    case "$ids" in *" $id "*) problem "$name: the id $id is used by more than one file" ;; esac
+    ids="$ids$id "
+    if [ "$(sed -n 1p "$f")" != "---" ]; then problem "$name: no frontmatter"; continue; fi
+    [ "$(fm "$f" id)" = "$id" ] || problem "$name: id '$(fm "$f" id)' does not match the file name"
+    s=$(fm "$f" state); asked=$(fm "$f" asked); answered=$(fm "$f" answered)
+    # asked is a time exactly in state asked and "none" in state open; an
+    # answered question keeps whatever it had (it may have been answered unasked).
+    case "$s" in
+      open)
+        ! is_set "$asked" || problem "$name: state open, but asked is '$asked'"
+        ! is_set "$answered" || problem "$name: state open, but answered is '$answered'" ;;
+      asked)
+        is_set "$asked" || problem "$name: state asked, but asked is not set"
+        ! is_set "$answered" || problem "$name: state asked, but answered is '$answered'" ;;
+      answered)
+        is_set "$answered" || problem "$name: state answered, but answered is not set"
+        [ -n "$(answer_text "$f")" ] || problem "$name: state answered, but there is no text under '## Answer'" ;;
+      *) problem "$name: state '$s' is not open, asked or answered" ;;
+    esac
+  done
+  [ "$bad" -eq 0 ] || return 1
+  echo "questions ok: $n file(s)"
+}
+
+case "$CMD" in
+  list)   cmd_list "$@" ;;
+  next)   cmd_next ;;
+  new)    cmd_new "$@" ;;
+  ask)    cmd_ask "$@" ;;
+  answer) cmd_answer "$@" ;;
+  check)  cmd_check ;;
+esac

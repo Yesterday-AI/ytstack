@@ -2,7 +2,7 @@
 name: code-review
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.3.0
 description: "Reviews the active task's commits with a fresh-context reviewer subagent and handles the feedback with technical rigor, through the vendored superpowers requesting-code-review and receiving-code-review procedures, with the task plan and commit range injected. Use after a task's commits exist and before summarize-task, before a merge or PR, or when the user says review this, code review, check my changes. Not for reviewing a plan (plan-eng-review) and not without commits for the task."
 allowed-tools:
   - Bash
@@ -48,7 +48,9 @@ if [ "$_IS_GIT" = yes ] && [ "$_T" != none ] && command -v yt_task_commits >/dev
   _COMMITS="$YT_COMMITS"; _COMMITS_SOURCE="$YT_COMMITS_SOURCE"
   if [ "$_COMMITS_SOURCE" = task-ref ]; then
     _OLDEST=$(git log --no-merges -E --grep "$_PAT" --pretty=format:%h 2>/dev/null | tail -1)
-    [ -n "$_OLDEST" ] && _BASE_SHA=$(git rev-parse "$_OLDEST^" 2>/dev/null || echo "")
+    # The parent of the task's first commit; for a repository's root commit the
+    # empty tree. Without --verify, rev-parse prints the unresolved "<sha>^".
+    [ -n "$_OLDEST" ] && _BASE_SHA=$(git rev-parse --verify --quiet "$_OLDEST^" 2>/dev/null || git hash-object -t tree /dev/null 2>/dev/null)
   elif [ -n "$YT_COMMITS_BASE" ]; then
     _BASE_SHA="$YT_COMMITS_BASE"
   fi
@@ -64,18 +66,82 @@ echo "HEAD_SHA: $_HEAD_SHA"
 echo "COMMITS_BEGIN"
 echo "${_COMMITS:-(none)}"
 echo "COMMITS_END"
+# Technical spec (M022): the area files that cover what the task changed.
+_SPEC_EXISTS=$([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/spec/SPEC.md" ] && echo yes || echo no)
+_SPEC_TOOL="${CLAUDE_SKILL_DIR}/../../bin/ytstack-spec"
+echo "SPEC_EXISTS: $_SPEC_EXISTS"
+echo "SPEC_AREAS_BEGIN"
+if [ "$_SPEC_EXISTS" = yes ] && [ -f "$_SPEC_TOOL" ] && [ -n "$_BASE_SHA" ]; then
+  # shortcut: paths are split on whitespace; a path with a space finds no area.
+  # shellcheck disable=SC2046
+  bash "$_SPEC_TOOL" areas --names $(git diff --name-only "$_BASE_SHA..HEAD" 2>/dev/null | head -200) 2>/dev/null \
+    | sed "s|^|.ytstack/spec/|; s|\$|.md|"
+fi
+echo "SPEC_AREAS_END"
+# Review rounds (M023): one line per round in the task plan under "## Review".
+_ROUNDS=0; _LAST_HEAD=""
+if [ -f "$_TASK_PLAN" ]; then
+  _ROUNDS=$(grep -c -E '^- Round [0-9]+:' "$_TASK_PLAN" 2>/dev/null); _ROUNDS=${_ROUNDS:-0}
+  _LAST_HEAD=$(grep -E '^- Round [0-9]+:' "$_TASK_PLAN" 2>/dev/null | tail -1 | sed -n -E 's/^- Round [0-9]+: *[0-9a-f]+\.\.([0-9a-f]+).*/\1/p')
+  [ -n "$_LAST_HEAD" ] && ! git rev-parse --verify --quiet "$_LAST_HEAD^{commit}" >/dev/null 2>&1 && _LAST_HEAD=""
+fi
+echo "REVIEW_ROUND: $((_ROUNDS + 1))"
+echo "LAST_REVIEWED_HEAD: ${_LAST_HEAD:-none}"
 ```
 
 ## ytstack invocation notes
 
-You are invoked inside a ytstack project after the active task's commits exist. The vendored `requesting-code-review` template needs `{DESCRIPTION}`, `{PLAN_OR_REQUIREMENTS}`, `{BASE_SHA}`, `{HEAD_SHA}`: take the description from the task plan's Summary, the requirements from `TASK_PLAN` (What this does + Verification), and the SHAs from `BASE_SHA` / `HEAD_SHA` above (never guess `HEAD~1`).
+You are invoked inside a ytstack project after the active task's commits exist. The vendored `requesting-code-review` template needs `{DESCRIPTION}`, `{PLAN_OR_REQUIREMENTS}`, `{BASE_SHA}`, `{HEAD_SHA}`: take the description from the task plan's Summary, the requirements from `TASK_PLAN` (What this does + Verification) plus the numbered list under "Bounded review", and the SHAs from `BASE_SHA` / `HEAD_SHA` above (never guess `HEAD~1`; from round 2 on the base is `LAST_REVIEWED_HEAD`).
 
 HARD-GATE: if `IS_GIT=no`, abort. If `ACTIVE_TASK` has `none` in it or `TASK_PLAN_EXISTS=no`, abort with "no active task plan; run `ytstack:plan-task` or review a plain diff without ytstack". If `COMMITS_SOURCE=none` or `BASE_SHA=none`, abort with "no commits found for the task; commit with the `M###-S##-T##:` prefix (or set `commit_ref_pattern` in PREFERENCES) and re-run".
 
-After the reviewer subagent returns, the vendored `receiving-code-review` procedure applies to its findings. ytstack additions:
+**Spec check, bounded to the touched area.** When `SPEC_EXISTS=yes`, add to the reviewer's requirements the plan's `## Spec impact` section and the paths listed under `SPEC_AREAS` (the area files of `.ytstack/spec/` that cover the changed files). The reviewer reads those area files, and the section of a `sources` document they point to, against the diff. Two things are findings: the diff changes behaviour, an interface, an invariant or an error path that an area file describes while the plan says `none`; or an area file (or its source) now states something the diff contradicts. A change that restores the described behaviour needs no spec edit and is not a finding. The reviewer does not audit the rest of the spec, other areas or the repository's documentation.
+
+## Bounded review (ytstack)
+
+A review ends. Where the vendored text below and this section differ, this section applies.
+
+**Which round this is** (`REVIEW_ROUND` above):
+
+| Round | What is reviewed | What the reviewer may report |
+|---|---|---|
+| 1 | The whole change, `BASE_SHA..HEAD_SHA`, with the callers and boundaries it touches. | Everything it finds. This round is meant to be complete. |
+| 2 | Only the fix: `LAST_REVIEWED_HEAD..HEAD_SHA`, and what those commits touch. Give the reviewer the findings of round 1. | Whether each finding is fixed. A new finding only when the fix introduced it, or when it is a serious defect (a permission that no longer holds, data that can be lost, a wrong result) with its concrete trigger; that one still blocks. Nothing about code the fix did not touch, no new matters of taste. |
+| 3 or more | Nothing. Do NOT dispatch a reviewer. | See "Third round" below. |
+
+**What the reviewer is told, in addition to the vendored template** (put it into `{PLAN_OR_REQUIREMENTS}`):
+
+1. Open with what the change does, in two sentences, and with `Assumed load:` the product stage and the volume the review rates against, and where that number comes from: `PROJECT.md`, the area file's "Known limits" and "Runtime and deployment assumptions", `RUNTIME.md`, a budget the plan sets. If no document states it, write `assumed, not documented: <what>`.
+2. Every finding has the file and lines, a concrete case (this input or this state leads to this wrong result) confirmed by reading the lines again, the smallest fix, and `If skipped:` with what happens then, in one sentence. No case, no finding.
+3. A scale or speed finding is rated against the assumed load. A path that gets slow or fails only at a volume this stage does not reach is a note, with the volume at which it starts to matter. At the stage's own load it is rated like any defect. Broken contracts, security boundaries, lost data and wrong answers are rated the same at any load.
+4. A `shortcut:` comment that names its limit is a decision, not a finding, unless the assumed load is already beyond that limit.
+5. No acceptance conditions the plan does not have, no vague worries, no style preferences.
+6. Close with `Not checked:` what was not looked at, and why.
+
+**Whose severity counts.** If the project says what blocks a change (a review policy in `AGENTS.md`, `CONTRIBUTING.md` or a reviewers folder), that policy rates the findings. A finding it rates non-blocking is never used to hold the task: it goes to Follow-ups. A risk the policy says a person has to accept is written as a gate in the task plan (`## Gates`, format in `ytstack:plan-task`); nobody in this session accepts it.
+
+**Record the round.** After the findings are handled, append one line to the task plan under `## Review` (add the heading on the first round), with seven-character SHAs:
+
+```
+- Round {REVIEW_ROUND}: {base}..{HEAD_SHA} -- {approved | changes requested}; blocking: {n}; follow-ups: {n}
+```
+
+`{base}` is `BASE_SHA` in round 1 and `LAST_REVIEWED_HEAD` afterwards. The line is what the next run counts; without it every review looks like the first.
+
+**Third round.** Two rounds are recorded and the change is still not accepted. A third review would find a third thing. Stop and diagnose instead, from the round lines, the findings and the fix commits:
+
+- **Scope:** is the disputed point something the plan never decided? Then it is a question for the human, not for a reviewer.
+- **Conflicting rules:** do two rules of the project ask for opposite things here? Name both.
+- **Solution:** did each fix move the problem instead of removing it? Then the approach is wrong, not the last commit.
+
+Put the diagnosis to the human in one AskUserQuestion: what does not converge, which of the three it is, your recommendation, and the options (decide the point; change the scope of the task; accept the change with the remaining finding as a tracked follow-up, where the project's policy allows that). Do not dispatch a reviewer, do not write another fix, do not run `ytstack:summarize-task`.
+
+## After the reviewer returns
+
+The vendored `receiving-code-review` procedure applies to its findings. ytstack additions:
 
 - Critical and Important findings fixed now get their own task-ref commits; Minor findings and "push-backs with reasoning" go into the task summary's Follow-ups (`ytstack:summarize-task` reads them from the conversation).
-- A finding that reveals a repo-wide pattern goes to `KNOWLEDGE.md`; a reversal of an earlier choice goes to `DECISIONS.md`, never silently.
+- A finding that reveals a repo-wide pattern goes to `KNOWLEDGE.md`; a reversal of an earlier choice goes to `DECISIONS.md`, never silently, and the area file it concerns lists the new entry under "Decisions that apply now" instead of the old one.
 - Do NOT run `ytstack:summarize-task` or `ytstack:verification-before-completion` automatically; name them as the next step.
 
 ## Vendored procedure 1: requesting (inlined verbatim)

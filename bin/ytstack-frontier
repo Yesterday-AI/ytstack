@@ -1,0 +1,385 @@
+#!/usr/bin/env bash
+# ytstack frontier: which lanes may start, and who holds which lane.
+# Format: docs/ux/coordinator-format.md ("LANES.md", "Blocking edges and the frontier").
+#
+#   ytstack-frontier [-C DIR] [list] [--milestone M###] [--ready]
+#   ytstack-frontier [-C DIR] claim <lane> --by <worker> [--kind implement|review|prepare] [--branch B] [--worktree W]
+#   ytstack-frontier [-C DIR] set <lane> [--status S] [--next TEXT] [--pr N] [--head SHA] [--round N] [--branch B] [--worktree W]
+#   ytstack-frontier [-C DIR] release <lane>
+#   ytstack-frontier [-C DIR] check
+#
+# list     one line per slice of the milestone (default: current_milestone of
+#          STATE.md; with "none" the highest M###-ROADMAP.md that is not done,
+#          dropped or shipped-informally): lane, state, detail, tab separated.
+#            done     "[x]" in the milestone roadmap, or a merged row in LANES.md
+#            claimed  a held row in LANES.md; detail: its "Claimed by" cell
+#            blocked  a "**Blocked by:**" entry of the slice plan is not done
+#                     (detail: the open ones), or a blocked row in LANES.md,
+#                     or an open or asked question that names the lane
+#            ready    the rest. A slice without a plan has no edges to read: it
+#                     waits for every slice before it; detail "unplanned".
+#          --ready prints the ready lanes only, one per line.
+# claim    adds the lane's row to LANES.md (created when missing) with status
+#          "claimed". Refused while the row is held, and for a blocked, dropped
+#          or merged row until it was released.
+# set      changes the named cells of one existing row.
+# release  "Claimed by" becomes "-", the status "dropped" unless it is "merged".
+# check    LANES.md has the ten columns, unique lanes, listed Status and Kind
+#          values, and a claim time on every held lane.
+#
+# LANES.md lives in the .ytstack directory of DIR (default: $PWD). A write
+# changes one row and the "updated:" line, under a lock, through a temporary
+# file in the same directory.
+#
+# Exit codes
+#   list     0; with --ready 1 when no lane is ready; 1 no milestone or roadmap
+#   claim    0 claimed; 1 refused (says who holds the lane since when)
+#   set      0; 1 the lane has no row, or nobody holds it and the status needs a holder
+#   release  0; 1 the lane has no row
+#   check    0 "lanes ok" or "no lanes file"; 1 one line per problem
+#   64       usage, or a cell value with "|" or a newline
+
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/hooks/lib/git-ctx.sh"
+
+COLS='Lane|Kind|Status|Claimed by|Branch|Worktree|PR|Reviewed head|Round|Next action'
+HELD='claimed|running|reported|in-review|ready'
+STATUSES="$HELD|merged|blocked|dropped"
+KINDS='implement|review|prepare'
+NL='
+'
+
+usage() { sed -n '5,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+die() { echo "ytstack-frontier: $*" >&2; exit 1; }
+# listed <value> <a|b|c>
+listed() { case "|$2|" in *"|$1|"*) return 0 ;; esac; return 1; }
+# cell <value>: refuse what would break the table
+cell() {
+  case "$1" in *"|"*|*"$NL"*) echo "ytstack-frontier: a cell value must not contain '|' or a newline" >&2; exit 64 ;; esac
+}
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD=list
+case "${1:-}" in
+  list|claim|set|release|check) CMD=$1; shift ;;
+  -h|--help|help) usage; exit 0 ;;
+  ""|--*) ;;
+  *) usage >&2; exit 64 ;;
+esac
+# The resolver falls back to $PWD for a missing directory: refuse it here.
+[ -d "$DIR" ] || { echo "ytstack-frontier: -C '$DIR' is not a directory" >&2; exit 64; }
+
+yt_git_ctx "$DIR"
+yt_resolve_yt_dir >/dev/null
+LANES="$YT_DIR/LANES.md"
+need_yt() { [ -n "$YT_DIR" ] || die "no .ytstack directory for $DIR"; }
+
+# ---- LANES.md --------------------------------------------------------------------
+# lane_rows: the table rows as ten tab separated cells, an empty cell as "-".
+lane_rows() {
+  [ -f "$LANES" ] || return 0
+  awk '
+    /^\|/ && ++n > 2 {
+      split($0, c, "|"); out = ""
+      for (i = 2; i <= 11; i++) { v = c[i]; gsub(/^[ \t]+|[ \t]+$/, "", v); out = out (i > 2 ? "\t" : "") (v == "" ? "-" : v) }
+      print out
+    }
+  ' "$LANES"
+}
+# get_row <lane>: the lane's cells in R_*; fails when it has no row.
+get_row() {
+  local row
+  R_STATUS=""; R_BY=""; R_NEXT=""
+  row=$(lane_rows | YTF_LANE="$1" awk -F'\t' '$1 == ENVIRON["YTF_LANE"] { print; exit }')
+  [ -n "$row" ] || return 1
+  IFS='	' read -r _ _ R_STATUS R_BY _ _ _ _ _ R_NEXT <<EOF
+$row
+EOF
+}
+# table_ok: the first table line is the ten columns, the second a separator.
+table_ok() {
+  awk -v want="$COLS" '
+    /^\|/ {
+      if (++n == 1) { h = $0; gsub(/[ \t]*\|[ \t]*/, "|", h); head = (h == "|" want "|") }
+      else { sep = ($0 ~ /^\|[ :|-]+$/); exit }
+    }
+    END { exit !(head && sep) }
+  ' "$LANES"
+}
+# lock: one writer at a time. Two claims sent in the same moment would otherwise
+# both read the file without the other's row, and one row would be lost.
+# The lock is a file the shell creates itself: under noclobber bash opens it
+# with O_EXCL, so exactly one caller gets it. Not `mkdir`: the mkdir of Ubuntu
+# 26.04 (uutils coreutils) reports success to several callers that create the
+# same directory in the same moment.
+# shortcut: a lock left behind by a killed process is not recognised as stale,
+# the message names the file to remove; upgrade to a pid check if that ever
+# happens in practice.
+lock() {
+  local n=0
+  [ -w "$YT_DIR" ] || die "cannot write in $YT_DIR"
+  until ( set -o noclobber; : > "$LANES.lock" ) 2>/dev/null; do
+    n=$((n + 1))
+    [ "$n" -le 50 ] || die "$LANES.lock exists: another ytstack-frontier is writing. Remove the file if none is."
+    sleep 0.1 2>/dev/null || sleep 1
+  done
+  trap 'rm -f "$LANES.tmp" "$LANES.lock"' EXIT
+}
+# write <lane> <add|change>: the lane's row from YTF_C1..YTF_C10 (an empty value
+# keeps the cell) and the "updated:" line. Every other line is copied as it is.
+YTF_C1=""; YTF_C2=""; YTF_C3=""; YTF_C4=""; YTF_C5=""; YTF_C6=""; YTF_C7=""; YTF_C8=""; YTF_C9=""; YTF_C10=""
+export YTF_C1 YTF_C2 YTF_C3 YTF_C4 YTF_C5 YTF_C6 YTF_C7 YTF_C8 YTF_C9 YTF_C10
+write() {
+  YTF_LANE="$1" awk -v mode="$2" -v now="$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function row(   i, v, out) {
+      out = "|"
+      for (i = 1; i <= 10; i++) {
+        v = ENVIRON["YTF_C" i]
+        if (v == "") v = trim(c[i + 1])
+        out = out " " (v == "" ? "-" : v) " |"
+      }
+      return out
+    }
+    NR == 1 && $0 == "---" { fm = 1; print; next }
+    fm && $0 == "---" { if (!stamped) print "updated: " now; fm = 0; print; next }
+    fm { if ($0 ~ /^updated:/) { print "updated: " now; stamped = 1 } else print; next }
+    /^\|/ {
+      split($0, c, "|")
+      if (++n > 2 && mode == "change" && !hit && trim(c[2]) == ENVIRON["YTF_LANE"]) { hit = 1; print row() }
+      else print
+      next
+    }
+    n >= 2 && mode == "add" && !hit { hit = 1; split("", c); print row() }
+    { print }
+    END { if (n >= 2 && mode == "add" && !hit) { split("", c); print row() } }
+  ' "$LANES" > "$LANES.tmp" && mv "$LANES.tmp" "$LANES" || die "could not write $LANES"
+}
+# open_table: lock, then make sure there is a table a row can be written to.
+open_table() {
+  lock
+  [ -f "$LANES" ] || return 1
+  table_ok || die "$LANES has no lanes table in the documented format; run 'ytstack-frontier check'"
+}
+
+# ---- list ------------------------------------------------------------------------
+# open_milestone: the highest milestone whose roadmap is still open.
+open_milestone() {
+  yt_find_artifacts "$YT_DIR" 'M[0-9][0-9][0-9]-ROADMAP.md' | while IFS= read -r f; do
+    case "$(sed -n 's/^status:[ ]*\([^ ]*\).*/\1/p' "$f" | head -1)" in
+      done|dropped|shipped-informally) ;;
+      *) basename "$f" -ROADMAP.md ;;
+    esac
+  done | sort -r | head -1
+}
+
+cmd_list() {
+  local m="" ready="" any="" road slices fin=" " earlier="" s x lane state detail plan by b open
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --ready) ready=1; shift ;;
+      --milestone)
+        case "${2:-}" in M[0-9][0-9][0-9]) m=$2; shift 2 ;; *) usage >&2; return 64 ;; esac ;;
+      *) usage >&2; return 64 ;;
+    esac
+  done
+  need_yt
+  if [ -z "$m" ]; then
+    m=$(sed -n 's/^current_milestone:[ ]*\([^ ]*\).*/\1/p' "$YT_DIR/STATE.md" 2>/dev/null | head -1)
+    case "$m" in M[0-9][0-9][0-9]) ;; *) m=$(open_milestone) ;; esac
+    [ -n "$m" ] || die "no milestone: STATE.md names none and no M###-ROADMAP.md is open"
+  fi
+  road=$(yt_find_artifacts "$YT_DIR" "$m-ROADMAP.md" | head -1)
+  [ -n "$road" ] || die "no roadmap for $m: looked for $YT_DIR/$m-ROADMAP.md"
+
+  # "S01 x" for a checked slice, "S01" for an open one, in roadmap order
+  slices=$(awk '/^- \[[ xX]\] S[0-9][0-9]( |$)/ { print substr($0, 7, 3) (substr($0, 4, 1) == " " ? "" : " x") }' "$road")
+  while read -r s x; do
+    [ -n "$s" ] || continue
+    if [ -n "$x" ] || { get_row "$m-$s" && [ "$R_STATUS" = merged ]; }; then fin="$fin$s "; fi
+  done <<EOF
+$slices
+EOF
+
+  local q qst qid qblock=""
+  for q in "$YT_DIR"/questions/Q[0-9]*.md; do
+    [ -f "$q" ] || continue
+    qst=$(sed -n 's/^state: *//p' "$q" | head -1)
+    case "$qst" in open|asked) ;; *) continue ;; esac
+    qid=$(sed -n 's/^id: *//p' "$q" | head -1)
+    for b in $(sed -n 's/^blocks: *//p' "$q" | head -1 | tr ',' ' '); do qblock="$qblock$NL$b $qid"; done
+  done
+
+  while read -r s x; do
+    [ -n "$s" ] || continue
+    lane="$m-$s"; state=ready; detail=""
+    get_row "$lane" || true
+    if [ -n "$x" ]; then state="done"
+    elif [ "$R_STATUS" = merged ]; then state="done"; detail="merged, roadmap checkbox open"
+    elif listed "$R_STATUS" "$HELD"; then state=claimed; detail=$R_BY
+    elif [ "$R_STATUS" = blocked ]; then state=blocked; detail="lane: $R_NEXT"
+    else
+      plan=$(yt_find_artifacts "$YT_DIR" "$lane-PLAN.md" | head -1)
+      if [ -n "$plan" ]; then
+        # "S01 (needs the schema), S03" names S01 and S03: the first word of each entry
+        by=$(sed -n 's/^\*\*Blocked by:\*\*[ ]*//p' "$plan" | head -1 | tr ',' '\n' | awk '{ print $1 }')
+      else
+        by=$earlier; detail=unplanned
+      fi
+      open=""
+      while IFS= read -r b; do
+        b=${b#"$m"-}
+        case "$b" in ""|none|-) continue ;; esac
+        # An entry that is no done slice of this milestone keeps the lane blocked.
+        case "$fin" in *" $b "*) ;; *) open="$open${open:+, }$b" ;; esac
+      done <<EOF
+$by
+EOF
+      # A question for the human that names this lane under `blocks:` and is
+      # not answered yet blocks it too (docs/ux/coordinator-format.md).
+      while read -r b qid; do
+        [ -n "$b" ] || continue
+        case "$b" in "$lane"|"$s") open="$open${open:+, }question $qid" ;; esac
+      done <<EOF
+$qblock
+EOF
+      if [ -n "$open" ]; then state=blocked; detail="$open${detail:+ ($detail)}"; fi
+    fi
+    earlier="$earlier$NL$s"
+    if [ -z "$ready" ]; then printf '%s\t%s%s\n' "$lane" "$state" "${detail:+	$detail}"
+    elif [ "$state" = ready ]; then echo "$lane"; any=1
+    fi
+  done <<EOF
+$slices
+EOF
+  [ -z "$ready" ] || [ -n "$any" ]
+}
+
+# ---- claim, set, release ---------------------------------------------------------
+cmd_claim() {
+  local lane="${1:-}" by="" kind="" branch="" wt=""
+  case "$lane" in ""|-*) usage >&2; return 64 ;; esac
+  cell "$lane"; shift
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { usage >&2; return 64; }
+    cell "$2"
+    case "$1" in
+      --by) by=$2 ;;
+      --kind) kind=$2 ;;
+      --branch) branch=$2 ;;
+      --worktree) wt=$2 ;;
+      *) usage >&2; return 64 ;;
+    esac
+    shift 2
+  done
+  [ -n "$by" ] && listed "${kind:-implement}" "$KINDS" || { usage >&2; return 64; }
+  need_yt
+  if ! open_table; then
+    { printf -- '---\nupdated: -\n---\n\n# Lanes\n\n'
+      echo "| $(printf '%s' "$COLS" | sed 's/|/ | /g') |"
+      echo '|---|---|---|---|---|---|---|---|---|---|'
+    } > "$LANES.tmp" && mv "$LANES.tmp" "$LANES" || die "could not write $LANES"
+  fi
+  YTF_C3=claimed; YTF_C4="$by $(date -u +%Y-%m-%dT%H:%MZ)"; YTF_C5=$branch; YTF_C6=$wt
+  if get_row "$lane"; then
+    if listed "$R_STATUS" "$HELD"; then
+      echo "ytstack-frontier: $lane is held by ${R_BY% *} since ${R_BY##* } (status $R_STATUS)" >&2
+      return 1
+    fi
+    if [ "$R_BY" != "-" ]; then
+      echo "ytstack-frontier: $lane has a $R_STATUS row of ${R_BY% *}; run 'ytstack-frontier release $lane' before it is claimed again" >&2
+      return 1
+    fi
+    YTF_C2=$kind; YTF_C10=-
+    write "$lane" change
+  else
+    YTF_C1=$lane; YTF_C2=${kind:-implement}; YTF_C9=0
+    write "$lane" add
+  fi
+}
+
+cmd_set() {
+  local lane="${1:-}" any="" v
+  case "$lane" in ""|-*) usage >&2; return 64 ;; esac
+  shift
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { usage >&2; return 64; }
+    cell "$2"; v=${2:--}
+    case "$1" in
+      --status)
+        listed "$2" "$STATUSES" || { echo "ytstack-frontier: --status takes one of: $STATUSES" >&2; return 64; }
+        YTF_C3=$2 ;;
+      --branch) YTF_C5=$v ;;
+      --worktree) YTF_C6=$v ;;
+      --pr) YTF_C7=$v ;;
+      --head) YTF_C8=$v ;;
+      --round) YTF_C9=$v ;;
+      --next) YTF_C10=$v ;;
+      *) usage >&2; return 64 ;;
+    esac
+    any=1; shift 2
+  done
+  [ -n "$any" ] || { usage >&2; return 64; }
+  need_yt
+  open_table && get_row "$lane" || die "$lane has no row in $LANES; claim it first"
+  if [ "$R_BY" = "-" ] && listed "$YTF_C3" "$HELD"; then
+    die "nobody holds $lane; claim it before it is set to $YTF_C3"
+  fi
+  write "$lane" change
+}
+
+cmd_release() {
+  local lane="${1:-}"
+  case "$lane" in ""|-*) usage >&2; return 64 ;; esac
+  [ $# -eq 1 ] || { usage >&2; return 64; }
+  need_yt
+  open_table && get_row "$lane" || die "$lane has no row in $LANES"
+  YTF_C4=-
+  [ "$R_STATUS" = merged ] || YTF_C3=dropped
+  write "$lane" change
+}
+
+# ---- check -----------------------------------------------------------------------
+cmd_check() {
+  [ $# -eq 0 ] || { usage >&2; return 64; }
+  [ -n "$YT_DIR" ] && [ -f "$LANES" ] || { echo "no lanes file"; return 0; }
+  awk -v want="$COLS" -v statuses="$STATUSES" -v held="$HELD" -v kinds="$KINDS" '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function listed(v, list) { return index("|" list "|", "|" v "|") > 0 }
+    function p(msg) { print msg; bad = 1 }
+    !/^\|/ { next }
+    ++n == 1 {
+      h = $0; gsub(/[ \t]*\|[ \t]*/, "|", h)
+      if (h != "|" want "|") p("line " NR ": the header is not the ten columns " want)
+      next
+    }
+    n == 2 { if ($0 !~ /^\|[ :|-]+$/) p("line " NR ": no separator line under the header"); next }
+    {
+      cells = split($0, c, "|") - 1 - ($0 ~ /\|[ \t]*$/)
+      if (cells != 10) { p("line " NR ": " cells " cells, expected 10"); next }
+      lane = trim(c[2]); kind = trim(c[3]); st = trim(c[4]); by = trim(c[5])
+      if (lane == "") { p("line " NR ": no lane"); next }
+      if (seen[lane]++) p(lane ": more than one row")
+      if (!listed(kind, kinds)) p(lane ": kind \"" kind "\" is not one of " kinds)
+      if (!listed(st, statuses)) p(lane ": status \"" st "\" is not one of " statuses)
+      else if (listed(st, held) && by !~ / [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9](:[0-9][0-9])?Z$/)
+        p(lane ": status " st " without a holder and a claim time (\"" by "\")")
+    }
+    END {
+      if (!n) p("no lanes table")
+      if (bad) exit 1
+      print "lanes ok"
+    }
+  ' "$LANES"
+}
+
+case "$CMD" in
+  list)    cmd_list "$@" ;;
+  claim)   cmd_claim "$@" ;;
+  set)     cmd_set "$@" ;;
+  release) cmd_release "$@" ;;
+  check)   cmd_check "$@" ;;
+esac

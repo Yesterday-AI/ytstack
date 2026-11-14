@@ -3,7 +3,7 @@ name: resume-session
 description: "Rebuilds working context at the start of a session from STATE.md, handoffs and the latest summaries into a where-we-are briefing. Use when a session starts in a project with .ytstack/, or when the user says resume, where were we, pick up where I left off. Not for writing a handoff (handoff-session) and not for repos without .ytstack/ (init-project or adopt-brownfield)."
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.1.1
   triggers:
     - resume session
     - where were we
@@ -91,6 +91,7 @@ echo "STATE_LINT: $_STATE_LINT"
 echo "LATEST_AUTO_HANDOFF: $_LATEST_AUTO_HANDOFF"
 echo "AUTO_HANDOFF_TS: ${_AUTO_HANDOFF_TS:-none}"
 echo "RECENT_SUMMARIES_COUNT: $(echo "$_RECENT_SUMMARIES" | grep -c .)"
+echo "HAS_SPEC: $([ -f "$_YT_DIR/spec/SPEC.md" ] && echo yes || echo no)"
 ```
 
 ## Procedure
@@ -102,8 +103,9 @@ STOP.
 **Step 3 -- Read handoffs, then synthesize.** Read each of:
 - `STATE.md` (frontmatter + Status + Next action sections)
 - The automatic handoff at `LATEST_AUTO_HANDOFF` if not `none` -- the freshest breadcrumb of *this* worktree, written out of tree by the pre-compact hook (position, Next action excerpt, reading list)
-- `HANDOFF.md` if present (`MANUAL_HANDOFF_EVENT` / `MANUAL_HANDOFF_TS`; In-flight, Next action, Open decisions, Warnings). When the manual handoff is newer than the automatic one, lean on the manual one; it was written on purpose.
+- `HANDOFF.md` if present (`MANUAL_HANDOFF_EVENT` / `MANUAL_HANDOFF_TS`; In-flight, Next action, Open decisions, Warnings, Suggested skills). When the manual handoff is newer than the automatic one, lean on the manual one; it was written on purpose.
 - Each file in `_RECENT_SUMMARIES` (Outcome first lines)
+- `spec/SPEC.md` when `HAS_SPEC=yes`: the "Areas" table only. Do not read the area files here and do not restate them in the briefing; name the area file of the work that is next.
 
 Open the briefing with one line that names the sources: `Handoffs: automatic {AUTO_HANDOFF_TS} ({LATEST_AUTO_HANDOFF}) / manual {MANUAL_HANDOFF_EVENT} {MANUAL_HANDOFF_TS}` (or `none` for either).
 
@@ -113,7 +115,7 @@ Produce a three-paragraph briefing:
 
 **Paragraph 2 -- Most recent work:** Summarize the 3 latest task summaries in one or two sentences each. Focus on *outcomes*, not process. If no summaries, note "no tasks closed yet in this project."
 
-**Paragraph 3 -- Next:** The STATE.md's Next action, enriched with HANDOFF.md's In-flight / Open decisions / Warnings if they exist and are non-empty. End with a concrete first suggested action.
+**Paragraph 3 -- Next:** The STATE.md's Next action, enriched with HANDOFF.md's In-flight / Open decisions / Warnings if they exist and are non-empty. End with a concrete first suggested action. When `HAS_SPEC=yes`, add which area file describes the code that action touches (`spec/<area>.md`): that file, not the plans and summaries, says what applies there now.
 
 **Formatting:**
 
@@ -128,8 +130,10 @@ Produce a three-paragraph briefing:
 
 ---
 Files read: STATE.md{, HANDOFF.md if present, <N> summary files}
-To go deeper: read ROADMAP.md for the big picture, DECISIONS.md for locked choices, REVIEW-NOTES.md for deferred items.
+To go deeper: spec/SPEC.md and the area file you work in for what applies now, ROADMAP.md for the big picture, DECISIONS.md for why, REVIEW-NOTES.md for deferred items.
 ```
+
+When `HAS_SPEC=no`, replace the first clause of the "To go deeper" line with: `No technical spec yet (what applies now, one file per area): /ytstack:adopt-brownfield adds .ytstack/spec/ and touches no other artifact.`
 
 **Step 4 -- Report.** Emit the briefing above. No further action -- return control so the user decides what to do next.
 

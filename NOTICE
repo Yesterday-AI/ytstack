@@ -81,8 +81,29 @@ code is needed at all, whether it exists, whether the standard library or an
 existing dependency covers it, whether one line suffices, and only then write
 the minimum; never cut validation, security, accessibility or the one small
 test) is adapted from the ponytail project
-(<https://github.com/DietrichGebert/ponytail>, MIT). No ponytail text, code or
-assets are included; the prose is ytstack's own.
+(<https://github.com/DietrichGebert/ponytail>, MIT). Further concepts in the
+same file and in skills/code-review/SKILL.md follow ponytail 5.3.3 (reviewed
+2026-11-13): list what a change must reach before choosing the smallest
+solution, fix a bug once in the shared code after checking every caller, no
+test for a trivial change, a shortcut comment that names its limit and when to
+upgrade, review findings with a concrete case and what happens if they are
+skipped, a stated assumed load, and a closing "not checked" line. Applying
+these ideas to verification, review rounds and dispatched agents is ytstack's
+own extension. No ponytail text, code or assets are included; the prose is
+ytstack's own.
+
+## mattpocock/skills (concept credit)
+
+Coordinator mode (skills/coordinate/, skills/finish-lane/,
+skills/handover-step/, skills/lane-retro/, bin/ytstack-frontier,
+bin/ytstack-questions and docs/ux/coordinator-format.md) adapts concepts from
+the skill collection at <https://github.com/mattpocock/skills> (MIT, reviewed
+at 4ae2317): a coordinating session whose memory outlives it and is written as
+history, blocking edges and a frontier of ready work, a claim before any work,
+a brief with checkable completion criteria, a staged script for steps only the
+human may perform, a queue of decision-ready questions, and retros that end in
+checks. No text, template or code from that collection is included; every
+skill, script and template here is ytstack's own.
 
 ## External AI-first methodology
 

@@ -819,6 +819,102 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 
 ---
 
+## 2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)
+
+**Context:** The artifact model answered "what did we plan and what happened" (plans, summaries, decisions) and had no place for "what applies now". A fresh session had to rebuild the present from history. In ytstack itself the entry documents contradicted the code (`PROJECT.md` said M001 in progress and gstack vendored, `KNOWLEDGE.md` denied a CI gate that two workflows run). A consumer audit on the same day showed the cost at scale.
+
+**Options considered:**
+- A) Clarify the roles inside the existing files and project conventions, no new files (issue #36 as first written).
+- B) Dedicated artifacts: `spec/SPEC.md` as the entry point and one file per system area, at the same paths in every project.
+- C) Generate a full architecture document (all twelve arc42 sections) per project.
+
+**Chose:** B, by the operator's instruction of 13 November 2026, with what A protects kept as a rule: an existing document stays authoritative and is named under `sources` (pointer-only); nothing is copied. The format is `docs/ux/spec-format.md`. `bin/ytstack-spec` checks it (`lint`), reports areas whose paths changed after their description (`drift`) and checks a task's documentation impact at closure (`impact`).
+
+**Reason:** A fixed path is what a fresh session, a dispatched agent and a host without hooks can all find without being told. One file per area keeps a task's documentation edit local, so parallel work does not collide in one growing root document. C produces filler nobody maintains.
+
+**How to apply:**
+- A plan names its spec impact; a task that changes behaviour updates the area file or the source it names in the same commits; a fix that restores the described behaviour, a refactoring and a trivial edit close with `none`.
+- A documentation impact is satisfied by the area file or by one of its `sources`. A correct pointer is not edited to close a task.
+- The drift report is a prompt to look. "Contract unchanged" is answered by setting `verified_at`. It never holds a task open.
+- A scaffold from a pitch is `status: planned` with `verified_at: none`. The spec states what is planned and what was read against the code; it never states deployment or acceptance.
+- A new decision that changes what applies in an area is linked under that area's "Decisions that apply now"; this file stays append-only.
+- The codebase maps of `adopt-brownfield` stay beside the spec.
+
+**Supersedes:** None. It adds a fourth role to the artifact model: plans and summaries are history, the spec is the description of the system.
+
+---
+
+## 2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)
+
+**Context:** `minimal-code` limited implementation code and nothing else. A consumer migration showed the gap: an evaluation planned as one pass of 44 scenarios ran as 88, findings the project's own rules rated non-blocking held pull requests, one change went through six review rounds, and plan rows that only a person's verdict could close were worked on for days. The rules also did not reach agents that were dispatched with a brief and never loaded a skill.
+
+**Options considered:**
+- A) A second directive for verification and review beside `minimal-code`.
+- B) One work contract: `minimal-code` covers code, evidence and the report, and travels inside every dispatched brief.
+- C) New preferences that switch review depth and evidence levels per project.
+
+**Chose:** B. The contract is the body of `skills/minimal-code/SKILL.md`; `bin/ytstack-brief render` puts it verbatim into the brief for a Claude subagent or `codex exec`, and `bin/ytstack-brief check` validates the worker's report. The decision points carry the detail: `plan-task` (runs, environment, gates), `reassess-roadmap` (one question, two numbers), `code-review` (rounds, assumed load, concrete findings), the verifier and `verification-before-completion` (evidence identity).
+
+**Reason:** A second directive is a second copy of the policy and the two drift. Preferences for evidence levels invite silent weakening of approved gates. One text that is rendered into the brief reaches every worker on every host without a hook.
+
+**How to apply:**
+- More work than the plan asks for needs a named reason: an unmet requirement, a reachable failure case, or evidence that does not establish the result.
+- A plan's Verification section is the whole evidence a task owes: command, runs, environment. Execution neither adds to it nor drops from it.
+- Evidence is a check on a commit in an environment. It is renewed when one of the three changed, when the run failed or flaked, or when an independent run is required and missing; never because a new context reads it.
+- A gate (`## Gates`: what, who decides, how, when it lapses) never holds a task open, and no agent records it as given. `reassess-roadmap` takes all open gates to the human in one question per slice boundary. A gate whose condition can no longer be met is recorded as lapsed, never as passed.
+- Review round 1 is complete, round 2 covers the fix and its consequences, round 3 is a diagnosis of scope, conflicting rules or solution. The round is recorded in the task plan.
+- A review states the load it assumed and rates scale findings against it. The project's severity policy decides what blocks; a non-blocking finding is a follow-up.
+- Every report ends with "Not checked:".
+- Checks the project requires for every change (CI on the current head, a required review, a deployment check) stay required.
+
+**Supersedes:** None. Narrows two older rules to the commit being claimed: the verifier's "run it again, now" (`agents/verifier.md`) and the vendored "run it fresh" in `verification-before-completion`. Extends 2026-11-07 "Ceremony scales with the change" from code to evidence and review.
+
+---
+
+## 2026-11-13: `STATE.md` is a pointer with a size bound; history leaves it through `reconcile`, a closed milestone is folded into the spec (M022-S03)
+
+**Context:** `STATE.md` collected status paragraphs and, in consumer projects, whole ledgers. ytstack's own file had 29 KB and thirteen earlier status paragraphs; one consumer's had 412 KB. The SessionStart injection then dropped the "Next action" excerpt to stay under the host's cap, which is the one line a new session needs.
+
+**Chose:**
+- The STATE lint reports a file above `YT_STATE_MAX_BYTES` (12,000) and status paragraphs beside the current one (W8, W9). Both are prompts; no skill stops on them, and the frontmatter that other tools read is unchanged.
+- The injection cuts the "Next action" excerpt to what fits instead of dropping it.
+- `reconcile` gets two classes, each with its own question: move the history paragraphs of `STATE.md` verbatim into `.ytstack/archive/`, and archive the slice and task files of closed milestones (only when a technical spec exists).
+- At the last slice of a milestone `reassess-roadmap` folds what still holds into the area files and then names the archive offer. It moves nothing itself.
+
+**Reason:** A size bound without a way to get under it only produces a permanent warning. The way has to keep the user's text intact, so it is a move with consent, never a rewrite. The fold comes before the archive offer because an archived plan that still holds the only statement of a rule would lose it.
+
+**How to apply:** New things that need a table per item (lanes, questions) get their own file and a link from `STATE.md`. A skill that writes into `STATE.md` writes one status paragraph and replaces the previous one only through `reconcile`'s consent path.
+
+**Supersedes:** None. The slice was planned to wait for M020 (Kimi adapter) because both edit `hooks/session-start` and `STATE.md`; it was built before M020 landed on the operator's instruction, so the two changes meet at merge time.
+
+---
+
+## 2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)
+
+**Context:** One session coordinated a migration with more than a hundred work packages. ytstack had nothing for the coordination itself, so the session kept its ledger in scratch files, rebuilt who owned what after every compaction, reported host state from memory, asked the same question several times and answered mechanical mistakes with more instruction text.
+
+**Chose:** Formats in `docs/ux/coordinator-format.md` and one tool per mechanical step:
+- `.ytstack/LANES.md` with one row per delegated lane, written through `bin/ytstack-frontier`; `**Blocked by:**` in slice plans; the frontier is what is open, unblocked and unclaimed; a claim precedes every dispatch.
+- Lane kinds (`implement`, `review`, `prepare`) in the rendered brief; the report gains `Status:`, `Uncommitted:` and `Next:`.
+- `bin/ytstack-finish-lane` and the skill `finish-lane`: commit what a lane left, push, open the pull request, wait for the host to show the head, review pinned to that commit, gates read from the host, merge at the reviewed commit.
+- `handover-step`: a step only the human may perform is one staged script that the agent checks statically and never runs.
+- `.ytstack/questions/`: one file per question with the states open, asked, answered.
+- `.ytstack/STANDING.md` for instructions that hold beyond the task.
+- `coordinate` for the owning session, `bin/ytstack-watch` for polling outside the model, `lane-retro` for sampling lanes into checks.
+
+**Reason:** Everything a coordinator needs after a context loss has to be a file, and everything that changes on a host has to be read, not remembered. A claim is the cheapest answer to "what stops two runs doing the same work". A merge is the one step that cannot be undone, so the default leaves it to the human.
+
+**How to apply:**
+- The lanes table is not part of `STATE.md`.
+- A status that names a pull request state, a check result or a deployed build says when it was read.
+- `merge_by:` in `PREFERENCES.md` decides who merges (`human` by default).
+- A mechanical mistake is answered with a check that replaces an instruction line, not with another line.
+- GitHub through `gh` is the only host the pipeline and the watcher support.
+
+**Supersedes:** None. Uses the brief, the report, the gates and the review rounds of M023 and the pointer rule of M022-S03.
+
+---
+
 ## 2026-11-14: The six gstack skills become ytstack's own adaptations, synced with upstream; no gstack install
 
 **Context:** Since 0.3.0 the wrappers `office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship` and `document-release` called an installed gstack through the Skill tool. gstack's `./setup` registers every gstack skill in `~/.claude/skills/` (63 folders plus `gstack`), so the maintainer's global skill list filled with ~65 skills ytstack never selected. That broke the founding promise: only selected skills, inside the plugin's boundary. The wrappers depended on that registration, because they invoked the skills by their bare names. A 1:1 copy is not an option either: the six skills reference 54 gstack helpers (29 Bun scripts, one compiled binary), ~560 MB of `node_modules` and hard-coded `~/.claude/skills/gstack/` paths.

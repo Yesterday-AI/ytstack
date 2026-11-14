@@ -11,7 +11,7 @@ user-invocable: false
 # Using ytstack
 
 <SUBAGENT-STOP>
-If you were dispatched as an Agent Teams teammate to execute a specific slice or task, skip this skill -- your scope is bounded by the task plan the lead gave you.
+If you were dispatched with a brief to execute a specific slice or task (subagent, teammate, a worker on another host), skip this skill -- your scope is the brief, and the work contract it carries (`ytstack:minimal-code`) applies.
 </SUBAGENT-STOP>
 
 <EXTREMELY-IMPORTANT>

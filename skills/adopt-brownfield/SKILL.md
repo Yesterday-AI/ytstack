@@ -1,9 +1,9 @@
 ---
 name: adopt-brownfield
-description: "Brings an existing codebase under ytstack by reference, without a greenfield pitch. Use when a repo has a README, docs, CHANGELOG, ADRs or months of commits but no .ytstack/ yet, or when the user says adopt ytstack, set up ytstack here, onboard this codebase, map the codebase. Not for ideas without code yet (office-hours, then init-project) and not for repos that already have .ytstack/ (resume-session)."
+description: "Brings an existing codebase under ytstack by reference, without a greenfield pitch. Use when a repo has a README, docs, CHANGELOG, ADRs or months of commits but no .ytstack/ yet, when a project has .ytstack/ but no technical spec under .ytstack/spec/ yet (adds only the spec), or when the user says adopt ytstack, set up ytstack here, onboard this codebase, map the codebase, write the technical spec. Not for ideas without code yet (office-hours, then init-project) and not for repos that already have .ytstack/ with a spec (resume-session)."
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.2.0
   triggers:
     - adopt ytstack
     - existing project
@@ -38,20 +38,28 @@ A product that has shipped, a repo with a CHANGELOG and a year of commits, a ser
 
 Copies drift. The README, `docs/` and the ADRs stay the source of truth; `.ytstack/` is a distillation and navigation layer over them. Link, summarise in one line, point at the file. Only move a file when the user says so (Step 4, option C), and leave a pointer at the old path.
 
+The technical spec (Step 7) is the place where this temptation is strongest, and the rule is the same: an area that already has an authoritative document gets a pointer to it, not a retelling.
+
+## Anti-Pattern: "The docs say it works, so the area is implemented"
+
+A document is a claim. `status: implemented` and a `verified_at` commit mean somebody read the code under the area's `paths` against the description, in this run. An area nobody read stays `planned` with `verified_at: none`, and a fact nobody established is written as `Unknown -- <what is missing>`. A spec with three honest `planned` rows beats one with eight green rows nobody checked: the next session acts on what the spec says.
+
 ## Checklist
 
 You MUST create a TodoWrite task for each of these items and complete them in order:
 
 1. **Run preamble** -- resolve the checkout, count brownfield signals, list candidate sources
-2. **HARD-GATE: already initialized** -- if `HAS_YTSTACK=yes`, report and stop
+2. **HARD-GATE: already initialized** -- if `HAS_YTSTACK=yes` and the technical spec exists, report and stop; if the spec is missing, do the spec-only run (Steps 5, 7, 8, 10, 11 in their reduced form)
 3. **Present the mapping table** -- found / target slot / proposed handling / conflicts / gaps
 4. **Ask per artifact** -- one AskUserQuestion per candidate slot: reference / extract / move / leave
 5. **Map the codebase** -- dispatch up to 4 read-only subagents, write `.ytstack/codebase/{stack,architecture,conventions,concerns}.md`
 6. **Write the artifacts** -- PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES, each per its Step 4 decision; templates only for gaps
-7. **Write the `.gitignore` block** -- `.ytstack/.local/` via `yt_ensure_gitignore`
-8. **Update the entry-point doc** -- pointer section in AGENTS.md or CLAUDE.md (never a copy)
-9. **Report** -- files written, handling per slot, next step
-10. **Return control** -- do NOT auto-invoke any other skill
+7. **Write the technical spec** -- propose areas from `codebase/architecture.md` and the docs index, confirm them with one AskUserQuestion, read the code per area, write `.ytstack/spec/SPEC.md` + `.ytstack/spec/<area>.md` (pointer-only where a document exists)
+8. **Check the spec format** -- run `ytstack-spec lint` and fix what it reports; by hand against `docs/ux/spec-format.md` when the script is not reachable
+9. **Write the `.gitignore` block** -- `.ytstack/.local/` via `yt_ensure_gitignore`
+10. **Update the entry-point doc** -- pointer section in AGENTS.md or CLAUDE.md (never a copy)
+11. **Report** -- files written, handling per slot, spec status per area, next step
+12. **Return control** -- do NOT auto-invoke any other skill
 
 ## Process Flow
 
@@ -64,16 +72,23 @@ digraph adopt_brownfield {
     "Ask per artifact (reference / extract / move / leave)" [shape=box];
     "Map codebase (4 read-only subagents)" [shape=box];
     "Write artifacts per decision; templates for gaps" [shape=box];
+    "Propose spec areas, confirm the list" [shape=box];
+    "Read code per area; write spec (pointer-only where a doc exists)" [shape=box];
+    "Check spec format (ytstack-spec lint)" [shape=box];
     "Write .gitignore block + entry-point pointer" [shape=box];
     "Report + return" [shape=doublecircle];
 
     "Run preamble (signals + candidates)" -> "HAS_YTSTACK?";
-    "HAS_YTSTACK?" -> "Report already initialized" [label="yes"];
+    "HAS_YTSTACK?" -> "Report already initialized" [label="yes, spec exists"];
+    "HAS_YTSTACK?" -> "Propose spec areas, confirm the list" [label="yes, no spec (spec-only run)"];
     "HAS_YTSTACK?" -> "Present mapping table" [label="no"];
     "Present mapping table" -> "Ask per artifact (reference / extract / move / leave)";
     "Ask per artifact (reference / extract / move / leave)" -> "Map codebase (4 read-only subagents)";
     "Map codebase (4 read-only subagents)" -> "Write artifacts per decision; templates for gaps";
-    "Write artifacts per decision; templates for gaps" -> "Write .gitignore block + entry-point pointer";
+    "Write artifacts per decision; templates for gaps" -> "Propose spec areas, confirm the list";
+    "Propose spec areas, confirm the list" -> "Read code per area; write spec (pointer-only where a doc exists)";
+    "Read code per area; write spec (pointer-only where a doc exists)" -> "Check spec format (ytstack-spec lint)";
+    "Check spec format (ytstack-spec lint)" -> "Write .gitignore block + entry-point pointer";
     "Write .gitignore block + entry-point pointer" -> "Report + return";
 }
 ```
@@ -126,6 +141,7 @@ fi
 echo "BRANCH: $(git branch --show-current 2>/dev/null || echo unknown)"
 echo "PROJECT_SLUG: $_PROJECT_SLUG"
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
+echo "HAS_SPEC: $([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/spec/SPEC.md" ] && echo yes || echo no)"
 echo "YTSTACK_SCOPE: $_YT_SCOPE"
 echo "YT_DIR: $_YT_DIR"
 echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
@@ -145,9 +161,17 @@ if [ -n "$_BF_HINTS" ]; then printf '%s\n' "$_BF_HINTS" | sed 's/^/  - /'; else 
 
 ### Step 2: HARD-GATE -- already initialized
 
-If `HAS_YTSTACK` is `yes`, nothing is left to adopt. Report and stop:
+If `HAS_YTSTACK` is `yes` and `HAS_SPEC` is `yes`, nothing is left to adopt. Report and stop:
 
-> "ytstack is already initialized for `{PROJECT_SLUG}` at `{YT_DIR}` (scope: {YTSTACK_SCOPE}). To see where things stand, run `ytstack:resume-session`. To refresh the codebase map only, delete `{YT_DIR}/codebase/` and run this skill again."
+> "ytstack is already initialized for `{PROJECT_SLUG}` at `{YT_DIR}` (scope: {YTSTACK_SCOPE}), including the technical spec. To see where things stand, run `ytstack:resume-session`."
+
+If `HAS_YTSTACK` is `yes` and `HAS_SPEC` is `no`: **spec-only run.** The project was set up before ytstack had a technical spec, or its spec question was cancelled. Say so in one line (*"`.ytstack/` exists, the technical spec does not. I add only the spec; no other artifact is touched."*) and run a reduced procedure:
+
+- Skip Steps 3, 4, 6 and 9. No existing artifact under `{YT_DIR}` is rewritten, moved or deleted.
+- Step 5 only for what is missing: Step 7 needs `codebase/architecture.md` and `codebase/stack.md`. A map file that exists is used as it is; name its `generated:` date in the area question so the user can judge its age. A missing one is written by its mapping subagent.
+- Step 7 and Step 8 in full. For the areas and their `sources`, read the project's own index as well: `KNOWLEDGE.md` (docs index), `DECISIONS.md` or a `decisions/` folder, and the documents they link.
+- Step 10: if the entry-point doc already has a ytstack section, add only the sentence that starts with "For what applies now"; otherwise append the block.
+- Step 11: report the "Technical spec" row, the "Spec, not established" line, the format check and the reading order. Leave out the other rows.
 
 If `BROWNFIELD_SIGNALS` is `0` or `1`, continue (the user asked for this skill), but say so in one line before the table: *"Only {N} brownfield signals. If this is really a new idea rather than an existing codebase, `ytstack:office-hours` then `ytstack:init-project` fit better; say stop and I will."* If it is `unknown` (lib not loaded), build the candidate list by hand in Step 3 from `README.md`, `docs/`, `CHANGELOG.md`, `docs/adr/`, `docs/decisions/`, manifest files and `AGENTS.md`/`CLAUDE.md`.
 
@@ -165,18 +189,19 @@ Read each candidate named under `CANDIDATES` (first 40 lines of each file is eno
 > | RUNTIME.md | `package.json` scripts, `.env.example`, `compose.yml`, `.github/workflows/` | extract: commands, services, env keys, deploy target | values never copied, keys only |
 > | ROADMAP backlog | `docs/plans/` / `ROADMAP.md` / `BACKLOG.md` | reference | open items become backlog, not a milestone |
 > | STATE.md | nothing | gap: scaffold | `tracker:` field for Linear / GitHub Projects / Paperclip / Jira |
+> | Technical spec | {documents that describe a part of the system: `docs/architecture.md`, `docs/adr/`, an API reference, feature docs} + the codebase map | one file per system area under `.ytstack/spec/`, pointer-only where a document exists | you confirm the area list after the codebase is mapped; an area is marked implemented only after its code was read |
 > | Entry point | `{ENTRY_DOC}` | pointer section | never duplicated |
 >
 > Conflicts: {e.g. "docs/adr/ AND docs/design-decisions.md both record decisions; I will seed DECISIONS.md from both, by reference, and flag overlaps"} or "none".
 > Gaps: {slots with no source, typically STATE.md and PREFERENCES.md}. These get templates.
 
-Omit rows whose source does not exist, except STATE.md (always a gap) and the entry point (say "none found" when `ENTRY_DOC` is `none`).
+Omit rows whose source does not exist, except STATE.md (always a gap), the technical spec (always written; say "codebase map only" under Found when no document describes a part of the system) and the entry point (say "none found" when `ENTRY_DOC` is `none`).
 
 If `PITCH` is not `none`: a pitch for new scope exists alongside the old codebase. Say so; in Step 6 move it to `{YT_DIR}/OFFICE-HOURS-<slug>.md` exactly as `init-project` does, so `plan-milestone` can draw the first milestone from it. The pitch does not change the handling of the existing docs.
 
 ### Step 4: Ask per artifact
 
-One question per slot that has a source (PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, backlog), in that order, one message each. Do not ask for gaps and do not ask for the entry point.
+One question per slot that has a source (PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, backlog), in that order, one message each. Do not ask for gaps and do not ask for the entry point. The technical spec has its own question in Step 7, once the codebase map exists.
 
 If `YTSTACK_NON_INTERACTIVE` is `true`, auto-pick the RECOMMENDATION for every slot and log one line each: `[ytstack:adopt-brownfield] auto-picked {X} for {SLOT} because YTSTACK_NON_INTERACTIVE=true`.
 
@@ -418,7 +443,150 @@ explain_level: default
 
 Write `{YT_DIR}/backlog/README.md`: one line per open item found in the source with a relative link; heading `# Backlog (inherited from {SOURCE})`. Items become milestones only when `ytstack:plan-milestone` picks them up.
 
-### Step 7: Write the `.gitignore` block
+### Step 7: Write the technical spec
+
+The artifacts say what the project is and where work stands. The technical spec says what applies now, per part of the system: `.ytstack/spec/SPEC.md` (the entry point, one page) and one `.ytstack/spec/<area>.md` per area. The binding format is `docs/ux/spec-format.md` in the ytstack plugin (`${CLAUDE_SKILL_DIR}/../../docs/ux/spec-format.md`). Read it before writing; the templates below are that format filled in for an existing codebase.
+
+The codebase map from Step 5 stays where it is and as it is. The map is a dated snapshot of what four readers found; the spec is the description that gets maintained. `SPEC.md` links to the map, nothing is merged into it.
+
+**7a. Propose the areas.** An area is a part of the system that somebody could be handed a bug in. Take the modules and boundaries from `codebase/architecture.md` and the docs index (`KNOWLEDGE.md`, or the candidates read in Step 3) and list three to eight areas. Per area: a lowercase slug (`auth`, `billing-export`), one line on what it covers, the `paths` globs of its code as the architecture map names them, and the authoritative document for it when the project has one (architecture guide, ADR folder, API reference, feature doc). More than eight modules: merge the ones that share a boundary. Fewer than three: take what the map shows and do not split a module to reach three.
+
+**7b. Confirm the list.** If `YTSTACK_NON_INTERACTIVE` is `true`, take the proposal and log:
+
+> `[ytstack:adopt-brownfield] auto-picked A (proposed spec areas: {comma-separated slugs}) because YTSTACK_NON_INTERACTIVE=true`
+
+Otherwise use AskUserQuestion with this body:
+
+> Adopting ytstack for **{PROJECT_SLUG}** on branch `{BRANCH}`. The memory files and the codebase map are written; the technical spec is next.
+>
+> The spec is where a fresh session reads how each part of the system behaves right now, where its code is and how a change to it is checked. It is split into areas: parts you could hand somebody a bug in, one short file each. Where one of your documents already describes a part, the file only points at that document. These are the parts I read in the codebase map and your docs:
+>
+> {one line per proposed area: `{slug}` -- {what it covers}; code: `{paths}`; described in: `{document}` or "no document yet"}
+>
+> RECOMMENDATION: Choose A because the list follows the module boundaries found in your code, and an area is cheap to rename, split or merge later.
+>
+> A) Use this list -- {N} area files
+>    Completeness: 10/10, effort: human: 0 / CC: ~5 min, tier: core
+>
+> B) Edit the list -- tell me what to add, drop, rename or merge; I write the list you give
+>    Completeness: 10/10, effort: human: ~2 min / CC: ~5 min, tier: core
+>
+> (to change later: add, rename or remove a file under `.ytstack/spec/` and its row in `.ytstack/spec/SPEC.md`)
+
+On B, take the edited list from the user's answer, turn every name into a lowercase slug and continue with that list. Do not ask a second time. If the user cancels the question: write no spec files, skip Step 8, keep the artifacts and the map, and continue with Step 9. The pointer block (Step 10) and the report (Step 11) then say that the spec is missing.
+
+**7c. Read the code per area.** Status is established by reading, never taken from a document. For each confirmed area somebody reads the code under its `paths` against its description: the area's document where one exists, otherwise what `codebase/architecture.md` says about the module. When an area is a handful of files, read them yourself. Otherwise dispatch one read-only subagent per area in ONE message (Agent tool, `general-purpose`), with the Step 5 frame (read-only, no build or test commands, at most 60 lines) plus:
+
+> Area `{area}`: code under `{paths}`, described in `{document, or the section of .ytstack/codebase/architecture.md}`. Read the description, then the code. Report: every behavior the description states, each with `found at <path:line>`, `not found` or `not read`; the entry points and the tests that pin the behavior, as paths; the command that checks this area if the repository names one; anything the code does that the description does not mention.
+
+`{HEAD_SHORT}` is `git rev-parse --short HEAD`. The read decides status and `verified_at`:
+
+| What the read established | `status` | `verified_at` |
+|---|---|---|
+| Every behavior the description states was found in the code | `implemented` | `{HEAD_SHORT}` |
+| Some were found, others were not found or not read | `partial` | `{HEAD_SHORT}` |
+| Nobody read the code: no reader, no `paths`, `IS_GIT: no`, or uncommitted changes under `paths` (the files read are then not the files at HEAD) | `planned` | `none` |
+
+`planned` after an honest attempt is a correct result. Raising a status to make the table look finished is not.
+
+`verified_at` is `{HEAD_SHORT}`, the commit whose code you read, never an older one such as the commit the branch started from (format document, "Drift"). On a branch that will be squash-merged, name the area in the report as one to stamp again after the merge; until then `lint` warns about the orphaned stamp, and `drift` does not read it.
+
+**7d. Write `.ytstack/spec/SPEC.md`.** At most 80 lines. The section "Keeping this true" is copied verbatim; it is what a session without hooks finds in the repository.
+
+```markdown
+---
+project: {PROJECT_NAME}
+updated: {TODAY}
+---
+
+# {PROJECT_NAME} -- technical spec
+
+## What this is
+
+{Three to six lines: what the system does, for whom, and its main parts. Distilled from PROJECT.md and codebase/architecture.md; link to README sections, do not copy them.}
+
+## Areas
+
+| Area | Covers | Status | File |
+|---|---|---|---|
+| {area} | {one line} | {planned / partial / implemented, per 7c} | [{area}.md]({area}.md) |
+
+## Invariants that hold everywhere
+
+- {A rule every area obeys, with a link to the ADR, the decision or the check that enforces it.} or: `Unknown -- no project-wide rule found in the docs or the codebase map`
+
+## Build and test
+
+The commands are in [codebase/stack.md](../codebase/stack.md); [RUNTIME.md](../RUNTIME.md) holds the distilled list.
+
+## Keeping this true
+
+- A task plan names its **Spec impact**: the area and section it changes, or `none`.
+- A task that changes behaviour updates the area file, or the source the area file names, in the same commits. A task that restores the described behaviour, a refactoring and a trivial edit close with `none`.
+- A decision that changes what applies in an area is linked under that area's "Decisions that apply now" in the same commits; the entry it replaces leaves the list.
+- Which area describes a path: the `paths` in each area file. Which areas need a look: `bin/ytstack-spec drift`.
+- The format: `docs/ux/spec-format.md` in the ytstack plugin.
+```
+
+**7e. Write one `.ytstack/spec/{area}.md` per area.** At most 200 lines each. An area with an authoritative document is pointer-only (the copy anti-pattern above applies here in full): the file holds the frontmatter with the document under `sources`, the four required sections, and only what the document lacks.
+
+```markdown
+---
+area: {area}
+status: {implemented | partial | planned, per 7c}
+paths:
+  - {glob from codebase/architecture.md, e.g. src/auth/**}
+sources:
+  - {the authoritative document, relative to the repository root, e.g. docs/architecture.md}
+verified_at: {HEAD_SHORT | none, per 7c}
+---
+
+## Purpose
+
+The description of this area lives in [{document}](../../{document}). {One line on where the area ends, only when the document does not say.}
+
+## Where implemented
+
+- `{entry point}` -- {what starts here}
+- Tests: `{test path}` or: `Unknown -- no test found that pins this area`
+
+## How to verify
+
+`{command, from codebase/stack.md}` -- {what a pass looks like}. Not run during adoption.
+
+## Decisions that apply now
+
+- [{ADR or decision title}](../../{path}) -- {one line}
+```
+
+Rules for every area file:
+
+- `paths` come from `codebase/architecture.md`, as git pathspec globs relative to the repository root. `sources` are paths relative to the repository root too; a document that Step 4 moved (option C) is named at its new place under `.ytstack/`.
+- No document for the area: leave `sources` out, and write "Purpose" in two to four lines from the architecture map. Add "Behavior" with the rules the reader saw in the code, each with the path that shows it.
+- `status: partial`: add "Behavior" (it sits between "Purpose" and "Where implemented") and list each behavior the description states that was not found, marked `(planned)`, and each one that was not read as `Unknown -- <behavior> not checked against the code`.
+- The other sections of the format (interfaces, data flow, invariants, error behavior, runtime assumptions, known limits) are written only for what the read established and the document does not say, under the exact names and in the order the format document fixes. Otherwise leave them out. Never fill a section by retelling the document.
+- "How to verify": the command as the repository names it. Say `passed at {HEAD_SHORT}` only if it ran in this session; otherwise `Not run during adoption`. No command found: `Unknown -- no check found for this area`.
+- "Decisions that apply now": the ADRs or decision entries in force for the area, linked. None found: `Unknown -- no decision record names this area`.
+- Anything nobody established is `Unknown -- <what is missing>`. Never set `verified_at` from a document alone, and never write a status the read in 7c did not establish.
+
+### Step 8: Check the spec format
+
+Skip when Step 7 wrote no spec files. Otherwise run the format check from the project root:
+
+```bash
+_SPEC_BIN="${CLAUDE_SKILL_DIR}/../../bin/ytstack-spec"
+if [ -x "$_SPEC_BIN" ]; then
+  "$_SPEC_BIN" lint; echo "SPEC_LINT_EXIT: $?"   # 0 clean | 2 warnings only | 1 failures
+else
+  echo "SPEC_LINT: unavailable"
+fi
+```
+
+- `SPEC_LINT_EXIT: 0` -- done.
+- `SPEC_LINT_EXIT: 1` or `2` -- every `FAIL` and `warn` line names the file and the rule. Fix the file and run the check again until it exits 0. Fix a finding in the direction of the truth: correct a `paths` glob that matches no file, a `sources` path, a section name or a link; shorten a file that is too long. If a status cannot be backed (no commit for `verified_at`, no `paths`), lower it to `planned`. Never invent a `verified_at` to make a finding go away.
+- `SPEC_LINT: unavailable` (a host that does not substitute `CLAUDE_SKILL_DIR`) -- read each file you wrote against the section "Checked mechanically" of `docs/ux/spec-format.md` by hand and fix what differs. If that document is not reachable either, compare against the templates in Step 7. Say in the report that the check was done by hand.
+
+### Step 9: Write the `.gitignore` block
 
 With the lib loaded by the preamble:
 
@@ -429,19 +597,21 @@ echo "GITIGNORE: $YT_GITIGNORE"   # written | unchanged | skipped
 
 Ignores only `.ytstack/.local/` (in-tree fallback for volatile session state). Everything else under `.ytstack/` is committable.
 
-### Step 8: Update the entry-point doc
+### Step 10: Update the entry-point doc
 
 If `ENTRY_DOC` is not `none`, append this section to it with the Edit tool (if `CLAUDE.md` is a symlink to `AGENTS.md`, edit `AGENTS.md`). If a `## ytstack` heading already exists there, replace that section instead of adding a second one.
 
 ```markdown
 ## ytstack project memory
 
-`.ytstack/` holds this project's memory: `PROJECT.md` (what it is, what is validated), `DECISIONS.md` (append-only), `KNOWLEDGE.md` (link index over `docs/` + gotchas), `RUNTIME.md` (derived from the manifests), `STATE.md` (milestone position) and a codebase map under `.ytstack/codebase/`. `README.md`, `docs/` and the ADRs stay the source of truth; `.ytstack/` links to them. Adopted via `ytstack:adopt-brownfield` on {TODAY}.
+`.ytstack/` holds this project's memory: `PROJECT.md` (what it is, what is validated), `DECISIONS.md` (append-only), `KNOWLEDGE.md` (link index over `docs/` + gotchas), `RUNTIME.md` (derived from the manifests), `STATE.md` (milestone position), a codebase map under `.ytstack/codebase/` and the technical spec under `.ytstack/spec/`. For what applies now (how a part of the system behaves, where it is implemented, how a change is verified), start at `.ytstack/spec/SPEC.md`. `README.md`, `docs/` and the ADRs stay the source of truth; `.ytstack/` links to them. Adopted via `ytstack:adopt-brownfield` on {TODAY}.
 ```
+
+If Step 7 wrote no spec (the area question was cancelled), leave out "and the technical spec under `.ytstack/spec/`" and the sentence that starts with "For what applies now".
 
 If `ENTRY_DOC` is `none`, write nothing and include the block in the report so the user can paste it into a new `AGENTS.md`.
 
-### Step 9: Report
+### Step 11: Report
 
 > Adopted **{PROJECT_NAME}** into ytstack (brownfield import, {BROWNFIELD_SIGNALS} signals, no office-hours):
 >
@@ -453,15 +623,22 @@ If `ENTRY_DOC` is `none`, write nothing and include the block in the report so t
 > | RUNTIME.md | {A/B/C/D} from {sources} | `.ytstack/RUNTIME.md` |
 > | STATE.md | scaffolded | `.ytstack/STATE.md` (`tracker: none`) |
 > | Codebase map | 4 subagents | `.ytstack/codebase/{stack,architecture,conventions,concerns}.md` |
+> | Technical spec | {n} areas: {i} implemented, {p} partial, {q} planned; {k} pointer-only | `.ytstack/spec/SPEC.md` + `.ytstack/spec/{area}.md` |
 > | Entry point | pointer section | `{ENTRY_DOC}` |
 >
+> Spec, not established: {one line per area that is `planned` or `partial`, carries an `Unknown` or needs a new `verified_at` after a squash merge: `{area}` -- {what is missing}; or "nothing open"}. Spec format check: {clean | fixed: {what} | done by hand, `ytstack-spec` not reachable}.
+>
 > Moved files: {list with old -> new, or "none"}. `.gitignore`: {GITIGNORE}.
+>
+> Reading order for a new session: `.ytstack/STATE.md` (where work stands), then `.ytstack/spec/SPEC.md` (what applies now), then the area file for the part being touched.
 >
 > Next step: `ytstack:plan-milestone` for the next discrete initiative; it reads `codebase/` and PROJECT.md "Validated" and scopes only the delta. If issue-level work lives in Linear / GitHub Projects / Paperclip / Jira, set `tracker:` in `STATE.md` first.
 >
 > If you're in a git repo (`IS_GIT: yes`): these files are unstaged. `git status` will show them. Commit when ready.
 
-### Step 10: Return control
+If the area question was cancelled in Step 7: the "Technical spec" row reads `not written (area question cancelled)`, the line that starts with "Spec, not established" is replaced by *"`.ytstack/spec/` was not written. Tell me the areas (or say "use the proposal") and I write it."*, and the reading order names `.ytstack/STATE.md` only.
+
+### Step 12: Return control
 
 STOP here. Do NOT invoke `ytstack:plan-milestone`, `ytstack:office-hours` or `ytstack:init-project`. The user decides the next step.
 
@@ -469,12 +646,13 @@ STOP here. Do NOT invoke `ytstack:plan-milestone`, `ytstack:office-hours` or `yt
 
 The terminal state is one of:
 
-- Returning control to the user after writing `.ytstack/` (artifacts + `codebase/`), the `.gitignore` block and the entry-point pointer, with the report above
-- Exiting immediately after reporting "already initialized" (when `HAS_YTSTACK=yes`)
+- Returning control to the user after writing `.ytstack/` (artifacts + `codebase/` + `spec/`), the `.gitignore` block and the entry-point pointer, with the report above
+- Exiting immediately after reporting "already initialized" (when `HAS_YTSTACK=yes` and `HAS_SPEC=yes`)
+- Returning control after a spec-only run (`HAS_YTSTACK=yes`, `HAS_SPEC=no`): `spec/` written, the map completed where it was missing, nothing else touched
 - Exiting without writes because the user cancelled a per-artifact question
 
 Do NOT invoke `ytstack:office-hours`, `ytstack:init-project`, `ytstack:plan-milestone`, `ytstack:spawn-milestone-team` or any other ytstack skill from here. The ONLY valid next actions are:
 
-- User reviews `.ytstack/PROJECT.md` (Validated section, Adoption table) and commits
+- User reviews `.ytstack/PROJECT.md` (Validated section, Adoption table) and `.ytstack/spec/SPEC.md` (area list, status per area) and commits
 - User sets `tracker:` in `.ytstack/STATE.md` if issue-level work lives elsewhere
 - User runs `ytstack:plan-milestone` when the next discrete initiative is ready

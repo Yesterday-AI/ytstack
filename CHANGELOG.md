@@ -7,6 +7,164 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Technical spec** (issue #36): every project gets `.ytstack/spec/SPEC.md`
+  (entry point, one page) and one `.ytstack/spec/<area>.md` per system area.
+  They say what applies now: behaviour, contracts, where it is implemented,
+  how a change is verified, which decisions are in force. Plans and summaries
+  stay the history. Where a project already has an authoritative document for
+  an area, the area file points at it (`sources`) and repeats nothing. Format
+  and maintenance rules: `docs/ux/spec-format.md`.
+- `bin/ytstack-spec`: `lint` (format), `drift` (areas whose `paths` changed
+  after their description or its source was last touched, as a prompt to
+  look), `impact` (a task plan's "Spec impact" against what the task changed),
+  `areas` (which area describes a path). Suite `tests/ytstack-spec.test.sh`.
+- `init-project` scaffolds the spec from the pitch, every area
+  `status: planned` and unverified. `adopt-brownfield` builds it over the
+  existing documents and its codebase map, and marks an area `implemented`
+  only after its code was read. For a project that already has `.ytstack/`
+  and no spec, `adopt-brownfield` adds only the spec.
+- `plan-task` writes a `## Spec impact` section (area and section, or `none`
+  with a reason). `summarize-task` does not close a task whose named area was
+  not updated: the area file or one of its `sources` has to have changed with
+  the task. The summary records the result under `## Spec`.
+- `code-review` and the verifier read the area files that cover the changed
+  paths against the change, and nothing else of the spec. `reassess-roadmap`
+  answers the drift report once per area at the slice boundary.
+- `bin/ytstack-check` lints ytstack's own `.ytstack/spec/` and fails when the
+  maintenance block in the two scaffolding skills differs from the format
+  document.
+- Eval case `spec-impact`; second outcome graders on `plan-task`,
+  `summarize-task`, `init-project` and `adopt-brownfield`.
+- **Bounded work** (issue #35): `minimal-code` is now the work contract for
+  code, evidence and reports: list what a change must reach before choosing
+  the smallest solution, fix a bug once in the shared code, no new test for a
+  trivial change, run what the plan's Verification names as often as it says,
+  end every report with "Not checked:".
+- `bin/ytstack-brief`: `render` builds the brief for a dispatched worker from
+  the plan files and includes the contract verbatim (the same text for a
+  Claude subagent and for `codex exec`); `check` validates the worker's
+  report (fixed labels, among them "Not checked:"). `spawn-milestone-team` dispatches with the
+  rendered brief and checks the report before the verifier runs. Suite
+  `tests/ytstack-brief.test.sh`.
+- Gates: a slice plan or task plan can carry `## Gates` (what, who decides,
+  how the verdict is obtained, when it lapses). A gate never holds a task
+  open and no agent records it as given. `reassess-roadmap` puts all open
+  gates and all non-converging work to the human in one question and reports
+  two numbers: slices closed by work, slices accepted.
+- `plan-task` records how often and where a verification runs (`Runs:`,
+  `Environment:`, optional `Sample:` with its reason).
+- `code-review` counts rounds in the task plan (`## Review`): round 1 is
+  complete, round 2 covers the fix and its consequences, a third round is a
+  diagnosis of scope, conflicting rules or solution instead of another
+  review. The reviewer states the assumed load, gives a concrete case and
+  "if skipped" per finding, treats a `shortcut:` comment that names its limit
+  as a decision, and follows the project's severity policy.
+- Eval cases `bounded-evidence`, `gates-one-question`, `review-round-three`.
+- **`STATE.md` as a pointer**: the STATE lint reports a file above 12,000
+  bytes (W8) and status paragraphs beside the current one (W9). Both are
+  prompts and stop no skill. `reconcile` offers to move that history verbatim
+  into `.ytstack/archive/` and, in a project with a technical spec, to
+  archive the slice and task files of closed milestones.
+- At the last slice of a milestone `reassess-roadmap` folds what still holds
+  (changed behaviour, decisions in force, limits) into the area files of the
+  spec before it names the archive offer.
+- Eval cases `fresh-resume`, `fresh-bugfix`, `fresh-requirement`: three
+  fresh-session tasks on one project snapshot whose history contradicts its
+  present.
+- **Coordinator mode** (issue #34), formats in
+  `docs/ux/coordinator-format.md`:
+  - `.ytstack/LANES.md`, one row per delegated lane, written through
+    `bin/ytstack-frontier` (`list`, `claim`, `set`, `release`, `check`).
+    Slice plans carry `**Blocked by:**`; the frontier is what is open,
+    unblocked and unclaimed. `spawn-milestone-team` claims a lane before it
+    dispatches and dispatches again when the frontier changes. Claiming a
+    held lane is refused.
+  - `bin/ytstack-brief render --kind implement|review|prepare`; the report
+    gains `Status:` (complete, partial, blocked), `Uncommitted:` and `Next:`.
+  - `bin/ytstack-finish-lane` and the skill `finish-lane`: commit what a lane
+    left (junk and out-of-scope files are refused), push, open the pull
+    request, wait until the host shows the head, review pinned to that
+    commit, gates read from the host, merge at the reviewed commit. GitHub
+    through `gh`. Who merges is `merge_by:` in `PREFERENCES.md`, `human` by
+    default.
+  - The skill `handover-step` with `bin/ytstack-handover`: a step only the
+    human may perform becomes one staged script with read-only checks, a
+    confirmation before every change and a receipt. The agent checks it
+    statically and never runs it.
+  - `.ytstack/questions/` with `bin/ytstack-questions`: one file per question
+    for the human, states open, asked, answered. A question is asked once.
+    `reassess-roadmap` carries a gate that needs a verdict as a question
+    file.
+  - `.ytstack/STANDING.md` for instructions that hold beyond the task at
+    hand.
+  - The skill `coordinate` for the session that owns a plan and delegates all
+    of it: start from files after every context loss, host facts read fresh
+    and stamped with their read time, questions one at a time, bounded loops,
+    rotation through a handoff. `bin/ytstack-watch` polls pull requests
+    outside the model and prints a line only when something changed.
+  - The skill `lane-retro`: a sample of finished lanes in six fixed
+    categories; an accepted candidate becomes a check or a pointer, never
+    only new prose.
+  - `systematic-debugging` gets a flake disposition; the handoff gets a
+    "Suggested skills" section.
+  - Eval case `coordinator-resume`.
+  - Not exercised yet: nothing of coordinator mode has run against a real
+    pull request host or in a real multi-lane run; the suites use a stand-in
+    for `gh`.
+
+### Changed
+
+- `resume-session`, `handoff-session` and the closing line of the
+  SessionStart injection name `spec/SPEC.md` instead of restating how the
+  system behaves.
+- The SessionStart injection cuts the "Next action" excerpt to what fits
+  under the host's cap instead of replacing it with "omitted".
+- Evidence is a check on a commit in an environment. The verifier still makes
+  the independent run, once per commit; neither it nor
+  `verification-before-completion` repeats a check for the same commit and
+  environment because the context is new. The summary's Verification line
+  records the commit and the environment.
+- The TDD wrapper says which changes get a new test (logic, bug fixes) and
+  which do not (a rename, a constant, a text, a config value).
+- ytstack's own entry documents agree with the repository again
+  (`PROJECT.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `AGENTS.md`, the wrapper and
+  suite counts in README, QUICKSTART, NOTICE and `docs/concept.md`).
+
+### Fixed
+
+- `verified_at` names the commit whose code was checked, never the branch
+  base; the advice to stamp an older commit is gone from the format and
+  `adopt-brownfield`. `bin/ytstack-spec lint` fails on an implemented area
+  whose `paths` match files at HEAD and none at `verified_at`. This
+  repository's six area files are stamped with the commit they were checked
+  against.
+- `.ytstack/spec/SPEC.md` no longer says hooks write nothing into the
+  checkout: it separates volatile state (outside the tree) from the two
+  deliberate artifact writers, `post-tool-use-bash` and `task-completed`.
+- The verifier and `spawn-milestone-team` reuse an earlier PASS only for
+  the same commit, environment and command. On another commit the check runs
+  again: unchanged planned files do not cover a changed import, configuration
+  or fixture. `tests/evidence-rule.test.sh` pins the rule.
+- A spec in user scope (`~/.ytstack/projects/<key>/`) no longer blocks
+  `summarize-task`: `bin/ytstack-spec impact` reports its area as
+  unverifiable (exit 4) with the area file's modification time against the
+  task's first commit, and the skill records that or asks the person once.
+- `bin/ytstack-spec impact` reads git's path records NUL-delimited, so a
+  source with a space or a non-ASCII byte in its name counts as changed,
+  committed or not.
+- `bin/ytstack-brief` reads a planned path with a space inside its backticks,
+  so the brief names the area file that covers it.
+
+### Upgrade notes
+
+- Existing projects have no spec yet. Run `/ytstack:adopt-brownfield` once:
+  it proposes the areas, asks one question and writes `.ytstack/spec/`. No
+  other artifact is touched.
+- Task plans written before this release have no `## Spec impact` section.
+  `summarize-task` then works the impact out at closure instead of refusing.
+
 ## [0.6.0] - 2026-11-14
 
 ### Fixed

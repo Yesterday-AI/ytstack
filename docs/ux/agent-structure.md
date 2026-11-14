@@ -24,7 +24,7 @@ skills:
 ---
 ```
 
-`hooks`, `mcpServers` and `permissionMode` are ignored for plugin subagents (platform rule); `bin/ytstack-check` warns when they appear. `isolation: worktree` branches from the repository's default branch, not from the orchestrator's HEAD: the brief's first instruction re-bases the worker (`git checkout -B ytstack/M###-S## <orchestrator-branch>`), and the worktree is removed automatically when the agent changed nothing (verifiers never do).
+`hooks`, `mcpServers` and `permissionMode` are ignored for plugin subagents (platform rule); `bin/ytstack-check` warns when they appear. `isolation: worktree` branches from the repository's default branch, not from the orchestrator's HEAD: the brief's "Git" section re-bases the worker (`git checkout -B ytstack/M###-S## <orchestrator-branch>`), and the worktree is removed automatically when the agent changed nothing (verifiers never do).
 
 ### name
 

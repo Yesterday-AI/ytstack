@@ -36,11 +36,13 @@ You are an implementer dispatched by ytstack's orchestrator (`ytstack:spawn-mile
 2. **Read** `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md` once, then your slice plan.
 3. **Per task:** read `T##-PLAN.md` (run `ytstack:plan-task` when it does not exist yet); `ytstack:test-driven-development` (failing test first, minimal code, `ytstack:minimal-code` ladder in the GREEN step); stay inside the plan's Files section; `ytstack:verification-before-completion` with the plan's command; `ytstack:summarize-task`; commit with the prefix `M###-S##-T##:`.
 4. **Next task** until every task of the slice has a summary.
-5. **Report:** branch name, `git log --oneline <orchestrator-branch>..HEAD`, each verification command with its exit code, anything the plan got wrong. Then stop.
+5. **Report** in the shape the brief gives under "Report": every label, one `Checks run:` line per check, what the plan got wrong under `Deviations:`. The orchestrator checks it with `ytstack-brief check`. Then stop.
+
+The work contract in the brief (the body of `ytstack:minimal-code`) governs how much code and how much checking is enough.
 
 ## Hard rules
 
-- No implementation before a failing test exists.
+- No implementation of logic before a failing test exists; a trivial change (a rename, a constant, a text, a config value) gets no new test.
 - No files outside the task plan's Files section; the `pre-tool-use-edit` hook warns, you stop and report instead of widening the scope.
 - No "done" without the verification command's real output.
 - `STATE.md` in your worktree is your copy: the skills may update it; the orchestrator owns the pointer in the main checkout and resolves it at merge time.

@@ -1,9 +1,9 @@
 ---
 name: reassess-roadmap
-description: "Checks at a slice boundary whether the milestone roadmap still fits reality: deviations from the summaries, stale milestones to mark dropped or shipped-informally, slices to add, split, reorder or remove. Use after summarize-task closed the last task of a slice, or when the user says reassess, review the roadmap, does the plan still hold. Not mid-slice and not for task detail (plan-task)."
+description: "Checks at a slice boundary whether the milestone roadmap still fits reality: deviations from the summaries, gates that only a person can close or that have lapsed, work that repeats without advancing, stale milestones to mark dropped or shipped-informally, slices to add, split, reorder or remove. Use after summarize-task closed the last task of a slice, or when the user says reassess, review the roadmap, does the plan still hold. Not mid-slice and not for task detail (plan-task)."
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.3.0
   triggers:
     - reassess roadmap
     - review milestone plan
@@ -34,13 +34,13 @@ Run it anyway. It takes 2 minutes and either confirms the plan (good -- more con
 
 1. **Run preamble** -- detect milestone + just-completed slice
 2. **HARD-GATE** -- slice must be fully complete (all tasks `[x]`)
-3. **Summarize the slice** -- show outcomes of the N task summaries
+3. **Summarize the slice** -- show outcomes of the N task summaries; answer the spec drift report once per area (Step 3a); report closed-by-work and accepted, and put open gates and non-converging work to the human in one question (Step 3b)
 4. **Ask: does the remaining roadmap still fit?**
 5. **If no, prompt for changes** -- add / split / reorder / remove slices
 6. **Update `M###-ROADMAP.md`** with agreed changes
 7. **Append decision to `M###-CONTEXT.md`** if the change is non-trivial
 8. **Update STATE.md** -- flip completed slice, set next `active_slice` (guarded)
-9. **Backlog sweep** (only if this was the last slice of the milestone) -- per-item prompt from `M###-CONTEXT.md` scope
+9. **Fold + backlog sweep** (only if this was the last slice of the milestone) -- fold what still holds into the area files of `.ytstack/spec/` and offer the archive through `reconcile` (Step 8a); then the backlog sweep -- per-item prompt from `M###-CONTEXT.md` scope
 10. **Stale milestones** (M018) -- for each `STALE_MILESTONES` entry ask `dropped` / `shipped-informally` / `keep` and write the state
 
 ## Preamble
@@ -80,7 +80,10 @@ fi
 _SLICE_PLAN="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md"
 _SLICE_COMPLETE=no
 if [ -f "$_SLICE_PLAN" ]; then
-  _REMAINING=$(grep -c '^- \[ \]' "$_SLICE_PLAN" 2>/dev/null || echo 0)
+  # Open TASK lines only: an open gate (`- [ ] G01 --`) does not keep a slice
+  # from being complete. No `|| echo 0`: grep -c prints 0 and exits 1, which
+  # would yield "0<newline>0" and break the integer test.
+  _REMAINING=$(grep -c '^- \[ \] T[0-9]' "$_SLICE_PLAN" 2>/dev/null); _REMAINING=${_REMAINING:-0}
   [ "$_REMAINING" -eq 0 ] && _SLICE_COMPLETE=yes
 fi
 
@@ -107,6 +110,37 @@ echo "ACTIVE_SLICE: $_ACTIVE_SLICE"
 echo "SLICE_COMPLETE: $_SLICE_COMPLETE"
 echo "STALE_MILESTONES: ${_STALE_MILESTONES:-none}"
 echo "TRACKER: $_TRACKER"
+# Technical spec (M022): areas whose code moved on without their description.
+_SPEC_TOOL="${CLAUDE_SKILL_DIR}/../../bin/ytstack-spec"
+echo "SPEC_DRIFT_BEGIN"
+if [ -f "$_YT_DIR/spec/SPEC.md" ] && [ -f "$_SPEC_TOOL" ]; then bash "$_SPEC_TOOL" drift 2>&1; else echo "(no technical spec, or script not reachable)"; fi
+echo "SPEC_DRIFT_END"
+# Bounded work (M023): gates that no work closes, reviews that do not converge,
+# and the two progress numbers (closed by work, accepted).
+_GATE_RE='^- \[ \] G[0-9]+ --'
+echo "OPEN_GATES_BEGIN"
+grep -Hn -E "$_GATE_RE" "$_YT_DIR"/"$_CURRENT_MILESTONE"-*PLAN.md 2>/dev/null | sed "s|^$_YT_DIR/||"
+echo "OPEN_GATES_END"
+echo "REVIEW_ROUNDS_BEGIN"
+for _p in "$_YT_DIR"/"$_CURRENT_MILESTONE-$_ACTIVE_SLICE"-T[0-9][0-9]-PLAN.md; do
+  [ -f "$_p" ] || continue
+  _r=$(grep -c -E '^- Round [0-9]+:' "$_p" 2>/dev/null); _r=${_r:-0}
+  [ "$_r" -ge 3 ] && echo "$(basename "$_p" -PLAN.md): $_r review rounds"
+done
+echo "REVIEW_ROUNDS_END"
+_SL_TOTAL=0; _SL_WORK=0; _SL_ACC=0
+[ -f "$_YT_DIR/$_CURRENT_MILESTONE-ROADMAP.md" ] && _SL_TOTAL=$(grep -c -E '^- \[.\] S[0-9][0-9] --' "$_YT_DIR/$_CURRENT_MILESTONE-ROADMAP.md" 2>/dev/null)
+for _sp in "$_YT_DIR"/"$_CURRENT_MILESTONE"-S[0-9][0-9]-PLAN.md; do
+  [ -f "$_sp" ] || continue
+  grep -q '^- \[ \] T[0-9]' "$_sp" && continue
+  grep -q '^- \[[xX]\] T[0-9]' "$_sp" || continue
+  _SL_WORK=$((_SL_WORK + 1))
+  _s=$(basename "$_sp" -PLAN.md)
+  cat "$_sp" "$_YT_DIR"/"$_s"-T[0-9][0-9]-PLAN.md 2>/dev/null | grep -q -E "$_GATE_RE" || _SL_ACC=$((_SL_ACC + 1))
+done
+echo "SLICES_TOTAL: ${_SL_TOTAL:-0}"
+echo "SLICES_CLOSED_BY_WORK: $_SL_WORK"
+echo "SLICES_ACCEPTED: $_SL_ACC"
 ```
 
 ## Procedure
@@ -119,6 +153,49 @@ echo "TRACKER: $_TRACKER"
 >
 > {For each task summary:}
 > - **T##:** {OUTCOME_FIRST_LINE} (deviations: {DEVIATIONS_SHORT})
+
+**Step 3a -- Spec drift.** Read the lines between `SPEC_DRIFT_BEGIN` and `SPEC_DRIFT_END`. Each `<area>: possible documentation impact` line names an area whose code changed after its description was last touched. That is a prompt to look, not a finding. Answer it here, once per area, for the whole slice:
+
+- Read `.ytstack/spec/<area>.md` (and the section of a `sources` document it points to) against the commits the line counts (`git log --oneline <sha>..HEAD -- <the area's paths>`).
+- A statement became false: correct the area file or its source now.
+- Nothing became false (refactoring, a fix that restored the described behaviour): set `verified_at` in the area file to the commit you checked. Do not edit a description to quiet the report.
+
+List what you did per area in the Step 3 message. No line, or no technical spec: skip. Slice closure never waits on this step; an area you could not assess is named in the report as not checked.
+
+**Step 3b -- What no work can close: one question.** Two numbers describe the milestone, and they are reported side by side, never as one: `SLICES_CLOSED_BY_WORK` of `SLICES_TOTAL` (every task done) and `SLICES_ACCEPTED` of `SLICES_TOTAL` (done, and no gate open). When they differ, more work does not close the gap. Find what does:
+
+1. **Open gates.** Each line between `OPEN_GATES_BEGIN` and `OPEN_GATES_END` is a gate (`G## -- <what> | decides: <who> | how: <how> | lapses: <when>`) in a plan of this milestone. Read the summaries and the plan's Notes for what happened since, then sort each gate into exactly one group:
+   - **Needs a verdict.** A person or role decides it, and nothing in the remaining slices produces that verdict.
+   - **Lapsed.** Its `lapses:` condition has occurred, or the step it was meant to guard has been made, so it can no longer be met as written. A lapsed gate is named as lapsed, never as passed. If a measurement behind it still matters, it continues as ordinary work with its threshold unchanged: propose a task for it in Step 5.
+   - **Work can still close it.** A task that exists, or one you propose in Step 5, produces what the gate asks for. These are not put to the human.
+2. **Work that repeats without advancing.** A line between `REVIEW_ROUNDS_BEGIN` and `REVIEW_ROUNDS_END` (a task with three or more review rounds). In the summaries of this slice: the same check renewed on an unchanged commit, follow-up tasks that only verify again, the same finding reopened. For each: what repeats, how often, and what would end it (a decision on scope, a rule that conflicts with another, a different solution).
+
+If both lists are empty, say so in one line with the two numbers and go on. Otherwise put everything into ONE AskUserQuestion; never one question per item, and never spread over several turns:
+
+> Slice **{CURRENT_MILESTONE}-{ACTIVE_SLICE}** is done. **{SLICES_CLOSED_BY_WORK} of {SLICES_TOTAL}** slices are closed by work, **{SLICES_ACCEPTED} of {SLICES_TOTAL}** are accepted. The difference is not work that is left: these {N} points need you.
+>
+> {Numbered, one block per item:}
+> {n}. **{gate id or task ref}** -- {what it is, in one plain sentence}.
+>    Decides: {who}. How: {how the verdict is obtained, with the file or link to look at}. {Lapses: {when} | Lapsed: {what happened, when}}.
+>    My recommendation: {give it | not yet, because ... | record it as lapsed | change the scope to ...}, because {one reason}.
+>
+> RECOMMENDATION: Choose A. One reply settles all {N}; each one left open keeps its slice out of the accepted count.
+>
+> A) Decide them now, in one reply ("1 yes, 2 lapsed, 3 no: ...") -- I record each answer where the gate is written
+>    Completeness: 10/10, effort: human: ~{N} min / CC: ~2 min, tier: task
+>
+> B) Leave them open -- they stay as they are and come back at the next slice boundary, not before
+>    Completeness: 6/10, effort: human: 0 / CC: 0, tier: task
+
+Record only what the human answered, in the plan file that holds the gate:
+
+- given: `- [x] G## -- ... | given: {TODAY} {who}`
+- lapsed: `- [-] G## -- ... | lapsed: {TODAY} {what happened}`
+- not given: the line stays `- [ ]`; what has to change becomes a task or a slice in Step 5.
+
+**The question queue.** A project that keeps `.ytstack/questions/` (format: `docs/ux/coordinator-format.md`) carries each gate that needs a verdict as one question file, so that it survives the session and is not asked twice. Before the question above is put: for a gate without a file, `"${CLAUDE_SKILL_DIR}/../../bin/ytstack-questions" new --question "<the gate as a question>" --decides "<who>" --blocks "<gate id>"` and fill its Context, Options and Recommendation; a gate whose file is already `asked` is listed as waiting since that time and is not put again unless something changed. When the question goes out: `ytstack-questions ask <id>` for each one in it. When the human answers: write the answer under `## Answer` in the file, then `ytstack-questions answer <id>`, then the gate line as above. A project without the directory skips this paragraph; the gate lines alone carry the state.
+
+A verdict that the plan reserves for a person is never recorded as given by you, by a dispatched agent or by a review. If `YTSTACK_NON_INTERACTIVE` is `true`, ask nothing and record nothing: list the items under "Waiting on a person" in the report, and when `STATE.md` has a `progress:` block set its `waiting_on` to the first item. A finding that the project's own policy rates non-blocking is not a gate and is not listed here; it is a follow-up.
 
 **Step 4.** Use AskUserQuestion:
 
@@ -178,9 +255,25 @@ If `YTSTACK_NON_INTERACTIVE` is `true` (running as swarm teammate): skip frontma
 
 Regardless of teammate mode:
 - Bump `last_updated`
-- Status line: `**Status:** {CURRENT_MILESTONE} -- slice {OLD_SLICE} complete. Next slice: {NEW_ACTIVE_SLICE}.`
+- Status line: `**Status:** {CURRENT_MILESTONE} -- slice {OLD_SLICE} complete. Next slice: {NEW_ACTIVE_SLICE}.` When the two numbers of Step 3b differ, append `Closed by work {W}/{T}, accepted {A}/{T}; waiting on: {open gate ids}.`
 
 Also flip `- [ ] {OLD_SLICE}` → `- [x] {OLD_SLICE}` in `{CURRENT_MILESTONE}-ROADMAP.md` and bump `completed_slices`.
+
+**Step 8a. Fold the milestone into the spec** (only if this was the last slice of the milestone -- no remaining `- [ ] S##` in ROADMAP -- and the project has `.ytstack/spec/`).
+
+A finished milestone leaves its knowledge in plans, summaries and its context file. What still holds belongs where the next session looks for it: in the area files. Fold once, now, so that nobody has to read this milestone's history to work on its result.
+
+1. **Which areas.** The areas named under `## Spec` in this milestone's summaries, plus the ones the drift report listed in Step 3a.
+2. **Per area, read the area file against the milestone's outcome** (summaries: Outcome, Deviations, Follow-ups; `{CURRENT_MILESTONE}-CONTEXT.md`: "Decisions locked"). Bring over only what applies from now on:
+   - a behaviour or contract the milestone changed and the area file does not state yet: correct the section;
+   - a decision that is in force and exists only in the milestone context: add an entry to `DECISIONS.md` and link it under "Decisions that apply now"; remove a link the milestone superseded;
+   - a shortcut or limit that still holds (a `shortcut:` comment, an open follow-up): one line under "Known limits";
+   - `status`: raise `planned` or `partial` only for what you read in the code now, and set `verified_at` to that commit.
+   Do not copy narrative, dates or task refs into an area file. What happened stays in the summaries.
+3. **Say what you folded** in the report: per area the sections you changed, or "nothing to fold".
+4. **Offer the archive, do not perform it.** After the fold the milestone's slice and task files are history. Tell the user that `ytstack:reconcile` moves them to `.ytstack/archive/` on request (its "closed milestones" class) and leaves `{CURRENT_MILESTONE}-CONTEXT.md` and `{CURRENT_MILESTONE}-ROADMAP.md` in place. Nothing moves from inside this skill, and nothing moves without that answer.
+
+No technical spec: skip this step and say in the report that `ytstack:adopt-brownfield` adds one.
 
 **Step 9. Backlog sweep** (only if this was the last slice of the milestone -- no remaining `- [ ] S##` in ROADMAP).
 
@@ -213,6 +306,8 @@ For C: remove the item from `{CURRENT_MILESTONE}-CONTEXT.md` and append to `DECI
 ## Report + return
 
 > Slice **{OLD_SLICE}** closed, roadmap reassessed: {A/B/C outcome}.
+>
+> Closed by work: {SLICES_CLOSED_BY_WORK} of {SLICES_TOTAL} slices. Accepted: {SLICES_ACCEPTED} of {SLICES_TOTAL}. {Gates given / lapsed / still open, by id; or "no gates".}
 >
 > {If B/C:} Changes logged to `{CURRENT_MILESTONE}-CONTEXT.md` under "Reassessment {TIMESTAMP}".
 >

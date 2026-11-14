@@ -3,7 +3,7 @@ name: init-project
 description: "Scaffolds .ytstack/ (PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES) for a new project from a validated pitch. Use after office-hours wrote OFFICE-HOURS.md, or when the user says init ytstack, set up ytstack, start a ytstack project in a fresh repo. Not for unvalidated ideas (office-hours first) and not for mature codebases with docs and commits but no .ytstack/ (adopt-brownfield; init-project routes there by itself)."
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.2.0
   triggers:
     - init ytstack
     - setup ytstack
@@ -19,7 +19,7 @@ allowed-tools:
 
 # init-project
 
-Initialize a `.ytstack/` directory with the core project-memory artifacts that every other ytstack skill depends on.
+Initialize a `.ytstack/` directory with the core project-memory artifacts that every other ytstack skill depends on, plus a technical spec scaffold (`spec/SPEC.md` and one file per system area) that records the approved design as planned.
 
 ## Anti-Pattern: "This project is too small for formal init"
 
@@ -33,6 +33,10 @@ If the user insists the project is too small for ytstack, don't force it. Tell t
 
 A repo with a 100-line README, a `docs/` folder, a CHANGELOG and a year of commits is not an unvalidated idea. Writing a placeholder one-liner that points at `office-hours` is wrong twice: the pitch interview on a shipped product is theater, and the placeholders duplicate or contradict docs that already exist. When the preamble reports `BROWNFIELD_SIGNALS` of 2 or more and no pitch, this skill stops and points at `ytstack:adopt-brownfield`, which links the existing docs instead of re-asking for them (Step 3).
 
+## Anti-Pattern: "The pitch describes it, so the spec can say it works"
+
+A pitch is a plan. The technical spec this skill writes (Step 7) is a scaffold of that plan: every area is `planned`, `verified_at` is `none`, "Where implemented" says "Not built yet." Write what the pitch and its reviews decided as the approved design, and write `Unknown` for everything they left open. One sentence that reads as if code existed, or as if anything had been checked, makes the next session trust a system that is not there.
+
 ## Checklist
 
 You MUST create a TodoWrite task for each of these items and complete them in order:
@@ -43,9 +47,11 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 4. **Ask scope question** -- project-level vs user-level storage (core tier)
 5. **Create artifact directory** -- `.ytstack/` or `~/.ytstack/projects/<slug>/` based on scope
 6. **Write all 6 artifact files** -- PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES. PROJECT.md pre-populated from pitch artifact if present; otherwise placeholders.
-7. **Write `.gitignore` block** -- `.ytstack/.local/` (fallback session-state dir) via `yt_ensure_gitignore`; completion + scope are recorded in `PROJECT.md` frontmatter, no sentinels
-8. **Report what was created** -- file list + pitch-status + next-step suggestion
-9. **Return control** -- do NOT auto-invoke any other skill
+7. **Write the technical spec** -- propose areas from the pitch and its reviews, confirm them with one AskUserQuestion, write `spec/SPEC.md` + one `spec/<area>.md` per area, all `status: planned`
+8. **Check the spec format** -- run `ytstack-spec lint` and fix what it reports; by hand against `docs/ux/spec-format.md` when the script is not reachable
+9. **Write `.gitignore` block** -- `.ytstack/.local/` (fallback session-state dir) via `yt_ensure_gitignore`; completion + scope are recorded in `PROJECT.md` frontmatter, no sentinels
+10. **Report what was created** -- file list (artifacts + spec files) + pitch-status + reading order + next-step suggestion
+11. **Return control** -- do NOT auto-invoke any other skill
 
 ## Process Flow
 
@@ -58,6 +64,9 @@ digraph init_project {
     "Report: use adopt-brownfield" [shape=doublecircle];
     "Ask scope" [shape=box];
     "Write artifacts (pitch-populated or placeholder)" [shape=box];
+    "Propose spec areas from the pitch, confirm the list" [shape=box];
+    "Write spec (SPEC.md + area files, all planned)" [shape=box];
+    "Check spec format (ytstack-spec lint)" [shape=box];
     "Write .gitignore block" [shape=box];
     "Report + return" [shape=doublecircle];
 
@@ -67,7 +76,10 @@ digraph init_project {
     "Signals >= 2 and no pitch?" -> "Report: use adopt-brownfield" [label="yes"];
     "Signals >= 2 and no pitch?" -> "Ask scope" [label="no"];
     "Ask scope" -> "Write artifacts (pitch-populated or placeholder)";
-    "Write artifacts (pitch-populated or placeholder)" -> "Write .gitignore block";
+    "Write artifacts (pitch-populated or placeholder)" -> "Propose spec areas from the pitch, confirm the list";
+    "Propose spec areas from the pitch, confirm the list" -> "Write spec (SPEC.md + area files, all planned)";
+    "Write spec (SPEC.md + area files, all planned)" -> "Check spec format (ytstack-spec lint)";
+    "Check spec format (ytstack-spec lint)" -> "Write .gitignore block";
     "Write .gitignore block" -> "Report + return";
 }
 ```
@@ -139,7 +151,7 @@ if [ -n "$_BF_HINTS" ]; then echo "CANDIDATES:"; printf '%s\n' "$_BF_HINTS" | se
 
 If `HAS_YTSTACK` is `yes`, do NOT re-initialize. Report and exit:
 
-> "ytstack is already initialized for `{PROJECT_SLUG}` at {location based on YTSTACK_SCOPE}. To see current state, read `STATE.md` in that directory. To re-init from scratch, delete that directory first and run this skill again."
+> "ytstack is already initialized for `{PROJECT_SLUG}` at {location based on YTSTACK_SCOPE}. To see current state, read `STATE.md` in that directory, then `spec/SPEC.md` (what applies now) when it exists. To re-init from scratch, delete that directory first and run this skill again."
 
 Do not invoke any other skill. Return control.
 
@@ -369,7 +381,141 @@ team: off                # off = spawn-milestone-team dispatches worktree subage
 (Project-specific preferences that don't fit elsewhere.)
 ```
 
-### Step 7: Write the `.gitignore` block
+### Step 7: Write the technical spec
+
+The six files say what the project is and where work stands. The technical spec says what applies now, per part of the system: `spec/SPEC.md` (the entry point, one page) and one `spec/<area>.md` per area. The binding format is `docs/ux/spec-format.md` in the ytstack plugin (`${CLAUDE_SKILL_DIR}/../../docs/ux/spec-format.md`). Read it before writing; the templates below are that format filled in for a project without code.
+
+Location: `spec/` inside the directory chosen in Step 5 (for `both`, in both locations with identical content). Additional substitution: `{TODAY}` = the date part of `{ISO_TIMESTAMP}` (`YYYY-MM-DD`).
+
+**7a. Propose the areas.** An area is a part of the system that somebody could be handed a bug in. If `PITCH` is not `none`, read the pitch (moved in Step 5 to `{location}/OFFICE-HOURS-{PITCH_SLUG}.md`), including the review blocks that `plan-ceo-review` and `plan-eng-review` put at its top when they ran. List the main parts of the system the pitch names: three to eight, each with a lowercase slug (`auth`, `billing-export`) and one line on what it covers. More than eight: merge the smallest ones. Fewer than three: take the parts the pitch names and do not invent one to reach three.
+
+If `PITCH` is `none`, or the pitch names no parts at all: use a single area named after the project (`{PROJECT_NAME}` as a lowercase slug of letters, digits and hyphens), skip 7b, and say so in the report (Step 10).
+
+**7b. Confirm the list.** If `YTSTACK_NON_INTERACTIVE` is `true`, take the proposal and log:
+
+> `[ytstack:init-project] auto-picked A (proposed spec areas: {comma-separated slugs}) because YTSTACK_NON_INTERACTIVE=true`
+
+Otherwise, use AskUserQuestion with this body:
+
+> I'm setting up ytstack for `{PROJECT_NAME}` on branch `{BRANCH}`. The six memory files are written; the technical spec is next.
+>
+> The spec is where a fresh session reads how the system behaves right now, without digging through plans and history. It is split into areas: parts of the system you could hand somebody a bug in, one file each. Nothing is built yet, so every file starts as "planned" and records only what your pitch decided. These are the parts I read in the pitch:
+>
+> {one line per proposed area: `{slug}` -- {what it covers}}
+>
+> RECOMMENDATION: Choose A because the list follows the parts your pitch names, and an area is cheap to rename, split or merge once code exists.
+>
+> A) Use this list -- {N} area files, all marked planned
+>    Completeness: 10/10, effort: human: 0 / CC: ~2 min, tier: core
+>
+> B) Edit the list -- tell me what to add, drop, rename or merge; I write the list you give
+>    Completeness: 10/10, effort: human: ~2 min / CC: ~2 min, tier: core
+>
+> (to change later: add, rename or remove a file under `spec/` and its row in `spec/SPEC.md`)
+
+On B, take the edited list from the user's answer, turn every name into a lowercase slug and write that list. Do not ask a second time. If the user cancels the question: write no spec files, skip Step 8, and say in the report that `spec/` is missing and that answering the area question closes the gap.
+
+**7c. Write `spec/SPEC.md`.** At most 80 lines. The section "Keeping this true" is copied verbatim; it is what a session without hooks finds in the repository.
+
+```markdown
+---
+project: {PROJECT_NAME}
+updated: {TODAY}
+---
+
+# {PROJECT_NAME} -- technical spec
+
+## What this is
+
+{Three to six lines from the pitch: what the system is meant to do, for whom, and its main parts. If there is no pitch: `Unknown -- no validated pitch yet; run ytstack:office-hours`.}
+
+Nothing is built yet. Every area below is the approved design, not a description of running code.
+
+## Areas
+
+| Area | Covers | Status | File |
+|---|---|---|---|
+| {area} | {one line} | planned | [{area}.md]({area}.md) |
+
+## Invariants that hold everywhere
+
+- {A rule the pitch or a review fixed for every area, with a link to the pitch.} or: `Unknown -- no project-wide rule decided yet`
+
+## Build and test
+
+The commands belong in [RUNTIME.md](../RUNTIME.md). Unknown -- none defined yet.
+
+## Keeping this true
+
+- A task plan names its **Spec impact**: the area and section it changes, or `none`.
+- A task that changes behaviour updates the area file, or the source the area file names, in the same commits. A task that restores the described behaviour, a refactoring and a trivial edit close with `none`.
+- A decision that changes what applies in an area is linked under that area's "Decisions that apply now" in the same commits; the entry it replaces leaves the list.
+- Which area describes a path: the `paths` in each area file. Which areas need a look: `bin/ytstack-spec drift`.
+- The format: `docs/ux/spec-format.md` in the ytstack plugin.
+```
+
+**7d. Write one `spec/{area}.md` per area.** At most 200 lines each.
+
+```markdown
+---
+area: {area}
+status: planned
+paths: []
+verified_at: none
+---
+
+## Purpose
+
+Approved design, not built yet. {Two to four lines from the pitch and its reviews: what this part is for and where it ends.}
+
+## Behavior
+
+Approved design from [the pitch](../OFFICE-HOURS-{PITCH_SLUG}.md); no code exists for it.
+
+- {A rule the pitch or a review decided, as something a user or a caller can observe.}
+- Unknown -- {a question the pitch leaves open for this area}
+
+## Where implemented
+
+Not built yet.
+
+## How to verify
+
+Planned check, from the pitch: {the pitch's success criterion for this area}.
+
+## Decisions that apply now
+
+None recorded in [DECISIONS.md](../DECISIONS.md) yet. The approved design is the pitch linked under "Behavior".
+```
+
+Rules for every area file:
+
+- `status: planned` and `verified_at: none`, always. This skill never writes another status: a scaffold has read no code.
+- `paths` is `[]`, or a list of the globs the pitch or a review already fixes (`src/export/**`). Do not guess a directory layout.
+- No `sources` entry. The pitch is a plan, not a description of the system; it is linked in the body.
+- "Purpose" and "Behavior" carry what the pitch and its reviews decided, worded as the approved design. Whatever they leave open is `Unknown -- <what is missing>`.
+- "How to verify" carries the pitch's success criterion for the area. If the pitch has none: `Unknown -- no check defined yet`.
+- The other sections of the format (interfaces, data flow, invariants, error behavior, runtime assumptions, known limits) are written only when the pitch or a review decided something there, under the exact names and in the order the format document fixes. Otherwise leave them out.
+- Without a pitch (single-area fallback): "Purpose" is `Unknown -- no validated pitch yet; run ytstack:office-hours`, "Behavior" is left out, "How to verify" is `Unknown -- no check defined yet`, and "Decisions that apply now" keeps only its first sentence.
+
+### Step 8: Check the spec format
+
+Skip when Step 7 wrote no spec files. Otherwise run the format check from the project root:
+
+```bash
+_SPEC_BIN="${CLAUDE_SKILL_DIR}/../../bin/ytstack-spec"
+if [ -x "$_SPEC_BIN" ]; then
+  "$_SPEC_BIN" lint; echo "SPEC_LINT_EXIT: $?"   # 0 clean | 2 warnings only | 1 failures
+else
+  echo "SPEC_LINT: unavailable"
+fi
+```
+
+- `SPEC_LINT_EXIT: 0` -- done.
+- `SPEC_LINT_EXIT: 1` or `2` -- every `FAIL` and `warn` line names the file and the rule. Fix the file and run the check again until it exits 0. Fix a finding in the direction of the truth: shorten a file that is too long, correct a section name or a link. Never raise a `status` or fill in a `verified_at` to make a finding go away.
+- `SPEC_LINT: unavailable` (a host that does not substitute `CLAUDE_SKILL_DIR`) -- read each file you wrote against the section "Checked mechanically" of `docs/ux/spec-format.md` by hand and fix what differs. If that document is not reachable either, compare against the templates in Step 7. Say in the report that the check was done by hand.
+
+### Step 9: Write the `.gitignore` block
 
 Skip when `_SCOPE_CHOICE` is `user` (nothing lives in the tree). Otherwise, with the lib loaded by the preamble:
 
@@ -380,7 +526,7 @@ echo "GITIGNORE: $YT_GITIGNORE"   # written | unchanged | skipped
 
 This ignores only `.ytstack/.local/` -- the in-tree fallback for volatile session state (auto handoffs, journal) when no plugin data dir is writable. `.ytstack/HANDOFF.md` and every other artifact stay committable. Completion and scope are already recorded in `PROJECT.md` frontmatter (`init_completed`, `scope`); no `~/.ytstack` sentinels are written.
 
-### Step 8: Report what was created
+### Step 10: Report what was created
 
 Write this prose summary (substitute the real paths based on `_SCOPE_CHOICE`, and branch on whether a pitch was consumed):
 
@@ -395,6 +541,14 @@ Write this prose summary (substitute the real paths based on `_SCOPE_CHOICE`, an
 > - {location}/RUNTIME.md -- empty services and env-vars file
 > - {location}/STATE.md -- dashboard, current status
 > - {location}/PREFERENCES.md -- your local settings
+> - {location}/spec/SPEC.md -- technical spec entry point: {N} areas, all `planned`
+> - {location}/spec/{area}.md, one per area ({comma-separated slugs}) -- the approved design from the pitch; nothing is built and nothing was verified
+>
+> {Only if the pitch named no parts:} The pitch names no parts of the system, so the spec has a single area `{area}`. Split it when the first milestone shows the parts.
+>
+> Spec format check: {clean | fixed: {what} | done by hand, `ytstack-spec` not reachable}.
+>
+> Reading order for a new session: `STATE.md` (where work stands), then `spec/SPEC.md` (what applies now), then the area file for the part being touched.
 >
 > Next step: run `ytstack:plan-milestone` to define the first milestone. The pitch gives plan-milestone a goal and exit criteria to draw from.
 >
@@ -406,12 +560,19 @@ Write this prose summary (substitute the real paths based on `_SCOPE_CHOICE`, an
 >
 > - {location}/PROJECT.md -- one-liner is a placeholder pointing to office-hours
 > - {location}/DECISIONS.md, KNOWLEDGE.md, RUNTIME.md, STATE.md, PREFERENCES.md -- empty
+> - {location}/spec/SPEC.md and {location}/spec/{area}.md -- technical spec with a single area named after the project, because no pitch names the parts of the system; `planned`, contents `Unknown`
+>
+> Spec format check: {clean | fixed: {what} | done by hand, `ytstack-spec` not reachable}.
+>
+> Reading order for a new session: `STATE.md` (where work stands), then `spec/SPEC.md` (what applies now).
 >
 > **Recommended next step: run `ytstack:office-hours`** to validate the project premise, then the outcome will populate PROJECT.md. Running `ytstack:plan-milestone` directly without a pitch works but the milestone goal will not be grounded in a validated premise.
 >
 > If you're in a git repo (`IS_GIT: yes`): these files are unstaged. `git status` will show them. Commit when ready.
 
-### Step 9: Return control
+If the area question was cancelled in Step 7, replace the spec lines and the format-check line with: *"`spec/` was not written: you cancelled the area question. Tell me the areas (or say "use the proposal") and I write it."*
+
+### Step 11: Return control
 
 STOP here. Do NOT invoke `ytstack:plan-milestone`, `ytstack:office-hours` or `ytstack:adopt-brownfield` automatically. The user decides the next step.
 
@@ -419,7 +580,7 @@ STOP here. Do NOT invoke `ytstack:plan-milestone`, `ytstack:office-hours` or `yt
 
 The terminal state is one of:
 
-- Returning control to the user after writing the 6 artifacts and reporting file paths
+- Returning control to the user after writing the 6 artifacts and the technical spec (`spec/SPEC.md` + one area file per area, all `planned`) and reporting file paths
 - Exiting immediately after reporting "already initialized" (when HAS_YTSTACK=yes)
 - Exiting immediately after pointing at `ytstack:adopt-brownfield` (when BROWNFIELD_SIGNALS >= 2 and no pitch)
 

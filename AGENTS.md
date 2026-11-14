@@ -4,6 +4,8 @@ Read this before modifying anything in this repo.
 
 ## Read first
 
+For what applies now, read `.ytstack/spec/SPEC.md` and the area file of what you touch: behaviour, where it is implemented, how to verify it. Plans and summaries are history, not a description of the system.
+
 Before any architectural proposal, read in order: `docs/concept.md` (stable summary of what ytstack wraps and skips), `.ytstack/DECISIONS.md` (locked-in decisions, append-only), `.ytstack/VENDOR-INVENTORY.md` (what actually exists upstream). Do not debate a point that these files already settle.
 
 ## If you are an AI agent
@@ -27,7 +29,7 @@ If you can't verify all five above, stop and tell the human what you can't verif
 **Is:**
 - A Claude Code and Codex plugin (one shared skill tree and lifecycle scripts, host-specific registration; see `docs/codex.md` for the support boundary)
 - A curated clamp around selected superpowers skills (vendored via git subtree, NEVER modified) and six gstack skills (adapted into ytstack's own skills and kept in sync with upstream, see below)
-- An artifact-first system: `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, milestone/slice/task hierarchy
+- An artifact-first system: `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, the technical spec under `spec/` (what applies now, `docs/ux/spec-format.md`), milestone/slice/task hierarchy
 - SessionStart-hook-driven context injection (following superpowers' using-superpowers pattern)
 - MIT licensed, shareable, team-usable
 

@@ -407,6 +407,10 @@ EOF
 #   W5 last_updated older than the newest commit touching <yt_dir>
 #   W6 current milestone marked done while a slice is still active
 #   W7 malformed `progress` block (one finding per problem)
+#   W8 STATE.md larger than YT_STATE_MAX_BYTES (it is a pointer, not a ledger)
+#   W9 earlier status paragraphs beside the current one (history)
+# W8 and W9 are prompts for ytstack:reconcile; no skill stops on them.
+YT_STATE_MAX_BYTES=12000
 yt_state_lint() {
   local ytd="$1" sf="$1/STATE.md" m s t lu w="" n=0
   _yt_warn() { w="${w:+$w
@@ -467,6 +471,19 @@ yt_state_lint() {
     while IFS= read -r pl; do _yt_warn "$pl"; done <<EOF
 $YT_PROGRESS_ERRORS
 EOF
+  fi
+  # W8 / W9 (M022-S03): size, and status paragraphs beyond the current one
+  # ("**Previous ...**", "**Prior ...**", a second "**Status ...**").
+  local sz hist st
+  sz=$(wc -c < "$sf" 2>/dev/null | tr -d ' ')
+  if [ "${sz:-0}" -gt "$YT_STATE_MAX_BYTES" ]; then
+    _yt_warn "STATE.md is $sz bytes; a pointer stays under $YT_STATE_MAX_BYTES (ytstack:reconcile moves history out)"
+  fi
+  hist=$(grep -c -E '^\*\*(Previous|Prior)[^*]*\*\*' "$sf" 2>/dev/null); hist=${hist:-0}
+  st=$(grep -c -E '^\*\*Status[^*]*\*\*' "$sf" 2>/dev/null); st=${st:-0}
+  [ "$st" -le 1 ] || hist=$((hist + st - 1))
+  if [ "$hist" -gt 0 ]; then
+    _yt_warn "STATE.md carries $hist earlier status paragraph(s); keep the current one (ytstack:reconcile archives the rest)"
   fi
   YT_STATE_WARNINGS="$w"; YT_STATE_WARN_COUNT=$n
   unset -f _yt_warn
