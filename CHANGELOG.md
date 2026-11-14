@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `retro` counts the milestone's own commits even when the branch has not
+  merged the latest base yet; it reports how many base commits are missing
+  instead of switching the analysis to the base branch.
+- `ship` writes the CHANGELOG entry under the bumped version when the branch
+  already carries it, not under `Unreleased`.
+- `plan-ceo-review` writes `last_updated` in `STATE.md` as a full ISO
+  timestamp, so the STATE lint stays clean.
+- `plan-eng-review` finds the pitch in concept mode when the checkout path
+  contains a space, and picks the newest one.
+
 ### Changed
 
 - **The six gstack-derived skills ship inside ytstack** (`office-hours`,

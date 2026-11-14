@@ -3,7 +3,7 @@ name: retro
 description: "Milestone retrospective fed with the milestone's task summaries, deviations and follow-ups plus the git history of the milestone window, written to M###-RETRO.md. Use after a milestone's last slice closed and reassess-roadmap ran, or when the user says retro, retrospective, what did we learn, lessons from this milestone. Not mid-milestone (reassess-roadmap) and not for closing a task (summarize-task)."
 metadata:
   tier: task
-  version: 1.0.0
+  version: 1.0.1
   upstream: "gstack v1.99.3.0 (retro/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
@@ -203,14 +203,16 @@ Run this once. Substitute `<since>` (for example `2026-11-01T00:00:00`), `<until
 _SINCE="<since>"; _UNTIL="<until>"; _BASE="<base>"
 # Freshness: refresh the base ref; offline or no remote is fine, the guard discloses it.
 git fetch origin "$_BASE" --quiet 2>/dev/null && echo "RETRO_FETCH: ok" || echo "RETRO_FETCH: failed (offline or no remote)"
-# Analyzed ref: HEAD when it contains the base (milestone work may not be merged yet), else the base.
-_REF=HEAD
+# Analyzed ref: always HEAD, so the milestone's own commits are counted even
+# before the branch has merged the latest base. Divergence is only reported.
+_REF=HEAD; _BEHIND=0
 for _C in "origin/$_BASE" "$_BASE"; do
   git rev-parse --verify --quiet "$_C" >/dev/null 2>&1 || continue
-  git merge-base --is-ancestor "$_C" HEAD 2>/dev/null || _REF="$_C"
+  _BEHIND=$(git rev-list --count "HEAD..$_C" 2>/dev/null || echo 0)
   break
 done
 echo "RETRO_REF: $_REF"
+echo "BASE_COMMITS_NOT_IN_HEAD: $_BEHIND"
 echo "GUARD_REMOTE: $(git remote 2>/dev/null | grep -qx origin && echo origin || echo none)"
 echo "GUARD_LATEST_COMMIT: $(git log -1 --date=format-local:%Y-%m-%d --format=%ad "$_REF" 2>/dev/null || echo unknown)"
 echo "WINDOW: $_SINCE .. ${_UNTIL:-now}"
@@ -327,7 +329,7 @@ done
 1. If `GUARD_REMOTE: none` or `RETRO_FETCH` failed: proceed, and carry "offline run, window not freshness-verified" into the report.
 2. If the fetch succeeded and `COMMITS: 0` and `GUARD_LATEST_COMMIT` is older than the window start: stop with "Retro window is stale. Latest commit on `<RETRO_REF>` is `<date>`, but the window covers `<since>` to today. Either today's date is wrong in this session or the base branch is behind. Check the date, run `git fetch origin <base>`, then run `ytstack:retro` again."
 3. If `COMMITS: 0` otherwise: say so, suggest a wider window (`ytstack:retro 30d`), and continue with summaries only; every git-derived section then reads `no commits in window`.
-4. If `RETRO_REF` is not `HEAD`, disclose which ref was analyzed and why (the current branch does not contain the base).
+4. If `BASE_COMMITS_NOT_IN_HEAD` is above 0, say once in the report that the branch has not merged the latest base (that many base commits are not counted); the metrics still describe `HEAD`, which carries the milestone's work.
 
 ### 6. Shipping outcomes
 

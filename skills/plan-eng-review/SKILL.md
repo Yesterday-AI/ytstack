@@ -3,7 +3,7 @@ name: plan-eng-review
 description: "Reviews the execution approach of a pitch or a sliced milestone for feasibility, architecture, data flow, edge cases, test coverage, performance and security. Use after plan-ceo-review on a pitch, or after slice-milestone and before plan-task on M###-S##-PLAN.md; also when the user says eng review, architecture review, lock the approach. Not for scope and ambition questions (plan-ceo-review)."
 metadata:
   tier: core
-  version: 1.0.1
+  version: 1.0.2
   upstream: "gstack v1.99.3.0 (plan-eng-review/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
@@ -142,10 +142,10 @@ _PITCH=""
 if [ -f "./OFFICE-HOURS.md" ]; then
   _PITCH="./OFFICE-HOURS.md"
 elif [ -n "$_YT_DIR" ]; then
-  # newest pitch first (a re-run writes OFFICE-HOURS-<slug>-v2.md next to the old one)
-  for _f in $(ls -t "$_YT_DIR"/OFFICE-HOURS-*.md 2>/dev/null) "$_YT_DIR"/OFFICE-HOURS.md; do
-    [ -f "$_f" ] && { _PITCH="$_f"; break; }
-  done
+  # newest pitch first (a re-run writes OFFICE-HOURS-<slug>-v2.md next to the old one);
+  # one line from ls, no word splitting, so paths with spaces survive
+  _PITCH=$(ls -t "$_YT_DIR"/OFFICE-HOURS-*.md 2>/dev/null | head -1)
+  [ -z "$_PITCH" ] && [ -f "$_YT_DIR/OFFICE-HOURS.md" ] && _PITCH="$_YT_DIR/OFFICE-HOURS.md"
 fi
 if [ -n "$_SLICE_PLANS" ]; then
   _MODE=milestone; _REVIEW_FILE="$_YT_DIR/$_M-ENG-REVIEW.md"
