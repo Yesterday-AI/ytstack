@@ -10,6 +10,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from .state import cli, connect, home, root
 
@@ -62,18 +63,38 @@ def fallback_file():
 
 LAUNCHER = r'''#!/bin/sh
 # ytstack PR watch launcher, written by `ytstack-pr-watch install-worker`.
-# Runs the engine of the newest installed ytstack (Claude Code and Codex plugin
-# caches, highest version first); falls back to the engine recorded at install.
+# Runs the engine of the ytstack Claude Code has installed (installPath in
+# ~/.claude/plugins/installed_plugins.json, so a rolled-back version is not
+# picked); without that, the newest cached version that is not marked
+# .orphaned_at (Claude Code and Codex caches); last, the engine recorded at
+# install.
 export YTSTACK_PR_WATCH_HOME=%(home)s
+active=$(%(python)s - <<'PY' 2>/dev/null
+import json, os
+try:
+    plugins = json.load(open(os.path.expanduser('~/.claude/plugins/installed_plugins.json'))).get('plugins', {})
+except Exception:
+    plugins = {}
+for name, installs in plugins.items():
+    if name.split('@')[0] != 'ytstack':
+        continue
+    for i in installs if isinstance(installs, list) else [installs]:
+        p = os.path.join(i.get('installPath', ''), 'tools/pr-watch/pr-watch.py')
+        if os.path.isfile(p):
+            print(p)
+            raise SystemExit
+PY
+)
 newest=$(
   for p in "$HOME"/.claude/plugins/cache/*/ytstack/*/tools/pr-watch/pr-watch.py \
            "$HOME"/.codex/plugins/cache/*/ytstack*/*/tools/pr-watch/pr-watch.py; do
     [ -f "$p" ] || continue
-    v=$(basename "$(dirname "$(dirname "$(dirname "$p")")")")
-    printf '%%s\t%%s\n' "$v" "$p"
+    d=$(dirname "$(dirname "$(dirname "$p")")")
+    [ -e "$d/.orphaned_at" ] && continue
+    printf '%%s\t%%s\n' "$(basename "$d")" "$p"
   done | sort -V -k1,1 | tail -1 | cut -f2-
 )
-engine=${newest:-$(cat "$(dirname "$0")/engine-path" 2>/dev/null)}
+engine=${active:-${newest:-$(cat "$(dirname "$0")/engine-path" 2>/dev/null)}}
 [ -n "$engine" ] && [ -f "$engine" ] || { echo "ytstack pr-watch: no engine found" >&2; exit 1; }
 export YTSTACK_PR_WATCH_CLI="$(dirname "$(dirname "$(dirname "$engine")")")/bin/ytstack-pr-watch"
 exec %(python)s "$engine" "$@"
@@ -193,9 +214,18 @@ def source_files(base):
     return None, None
 
 
-def read_only(db_path):
-    # mode=ro: no checkpoint, no WAL cleanup, the source stays untouched.
-    return sqlite3.connect(db_path.as_uri() + '?mode=ro', uri=True, timeout=15)
+def snapshot(db_path, scratch):
+    # SQLite never opens the source: even a mode=ro connection takes part in WAL
+    # housekeeping and may create or remove the source's -wal / -shm files, which
+    # can split a still running writer from its WAL. The database file and its
+    # -wal are copied byte-wise into a scratch dir and the copy is opened there,
+    # where SQLite replays the WAL. Stop the old worker first (the printed steps);
+    # integrity_check on the copy catches a torn copy.
+    for suffix in ('', '-wal'):
+        part = Path(str(db_path) + suffix)
+        if part.is_file():
+            shutil.copy2(part, scratch / (db_path.name + suffix))
+    return sqlite3.connect(str(scratch / db_path.name), timeout=15)
 
 
 def migrate(source, yes):
@@ -209,12 +239,26 @@ def migrate(source, yes):
         print(f'{target} already exists; refusing to overwrite it. Move it away first if you mean to replace it.',
               file=sys.stderr)
         return 2
-    src = read_only(db_path)
+    scratch = Path(tempfile.mkdtemp(prefix='ytstack-pr-watch-migrate.'))
+    try:
+        return _migrate(db_path, policy_path, state, target, scratch, yes)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _migrate(db_path, policy_path, state, target, scratch, yes):
+    src = snapshot(db_path, scratch)
     try:
         counts = {t: src.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0] for t in ('watches', 'outbox')}
+        whole = src.execute('PRAGMA integrity_check').fetchone()[0]
     except sqlite3.DatabaseError as exc:
         src.close()
         print(f'{db_path} is not a PR watch database ({exc}).', file=sys.stderr)
+        return 2
+    if whole != 'ok':
+        src.close()
+        print(f'The copy of {db_path} is inconsistent ({whole}); stop the old worker and run migrate again.',
+              file=sys.stderr)
         return 2
     copy_policy = policy_path.is_file() and not (state / 'policy.json').exists()
     print(f'copy         {db_path} -> {target} ({counts["watches"]} watches, {counts["outbox"]} outbox rows, SQLite backup)')

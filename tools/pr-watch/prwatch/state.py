@@ -66,6 +66,9 @@ def register(db, repo, number, session, cwd):
     db.execute('DELETE FROM meta WHERE key IN (?,?)', (f'ownership:{repo}:{number}', f'registration:{repo}:{number}'))
     db.execute('INSERT OR IGNORE INTO watches(repo,number,session,cwd) VALUES(?,?,?,?)',
                (repo, number, session, cwd))
+    # Registering again revives a watch that was closed (for example a PR that was reopened).
+    db.execute("UPDATE watches SET status='registered', updated=0 WHERE repo=? AND number=? AND status='closed'",
+               (repo, number))
 
 
 def policy(repo):

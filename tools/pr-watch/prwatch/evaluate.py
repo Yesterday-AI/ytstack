@@ -15,7 +15,9 @@ def bot(user, policy):
 
 def evaluate(s, policy):
     if s.get('closed'):
-        return 'closed', [], []
+        # A merged PR cannot reopen; a closed one can (worker rechecks those).
+        pr = s.get('pr') or {}
+        return 'closed', (['merged'] if pr.get('merged_at') or pr.get('merged') else []), []
     issues, pending, events = [], [], []
     if s['pr'].get('mergeable') is False:
         issues.append('Merge conflict with base branch')

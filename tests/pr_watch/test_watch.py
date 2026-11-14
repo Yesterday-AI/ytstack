@@ -149,6 +149,32 @@ class DurableWorkflow(unittest.TestCase):
         self.assertIsNotNone(self.db.execute("SELECT cancelled FROM outbox WHERE event_key='state:old'").fetchone()[0])
         self.assertEqual(self.watch()['status'],'closed')
 
+    def test_closed_unmerged_pr_is_rechecked_and_merged_pr_is_not(self):
+        # A closed PR can be reopened on GitHub: the worker looks at it again after REOPEN_CHECK.
+        with patch.object(github,'snapshot',return_value={'head':'head2','closed':True,'pr':{'state':'closed','merged_at':None}}):
+            worker.monitor(self.db,self.watch())
+        with self.db:self.db.execute('UPDATE watches SET updated=?',(time.time()-worker.REOPEN_CHECK-1,))
+        seen=[]
+        with patch.object(worker,'discover'),patch.object(worker,'monitor',side_effect=lambda db,w:seen.append(w['number'])),\
+             patch.object(worker,'deliver'):
+            worker.tick(send=False,reconcile=False)
+        self.assertEqual(seen,[self.watch()['number']])
+        with patch.object(github,'snapshot',return_value={'head':'head2','closed':True,'pr':{'state':'closed','merged_at':'2026-01-01T00:00:00Z'}}):
+            worker.monitor(self.db,self.watch())
+        with self.db:self.db.execute('UPDATE watches SET updated=?',(time.time()-worker.REOPEN_CHECK-1,))
+        seen=[]
+        with patch.object(worker,'discover'),patch.object(worker,'monitor',side_effect=lambda db,w:seen.append(w['number'])),\
+             patch.object(worker,'deliver'):
+            worker.tick(send=False,reconcile=False)
+        self.assertEqual(seen,[])
+
+    def test_registering_again_revives_a_closed_watch(self):
+        with patch.object(github,'snapshot',return_value={'head':'head2','closed':True}):
+            worker.monitor(self.db,self.watch())
+        w=self.watch()
+        with self.db:register(self.db,w['repo'],w['number'],w['session'],w['cwd'])
+        self.assertEqual(self.watch()['status'],'registered')
+
     def test_hook_captures_create_receipt_and_workdir_without_network(self):
         payload=dict(session_id='session-a',hook_event_name='PostToolUse',cwd='/tmp',tool_name='exec_command',
                      tool_input={'command':'gh pr create --title test','workdir':'/tmp/work'},

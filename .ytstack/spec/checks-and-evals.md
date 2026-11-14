@@ -25,7 +25,7 @@ sources:
   - docs/ux/review-policy-format.md
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
-verified_at: 1ae7f2c
+verified_at: 4ab539c
 ---
 
 # checks-and-evals
@@ -90,6 +90,8 @@ Everything that tells a contributor whether a change is acceptable: the static c
 - `tests/run-all.sh` runs every suite from a neutral temporary directory and prints `PASS` or `FAIL` per suite with that suite's last line. It stops at the first failing suite, prints up to ten of its `FAIL` lines and exits 1. The last line is `ALL SUITES PASSED` or `SUITE FAILURE`.
 - `tests/run-all.sh --linux` runs the same inside an `alpine/git` container with the repository mounted read-only. Without a working Docker daemon it prints a skip line and exits 0.
 - `tests/ytstack-check.test.sh` tests the checker on a copy of the plugin tree. `tests/ytstack-spec.test.sh` tests `bin/ytstack-spec` on fixture repositories, one case per rule. `tests/ytstack-brief.test.sh` does the same for `bin/ytstack-brief` and compares the rendered contract with the real `skills/minimal-code/SKILL.md`. `tests/evidence-rule.test.sh` pins the evidence reuse rule: the verifier, the dispatcher and the skills area reuse a PASS only for the same commit, and its git fixture shows why (an unchanged planned file, a changed imported helper, a failing check).
+
+- `tests/pr-watch.test.sh` runs the PR watch engine's `unittest` suite (`tests/pr_watch/`, standard library, `gh` and the Codex daemon mocked) and then shell cases for `hooks/pr-watch` (off, on, malformed input), `bin/ytstack-pr-watch` (enable/disable, install-worker and migrate plans, migrate copy, the worker launcher's engine choice) under a temporary HOME. The resolver rule of `bin/ytstack-check` exempts `hooks/pr-watch` by name (`_HOOKS_WITHOUT_RESOLVER`).
 
 **Python tests: `tests/codex_plugin_test.py`**
 

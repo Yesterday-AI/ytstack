@@ -3,6 +3,8 @@ import json
 import subprocess
 import time
 import uuid
+
+REOPEN_CHECK = 1800  # seconds between rechecks of a closed, unmerged PR
 from datetime import datetime
 from . import github, codex, claude
 from .evaluate import evaluate, notification_events, conflict_unknown
@@ -207,7 +209,12 @@ def tick(send=True, reconcile=True):
             else:
                 with db:
                     db.execute("DELETE FROM meta WHERE key='discovery_error'")
-        for watch in db.execute("SELECT * FROM watches WHERE paused=0 AND status!='closed'").fetchall():
+        # Closed but unmerged PRs can be reopened on GitHub: recheck them every
+        # REOPEN_CHECK seconds instead of dropping them for good.
+        for watch in db.execute(
+                "SELECT * FROM watches WHERE paused=0 AND (status!='closed' OR "
+                "(detail NOT LIKE '%\"merged\"%' AND updated < ?))",
+                (time.time() - REOPEN_CHECK,)).fetchall():
             monitor(db, watch)
         if send:
             deliver(db)

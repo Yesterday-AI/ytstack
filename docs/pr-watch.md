@@ -89,8 +89,11 @@ never sent twice. Codex runs plugin hooks only after you trust them in `/hooks`.
 `install-worker --yes` writes:
 
 - `~/.ytstack/pr-watch/bin/pr-watch`, a launcher that runs the engine of the
-  newest installed ytstack (Claude Code and Codex plugin caches, highest
-  version), falling back to the plugin that ran `install-worker`
+  ytstack version Claude Code has installed (`installPath` in
+  `~/.claude/plugins/installed_plugins.json`, so a rolled-back version is not
+  used); without that entry, the highest cached version that carries no
+  `.orphaned_at` marker (Claude Code and Codex plugin caches); last, the
+  plugin that ran `install-worker`
 - `~/Library/LaunchAgents/com.ytstack.pr-watch.plist`: `tick` every 60 seconds
   and at login, logs in the state directory, a `PATH` with the directories of
   `gh` and `python3` found at install time
@@ -147,9 +150,13 @@ bin/ytstack-pr-watch migrate --from /path/to/old-install --yes
 ```
 
 `--from` is the old install directory (with `state/watch.sqlite3`) or the state
-directory itself. The database is copied with SQLite's backup API from a
-read-only connection, so a running old worker is safe and the source is not
-changed. `policy.json` is copied when the target has none. The command refuses
+directory itself. SQLite never opens the source: the database file and its
+`-wal` are copied byte for byte into a scratch directory, the copy is checked
+with `integrity_check` and written to the target with SQLite's backup API. The
+source files stay untouched (even a read-only SQLite connection can create or
+remove a database's `-wal` and `-shm` files). Stop the old worker first (step
+1): a copy taken while it writes can be inconsistent, and the command then
+refuses. `policy.json` is copied when the target has none. The command refuses
 when the target database exists. It changes nothing else and prints the
 remaining steps, which are yours to run:
 
@@ -166,6 +173,9 @@ remaining steps, which are yours to run:
   deliberately avoids the tooling.
 - The worker runs while you are logged in. After sleep, logout or network loss
   it resumes with the next tick. 24/7 coverage needs a host that is always on.
+- A closed PR stays watched: the worker looks at it again every 30 minutes and
+  picks it up when it was reopened; registering it again does the same at
+  once. A merged PR is not checked again.
 - GitHub and the agent cannot be read atomically. A finding can resolve right
   after the last read; the agent re-reads before acting.
 - Codex delivery uses the Codex app server's local API. An unsupported API

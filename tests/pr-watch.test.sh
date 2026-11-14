@@ -115,13 +115,15 @@ if [ "$(uname -s)" = Darwin ]; then
 else
   has "install-worker off macOS prints a systemd recipe" "systemctl --user" "$out"
 fi
-# The launcher the worker runs: newest engine across both plugin caches, else the recorded fallback.
+# The launcher the worker runs: the engine Claude Code has installed
+# (installed_plugins.json), else the newest non-orphaned cached version across
+# both plugin caches, else the recorded fallback.
 L="$T/launcher"; mkdir -p "$L/bin"
-(cd "$ROOT/tools/pr-watch" && python3 -c '
+(cd "$ROOT/tools/pr-watch" && "$PYBIN" -c '
 import shlex, sys
 from prwatch import admin
-print(admin.LAUNCHER % {"home": shlex.quote(sys.argv[1]), "python": "/bin/sh"}, end="")' "$L/state") >"$L/bin/pr-watch"
-stub() { mkdir -p "$(dirname "$1")"; printf 'echo "$0 $YTSTACK_PR_WATCH_HOME $*"\n' >"$1"; }
+print(admin.LAUNCHER % {"home": shlex.quote(sys.argv[1]), "python": shlex.quote(sys.argv[2])}, end="")' "$L/state" "$PYBIN") >"$L/bin/pr-watch"
+stub() { mkdir -p "$(dirname "$1")"; printf 'import os, sys\nprint(sys.argv[0], os.environ["YTSTACK_PR_WATCH_HOME"], *sys.argv[1:])\n' >"$1"; }
 stub "$L/fallback/tools/pr-watch/pr-watch.py"; echo "$L/fallback/tools/pr-watch/pr-watch.py" >"$L/bin/engine-path"
 eq "launcher without cached plugins runs the fallback engine" "$L/fallback/tools/pr-watch/pr-watch.py $L/state tick" \
   "$(HOME="$L/h" sh "$L/bin/pr-watch" tick 2>&1)"
@@ -129,6 +131,14 @@ stub "$L/h/.claude/plugins/cache/mp/ytstack/0.9.0/tools/pr-watch/pr-watch.py"
 stub "$L/h/.claude/plugins/cache/mp/ytstack/0.10.0/tools/pr-watch/pr-watch.py"
 stub "$L/h/.codex/plugins/cache/ytstack/ytstack/0.9.5/tools/pr-watch/pr-watch.py"
 eq "launcher picks the highest version across both caches" "$L/h/.claude/plugins/cache/mp/ytstack/0.10.0/tools/pr-watch/pr-watch.py $L/state tick" \
+  "$(HOME="$L/h" sh "$L/bin/pr-watch" tick 2>&1)"
+touch "$L/h/.claude/plugins/cache/mp/ytstack/0.10.0/.orphaned_at"
+eq "launcher skips a version marked .orphaned_at (rolled back)" "$L/h/.codex/plugins/cache/ytstack/ytstack/0.9.5/tools/pr-watch/pr-watch.py $L/state tick" \
+  "$(HOME="$L/h" sh "$L/bin/pr-watch" tick 2>&1)"
+mkdir -p "$L/h/.claude/plugins"
+printf '{"version":2,"plugins":{"ytstack@mp":[{"scope":"user","installPath":"%s","version":"0.9.0"}]}}' \
+  "$L/h/.claude/plugins/cache/mp/ytstack/0.9.0" >"$L/h/.claude/plugins/installed_plugins.json"
+eq "launcher prefers the version Claude Code has installed" "$L/h/.claude/plugins/cache/mp/ytstack/0.9.0/tools/pr-watch/pr-watch.py $L/state tick" \
   "$(HOME="$L/h" sh "$L/bin/pr-watch" tick 2>&1)"
 
 out=$(HOME="$H" "$CLI" uninstall-worker 2>&1); ec=$?
