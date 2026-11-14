@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-14
+
+### Fixed
+
+- PR watch: a state migrated from an older install (hundreds of closed
+  watches) no longer turns every closed PR into a reopen check. Closed PRs are
+  never snapshotted; reopen detection lists a repository's open PRs once every
+  30 minutes, for 7 days after closing. A `waiting` PR is read every minute
+  only within 30 minutes of its last change, so a `waiting` that never ends
+  (no review policy) costs a read every 5 minutes. New columns `closed_at` and
+  `changed_at` are added on first start; older closed rows count as closed when
+  they were last read.
+
 ## [0.8.0] - 2026-11-14
 
 ### Added
@@ -712,6 +725,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.8.1]: https://github.com/Yesterday-AI/ytstack/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Yesterday-AI/ytstack/releases/tag/v0.6.0

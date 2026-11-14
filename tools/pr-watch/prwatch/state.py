@@ -51,6 +51,16 @@ def connect():
         for name, kind in [('cancelled', 'REAL'), ('dispatch_id', 'TEXT'), ('turn_id', 'TEXT')]:
             if name not in columns:
                 db.execute(f'ALTER TABLE outbox ADD COLUMN {name} {kind}')
+        watch_columns = {r['name'] for r in db.execute('PRAGMA table_info(watches)')}
+        if 'changed_at' not in watch_columns:
+            # When head or status last changed; NULL (older rows) counts as long ago.
+            db.execute('ALTER TABLE watches ADD COLUMN changed_at REAL')
+        if 'closed_at' not in watch_columns:
+            # Closing time for the reopen window. Rows closed before this column
+            # existed get the time they were last read, which is when the worker
+            # saw them closed (an older install: weeks back, so never rechecked).
+            db.execute('ALTER TABLE watches ADD COLUMN closed_at REAL')
+            db.execute("UPDATE watches SET closed_at=updated WHERE status='closed'")
     return db
 
 
@@ -67,7 +77,7 @@ def register(db, repo, number, session, cwd):
     db.execute('INSERT OR IGNORE INTO watches(repo,number,session,cwd) VALUES(?,?,?,?)',
                (repo, number, session, cwd))
     # Registering again revives a watch that was closed (for example a PR that was reopened).
-    db.execute("UPDATE watches SET status='registered', updated=0 WHERE repo=? AND number=? AND status='closed'",
+    db.execute("UPDATE watches SET status='registered', updated=0, closed_at=NULL WHERE repo=? AND number=? AND status='closed'",
                (repo, number))
 
 
