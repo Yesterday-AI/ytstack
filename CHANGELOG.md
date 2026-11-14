@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   watch was switched on (or when ytstack gained the hooks) registered nothing
   until it restarted; on the maintainer's machine a coordinator's subagents
   opened about 60 PRs in that window that were never watched. `coordinate`
-  (0.2.1) registers the open PRs with `--all-open` when the PR watch is on.
+  (0.2.1) registers the open PRs with `--all-open` when the PR watch is on,
+  and counts it as on only with a worker heartbeat younger than 10 minutes;
+  otherwise it keeps polling through `ytstack-watch`.
 
 ## [0.9.0] - 2026-11-14
 
