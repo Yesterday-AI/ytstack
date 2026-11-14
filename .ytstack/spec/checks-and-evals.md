@@ -25,7 +25,7 @@ sources:
   - docs/ux/review-policy-format.md
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
-verified_at: 030d254
+verified_at: 4d1ac7a
 ---
 
 # checks-and-evals
@@ -62,7 +62,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **`bin/ytstack-runtime`: `RUNTIME.md` and the product per worktree** (`docs/ux/runtime-format.md`)
 
 - Every other script and skill reads the "Run", "Release" and "Signals" sections through it. `get <section> <key>` (exit 1 when missing), `signals` (tab separated), `check` (each defect of the three sections, a token-looking string; a file without them passes).
-- `up [--timeout <s>]` starts the product in a process group of its own on a free port of the range, at a start position derived from the worktree, waits for `ready` and prints `URL:`, `PORT:`, `PID:`, `LOG:` and `COMMIT:`; a start that exits or a `ready` that does not pass ends with exit 1, the end of the log and nothing running. `down` ends that group and only a process it started; `status`. The state of an instance lives outside the checkout, per worktree.
+- `up [--timeout <s>]` starts the product in a process group of its own on a free port of the range, at a start position derived from the worktree, waits for `ready` and prints `URL:`, `PORT:`, `PID:`, `LOG:` and `COMMIT:`; a start that exits or a `ready` that does not pass ends with exit 1, the end of the log and nothing running. `down` ends that group and only a process it started; `status`. A zombie counts as ended (the process state is read, not only `kill -0`), and nothing inside a code fence is read as a heading or a key. The state of an instance lives outside the checkout, per worktree.
 
 **`bin/ytstack-signals`: production findings and incident records** (`docs/ux/signal-format.md`)
 
