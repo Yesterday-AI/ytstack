@@ -102,17 +102,13 @@ for s in $SKILLS; do
       has "$s: brownfield -> PITCH none (route condition)" "$OUT" "PITCH: none"
       has "$s: brownfield -> candidates listed" "$OUT" "CANDIDATES:" ;;
     office-hours|plan-ceo-review|plan-eng-review|retro|ship|document-release)
-      # gstack wrappers: precheck flags, empty HOME (no gstack) vs fake install
-      has "$s: no gstack -> GSTACK_AVAILABLE no" "$OUT" "GSTACK_AVAILABLE: no"
-      has "$s: no gstack -> install cmd names the pin" "$OUT" "--branch v1.96.0.0"
-      GSI="$TMP/home/.claude/skills/gstack"; mkdir -p "$GSI"
-      printf '1.96.0.0\n' > "$GSI/VERSION"; for g in office-hours plan-ceo-review plan-eng-review retro ship document-release; do mkdir -p "$GSI/$g"; printf -- '---\nname: %s\n---\n' "$g" > "$GSI/$g/SKILL.md"; done
-      run_pre "$P" "$WT"
-      has "$s: fake install -> GSTACK_AVAILABLE yes" "$OUT" "GSTACK_AVAILABLE: yes"
-      has "$s: fake install -> skill ok" "$OUT" "GSTACK_SKILL_OK: yes"
-      has "$s: fake install -> pin ok" "$OUT" "GSTACK_PIN_OK: yes"
-      rm -rf "$TMP/home/.claude"
-      grep -q 'vendor/gstack' "$ROOT/skills/$s/SKILL.md" && bad "$s: no vendor/gstack reference left" || ok "$s: no vendor/gstack reference left" ;;
+      # Adapted from gstack and shipped in ytstack (DECISIONS 2026-11-14): the
+      # preamble runs with an empty HOME (no gstack anywhere) and needs nothing
+      # outside the plugin.
+      [ "$EC" -eq 0 ] && ok "$s: runs with an empty HOME (no gstack install)" || bad "$s: runs with an empty HOME" "exit $EC"
+      has "$s: reports HAS_YTSTACK" "$OUT" "HAS_YTSTACK: yes"
+      case "$OUT" in *GSTACK*|*BUN_OK*) bad "$s: no gstack precheck flags" ;; *) ok "$s: no gstack precheck flags" ;; esac
+      grep -rqE '\.claude/skills/gstack|vendor/gstack|gstack-skill-start|\bbun\b' "$ROOT/skills/$s" && bad "$s: no gstack runtime reference" || ok "$s: no gstack runtime reference" ;;
     reconcile)
       has "$s: clean fixture -> no draft stubs" "$OUT" "DRAFT_STUBS: 0"
       printf -- '---\nclosed: draft\n---\n' > "$WT/.ytstack/M999-S01-T09-SUMMARY.md"

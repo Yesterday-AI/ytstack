@@ -26,7 +26,7 @@ If you can't verify all five above, stop and tell the human what you can't verif
 
 **Is:**
 - A Claude Code and Codex plugin (one shared skill tree and lifecycle scripts, host-specific registration; see `docs/codex.md` for the support boundary)
-- A curated clamp around selected superpowers skills (vendored via git subtree, NEVER modified) and gstack skills (an installed, tag-pinned dependency invoked through the Skill tool, never inlined)
+- A curated clamp around selected superpowers skills (vendored via git subtree, NEVER modified) and six gstack skills (adapted into ytstack's own skills and kept in sync with upstream, see below)
 - An artifact-first system: `.ytstack/PROJECT.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `STATE.md`, milestone/slice/task hierarchy
 - SessionStart-hook-driven context injection (following superpowers' using-superpowers pattern)
 - MIT licensed, shareable, team-usable
@@ -49,9 +49,13 @@ If you can't verify all five above, stop and tell the human what you can't verif
 
 If you need different behavior, wrap the vendored skill in a ytstack-namespaced wrapper at `skills/<name>/SKILL.md` that inlines the vendored skill with additional pre/post logic and a `## Namespace note` (`bin/ytstack-check` enforces it). Never edit `vendor/**`.
 
-### gstack is an installed dependency, never vendored or inlined
+### Skills adapted from gstack: ytstack's own copies, synced with upstream
 
-Since 0.3.0 (DECISIONS 2026-11-07 "Vendor strategy") gstack is not in this repo. The three planning wrappers (`office-hours`, `plan-ceo-review`, `plan-eng-review`) detect `~/.claude/skills/gstack` via `yt_gstack_ctx` (pin `YT_GSTACK_PIN` in `hooks/lib/git-ctx.sh`, bun >= 1.4.2), stop with the install command when it is missing, and invoke the installed skill through the Skill tool. Do not re-add a `vendor/gstack` subtree, do not `cat` gstack files, do not copy gstack prose into ytstack. To move the pin: bump `YT_GSTACK_PIN`, re-run the live validation (`tests/` + a temp-HOME install), update README/QUICKSTART/NOTICE.
+Since 0.6.0 (DECISIONS 2026-11-14) six skills are ytstack's own adaptations of gstack skills (MIT, Garry Tan): `office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`. They ship inside the plugin and run with bash, git and gh only. Nothing of gstack is installed or registered globally, and ytstack never asks the user to install gstack.
+
+- Each of the six carries `metadata.upstream` with the gstack tag it was last synced to. `bin/ytstack-check` fails a missing baseline, any gstack runtime reference (`~/.claude/skills/gstack`, `gstack-*` binaries, `bun`, `GSTACK_*`), a symlink in the skill dir and em-dashes.
+- **On every ytstack release, and whenever one of these skills is touched, check upstream first:** `bin/ytstack-gstack-diff --stat` (exit 3 = at least one skill is behind the newest gstack tag), then `bin/ytstack-gstack-diff <tag>` for the full diff. Fold in what changes the method (questions, review sections, checklists, report formats, fixes); skip what only touches gstack's runtime (preamble binary, telemetry, gbrain, learnings, Greptile, browser). Then set `metadata.upstream` to the new tag, bump the skill's `metadata.version`, and note the sync in CHANGELOG. A skill whose upstream change was deliberately skipped still moves its baseline, with the reason in the commit message.
+- Do not re-add a gstack install check, a `vendor/gstack` subtree or Skill-tool calls into gstack. Do not adapt further gstack skills without a DECISIONS entry: the curation (only these six) is the point.
 
 ### Never copy third-party methodology content verbatim
 

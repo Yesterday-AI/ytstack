@@ -58,7 +58,7 @@ and project paths needed for explicit shell calls.
 Read the entire output of the wrapper's vendor `cat` block, including any
 referenced files needed for the task. Vendor files remain unchanged. Keep
 ytstack's invocation notes, artifact paths, and terminal-state rules around
-the upstream procedure. Missing gstack services or sibling skills are not
+the upstream procedure. Missing external services or sibling skills are not
 installed by this plugin; report an essential missing capability instead of
 inventing a tool or installing a dependency silently.
 

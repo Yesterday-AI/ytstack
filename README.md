@@ -86,7 +86,7 @@ Install all three and you get friction: interactive prompts blocking each other,
 
 **Parallel execution without a custom runtime.** `ytstack:spawn-milestone-team` turns the main session into a thin orchestrator: one `ytstack:implementer` subagent per slice in its own git worktree (`isolation: worktree`, skills preloaded, fresh context), one `ytstack:verifier` per finished slice branch, then a merge the orchestrator owns. Claude Code Agent Teams remain an opt-in (`team: on`) for milestones where teammates must talk to each other. No separate CLI, no SQLite, no TUI to babysit.
 
-**One namespace, upstreams consumed the way they want to be.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/superpowers/` is a read-only `git subtree` mirror pinned to an upstream tag (v7.0.2); we never modify it, we inline it. gstack is **not** vendored any more: it ships its skills as a Bun-powered install under `~/.claude/skills/gstack`, so ytstack's three planning wrappers check for that install (pinned v1.96.0.0) and invoke it through the Skill tool.
+**One namespace, upstreams consumed the way they want to be.** Skills appear as `/ytstack:<name>` -- no conflicts with other plugins. `vendor/superpowers/` is a read-only `git subtree` mirror pinned to an upstream tag (v7.0.2); we never modify it, we inline it. From gstack, ytstack takes exactly six skills and ships them as its own adaptations (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`): no gstack install, no Bun, nothing registered in `~/.claude/skills/`. Each records the gstack release it follows; `bin/ytstack-gstack-diff` shows upstream changes before every release.
 
 ## Workflows
 
@@ -121,9 +121,9 @@ SessionStart hook injects `STATE.md` + the `using-ytstack` directive before your
   -> "let's do a handoff"      -> ytstack:handoff-session   (rich HANDOFF.md)
   -> "poke holes in this idea" -> ytstack:grill             (question it before plan-milestone)
   -> "finish the branch"       -> ytstack:finish-branch     (merge / PR / keep, after the slice is closed)
-  -> "ship it"                 -> ytstack:ship              (gstack release flow: tests, review, PR)
-  -> "retro"                   -> ytstack:retro             (after the milestone closed; gstack)
-  -> "write the changelog"     -> ytstack:document-release  (release notes from the summaries; gstack)
+  -> "ship it"                 -> ytstack:ship              (release flow: tests, review, PR)
+  -> "retro"                   -> ytstack:retro             (after the milestone closed)
+  -> "write the changelog"     -> ytstack:document-release  (release notes from the summaries)
 ```
 
 Continuing an open task:
@@ -193,7 +193,7 @@ Source: [`docs/ytstack-debugging-flow.excalidraw`](docs/ytstack-debugging-flow.e
 ### Prerequisites
 
 - Claude Code >= 2.1.214.
-- For the six gstack-backed skills (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`): gstack installed at `~/.claude/skills/gstack` (tested against v1.96.0.0) with bun >= 1.4.2 -- `git clone --branch v1.96.0.0 https://github.com/garrytan/gstack ~/.claude/skills/gstack && (cd ~/.claude/skills/gstack && ./setup --no-browser)`. Those skills stop with this command when gstack is missing; the other 25 skills and all hooks need neither gstack nor bun.
+- bash, git and `gh` (for `ship` and `document-release`). Nothing else: the six skills adapted from gstack (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`) ship inside the plugin, so gstack and Bun are not needed and nothing is registered in `~/.claude/skills/`.
 
 ### Codex
 
@@ -351,7 +351,7 @@ ytstack/
 ├── skills/                      21 skill packages
 ├── bin/                         ytstack-check (contracts), ytstack-status (status line segment), ytstack-codex, dev-reinstall
 ├── tests/                       13 shell test suites + run-all.sh (--linux via Docker)
-├── vendor/                      read-only subtree: superpowers v7.0.2 (gstack is an installed dependency, not vendored)
+├── vendor/                      read-only subtree: superpowers v7.0.2 (the six gstack skills are adapted under skills/, not vendored)
 ├── docs/
 │   ├── ux/                      mandatory skill-authoring contracts
 │   ├── references.md            research sources
