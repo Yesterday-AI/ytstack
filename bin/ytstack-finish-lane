@@ -13,9 +13,11 @@
 #                                  [--verdict-pattern ERE] [--allow-no-checks]
 #   ytstack-finish-lane merge      --pr N --at SHA [--method squash|merge|rebase]
 #                                  [--max-open N] [--verdict-pattern ERE] [--allow-no-checks]
+#   ytstack-finish-lane route      --lane REF --base SHA --head SHA
 #
 # All commands take -C DIR first: the lane's worktree (default: $PWD). A
-# relative --body-file is read from where the command was started.
+# relative --body-file is read from where the command was started. For route
+# DIR is the checkout of the coordinating session, see below.
 #
 # The host is GitHub, reached through `gh` only (its own JSON filter, no other
 # tool). No other host is supported. Nothing is written into .ytstack/.
@@ -26,10 +28,13 @@
 #             anything under node_modules/, an untracked file above 1 MB. A
 #             --scope PATH is a file, a directory or a shell
 #             pattern, relative to the worktree's root; without --scope nothing
-#             is out of scope.
+#             is out of scope. The evidence directory of a visual review
+#             (evidence_dir of PREFERENCES.md, default .ytstack/evidence) is a
+#             record of the review and no leftover: it is not listed.
 # commit      stages the in-scope files by name and commits them. Refuses while
 #             junk, out-of-scope files or unmerged paths exist; nothing is
-#             staged then. The repository's signing settings apply unchanged.
+#             staged then. The evidence directory is left where it is. The
+#             repository's signing settings apply unchanged.
 # push        the current branch to origin, with upstream. A rejected push
 #             stays rejected: the script has no way to overwrite the remote.
 # open-pr     opens the pull request for the current branch; prints its number.
@@ -56,18 +61,33 @@
 #               open-prs   with --max-open: at most N open pull requests
 # merge       runs gates for --at SHA, merges only when all hold, pinned to
 #             that commit on the host's side, and reads the state back. No
-#             auto-merge, no administrator override.
+#             auto-merge, no administrator override. It does not read the
+#             route: who may call it is decided by the skill, from merge_by.
+# route       whether the lane may merge without a person. Runs
+#             `ytstack-risk route` (docs/ux/review-policy-format.md, "The
+#             route") for the change --base..--head, prints one line of what
+#             it read and then that script's lines. It reads no host and
+#             merges nothing. DIR is the checkout whose .ytstack/ holds
+#             LANES.md and the plan with the review records: the coordinating
+#             session's, not the lane's worktree. The author of the change is
+#             the first word of the lane's "Claimed by" cell; without a row
+#             the author is unknown and the route is "person". The plan is
+#             <REF>-PLAN.md; a lane without one has no review record:
+#             "route: person". The evidence directory of a visual lens is read
+#             from the main checkout of the repository.
 #
 # Exit codes: 0 done; 1 refused or a gate does not hold (the reason is
-# printed); 64 usage.
+# printed); 64 usage. route: 0 "route: unattended"; 10 "route: person"; 65 git
+# cannot answer; a caller treats everything but 0 as "not unattended".
 
 set -uo pipefail
 
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '6,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '6,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 bad_usage() { [ $# -eq 0 ] || echo "ytstack-finish-lane: $*" >&2; usage >&2; exit 64; }
 die() { echo "ytstack-finish-lane: $*" >&2; exit 1; }
 is_int() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; }
@@ -117,9 +137,25 @@ junk_reason() { # <path> <untracked: yes|no>
   esac
   if [ "$2" = yes ] && [ -f "$1" ] && [ "$(wc -c < "$1" | tr -d ' ')" -gt 1048576 ]; then echo "untracked, above 1 MB"; fi
 }
+# evidence_rel: sets EVIDENCE, the evidence directory of a visual review
+# (evidence_dir of PREFERENCES.md, default .ytstack/evidence) as a path under
+# the worktree's root. What lies in it is a record of the review, not work of
+# the lane: it is no leftover and is never staged here.
+EVIDENCE=.ytstack/evidence
+evidence_rel() {
+  local lib="$SELF_DIR/../hooks/lib/git-ctx.sh"
+  [ -f "$lib" ] || return 0
+  . "$lib"
+  yt_git_ctx "$TOP"; yt_resolve_yt_dir >/dev/null; yt_prefs "$YT_DIR"
+  EVIDENCE=${YT_PREF_EVIDENCE_DIR#./}; EVIDENCE=${EVIDENCE%/}
+  case "$EVIDENCE" in "$TOP"/*) EVIDENCE=${EVIDENCE#"$TOP"/} ;; esac
+  case "$EVIDENCE" in ""|/*|*..*) EVIDENCE="" ;; esac
+}
 # classify <path> <untracked: yes|no> <needs staging: yes|no>
 classify() {
-  local r; r=$(junk_reason "$1" "$2")
+  local r
+  [ -z "$EVIDENCE" ] || case "$1" in "$EVIDENCE"/*) return 0 ;; esac
+  r=$(junk_reason "$1" "$2")
   if [ -n "$r" ]; then JUNK[${#JUNK[@]}]="$1 ($r)"
   elif in_scope "$1"; then
     IN[${#IN[@]}]="$1"
@@ -155,7 +191,7 @@ cmd_leftovers() {
       *) bad_usage "leftovers: unknown argument '$1'" ;;
     esac
   done
-  enter; scan
+  enter; evidence_rel; scan
   group "in scope" ${IN[@]+"${IN[@]}"}
   group "out of scope" ${OUT[@]+"${OUT[@]}"}
   group "junk" ${JUNK[@]+"${JUNK[@]}"}
@@ -173,7 +209,7 @@ cmd_commit() {
   [ -n "$msg" ] || bad_usage "commit needs --message"
   enter
   [ -z "$(git ls-files -u)" ] || die "unmerged paths in $TOP (an unfinished merge or rebase); nothing was staged"
-  scan
+  evidence_rel; scan
   if [ ${#JUNK[@]} -gt 0 ] || [ ${#OUT[@]} -gt 0 ]; then
     group "out of scope" ${OUT[@]+"${OUT[@]}"}
     group "junk" ${JUNK[@]+"${JUNK[@]}"}
@@ -444,6 +480,52 @@ cmd_merge() {
   echo "merged #$PR at $HOST_HEAD ($METHOD)"
 }
 
+# ---- route ---------------------------------------------------------------------
+cmd_route() {
+  local lane="" base="" head="" author="" plan="" root
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || bad_usage "$1 needs a value"
+    case "$1" in
+      --lane) lane="$2" ;;
+      --base) base="$2" ;;
+      --head) head="$2" ;;
+      *) bad_usage "route: unknown argument '$1'" ;;
+    esac
+    shift 2
+  done
+  case "$lane" in ""|*[!A-Za-z0-9._-]*) bad_usage "route needs --lane REF (letters, digits, '.', '_' and '-')" ;; esac
+  is_sha "$base" && is_sha "$head" || bad_usage "route needs --base and --head as 7 to 40 hex digits"
+  enter
+  [ -f "$SELF_DIR/ytstack-risk" ] && [ -f "$SELF_DIR/../hooks/lib/git-ctx.sh" ] \
+    || die "bin/ytstack-risk and hooks/lib/git-ctx.sh are not next to this script: the route is unknown, a person merges"
+  . "$SELF_DIR/../hooks/lib/git-ctx.sh"
+  yt_git_ctx "$TOP"; yt_resolve_yt_dir >/dev/null
+  [ -n "$YT_DIR" ] || die "no .ytstack directory for $TOP: route runs in the checkout that holds LANES.md and the plans"
+
+  # Who made the change: the worker that holds the lane's row.
+  [ ! -f "$YT_DIR/LANES.md" ] || author=$(YTF_LANE="$lane" awk -F'|' '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    /^\|/ && ++n > 2 && trim($2) == ENVIRON["YTF_LANE"] { split(trim($5), w, /[ \t]+/); print w[1]; exit }
+  ' "$YT_DIR/LANES.md")
+  [ "$author" != - ] || author=""
+  plan=$(yt_find_artifacts "$YT_DIR" "$lane-PLAN.md" | head -1)
+  if [ -n "$plan" ]; then echo "lane: $lane; author: ${author:-unknown}; plan: ${plan#"$TOP"/}"
+  else echo "lane: $lane; author: ${author:-unknown}; plan: none"; fi
+  if [ -z "$plan" ]; then
+    echo "route: person"
+    echo "reason: review -- lane $lane has no plan file ($lane-PLAN.md under $YT_DIR): there is no review record to read"
+    exit 10
+  fi
+
+  # A relative evidence directory starts at the main checkout: a reviewer in a
+  # worktree of its own stores its images there, where this call finds them.
+  root="${YT_MAIN_TOPLEVEL:-$TOP}"; [ -d "$root" ] || root="$TOP"
+  set -- -C "$root" route --plan "$plan" --base "$base" --head "$head"
+  [ -z "$author" ] || set -- "$@" --author "$author"
+  bash "$SELF_DIR/ytstack-risk" "$@"
+  exit $?
+}
+
 case "$CMD" in
   leftovers)  cmd_leftovers "$@" ;;
   commit)     cmd_commit "$@" ;;
@@ -453,6 +535,7 @@ case "$CMD" in
   body-check) cmd_body_check "$@" ;;
   gates)      cmd_gates "$@" ;;
   merge)      cmd_merge "$@" ;;
+  route)      cmd_route "$@" ;;
   -h|--help|help) usage ;;
   *) bad_usage ;;
 esac

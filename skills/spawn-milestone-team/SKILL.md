@@ -3,7 +3,7 @@ name: spawn-milestone-team
 description: "Dispatches the current milestone's slices to parallel workers: by default one worktree-isolated implementer subagent per slice plus a fresh verifier per slice, orchestrated from the main session which never edits source; with PREFERENCES team on, a Claude Code Agent Team instead. Use after slice-milestone and plan-eng-review when the slices are independent, or when the user says spawn the team, run the slices in parallel, dispatch the milestone. Not for a single slice or sequential work (plan-task)."
 metadata:
   tier: task
-  version: 0.4.0
+  version: 0.5.0
   triggers:
     - spawn team
     - dispatch milestone
@@ -311,6 +311,8 @@ If `.ytstack/STATE.md` conflicts, resolve it from the orchestrator's side (`git 
 `_MERGE_POLICY = B`: leave the branches, list them. The rows stay at Status `ready`.
 
 Never push, never open a PR here (`ytstack:ship` / `ytstack:finish-branch` do that on request).
+
+This merge is a local one into `{BRANCH}`, under the policy of Step 4. It is not the risk gate: `merge_by` and the route of a change (`bin/ytstack-risk route`, `docs/ux/review-policy-format.md`) decide about a pull request, in `ytstack:finish-lane`. The verifier of Step 7 runs commands; it is no review and no lens. A milestone whose lanes should each get a review with a stated class, the lenses its kind of change requires (each lens reviewer a lane of kind `review`), a route and a pull request of their own runs through `ytstack:coordinate`.
 
 After each merge (policy A) or each verified slice (policy B): back to Step 5 and look at the frontier again. Go on to Step 9 only when Step 5 says the run is over.
 

@@ -3,9 +3,11 @@
 # the worker's report to a merge at the reviewed commit.
 #
 # Contract:
-#   leftovers   in scope / out of scope / junk; junk wins over scope
+#   leftovers   in scope / out of scope / junk; junk wins over scope; the
+#               evidence directory of a visual review is not listed
 #   commit      refuses junk, out-of-scope files and unmerged paths and stages
-#               nothing; commits the in-scope files, staged or not
+#               nothing; commits the in-scope files, staged or not, and leaves
+#               the evidence directory out
 #   push        the branch reaches origin with upstream; a rejected push leaves
 #               origin as it was
 #   open-pr     prints the number of the pull request it opened
@@ -15,11 +17,17 @@
 #               head; commands, branches and fenced blocks are not paths
 #   gates       each gate fails alone; all hold: exit 0 and the time of the read
 #   merge       only when the gates hold, pinned to the reviewed commit
+#   route       the lines of `ytstack-risk route` for the lane's plan, with the
+#               worker of the lane's row as the author: exit 0 for
+#               "unattended", 10 for "person"; a reviewer who is the worker, a
+#               lane without a row and a lane without a plan are "person"; no
+#               host is read; the evidence of a visual lens is read from the
+#               main checkout, also when the session works in a linked worktree
 #   usage       exit 64
 #
 # The host is a fake `gh` first in PATH that answers from fixture files and
 # logs its arguments; origin is a local bare repository. Nothing leaves the
-# machine.
+# machine. route runs the real bin/ytstack-risk on a fixture repository.
 #
 # Run: /bin/bash tests/ytstack-finish-lane.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -121,6 +129,18 @@ hasnt "a committed template (.env.example) is not junk" ".env.example (" "$OUT"
 ( cd "$L" && rm -f .env.example )
 run "$L" leftovers --scope 'src/*.sh' --scope README.md
 eq "a scope may be a pattern, and --scope may repeat" "README.md|src/a.sh|src/d.sh|src/new file.sh|" "$(grp "in scope")"
+# The evidence directory of a visual review is a record of the review, no leftover.
+( cd "$L" && mkdir -p .ytstack/evidence/M001-S01/abc1234/ui review/shots
+  echo png > .ytstack/evidence/M001-S01/abc1234/ui/list-390.png; echo m > .ytstack/evidence/M001-S01/abc1234/ui/MANIFEST
+  echo png > review/shots/list-390.png )
+run "$L" leftovers --scope src tests/
+hasnt "the evidence directory is not listed" ".ytstack/evidence" "$OUT"
+has "images somewhere else are a leftover" "review/shots/list-390.png" "$OUT"
+( cd "$L" && printf 'evidence_dir: ./review/shots/\n' > .ytstack/PREFERENCES.md )
+run "$L" leftovers --scope src tests/
+hasnt "evidence_dir of PREFERENCES.md is the directory that is left out" "review/shots/list-390.png" "$OUT"
+has "and the default directory is a leftover then" ".ytstack/evidence/M001-S01/abc1234/ui/list-390.png" "$OUT"
+rm -rf "$L/.ytstack" "$L/review"
 eq "leftovers stages nothing" "" "$(staged "$L")"
 
 # ---- 2. commit ----------------------------------------------------------------
@@ -149,6 +169,11 @@ eq "the worktree is clean afterwards" "" "$(git -C "$L" status --porcelain)"
 run "$L" commit --message "again"
 eq "nothing left: commit refuses" 1 "$EC"
 has "and says so" "nothing to commit" "$OUT"
+( cd "$L" && mkdir -p .ytstack/evidence/M001-S01/abc1234/ui && echo png > .ytstack/evidence/M001-S01/abc1234/ui/list-390.png && echo more >> src/a.sh )
+run "$L" commit --message "M001-S01-T01: more" --scope src
+eq "evidence beside an in-scope change: commit succeeds" 0 "$EC"
+eq "and the evidence stays out of the commit" "src/a.sh|" "$(git -C "$L" show --name-only --format= HEAD | tr '\n' '|')"
+rm -rf "$L/.ytstack"
 
 U=$(new_lane unmerged)
 ( cd "$U" && echo lane >> src/a.sh && git commit -qam lane && git checkout -q main && echo main >> src/a.sh && git commit -qam main
@@ -385,7 +410,93 @@ host; touch "$GH_FIX/merge.queue"; run "$G" merge --pr 7 --at "$SHA"
 eq "accepted but not merged (a queue): fail" 1 "$EC"
 has "the host's state is named" "the host reports OPEN" "$OUT"
 
-# ---- 9. usage -----------------------------------------------------------------
+# ---- 9. route -----------------------------------------------------------------
+echo "# route"
+# A project with one area (src/**, auto_merge: low) and a lane whose worker
+# changed one file under it. The checkout of the coordinating session holds
+# LANES.md with the worker and the lane's plan with the review record.
+RT="$TMP/route"; mkdir -p "$RT/src" "$RT/.ytstack/spec"
+( cd "$RT" || exit 1
+  git init -q -b main && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false || exit 1
+  echo a > src/a.sh
+  printf -- '---\narea: core\nstatus: implemented\npaths:\n  - src/**\nauto_merge: low\n---\n\n# core\n\n## Invariants and security boundaries\n\n- x\n\n## Decisions that apply now\n\n- none\n' > .ytstack/spec/core.md
+  git add -A && git commit -qm base && git checkout -q -b lane && echo b >> src/a.sh && git commit -qam "M001-S01-T01: change a" && git checkout -q main ) >/dev/null 2>&1
+RB=$(git -C "$RT" rev-parse main); RH=$(git -C "$RT" rev-parse lane)
+# lanes <claimed by>: the lanes table with one row for M001-S01
+lanes() {
+  printf -- '---\nupdated: 2026-11-13T10:00:00Z\n---\n\n# Lanes\n\n| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |\n|---|---|---|---|---|---|---|---|---|---|\n| M001-S01 | implement | in-review | %s | lane | - | 7 | - | 1 | - |\n' "$1" > "$RT/.ytstack/LANES.md"
+}
+# rplan <reviewer>: the lane's plan with one approving round by that reviewer
+rplan() {
+  printf -- '---\nstatus: in-progress\n---\n\n# Slice Plan\n\n## Review\n\n- Round 1: %s..%s -- approved; blocking: 0; follow-ups: 0; risk: low; invariants: none; by: %s\n' \
+    "${RB:0:7}" "${RH:0:7}" "$1" > "$RT/.ytstack/M001-S01-PLAN.md"
+}
+route() { quiet; run "$RT" route --lane M001-S01 --base "$RB" --head "${RH:0:12}"; }
+
+lanes "impl-M001-S01 2026-11-13T09:00Z"; rplan review-M001-S01; route
+eq "an approved low change in an area that allows low: exit 0" 0 "$EC"
+eq "the first line says what was read" "lane: M001-S01; author: impl-M001-S01; plan: .ytstack/M001-S01-PLAN.md" "$(printf '%s\n' "$OUT" | sed -n 1p)"
+has "then the lines of ytstack-risk route" "route: unattended
+class: low
+ceiling: low" "$OUT"
+eq "no host was read" "" "$(calls)"
+rplan impl-M001-S01; route
+eq "the reviewer is the lane's worker: exit 10" 10 "$EC"
+has "the route is person" "route: person" "$OUT"
+has "and says why" "reason: review -- the reviewer 'impl-M001-S01' is the author of the change" "$OUT"
+rplan review-M001-S01; lanes "-"; route
+eq "nobody holds the lane's row: exit 10" 10 "$EC"
+has "the author is unknown" "lane: M001-S01; author: unknown; plan:" "$OUT"
+has "so the reviewer cannot be told from the author" "reason: review -- no --author given" "$OUT"
+rm -f "$RT/.ytstack/LANES.md"; route
+eq "no lanes table at all: exit 10" 10 "$EC"
+lanes "impl-M001-S01 2026-11-13T09:00Z"; rm -f "$RT/.ytstack/M001-S01-PLAN.md"; route
+eq "a lane without a plan: exit 10" 10 "$EC"
+eq "it is person, with the one reason" "lane: M001-S01; author: impl-M001-S01; plan: none
+route: person
+reason: review -- lane M001-S01 has no plan file (M001-S01-PLAN.md under $RT/.ytstack): there is no review record to read" "$OUT"
+rplan review-M001-S01
+quiet; run "$RT" route --lane M001-S01 --base "$RB" --head 0123456789abcdef
+eq "a head that is no commit of the repository: exit 65, not unattended" 65 "$EC"
+quiet; run "$TMP/plain-route" route --lane M001-S01 --base "$RB" --head "$RH"
+eq "-C to a missing directory: exit 64" 64 "$EC"
+
+# A visual lens. The reviewer stored its images in the main checkout; the
+# coordinating session works in a linked worktree of the same repository.
+RV="$TMP/routev"; RW="$TMP/routev-wt"; mkdir -p "$RV/src/ui" "$RV/docs" "$RV/.ytstack/spec"
+( cd "$RV" || exit 1
+  git init -q -b main && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false || exit 1
+  echo a > src/ui/a.css; echo design > docs/design.md
+  printf -- '---\narea: core\nstatus: implemented\npaths:\n  - src/**\n  - docs/**\nauto_merge: low\n---\n\n# core\n' > .ytstack/spec/core.md
+  printf '# Review policy\n\n## Lenses\n\n- ui | applies: src/ui/** | reads: docs/design.md | evidence: visual\n' > .ytstack/spec/REVIEW.md
+  git add -A && git commit -qm base && git checkout -q -b lane && echo b >> src/ui/a.css && git commit -qam "M001-S01-T01: restyle" && git checkout -q main
+  git worktree add -q -b coord "$RW" main ) >/dev/null 2>&1
+VB=$(git -C "$RV" rev-parse main); VH=$(git -C "$RV" rev-parse lane); EV=".ytstack/evidence/M001-S01/${VH:0:7}/ui"
+printf -- '---\nupdated: 2026-11-13T10:00:00Z\n---\n\n# Lanes\n\n| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |\n|---|---|---|---|---|---|---|---|---|---|\n| M001-S01 | implement | in-review | impl-M001-S01 2026-11-13T09:00Z | lane | - | 7 | - | 1 | - |\n' > "$RW/.ytstack/LANES.md"
+printf -- '# Slice Plan\n\n## Review\n\n- Round 1: %s..%s -- approved; blocking: 0; follow-ups: 0; risk: low; invariants: none; by: review-M001-S01\n- Lens ui: %s -- pass; by: ui-M001-S01; evidence: %s (1 images)\n' \
+  "${VB:0:7}" "${VH:0:7}" "${VH:0:7}" "$EV" > "$RW/.ytstack/M001-S01-PLAN.md"
+# shot <root>: one image under <root>/$EV with a complete MANIFEST line
+shot() {
+  mkdir -p "$1/$EV" && echo png > "$1/$EV/button-390.png" && bash "$ROOT/bin/ytstack-risk" manifest "$1/$EV" >/dev/null \
+    && sed 's#| url:  | viewport:  | shows: $#| url: http://localhost:4100/ | viewport: 390x844 | shows: the button#' "$1/$EV/MANIFEST" > "$1/$EV/MANIFEST.tmp" \
+    && mv "$1/$EV/MANIFEST.tmp" "$1/$EV/MANIFEST"
+}
+vroute() { quiet; run "$RW" route --lane M001-S01 --base "$VB" --head "$VH"; }
+vroute
+eq "a visual lens without its evidence: exit 10" 10 "$EC"
+has "the missing directory is the reason" "reason: lens ui -- the evidence directory $EV does not exist" "$OUT"
+shot "$RW"; vroute
+eq "evidence in the worktree of the session is not what is read: exit 10" 10 "$EC"
+rm -rf "$RW/.ytstack/evidence"; shot "$RV"; vroute
+eq "evidence in the main checkout, read from the linked worktree: exit 0" 0 "$EC"
+has "the route is unattended with its lens" "route: unattended
+class: low
+ceiling: low
+floor: low
+areas: core
+lenses: ui" "$OUT"
+
+# ---- 10. usage ----------------------------------------------------------------
 echo "# usage"
 host
 run "$G";                                              eq "no command: exit 64" 64 "$EC"
@@ -405,6 +516,9 @@ run "$G" gates --pr 7 --reviewed-head "$SHA" --verdict-pattern '(';  eq "an inva
 run "$G" gates --pr 7 --at "$SHA";                     eq "--at belongs to merge: exit 64" 64 "$EC"
 run "$G" merge --pr 7 --at "$SHA" --method fast;       eq "an unknown merge method: exit 64" 64 "$EC"
 run "$G" merge --pr 7 --at;                            eq "an option without its value: exit 64" 64 "$EC"
+run "$G" route --base "$SHA" --head "$SHA";            eq "route without a lane: exit 64" 64 "$EC"
+run "$G" route --lane M001-S01 --base main --head "$SHA"; eq "route with a branch name as the base: exit 64" 64 "$EC"
+run "$G" route --lane 'M001 S01' --base "$SHA" --head "$SHA"; eq "a lane reference with a space: exit 64" 64 "$EC"
 eq "no usage error reached the host" "" "$(calls)"
 run "$TMP/nowhere" leftovers;                          eq "-C to a missing directory: exit 64" 64 "$EC"
 mkdir -p "$TMP/plain"; run "$TMP/plain" leftovers
