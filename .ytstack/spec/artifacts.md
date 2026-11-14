@@ -19,7 +19,7 @@ sources:
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
   - docs/statusline.md
-verified_at: 54a25e7
+verified_at: 1e27f96
 ---
 
 # artifacts
