@@ -70,12 +70,13 @@ def enqueue(db, key, watch, message):
 
 
 def register(db, repo, number, session, cwd):
-    existing = db.execute('SELECT session FROM watches WHERE repo=? AND number=?', (repo, number)).fetchone()
-    if existing and existing['session'] != session:
-        raise ValueError('PR already belongs to another session; explicit reassignment required')
-    db.execute('DELETE FROM meta WHERE key IN (?,?)', (f'ownership:{repo}:{number}', f'registration:{repo}:{number}'))
+    # Insert first, then read the owner: a check before the insert races with the worker.
     db.execute('INSERT OR IGNORE INTO watches(repo,number,session,cwd) VALUES(?,?,?,?)',
                (repo, number, session, cwd))
+    owner = db.execute('SELECT session FROM watches WHERE repo=? AND number=?', (repo, number)).fetchone()
+    if owner['session'] != session:
+        raise ValueError('PR already belongs to another session; explicit reassignment required')
+    db.execute('DELETE FROM meta WHERE key IN (?,?)', (f'ownership:{repo}:{number}', f'registration:{repo}:{number}'))
     # Registering again revives a watch that was closed (for example a PR that was reopened).
     db.execute("UPDATE watches SET status='registered', updated=0, closed_at=NULL WHERE repo=? AND number=? AND status='closed'",
                (repo, number))

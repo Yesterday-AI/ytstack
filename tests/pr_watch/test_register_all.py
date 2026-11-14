@@ -78,6 +78,16 @@ class RegisterAllOpen(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn('#7 (claude:worker-found)', out)
 
+    def test_insert_raced_by_the_worker_is_not_reported_as_ours(self):
+        # The worker commits its watch after any pre-check: register itself must notice.
+        db = connect()
+        with db:
+            db.execute("INSERT INTO watches(repo,number,session,cwd) VALUES('o/r',8,'claude:worker-found','/tmp')")
+            with self.assertRaises(ValueError):
+                register(db, 'o/r', 8, 'claude:coordinator', '/tmp')
+        db.close()
+        self.assertEqual(self.watches(), {8: 'claude:worker-found'})
+
     def test_needs_a_session(self):
         with patch.object(github, 'open_pulls', return_value=[]), self.assertRaises(SystemExit):
             with redirect_stdout(io.StringIO()), patch('sys.stderr', io.StringIO()):
