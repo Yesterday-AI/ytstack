@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-14T20:30:00Z
+last_updated: 2026-11-14T21:30:00Z
 current_milestone: none
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-11-14, 0.9.2):** Patch release for the #54 field run (PR #59, `c737d84`): the PR watch CLI qualifies the current Claude session's bare id, `register` heals watches stored under it, `coordinate` 0.2.2 leaves `--session` out. The context-mcp coordinator needs a restart (its hooks are still 0.7.0), then `register --all-open` without `--session`.
 
 **Status (2026-11-14, 0.9.1):** Patch release for issue #54 point 2 (PR #56, `eaad9c3`): `ytstack-pr-watch register --all-open` for the session that owns a repository's PRs, `coordinate` 0.2.1 relies on the PR watch only with a fresh worker heartbeat, `migrate` step 5 (restart, then re-register). Open next: plan the rest of #54 (incl. the risk-route round-line finding and the setup guide), #53 (incident to lesson loop) and #55 (upstream feedback channel).
 
