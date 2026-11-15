@@ -181,6 +181,8 @@ LOG=$(cat "$GH_FIX/log" 2>/dev/null)
 has "gh pr create on the day branch against main" "pr create --repo acme/demo --base main --head standing/$DAY" "$LOG"
 eq "the checkout is unchanged" "" "$(git -C "$M" status --porcelain)"
 [ ! -d "$M/.ytstack/standing" ] && ok "no entry in the checkout's tree" || bad "no entry in the checkout's tree"
+SS=$(printf '{"session_id":"ss1","cwd":"%s","source":"compact"}' "$M" | YTSTACK_HOOK_FORMAT=plain CLAUDE_PLUGIN_ROOT="$ROOT" bash "$ROOT/hooks/session-start" 2>/dev/null)
+has "SessionStart shows the pending entry before the checkout has standing/" "never-merge-a-red-main (every lane): Never merge a red main. [pending:standing/$DAY]" "$SS"
 REMOTE_FILES=$(git --git-dir="$BARE" ls-tree --name-only "standing/$DAY" -- .ytstack/standing/ 2>/dev/null)
 has "pushed: the remote branch has the entry" "never-merge-a-red-main" "$REMOTE_FILES"
 WT="$XDG_STATE_HOME/ytstack/repos"

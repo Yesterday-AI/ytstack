@@ -798,7 +798,7 @@ yt_standing_lines() {
 # ytstack/sessions. Not yt_state_base: Claude Code sets CLAUDE_PLUGIN_DATA for
 # hooks only, never for commands of the Bash tool. Files under
 # <home>/<session id>/: `coordinate` (written by the coordinate preamble: the
-# YT_DIR on line 1), `prompts` (hooks/standing-prompt: one epoch per human
+# YT_DIR on line 1, YT_REPO_KEY on line 2), `prompts` (hooks/standing-prompt: one epoch per human
 # prompt), `standing-flags` (epoch TAB YYYYMMDDHHMM TAB ISO TAB excerpt per
 # prompt that looks like a standing instruction), `standing-stop` (hooks/stop:
 # the epoch up to which flags were handled).

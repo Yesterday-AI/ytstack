@@ -332,7 +332,9 @@ newest entry: 20261114T1436Z-at-most-fifteen ("
       has "$s: no session id -> no marker" "$OUT" "COORDINATE_MARKER: none"
       PRE_SID=pre-1 run_pre "$P" "$WT"
       has "$s: session id -> marker written" "$OUT" "COORDINATE_MARKER: written"
-      eq "$s: the marker names the resolved .ytstack" "$WT/.ytstack" "$(cat "$TMP/xdg/ytstack/sessions/pre-1/coordinate" 2>/dev/null)"
+      eq "$s: the marker names the resolved .ytstack" "$WT/.ytstack" "$(sed -n 1p "$TMP/xdg/ytstack/sessions/pre-1/coordinate" 2>/dev/null)"
+      _K=$( . "$ROOT/hooks/lib/git-ctx.sh"; yt_git_ctx "$WT"; printf '%s' "$YT_REPO_KEY" )
+      eq "$s: and the repository key on line 2" "$_K" "$(sed -n 2p "$TMP/xdg/ytstack/sessions/pre-1/coordinate" 2>/dev/null)"
       rm -rf "$TMP/xdg"
       # the factory tools (M031, issue #54): Step 7 skips by what the project switched on
       run_pre "$P" "$WT"

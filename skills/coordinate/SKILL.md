@@ -147,7 +147,7 @@ _SID="${CLAUDE_CODE_SESSION_ID:-}"
 case "$_SID" in
   ''|*[!A-Za-z0-9._-]*) echo "COORDINATE_MARKER: none (no session id on this host: the standing hooks stay off)" ;;
   *) if [ -n "$_YT_DIR" ] && command -v yt_session_home >/dev/null 2>&1 && mkdir -p "$(yt_session_home)/$_SID" 2>/dev/null \
-        && printf '%s\n' "$_YT_DIR" > "$(yt_session_home)/$_SID/coordinate" 2>/dev/null; then
+        && printf '%s\n%s\n' "$_YT_DIR" "$_PROJECT_KEY" > "$(yt_session_home)/$_SID/coordinate" 2>/dev/null; then
        echo "COORDINATE_MARKER: written"
      else
        echo "COORDINATE_MARKER: not written (the standing hooks stay off)"

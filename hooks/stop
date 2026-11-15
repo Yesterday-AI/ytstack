@@ -81,15 +81,18 @@ standing_block
 # first stop came before its first dispatch.
 LINT_MSG=""
 coordinate_lints() {
-  local sid="${YT_SESSION_ID:-}" sd ytd last lm kind present n s seen streak need tmp text
+  local sid="${YT_SESSION_ID:-}" sd ytd key last lm kind present n s seen streak need tmp text
   case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) return 0 ;; esac
   sd="$(yt_session_home)/$sid"
   [ -f "$sd/coordinate" ] || return 0
   ytd=$(sed -n 1p "$sd/coordinate" 2>/dev/null)
   [ -n "$ytd" ] && [ -d "$ytd" ] || return 0
   need="${YT_LINT_STREAK_N:-3}"; case "$need" in ''|*[!0-9]*) need=3 ;; esac
-  yt_git_ctx "$(dirname "$ytd")"
-  streak="$(yt_state_base)/repos/${YT_REPO_KEY:-unknown}/coordinate-lints"
+  # The repository key from the marker's second line (the coordinate preamble's
+  # YT_REPO_KEY): in user scope the .ytstack lies outside the repository.
+  key=$(sed -n 2p "$sd/coordinate" 2>/dev/null); case "$key" in *[!A-Za-z0-9]*) key="" ;; esac
+  if [ -z "$key" ]; then yt_git_ctx "$(dirname "$ytd")"; key="${YT_REPO_KEY:-unknown}"; fi
+  streak="$(yt_state_base)/repos/$key/coordinate-lints"
   mkdir -p "$(dirname "$streak")" 2>/dev/null || return 0
   last=$(cat "$sd/dispatches" "$sd/reports" 2>/dev/null | awk '$1 + 0 > m { m = $1 + 0 } END { print m + 0 }')
   yt_state_lint "$ytd" >/dev/null

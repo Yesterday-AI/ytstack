@@ -137,6 +137,12 @@ for s in q1 q2 q3; do
   date +%s >> "$SH/$s/dispatches"; stop "$s"
 done
 eq "the third such session blocks" block "$(ctx .decision)"
+
+echo "# stop: the streak is kept per repository key from the marker (user scope)"
+rm -rf "$XDG_STATE_HOME/ytstack/repos"
+mkdir -p "$SH/u1"; printf '%s\nkeyone\n' "$P/.ytstack" > "$SH/u1/coordinate"; date +%s > "$SH/u1/dispatches"; stop u1
+mkdir -p "$SH/u2"; printf '%s\nkeytwo\n' "$P/.ytstack" > "$SH/u2/coordinate"; date +%s > "$SH/u2/dispatches"; stop u2
+eq "two keys, two counters" "1|1" "$(awk -F '\t' '$1 == "lanes" { print $2 }' "$XDG_STATE_HOME/ytstack/repos/keyone/coordinate-lints" 2>/dev/null)|$(awk -F '\t' '$1 == "lanes" { print $2 }' "$XDG_STATE_HOME/ytstack/repos/keytwo/coordinate-lints" 2>/dev/null)"
 eq "nothing written into the project" "?? .ytstack/LANES.md" "$(git -C "$P" status --porcelain)"
 
 echo

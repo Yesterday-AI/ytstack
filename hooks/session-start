@@ -198,15 +198,18 @@ fi
 # Standing instructions (issue #74): the active entries of standing/, files
 # only (no until-check or check runs here; a passed `until` is applied), for
 # the session's role: coordinator when the coordinate preamble left its
-# session marker, else lane. At most 8 lines; the rest is a pointer.
+# session marker, else lane. At most 6 lines; the rest is a pointer. Pending
+# entries count too, also before the checkout has a standing/ directory.
 STANDING_LINES=""; STANDING_N=0
 _ROLE=lane
 case "${YT_SESSION_ID:-}" in ''|.|..|*[!A-Za-z0-9._-]*) ;; *) [ ! -f "$(yt_session_home)/$YT_SESSION_ID/coordinate" ] || _ROLE=coordinator ;; esac
-if [ -d "$YT_DIR/standing" ]; then
+_ALL=$(yt_standing_lines "$YT_DIR" "$_ROLE")
+_SL=""
+if [ -n "$_ALL" ]; then
   _SL=$(yt_standing_lines "$YT_DIR" "$_ROLE" 6 | cut -c1-150)
-  STANDING_N=$(yt_standing_lines "$YT_DIR" "$_ROLE" | grep -c .)
+  STANDING_N=$(printf '%s\n' "$_ALL" | grep -c .)
   _SH="Standing instructions in force (role: $_ROLE; they override defaults; full text in standing/):"
-  [ -z "$_SL" ] || STANDING_LINES="$_SH
+  STANDING_LINES="$_SH
 $_SL"
 fi
 [ ! -f "$YT_DIR/STANDING.md" ] || STANDING_LINES="${STANDING_LINES:+$STANDING_LINES
