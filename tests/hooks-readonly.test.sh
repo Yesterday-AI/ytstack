@@ -117,6 +117,7 @@ CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty
 has   "ss-main: long next action -> its start is kept"   "$CTX" "NEXTLINE0 xxx"
 has   "ss-main: long next action -> the cut is marked"   "$CTX" "(cut: rest in STATE.md)"
 lacks "ss-main: long next action -> not dropped"          "$CTX" "(omitted: see STATE.md"
+lacks "ss-main: long next action -> YT_BIN yields first (issue #85)" "$CTX" "YT_BIN="
 if [ "${#CTX}" -le 9500 ]; then ok "ss-main: cut injection fits the guard (${#CTX})"; else bad "ss-main: cut injection fits the guard" "${#CTX}"; fi
 cp "$TMP/state.good" "$MAIN/.ytstack/STATE.md"
 

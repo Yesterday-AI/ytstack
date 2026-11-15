@@ -312,6 +312,9 @@ STANDING_ENTRIES_END"
       rm -rf "$WT/.ytstack/standing" "$WT/.ytstack/STANDING.md"
       # the factory tools (M031, issue #54): Step 7 skips by what the project switched on
       run_pre "$P" "$WT"
+      # issue #85: the bins of the running version, canonical, for "$YT_BIN/ytstack-<name>"
+      has "$s: YT_BIN is the canonical bin directory" "$OUT" "YT_BIN=$ROOT/bin
+"
       has "$s: bare fixture -> merge_by risk" "$OUT" "MERGE_BY: risk"
       has "$s: bare fixture -> no review policy" "$OUT" "REVIEW_POLICY: no"
       has "$s: bare fixture -> no own reviewers" "$OUT" "OWN_REVIEWERS: no"
