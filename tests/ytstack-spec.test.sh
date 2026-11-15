@@ -274,6 +274,22 @@ plan "- auth: Behavior -- a\n- billing: Known limits -- b"
 run "$R" impact --plan "$P" --base "$BASE"
 eq "two areas, both satisfied" 0 "$EC"
 
+# --head: a range that is not checked out (a lane's branch, read from the
+# coordinating checkout). The working tree is not the lane's and is not read.
+LH=$(head_of "$R"); plan "- auth: Behavior -- a"
+( cd "$R" && git checkout -q -b lane-x "$BASE" && echo a3 > src/auth/login.sh && git commit -qam "lane: code only" && git checkout -q - ) >/dev/null 2>&1
+LX=$(git -C "$R" rev-parse lane-x)
+run "$R" impact --plan "$P" --base "$BASE" --head "$LX"
+eq "--head: the lane changed code and no description: exit 1" 1 "$EC"
+printf '\nedited\n' >> "$R/.ytstack/spec/auth.md"
+run "$R" impact --plan "$P" --base "$BASE" --head "$LX"
+eq "--head: an edit in the working tree does not count for the lane" 1 "$EC"
+run "$R" impact --plan "$P" --base "$BASE" --head "$LH"
+eq "--head: the range BASE..HEAD of another branch counts its own commits" 0 "$EC"
+git -C "$R" show HEAD:.ytstack/spec/auth.md > "$R/.ytstack/spec/auth.md.tmp" && mv "$R/.ytstack/spec/auth.md.tmp" "$R/.ytstack/spec/auth.md"
+run "$R" impact --plan "$P" --head "$LX"
+eq "--head without --base: usage error" 64 "$EC"
+
 # Filenames git quotes in its plain output (a space, a non-ASCII byte) are
 # compared as the real names: the records are read NUL-delimited.
 # srcarea <name> <source>: an implemented area whose one source has a space or

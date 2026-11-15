@@ -24,7 +24,9 @@
 #               host is read without --pr; the evidence of a visual lens is
 #               read from the main checkout, also when the session works in a
 #               linked worktree; with --pr the round comes from the review on
-#               the host, also for a lane without a plan
+#               the host, also for a lane without a plan; with a technical
+#               spec a change to an area's paths without its area file, a
+#               plan's impact or a reason in the report (--report) is "person"
 #   usage       exit 64
 #
 # The host is a fake `gh` first in PATH that answers from fixture files and
@@ -492,6 +494,56 @@ eq "no review with a line, the plan has one: exit 0" 0 "$EC"
 has "the plan is named as the source" "round: plan" "$OUT"
 quiet; run "$RT" route --lane M001-S01 --base "$RB" --head "$RH" --pr seven
 eq "a pull request that is no number: exit 64" 64 "$EC"
+
+# The spec delta (issue #75): with a technical spec, a change to an area's
+# paths needs an edited area file, a plan that states the impact, or a reason
+# in the worker's report; otherwise it does not merge without a person.
+RS="$TMP/routes"; mkdir -p "$RS/src" "$RS/.ytstack/spec"
+( cd "$RS" || exit 1
+  git init -q -b main && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false || exit 1
+  echo a > src/a.sh
+  printf -- '---\nproject: p\n---\n\n# p\n\n## Areas\n\n| Area | File |\n|---|---|\n| core | [core.md](core.md) |\n\n## Keeping this true\n\n- x\n' > .ytstack/spec/SPEC.md
+  printf -- '---\narea: core\nstatus: implemented\npaths:\n  - src/**\nauto_merge: low\n---\n\n# core\n\n## Behavior\n\n- a\n\n## Invariants and security boundaries\n\n- x\n\n## Decisions that apply now\n\n- none\n' > .ytstack/spec/core.md
+  git add -A && git commit -qm base
+  git checkout -q -b code && echo b >> src/a.sh && git commit -qam "M001-S01-T01: change a"
+  git checkout -q -b documented && awk '{ print } /^- a$/ { print "- b" }' .ytstack/spec/core.md > core.tmp && mv core.tmp .ytstack/spec/core.md && git commit -qam "M001-S01-T01: describe b"
+  git checkout -q main ) >/dev/null 2>&1
+SB=$(git -C "$RS" rev-parse main); SC=$(git -C "$RS" rev-parse code); SD=$(git -C "$RS" rev-parse documented)
+printf -- '---\nupdated: 2026-11-13T10:00:00Z\n---\n\n# Lanes\n\n| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |\n|---|---|---|---|---|---|---|---|---|---|\n| M001-S01 | implement | in-review | impl-M001-S01 2026-11-13T09:00Z | code | - | 7 | - | 1 | - |\n' > "$RS/.ytstack/LANES.md"
+# splan <head>: the slice plan with an approving round on that head
+splan() {
+  printf -- '---\nstatus: in-progress\n---\n\n# Slice Plan\n\n## Review\n\n- Round 1: %s..%s -- approved; blocking: 0; follow-ups: 0; risk: low; invariants: none; by: review-M001-S01\n' "${SB:0:7}" "${1:0:7}" > "$RS/.ytstack/M001-S01-PLAN.md"
+}
+# report <spec value>: a worker's report with that Spec: line
+report() { printf 'Task: M001-S01\nStatus: complete\nSpec: %s\nNext: review\n' "$1" > "$TMP/report.md"; }
+sroute() { quiet; run "$RS" route --lane M001-S01 --base "$SB" --head "$1" ${2:+--report "$TMP/report.md"}; }
+
+splan "$SC"; sroute "$SC"
+eq "code changed, no plan states an impact, no report: exit 10" 10 "$EC"
+has "the route is person" "route: person" "$OUT"
+hasnt "and never unattended" "route: unattended" "$OUT"
+has "the spec delta is the reason" "reason: spec -- core: the change touches its paths, neither .ytstack/spec/core.md nor its sources changed" "$OUT"
+report "none -- no behaviour or contract changes"; sroute "$SC" r
+eq "the report states why the spec is unchanged: exit 0" 0 "$EC"
+has "the reason is printed" "spec: core unchanged -- no behaviour or contract changes (the worker's report)" "$OUT"
+report "core: .ytstack/spec/core.md (Behavior)"; sroute "$SC" r
+eq "the report names an edit the diff does not have: exit 10" 10 "$EC"
+has "and says so" "reason: spec -- the report names .ytstack/spec/core.md, which the change does not touch" "$OUT"
+splan "$SD"; sroute "$SD"
+eq "the lane edited the area file: exit 0" 0 "$EC"
+has "and the edit is named" "spec: core -- .ytstack/spec/core.md changed" "$OUT"
+splan "$SC"
+printf -- '---\ntask: T01\n---\n\n# plan\n\n## Files\n\n- `src/a.sh`\n\n## Spec impact\n\n- core: Behavior -- b\n' > "$RS/.ytstack/M001-S01-T01-PLAN.md"
+report "none -- no behaviour or contract changes"; sroute "$SC" r
+eq "a task plan names the area and the lane did not edit it: exit 10, the report does not override the plan" 10 "$EC"
+has "the impact check is the reason" "reason: spec -- .ytstack/M001-S01-T01-PLAN.md: FAIL core: neither .ytstack/spec/core.md nor its sources" "$OUT"
+printf -- '---\ntask: T01\n---\n\n# plan\n\n## Files\n\n- `src/a.sh`\n\n## Spec impact\n\nnone -- restores the described behaviour\n' > "$RS/.ytstack/M001-S01-T01-PLAN.md"
+sroute "$SC"
+eq "the task plan states none with a reason: exit 0" 0 "$EC"
+has "and its line is printed" "spec: .ytstack/M001-S01-T01-PLAN.md -- spec impact: none -- restores the described behaviour" "$OUT"
+rm -f "$RS/.ytstack/M001-S01-T01-PLAN.md"
+quiet; run "$RS" route --lane M001-S01 --base "$SB" --head "$SC" --report "$TMP/none.md"
+eq "a report file that cannot be read: exit 64" 64 "$EC"
 
 # A visual lens. The reviewer stored its images in the main checkout; the
 # coordinating session works in a linked worktree of the same repository.

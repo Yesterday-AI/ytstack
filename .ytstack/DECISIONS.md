@@ -1256,3 +1256,24 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - A review of an unplanned task still has no brief: there is nothing to review against.
 
 **Supersedes:** None.
+
+## 2026-11-15: `finish-lane`'s route checks the spec delta; a gap routes to a person (issue #75)
+
+**Context:** `summarize-task` checks a plan's spec impact, but lanes that skip it merged with no check at all. `finish-lane` read the receipt and the gates, never the spec.
+
+**Options considered:**
+- A) A separate `finish-lane` step `spec` the skill has to call.
+- B) Inside `ytstack-finish-lane route`: after `ytstack-risk route`, the spec delta; a gap is a `reason: spec` line and makes the route `person`.
+- C) Inside `ytstack-risk route`, for every caller.
+
+**Chose:** B.
+
+**Reason:** A step that can be skipped is the failure this issue reports. `route` is already the one call a merge without a person needs. `ytstack-risk` reads a policy at the base commit and stays a function of the diff and the review records; the worker's report is a lane artifact, which only `finish-lane` holds (C would make it read a file it has no record of).
+
+**How to apply:**
+- Plans first: a plan that states `## Spec impact` is checked with `ytstack-spec impact --base --head`, and the report cannot override it. Without one, an area the diff touches needs its area file or a source in the diff, or `Spec: none -- <reason>` in the report given with `--report`.
+- The area files are read from the coordinating checkout's working tree, not at the base commit; a change to an area file's frontmatter is a `person` floor anyway.
+- Under `merge_by: coordinator` a `reason: spec` line still sends the lane back to the worker.
+- No technical spec: `spec: no technical spec`, nothing changes.
+
+**Supersedes:** None.

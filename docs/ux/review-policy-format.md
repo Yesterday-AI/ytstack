@@ -281,7 +281,7 @@ The route is `unattended` only when all of this holds:
 3. The class (the higher of floor and stated risk) is not above the ceiling of the touched areas. A change that touches no area has the ceiling `none`.
 4. Every required lens has a newest line with `pass` that is valid for the head, from a reviewer other than the author, and its `reads` documents exist at the head. For `evidence: visual` the directory the line names holds a `MANIFEST` with at least one image; every listed image is there with the listed SHA-256, and its line states `url`, `viewport` and `shows`.
 
-The route reads the host only for the review records, and only with `--pr`; it says nothing about the host's gates. `finish-lane` reads the host's gates (checks, review threads, mergeability, the reviewed commit) as before, and merges on its own only when both hold and `merge_by` is `risk`.
+The route reads the host only for the review records, and only with `--pr`; it says nothing about the host's gates. `finish-lane` reads the host's gates (checks, review threads, mergeability, the reviewed commit) as before, and merges on its own only when both hold and `merge_by` is `risk`. Its own `route` (`bin/ytstack-finish-lane route`) adds the spec delta: a change to an area's paths without its area file or a source in the diff, without a plan that states the impact and without `Spec: none -- <reason>` in the worker's report is `person` (`docs/ux/spec-format.md`, "Before a merge").
 
 | `merge_by` | Who merges |
 |---|---|

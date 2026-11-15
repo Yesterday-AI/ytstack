@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plan beside the slice plan, in `plan-task`'s format (Files, What this does,
   Spec impact, Verification), committed alone, then the files it names. A
   slice brief names the plan file to write per unplanned task.
+- **`finish-lane` checks the spec delta before a merge without you** (issue
+  #75): `ytstack-finish-lane route --report <file>` runs `ytstack-spec impact`
+  on the lane's commits for every plan that states a "Spec impact"; without
+  one, every area the diff touches needs its area file or a source in the
+  diff, or `Spec: none -- <reason>` in the worker's report. A gap prints
+  `reason: spec -- ...` and turns `unattended` into `person`, so a lane that
+  skipped `summarize-task` is still caught. `ytstack-spec impact` takes
+  `--head` to check a commit range that is not checked out. `finish-lane`
+  0.6.0.
 
 ## [0.11.0] - 2026-11-15
 
