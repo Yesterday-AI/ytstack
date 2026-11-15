@@ -537,6 +537,12 @@ awk '/^### Step 14: Lesson/ { p = 1; next } /^### / { p = 0 } p' "$ROOT/skills/f
   && ok "finish-lane: Step 14 is the lesson" || bad "finish-lane: Step 14 is the lesson"
 awk '/^\*\*Step 7 --/ { p = 1 } /^\*\*Step 8 --/ { p = 0 } p' "$ROOT/skills/coordinate/SKILL.md" | grep_q -F 'a red `main`' \
   && ok "coordinate: Step 7 runs the lesson on a red main" || bad "coordinate: Step 7 runs the lesson on a red main"
+# issue #91: STALL 1 asks the lane once, STALL 2 hands the branch to a fresh worker
+awk '/^\*\*Step 7 --/ { p = 1 } /^\*\*Step 8 --/ { p = 0 } p' "$ROOT/skills/coordinate/SKILL.md" > "$TMP/step7.md"
+for want in '--focus' 'STALL 1' 'STALL 2' 'ytstack-frontier release <lane>' 'ytstack-frontier claim <lane>' \
+  'git worktree add --detach <new worktree> origin/<branch>' '--worktree <new worktree>' 'git push origin HEAD:<branch>'; do
+  grep_q -F -- "$want" "$TMP/step7.md" && ok "coordinate: Step 7 names $want" || bad "coordinate: Step 7 names $want"
+done
 
 # ---- technical spec in the preambles (M022) ----------------------------------
 # One area `core` over f.txt and cr.txt (the file the code-review case committed

@@ -1485,3 +1485,26 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** This replaces the first two "How to apply" points of "2026-11-15: `finish-lane`'s route checks the spec delta; a gap routes to a person (issue #75)": a plan of the range that names an area is still checked with `impact` and the report cannot override it, but a plan no longer stands in for areas its task did not touch.
 
 **Supersedes:** None. Narrows the entry named above.
+
+## 2026-11-15: STALL detection lives in both watchers, owner liveness in `ytstack-frontier owner`; focus PRs are read every tick (issue #91)
+
+**Context:** Issue #91: in a coordinator run a PR sat for an hour with a blocking review and then a conflict while its lane ran a long local job and pushed nothing. PR watch reported the conflict among 15 other PRs on every tick, `ytstack-watch` prints only on change, so a PR on which nothing happens was as quiet as a healthy one. The coordinator relayed "merge main" and noticed the stall only after the operator escalated twice.
+
+**Options considered:**
+- Where the stall rule lives: A) only in the PR watch engine, B) only in `ytstack-watch`, C) in both, with the lane lookup in one place.
+- Where liveness comes from: the PR watch reading `LANES.md` itself, or a `ytstack-frontier` subcommand both call.
+- Focus: an interval per watch, or "every tick" as a flag.
+
+**Chose:** C. Each watcher keeps its own clock, because the clock is state only it has: the PR watch's `changed_at` (head or status) in its database, `ytstack-watch`'s first sight in its process. The rule is one (an actionable state, no new head for T minutes, default 15, a mark after T and after 2T, never a third) and the lane lookup is one: `ytstack-frontier owner --pr N`, which reuses the clock of `check` (the last commit on the lane's branch, or the claim when newer; `claimed_at` and `last_commit` are shared by both). The PR watch calls it from the UserPromptSubmit hook only for a STALL line it shows, only from the watch's `cwd` and only when that checkout's `origin` is the PR's repository. Focus is a flag: the PR watch reads a focus watch on every 60-second tick and lists it first under `Focus (read every tick):`; `ytstack-watch --focus` reads it every 20 seconds (its minimum) and the others every `--interval`.
+
+**Reason:** A without B leaves the coordinator without the PR watch (worker off, or another host) with no stall signal, and the PR watch's block reaches a Claude session only with a prompt, while `ytstack-watch` under a monitor tool wakes it. B without A leaves the per-prompt block, where the issue's coordinator looked, as quiet as before. Moving one clock into the other watcher would need the PR watch to run as a long process or `ytstack-watch` to keep state on disk. The lane lookup is the part that must not drift: it reads the coordinator's format, and `ytstack-frontier` already owns that format and the liveness clock. Two windows match what the coordinator does with them (ask once, then hand over); more marks would bring back the noise of issue #85. Stall marks stop at 24 hours, where the pause suggestion takes over. Every tick for a focus PR costs about 480 REST calls an hour, so focus stays opt-in and per PR.
+
+**How to apply:**
+- STALL 1: ask the lane once for an ETA. STALL 2: `ytstack-frontier release <lane>`, claim a fresh worker on the same branch in a new worktree, never relay the same instruction a third time (`coordinate` Step 7).
+- PR watch: `stall_minutes` in `policy.json` (`defaults` or per repository, 0 = off); `ytstack-watch --stall MINUTES` (0 = off). A focus or stall mark joins a line's fingerprint only when set, so existing fingerprints stay equal across the upgrade.
+- The PR watch's state is `action_required` (it includes unresolved threads); `ytstack-watch` counts checks red, a conflict and changes requested on the head, the states its five fields show.
+- A new caller that needs "who holds PR N and is it alive" calls `ytstack-frontier owner`, not its own `LANES.md` reader.
+- `ytstack-watch` reads a blocking review per reviewer: one whose newest review on the head requests changes blocks, also when another reviewer approved later (the rule of `ytstack-finish-lane`). A failed read of an open focus pull request keeps the 20-second cadence (PR #92 review).
+- The PR watch shows `STALL 1` first and `STALL 2` only a full window after `STALL 1` was shown, as `ytstack-watch` does; the step shown is kept per session (`stall:<session>`). The lane lookup is one `ytstack-frontier owner --pr N,N,...` call per checkout within one 3-second budget, made before the fingerprints are saved; any failure leaves the line without a lane. A comment does not lift a changes request of the same reviewer, in `ytstack-watch` and in `ytstack-finish-lane gates`. `owner` prefers a held row. A fresh worker gets its own worktree: `git worktree add --detach <new> origin/<branch>`, `claim --worktree <new>` (PR #92 independent review).
+
+**Supersedes:** None. Extends "2026-11-15: Lane liveness is part of `ytstack-frontier check`, worktree cleanup only prints commands, peers are list lines in `LANES.md` (issue #84)" and "2026-11-15: PR watch bulk registration takes only your own ready PRs; bins are called through `YT_BIN` (issue #85)".

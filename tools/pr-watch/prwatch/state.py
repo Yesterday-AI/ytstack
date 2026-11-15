@@ -63,7 +63,8 @@ def connect():
             db.execute("UPDATE watches SET closed_at=updated WHERE status='closed'")
         # The PR's head branch (set by the worker) lets an own `git push` mark the
         # watch: pushed_at newer than updated means the stored head is stale.
-        for name, kind in [('branch', 'TEXT'), ('pushed_at', 'REAL')]:
+        # focus=1 (register --focus): read every tick and listed first (issue #91).
+        for name, kind in [('branch', 'TEXT'), ('pushed_at', 'REAL'), ('focus', 'INTEGER DEFAULT 0')]:
             if name not in watch_columns:
                 db.execute(f'ALTER TABLE watches ADD COLUMN {name} {kind}')
     return db

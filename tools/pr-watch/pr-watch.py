@@ -83,6 +83,8 @@ def main():
     add.add_argument('--include-drafts', action='store_true', help='with --all-open: also draft PRs')
     add.add_argument('--include-labelled', action='store_true',
                      help='with --all-open: also PRs with a do-not-merge label')
+    add.add_argument('--focus', action=argparse.BooleanOptionalAction, default=None,
+                     help='with --pr: read the PR every tick and list it first (--no-focus undoes it)')
     add.add_argument('--session', default=default_session)
     add.add_argument('--cwd', default=os.getcwd())
     create = sub.add_parser('create', help='Create a PR and persist ownership before returning')
@@ -113,6 +115,8 @@ def main():
     args = parser.parse_args()
     if args.command == 'register' and not args.all_open and (args.author or args.include_drafts or args.include_labelled):
         parser.error('--author, --include-drafts and --include-labelled apply to --all-open only')
+    if args.command == 'register' and args.all_open and args.focus is not None:
+        parser.error('--focus applies to --pr only')
     # The current Claude session's id given bare would be stored as a Codex thread and never delivered.
     own = os.environ.get('CLAUDE_CODE_SESSION_ID')
     if own and getattr(args, 'session', None) == own:
@@ -252,7 +256,10 @@ def main():
                 if pr['state'] != 'open':
                     parser.error('Only open PRs can be registered')
                 register(db, args.repo, args.pr, args.session, str(Path(args.cwd).resolve()))
-                print('Registered', pr['html_url'], 'to', args.session)
+                if args.focus is not None:
+                    db.execute('UPDATE watches SET focus=? WHERE repo=? AND number=?',
+                               (int(args.focus), args.repo, args.pr))
+                print('Registered', pr['html_url'], 'to', args.session + (' (focus)' if args.focus else ''))
             elif args.command in ('pause', 'resume'):
                 cursor = db.execute('UPDATE watches SET paused=? WHERE repo=? AND number=?',
                                     (int(args.command == 'pause'), args.repo, args.pr))
