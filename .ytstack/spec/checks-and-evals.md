@@ -31,7 +31,7 @@ sources:
   - docs/ux/signal-format.md
   - docs/ux/external-plans.md
   - docs/ux/upstream-feedback.md
-verified_at: f2d41dd
+verified_at: 7207818
 ---
 
 # checks-and-evals
