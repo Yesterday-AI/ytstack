@@ -539,7 +539,8 @@ awk '/^\*\*Step 7 --/ { p = 1 } /^\*\*Step 8 --/ { p = 0 } p' "$ROOT/skills/coor
   && ok "coordinate: Step 7 runs the lesson on a red main" || bad "coordinate: Step 7 runs the lesson on a red main"
 # issue #91: STALL 1 asks the lane once, STALL 2 hands the branch to a fresh worker
 awk '/^\*\*Step 7 --/ { p = 1 } /^\*\*Step 8 --/ { p = 0 } p' "$ROOT/skills/coordinate/SKILL.md" > "$TMP/step7.md"
-for want in '--focus' 'STALL 1' 'STALL 2' 'ytstack-frontier release <lane>' 'ytstack-frontier claim <lane>'; do
+for want in '--focus' 'STALL 1' 'STALL 2' 'ytstack-frontier release <lane>' 'ytstack-frontier claim <lane>' \
+  'git worktree add --detach <new worktree> origin/<branch>' '--worktree <new worktree>' 'git push origin HEAD:<branch>'; do
   grep_q -F -- "$want" "$TMP/step7.md" && ok "coordinate: Step 7 names $want" || bad "coordinate: Step 7 names $want"
 done
 
