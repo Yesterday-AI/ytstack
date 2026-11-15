@@ -20,7 +20,7 @@ sources:
   - docs/ux/signal-format.md
   - docs/statusline.md
   - docs/ux/external-plans.md
-verified_at: 8399866
+verified_at: 10228f6
 ---
 
 # artifacts

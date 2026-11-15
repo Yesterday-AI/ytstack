@@ -28,7 +28,7 @@ sources:
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
   - docs/ux/external-plans.md
-verified_at: 8399866
+verified_at: 10228f6
 ---
 
 # checks-and-evals
