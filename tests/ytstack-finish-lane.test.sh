@@ -591,6 +591,14 @@ quiet; run "$R2" route --lane M001-S01 --base "$B2" --head "$G2" --report "$TMP/
 has "a spaced source named in the report counts" "spec: web -- docs/Web Guide.md changed" "$OUT"
 hasnt "and is not truncated" "reason: spec -- the report names docs/Web" "$OUT"
 cp "$TMP/web.md.bak" "$R2/.ytstack/spec/web.md"
+# Codex P2 on #88: a plan's own files with a non-ASCII name still count for its area
+( cd "$R2" && git checkout -q -b cafe main && echo c > "src/café.sh" && git add src && git commit -qm "M001-S01-T01: café" && git checkout -q main ) >/dev/null 2>&1
+CF=$(git -C "$R2" rev-parse cafe); r2plan "$CF"
+printf -- '---\ntask: T01\n---\n\n# plan\n\n## Spec impact\n\nnone -- restores the described behaviour\n' > "$R2/.ytstack/M001-S01-T01-PLAN.md"
+quiet; run "$R2" route --lane M001-S01 --base "$B2" --head "$CF"
+has "a non-ASCII file of the plan's commit is covered by its statement" "spec: core unchanged -- restores the described behaviour (.ytstack/M001-S01-T01-PLAN.md)" "$OUT"
+hasnt "and needs no other reason" "reason: spec -- core" "$OUT"
+rm -f "$R2/.ytstack/M001-S01-T01-PLAN.md"
 # item 4: a file renamed out of an area still touches it
 r2plan "$M2"; rm -f "$R2/.ytstack/M001-S01-T01-PLAN.md"
 quiet; run "$R2" route --lane M001-S01 --base "$B2" --head "$M2"

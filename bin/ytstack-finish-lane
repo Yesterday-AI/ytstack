@@ -556,7 +556,7 @@ spec_delta() {
       0) echo "spec: $rp -- $(printf '%s\n' "$out" | grep -v '^$' | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
          case "$out" in "spec impact: "[Nn]one" -- "*)
            r=${out#spec impact: * -- }
-           for a in $(git log --no-merges --no-renames --name-only --format= -E --grep "^$ref[:-]" "$base..$head" 2>/dev/null | areas_of); do
+           for a in $(git -c core.quotePath=false log --no-merges --no-renames --name-only --format= -E --grep "^$ref[:-]" "$base..$head" 2>/dev/null | areas_of); do
              cover="$cover$a	$r ($rp)
 "
            done ;;
