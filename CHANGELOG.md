@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **PR watch stays on your own PRs and says less** (issue #85).
+  `ytstack-pr-watch register --all-open` registers only open PRs you authored
+  (the `gh` login) and skips drafts and do-not-merge labels, each named with
+  the reason; `--author <login>[,<login>]`, `--include-drafts` and
+  `--include-labelled` widen it; a rerun pauses a watch of yours that the
+  filter now skips. The status block on each prompt lists only the PR lines
+  that changed plus "N unchanged", a PR that closed gets one last
+  `closed (merged)` / `closed` line, and a PR stuck in `action_required` for
+  24 hours gets one line suggesting `pause`.
+  `ytstack-pr-watch status` shows the current session and repository;
+  `--all` shows everything.
+- **Bins through `YT_BIN`** (issue #85): the `coordinate` preamble
+  (`coordinate` 0.5.1) and the SessionStart context (where it fits under the
+  injection cap) print `YT_BIN=<bin of the running version>`, and
+  `coordinate` runs its bins as
+  `"$YT_BIN/ytstack-<name>"`, so a long session no longer calls a removed
+  version's path after an update.
+
 ### Fixed
 
 - **New artifacts follow the directory their milestone lives in** (issue #70):

@@ -1219,6 +1219,28 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 
 **Supersedes:** None. Extends the roadmap state values in `docs/ux/skill-structure.md`.
 
+## 2026-11-15: PR watch bulk registration takes only your own ready PRs; bins are called through `YT_BIN` (issue #85)
+
+**Context:** A coordinator ran `ytstack-pr-watch register --all-open`. It registered every open PR of the repository, including another author's do-not-merge prototype, which was then injected as `action_required` 967 times; single status blocks reached 8.4k characters and 34 PRs, re-sent whole whenever one line changed; `status` printed 1,176 watches of every repository and session. The same coordinator called the bins by the versioned cache path it had seen (`.../ytstack/0.7.0/bin/ytstack-frontier`), kept doing so after an update, and one call failed with exit 127.
+
+**Options considered:**
+- Bulk registration: A) only PRs whose author is the `gh` login, drafts and do-not-merge labels skipped, `--author`, `--include-drafts`, `--include-labelled` to widen; B) keep "every open PR" and rely on `pause`; C) filter by branch bindings of the session.
+- Bins: D) print `YT_BIN=<bin of the running version>` in the `coordinate` preamble and at the end of the SessionStart context, and have the skill run bins as `"$YT_BIN/ytstack-<name>"`; E) a stable `~/.ytstack/bin` shim that points at the active version.
+
+**Chose:** A and D.
+
+**Reason:** A coordinator's lanes open their PRs under the same login, so the author is the cheapest fact that separates them from a colleague's, and one REST call (`gh api user`) gets it. B is what failed. C misses exactly the PRs `--all-open` exists for: those a session without hooks opened. `--author` adds to the login instead of replacing it, so widening never drops one's own PRs. For bins, D needs nothing outside the plugin and gives the coordinator one current value to copy instead of a path it remembers from an earlier context. E is a file in the user's home that some command must install and keep current across hosts and versions, and it would point at whatever version was active last, not at the one the session runs; ytstack never edits host settings or `PATH`, so a shim would still need a path to be called by.
+
+**How to apply:**
+- `register --pr N` registers one PR whatever its author or label; the filters apply to `--all-open` only, and every skipped PR is named with its reason.
+- A do-not-merge label is any label that, lowercased with `-`, `_`, `/`, `:` and `.` read as spaces, contains the words "do not merge" or `dnm`. Logins compare without case and without a `[bot]` suffix. When the login cannot be read, only an explicit `--author` list is used (with a warning); without one the command stops.
+- A rerun that skips a PR this session already watches pauses that watch and names it: the filter exists to stop such reports, and `resume` undoes it.
+- The status block lists changed lines, `- N unchanged`, and one last `closed` line for a PR of the previous block (a merge without a bot finding has no other report); a PR `action_required` without a head or status change for 24 hours (NULL `changed_at` counts as older) gets one `pause` suggestion per stretch, remembered apart from the block fingerprint so SessionStart does not repeat it. `status` shows the current session and repository (compared without case) unless `--all`.
+- The SessionStart line comes on every source but only where it still fits under the injection guard: this repository's injection sits within about 50 characters of it with a long Next action, and the excerpt matters more. The `coordinate` preamble is the source that always prints it. A session started before an update runs the old version's hooks, so after an update the line is renewed by reloading the skill (the version notice asks for that), not by the hook.
+- A skill that runs ytstack bins over a long session names them through `YT_BIN`; a short skill keeps `${CLAUDE_SKILL_DIR}/../../bin`, which the host substitutes when it loads the skill.
+
+**Supersedes:** None. Narrows `register --all-open` of "2026-11-14: PR watch ships inside ytstack as an optional, opt-in tool" (issue #54).
+
 ## 2026-11-15: New artifacts follow the directory a milestone already lives in (issue #70)
 
 **Context:** Reading tolerated `milestones/`, `milestones/*/`, `backlog/` and `backlog/*/` since M018-S03, but every skill and hook wrote flat into `.ytstack/`. A consumer that moved 299 files of older milestones into `.ytstack/milestones/M###/` got the next plan or summary of such a milestone back at the top level, beside the moved ones.

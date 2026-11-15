@@ -43,7 +43,10 @@ bin/ytstack-pr-watch install-worker --yes
 ```
 
 `bin/` is relative to the installed plugin; inside a session the SessionStart
-context names the absolute path. The switch is per user and covers all projects.
+context names the absolute path as `YT_BIN=<dir>` (the running version's
+`bin/`, printed again after every resume and compaction where the
+injection has room, and by the `coordinate` preamble; call
+`"$YT_BIN/ytstack-pr-watch"` with it). The switch is per user and covers all projects.
 With it off, every PR watch hook exits after one `grep` on `~/.ytstack/config`,
 without starting Python and without output.
 
@@ -69,12 +72,21 @@ Code, Codex and the worker, and stays the same across plugin updates.
 ```bash
 bin/ytstack-pr-watch create --repo OWNER/REPO --session SESSION_ID --cwd WORKTREE -- --title "..." --body-file body.md
 bin/ytstack-pr-watch register --repo OWNER/REPO --pr 123 --session SESSION_ID --cwd WORKTREE
-bin/ytstack-pr-watch register --repo OWNER/REPO --all-open   # every open PR, for this session
+bin/ytstack-pr-watch register --repo OWNER/REPO --all-open   # your open PRs, for this session
 bin/ytstack-pr-watch handover --from claude:<old session id>   # take over another session's watches
 bin/ytstack-pr-watch pause --repo OWNER/REPO --pr 123     # and resume
 bin/ytstack-pr-watch inspect --repo OWNER/REPO --pr 123   # read only, registers nothing
-bin/ytstack-pr-watch status
+bin/ytstack-pr-watch status          # this session and this checkout's repository
+bin/ytstack-pr-watch status --all    # every session and repository
 ```
+
+`status` prints JSON: `scope` (the session and repository it shows, or
+`all`), the watches and undelivered notices in that scope, and `health` (the
+worker heartbeat and errors, always whole). The session is the current one
+(`--session` overrides it), the repository is the GitHub `origin` of the
+working directory (`--repo` overrides it; compared without case, as GitHub
+does); what cannot be resolved does not
+narrow the list, so outside a session and a checkout it shows everything.
 
 Inside a session `--session` defaults to the current one (`CODEX_THREAD_ID`, or
 `claude:$CLAUDE_CODE_SESSION_ID`).
@@ -84,9 +96,24 @@ parent's session, so a PR a subagent opens is registered to the coordinating
 session. **A session only has the hooks it loaded when it started**: a session
 that was already running when you switched the PR watch on, or when ytstack was
 updated to a version with these hooks, registers nothing until it is restarted.
-`register --all-open` closes that gap: it registers every open PR of the
+`register --all-open` closes that gap: it registers the open PRs of the
 repository to the current session in one listing call (one REST call per 100
-open PRs) and skips, by name, PRs another session already owns. Only the session
+open PRs, plus one for your login) and skips, by name, PRs another session
+already owns. It takes only PRs whose author is the login `gh` is signed in as
+(subagents open theirs under it), and skips drafts and PRs with a label that
+says "do not merge" (any case, with spaces, `-`, `_`, `/` or `:` between the
+words, so `do-not-merge/hold` and `status: do not merge` too, or the word
+`dnm`), each named with its reason. `--author <login>[,<login>]` adds other
+authors (a bot that opens PRs for you, for example; `dependabot` matches
+`dependabot[bot]`), `--include-drafts` and `--include-labelled` take drafts
+and labelled PRs as well; these three flags need `--all-open`. When `gh` cannot
+say who you are, `--all-open` stops with an error, or, with `--author` given,
+registers only those authors and says so on stderr. A run that skips a PR this
+session already watches (from an earlier run without the filter) pauses that
+watch and names it, with the `resume` command to undo it. `register --pr N`
+registers one PR whatever its author or label. Without these limits one bulk
+run registered every open PR of a repository, including another author's
+do-not-merge prototype, which was then reported 967 times (issue #85). Only the session
 that owns the repository's PRs runs it, typically the coordinator, once at its
 start and after any restart. When several independent sessions work in the same
 repository, each registers only its own PRs (`register --pr N`); a bulk run would
@@ -125,7 +152,7 @@ it and something is under `claude:<id>`: then it is that Claude session, and a
 bare `--to` that names nothing yet follows a Claude `--from`. Handovers chain
 (old to new to third), and a handover back to an earlier session makes it the
 owner again. The old session's id is in its SessionStart context ("This session
-is ...") and in `status`; a coordinator writes it into its handoff when it
+is ...") and in `status --all`; a coordinator writes it into its handoff when it
 rotates (`skills/coordinate/SKILL.md`, Step 12).
 
 ## Delivery: Claude Code pulls, Codex is woken
@@ -141,8 +168,20 @@ the next prompt, not on its own.
 The status block is injected only when one of its lines changed since the last
 injection in that session (ages do not count), or with a pending notice; a
 session that gets many prompts from background agents sees it once per change,
-not once per prompt. SessionStart (start, resume, compaction) resets this, so
-the next prompt shows the block again. When the session pushes to a watched
+not once per prompt. It then lists only the lines that changed, and the rest
+as one line `- N unchanged`: with 34 watched PRs one changed PR is two lines,
+not 34 (issue #85). A PR that was in the last block and has closed since gets
+one last line, `- OWNER/REPO#N: closed (merged)` or `closed`, and leaves the
+count: a merge without a bot finding sends no notice, so this line is how the
+session hears of it. SessionStart (start, resume, compaction) resets this, so
+the next prompt shows every open line again.
+
+A PR that stays `action_required` for 24 hours without a new head or status
+change (a watch from before that time was recorded counts as older) gets one
+suggestion on its line: `no new head or status for N h: if nobody works on it,
+ytstack-pr-watch pause --repo OWNER/REPO --pr N`. It comes once per such
+stretch, also across SessionStart and when only the findings change; a new head
+or status starts a new stretch. A paused PR gets none. When the session pushes to a watched
 PR's branch (`git push` seen by the PostToolUse hook in a bound worktree, and
 the branch's remote-tracking ref, or the local branch where a narrow fetch
 refspec keeps none, then differs from the watched head), the

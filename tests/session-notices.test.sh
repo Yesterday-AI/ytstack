@@ -156,6 +156,9 @@ ss "";      has "no source: block" "$CTX" "Factory tools"
 ss resume;  lacks "resume: no block" "$CTX" "Factory tools"
 ss compact; lacks "compact: no block" "$CTX" "Factory tools"
 has "compact still injects the state" "$CTX" "scope: project"
+# issue #85: every SessionStart names the running version's bin directory
+has "compact: YT_BIN names this version's bins" "$CTX" "
+YT_BIN=$ROOT/bin"
 # Near the cap the list shrinks to one pointer line (a directive of ~9,000 chars).
 mkdir -p "$TMP/bigroot/skills/using-ytstack"
 awk 'BEGIN { for (i = 0; i < 90; i++) printf "%0100d\n", i }' > "$TMP/bigroot/skills/using-ytstack/SKILL.md"
