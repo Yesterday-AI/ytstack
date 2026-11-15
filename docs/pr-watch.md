@@ -72,6 +72,7 @@ Code, Codex and the worker, and stays the same across plugin updates.
 ```bash
 bin/ytstack-pr-watch create --repo OWNER/REPO --session SESSION_ID --cwd WORKTREE -- --title "..." --body-file body.md
 bin/ytstack-pr-watch register --repo OWNER/REPO --pr 123 --session SESSION_ID --cwd WORKTREE
+bin/ytstack-pr-watch register --repo OWNER/REPO --pr 123 --focus   # read every tick, listed first (--no-focus undoes it)
 bin/ytstack-pr-watch register --repo OWNER/REPO --all-open   # your open PRs, for this session
 bin/ytstack-pr-watch handover --from claude:<old session id>   # take over another session's watches
 bin/ytstack-pr-watch pause --repo OWNER/REPO --pr 123     # and resume
@@ -188,6 +189,26 @@ refspec keeps none, then differs from the watched head), the
 line says `head moved by a push ... ago, not yet polled` instead of the old
 head's findings, and the worker reads that PR on its next tick.
 
+**Focus and STALL (issue #91).** A PR registered with `--focus` (only with
+`--pr`; a later `register` without the flag keeps it, `--no-focus` clears it)
+is read on every tick instead of every 5 minutes, and its line stands first in
+the block under `Focus (read every tick):`, the other lines under `Others:`.
+A PR that is `action_required` (a red check, a conflict, a blocking review or
+an unresolved thread), not paused, and has had no new head or status for
+`stall_minutes` (15 by default) gets a mark on its line:
+`STALL 1: no new head or status for 16 min`, and `STALL 2` after the next
+window of the same length; then nothing more until the pause suggestion at
+24 hours. Each mark shows the line once, like any other change. When the
+watch's checkout (`--cwd` of the registration) is a checkout of the PR's
+repository and its `.ytstack/LANES.md` names the PR in a lane row, the mark
+ends with that lane's holder and its last sign of life, read from local files
+by `ytstack-frontier owner --pr N`: `lane M004-S03 held by impl-S03 (running),
+last commit 52 min ago on ytstack/M004-S03`. A blocking review followed by
+silence and a lane that is still working look the same without it. What a
+coordinator does with the two marks is in `skills/coordinate/SKILL.md`,
+Step 7. `bin/ytstack-watch --stall` prints the same two lines for a process
+that is not the PR watch.
+
 **Codex.** The worker talks to the running Codex app server over its local
 socket and starts a turn in the owning thread when that thread is idle, after a
 fresh GitHub read and a second idle check. Busy or unloaded threads keep the
@@ -235,7 +256,8 @@ would use nearly the whole hour on its own. The worker therefore:
 
 - reads a PR every minute only while something moves: right after it was
   registered, and while it is `waiting` within 30 minutes of its last head or
-  status change. Every other open PR (`ready`, blocked, `unavailable`, or a
+  status change, and a focus PR always (about 480 calls an hour each, so
+  focus only the one or two PRs that block others). Every other open PR (`ready`, blocked, `unavailable`, or a
   `waiting` that never ends, such as a repository without a review policy) is
   read every 5 minutes;
 - never takes a snapshot of a closed PR. A closed, unmerged PR can be
@@ -281,6 +303,7 @@ finish before a PR counts as ready. Start from
 - A reviewer with `completion: "review"` is done when it submitted a review on the current head that is not a quota or failure notice.
 - A skipped or neutral check run that is neither required (branch rules or a label) nor a review bot's check does not block: workflows that skip jobs by change class report their normal green state that way. A required check or a review bot's check that was skipped still blocks. The older key `optional_skipped_checks` is no longer needed and is ignored.
 - `label_required_checks`: with the label set, the check must exist and pass.
+- `stall_minutes` (in `defaults` or per repository, default 15, `0` turns it off): the window of the STALL mark.
 
 Without a policy entry a repository still gets notices, but its PRs stay
 `waiting` ("Expected review bots not configured"). An explicit empty
@@ -345,5 +368,6 @@ bin/ytstack-pr-watch uninstall-worker --yes  # stop polling
 ```
 
 State stays in `~/.ytstack/pr-watch/`; delete it yourself once no watch is
-needed. `bin/ytstack-watch` is unrelated and unchanged: it reads PR state on
-demand while an agent keeps it running.
+needed. `bin/ytstack-watch` is a separate process: it reads PR state on demand
+while an agent keeps it running, with its own `--focus` and `--stall` and the
+same `ytstack-frontier owner` line.

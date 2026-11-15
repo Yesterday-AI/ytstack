@@ -281,15 +281,15 @@ def tick(send=True, reconcile=True):
 
 
 def due(watch, now):
-    """Whether a watch is read this tick. A new registration, and a PR whose
-    head or status changed within FAST_WINDOW while it is still `waiting`,
-    every tick; every other open PR every QUIET_INTERVAL (a `waiting` that
-    never ends, such as a repository without a review policy, settles there);
-    closed ones never (reopen_checks() brings a reopened one back)."""
+    """Whether a watch is read this tick. A new registration, a focus PR, and a
+    PR whose head or status changed within FAST_WINDOW while it is still
+    `waiting`, every tick; every other open PR every QUIET_INTERVAL (a `waiting`
+    that never ends, such as a repository without a review policy, settles
+    there); closed ones never (reopen_checks() brings a reopened one back)."""
     status, age = watch['status'], now - (watch['updated'] or 0)
     if status == 'closed':
         return False
-    if status == 'registered':
+    if status == 'registered' or ('focus' in watch.keys() and watch['focus']):
         return True
     pushed = watch['pushed_at'] if 'pushed_at' in watch.keys() else None
     if pushed and pushed > (watch['updated'] or 0):
