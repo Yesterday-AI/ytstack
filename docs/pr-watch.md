@@ -70,7 +70,7 @@ Code, Codex and the worker, and stays the same across plugin updates.
 bin/ytstack-pr-watch create --repo OWNER/REPO --session SESSION_ID --cwd WORKTREE -- --title "..." --body-file body.md
 bin/ytstack-pr-watch register --repo OWNER/REPO --pr 123 --session SESSION_ID --cwd WORKTREE
 bin/ytstack-pr-watch register --repo OWNER/REPO --all-open   # every open PR, for this session
-bin/ytstack-pr-watch handover --from OLD_SESSION_ID          # take over another session's watches
+bin/ytstack-pr-watch handover --from claude:<old session id>   # take over another session's watches
 bin/ytstack-pr-watch pause --repo OWNER/REPO --pr 123     # and resume
 bin/ytstack-pr-watch inspect --repo OWNER/REPO --pr 123   # read only, registers nothing
 bin/ytstack-pr-watch status
@@ -116,7 +116,13 @@ stays, so it is never sent twice), the branch bindings and the candidates, and
 resets the new session's status fingerprint so its next prompt shows the block.
 It also records the new session as the successor of the old one: a PR that a
 still-running subagent of the old session opens later is registered to the new
-session, and so is an explicit `register` for the old one. Handovers chain
+session, and so is an explicit `register` for the old one; when such a
+subagent touches the branch again under the old id, the worker counts it as the
+successor and adopts the PR instead of reporting two sessions on the branch.
+`--from` and `--to` take the id as the watch stores it (`claude:<id>`, or the
+Codex thread id). A bare id is a Codex thread, unless nothing is stored under
+it and something is under `claude:<id>`: then it is that Claude session, and a
+bare `--to` that names nothing yet follows a Claude `--from`. Handovers chain
 (old to new to third), and a handover back to an earlier session makes it the
 owner again. The old session's id is in its SessionStart context ("This session
 is ...") and in `status`; a coordinator writes it into its handoff when it
