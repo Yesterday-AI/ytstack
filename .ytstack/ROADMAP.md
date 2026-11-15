@@ -53,7 +53,7 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M033 | Upstream feedback channel (issue #55) -- `upstream_feedback: suggest / file / off`, the channel in `using-ytstack`, agent rules (search first, evidence, no personal data), "Upstream" section in `retro` and `lane-retro`. Done 2026-11-15 (1 slice); released in 0.11.0 (PR #67). | **done** | 4 | 4 |
 | M034 | Sticky session status (issues #31, #42 follow-up) -- a todo reader per host (Claude task files, Codex plan, Kimi to-dos), the todo state as the first line of `ytstack-status` with optional extra lines, Codex `task-progress`, optional herdr pane metadata and terminal-title sinks; research `docs/research/2026-11-15-sticky-session-status.md`. Planned 2026-11-15, on the backlog. | backlog | 0 | -- |
 
-**Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 done (6/6, 2026-11-07); M011 task count pending milestone planning.
+**Total (2026-11-15):** 225 tasks across M001-M033, 223 done; the 2 open are M008's user actions (git init + push, GitHub repo creation), long since done outside the loop. M011 and M013 were absorbed into M019, M014 is reserved, M034 is on the backlog. Slice and task files of M010-M030 are in `archive/2026-11-15/`.
 
 ---
 
