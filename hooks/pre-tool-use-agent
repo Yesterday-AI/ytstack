@@ -17,8 +17,8 @@
 #
 # Bash (issue #83): a `gh pr merge` by hand gets the ytstack-finish-lane merge
 # line, a `gh pr close` the line that a cap waits (parked) and CI reruns with
-# gh run rerun. Only a call after a command separator, optionally behind the
-# wrapper tokens of hooks/post-tool-use-bash, counts; an echo of the words not.
+# gh run rerun. Only a command counts (see gh_pr below); the words in quotes,
+# in a comment or in an echo do not.
 #
 # Files only. Fail open: any problem ends silent with exit 0.
 
@@ -73,12 +73,29 @@ emit() { # emit <text>: the PreToolUse additionalContext, then exit 0
 }
 
 if [ "$TOOL" = Bash ]; then
-  _WRAP='((rtk|sudo|command|env([[:space:]]+[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*)*)[[:space:]]+)*'
-  _GH="(^|[;&|()])[[:space:]]*${_WRAP}gh[[:space:]]+pr[[:space:]]+"
-  _MERGE="${_GH}merge([[:space:]]|\$)"; _CLOSE="${_GH}close([[:space:]]|\$)"
-  if [[ "$YT_TOOL_CMD" =~ $_MERGE ]]; then
+  # gh_pr: "merge" or "close" when a command (not quoted text, not a comment)
+  # runs gh pr merge|close: per line and per segment between ; & | ( ) && ||,
+  # after assignments, if/then/!/time, rtk/sudo/command/exec/nohup, env and
+  # xargs with their options, and gh's own -R/--repo.
+  GH_PR=$(printf '%s\n' "$YT_TOOL_CMD" | awk -v q="'" '
+    {
+      l = $0; gsub(q "[^" q "]*" q, " ", l); gsub(/"[^"]*"/, " ", l); sub(/(^|[ \t])#.*/, "", l)
+      n = split(l, seg, /[;&|()]/)
+      for (i = 1; i <= n; i++) {
+        m = split(seg[i], t, /[ \t]+/); j = 1
+        while (j <= m && t[j] == "") j++
+        while (j <= m && (t[j] ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || t[j] ~ /^(if|then|else|elif|do|while|until|!|time|rtk|sudo|command|exec|nohup)$/)) j++
+        if (t[j] == "env") { j++; while (j <= m && (t[j] ~ /=/ || t[j] ~ /^-/)) j++ }
+        if (t[j] == "xargs") { j++; while (j <= m && t[j] ~ /^-/) { if (t[j] ~ /^-[nPILsdE]$/) j++; j++ } }
+        if (t[j] != "gh") continue
+        j++
+        while (j <= m && t[j] ~ /^-/) { if (t[j] == "-R" || t[j] == "--repo") j++; j++ }
+        if (t[j] == "pr" && (t[j + 1] == "merge" || t[j + 1] == "close")) { print t[j + 1]; exit }
+      }
+    }' 2>/dev/null)
+  if [ "$GH_PR" = merge ]; then
     emit "ytstack: in a coordinator session a merge goes through bash \"$ROOT/bin/ytstack-finish-lane\" -C <worktree> merge --pr <N> --at <reviewed head> --verdict-pattern '^Verdict: approved', after the route (ytstack:coordinate Step 6 and Step 7, ytstack:finish-lane Step 11). It reads the gates and merges at the reviewed commit only; gh pr merge by hand skips both."
-  elif [[ "$YT_TOOL_CMD" =~ $_CLOSE ]]; then
+  elif [ "$GH_PR" = close ]; then
     emit "ytstack: a coordinator never closes, reopens to retrigger or deletes the branch of a lane's pull request (HARD-GATE of ytstack:coordinate). A cap waits: bash \"$ROOT/bin/ytstack-frontier\" set <lane> --status parked --next \"wait for the cap\", the pull request stays open. A check reruns with gh run rerun <run id> --failed. Only the person closes open work; if the person asked to close this one, go on."
   fi
   exit 0

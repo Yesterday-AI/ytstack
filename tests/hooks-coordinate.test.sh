@@ -104,6 +104,20 @@ has "behind cd and a wrapper too" "$(ctx .hookSpecificOutput.additionalContext)"
 tool a1 Bash "gh pr close 14 --comment 'cap'"
 has "gh pr close: a cap waits" "$(ctx .hookSpecificOutput.additionalContext)" "--status parked"
 has "and CI reruns" "$(ctx .hookSpecificOutput.additionalContext)" "gh run rerun"
+# a command, not text (PR #94 review)
+hint() { tool a1 Bash "$1"; case "$OUT" in *finish-lane*) HV=merge ;; *parked*) HV=close ;; '') HV=silent ;; *) HV=other ;; esac
+  [ -z "$OUT" ] || printf '%s' "$OUT" | "$JQ" -e . >/dev/null 2>&1 || HV="$HV invalid-json"; eq "$2: $(printf '%s' "$1" | tr '\n' '|')" "$3" "$HV"; }
+hint $'cd /x\ngh pr merge 12 --squash' "on the next line" merge
+hint 'if gh pr merge 12; then echo ok; fi' "after if" merge
+hint 'GH_TOKEN=x gh pr merge 12' "behind an assignment" merge
+hint 'gh -R o/r pr merge 12' "with -R before pr" merge
+hint 'gh --repo o/r pr close 9' "with --repo before pr" close
+hint 'xargs -n1 gh pr close < list' "behind xargs" close
+hint 'test -n "$x" || gh pr close 4' "after ||" close
+hint 'git commit -m "docs: note; gh pr merge is forbidden"' "inside double quotes" silent
+hint "echo 'a; gh pr close 3'" "inside single quotes" silent
+hint '# later: ; gh pr merge 5' "in a comment" silent
+hint 'ls # gh pr merge 5' "in a trailing comment" silent
 tool a1 Bash "gh pr view 12 --json state"; eq "another gh call: silent" "" "$OUT"
 tool a1 Bash "echo 'gh pr merge is not run here' > notes.txt"; eq "an echo of the words: silent" "" "$OUT"
 eq "Bash calls are no dispatches" "$N0" "$(grep -c . "$SH/a1/dispatches")"
@@ -190,18 +204,36 @@ stop r1; case "$(ctx .systemMessage)" in *"Rotate now"*) bad "once per compactio
 ss r1 startup; case "$C" in *"Compaction "*) bad "a startup source: no compaction line";; *) ok "a startup source: no compaction line";; esac
 compact plain1; ss plain1 compact; case "$C" in *"of this coordinator"*) bad "no marker: no compaction line";; *) ok "no marker: no compaction line";; esac
 eq "no marker: nothing counted" no "$([ -e "$SH/plain1/compactions" ] && echo yes || echo no)"
+mkdir -p "$TMP/noyt"; "$JQ" -n --arg c "$TMP/noyt" '{session_id: "r1", cwd: $c, hook_event_name: "PreCompact"}' | bash "$H/pre-compact" >/dev/null 2>&1
+eq "a compaction in a directory without .ytstack still counts (PR #94 review)" 3 "$(grep -c . "$SH/r1/compactions")"
 
 echo "# post-tool-use-bash: a red default branch read with gh run list (issue #83)"
 DEF=$(git -C "$P" symbolic-ref --short HEAD)
 runs() { OUT=$("$JQ" -n --arg s "$1" --arg c "$P" --arg cmd "$2" --arg o "$3" '{session_id: $s, cwd: $c, hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: {command: $cmd}, tool_response: {stdout: $o, stderr: "", interrupted: false}}' | bash "$H/post-tool-use-bash" 2>&1); }
-RED=$(printf 'completed\tsuccess\tfix: a\tci\t%s\tpush\t101\t1m\t2h\ncompleted\tfailure\tfeat: b\tci\t%s\tpush\t102\t3m\t1h\n' "$DEF" "$DEF")
+# gh run list prints the newest run first
+RED=$(printf 'completed\tfailure\tfeat: b\tci\t%s\tpush\t102\t3m\t1h\ncompleted\tsuccess\tfix: a\tci\t%s\tpush\t101\t1m\t2h\n' "$DEF" "$DEF")
 GREEN=$(printf 'completed\tsuccess\tfix: a\tci\t%s\tpush\t101\t1m\t2h\n' "$DEF")
 runs a1 "gh run list --branch $DEF --limit 5" "$RED"
 has "a failed run on the default branch: run ytstack:lesson" "$(ctx .hookSpecificOutput.additionalContext)" "ytstack:lesson"
 eq "as PostToolUse context" PostToolUse "$(ctx .hookSpecificOutput.hookEventName)"
 runs a1 "gh run list --branch $DEF --limit 5" "$RED"; eq "the same failure: said once" "" "$OUT"
-runs a1 "gh run list -b $DEF --json conclusion" '[{"conclusion":"success"},{"conclusion":"failure","databaseId":103}]'
+runs a1 "gh run list -b $DEF --json conclusion,workflowName" '[{"conclusion":"failure","workflowName":"ci","databaseId":103},{"conclusion":"success","workflowName":"ci"}]'
 has "JSON output, -b: said" "$(ctx .hookSpecificOutput.additionalContext)" "ytstack:lesson"
+# PR #94 review: only the newest run of each workflow counts; another repository is not this one
+runs a1 "gh run list --branch $DEF --limit 10" "$(printf 'completed\tsuccess\tfix: repair\tci\t%s\tpush\t3\t9m\t1h\ncompleted\tfailure\tfeat: broke\tci\t%s\tpush\t2\t9m\t2h\n' "$DEF" "$DEF")"
+eq "a failure the newer run of its workflow repaired: silent" "" "$OUT"
+runs a1 "gh run list --branch $DEF" "$(printf 'in_progress\t\tfix\tci\t%s\tpush\t4\t1m\t1m\ncompleted\tfailure\tx\tci\t%s\tpush\t5\t1m\t1h\n' "$DEF" "$DEF")"
+eq "a running newest run: silent" "" "$OUT"
+runs a1 "gh run list --branch $DEF" "$(printf 'completed\tsuccess\ta\tci\t%s\tpush\t6\t1m\t1h\ncompleted\tfailure\tb\tdeploy\t%s\tpush\t7\t1m\t2h\n' "$DEF" "$DEF")"
+has "another workflow's newest run failed: said" "$(ctx .hookSpecificOutput.additionalContext)" "ytstack:lesson"
+runs a1 "gh run list -R other/repo --branch $DEF" "$(printf 'completed\tfailure\tz\tci\t%s\tpush\t8\t1m\t1h\n' "$DEF")"
+eq "--repo of another repository: silent" "" "$OUT"
+git -C "$P" remote add origin git@github.com:Acme/P.git
+runs a1 "gh run list --repo acme/p --branch $DEF" "$(printf 'completed\tfailure\tz\tci\t%s\tpush\t9\t1m\t1h\n' "$DEF")"
+has "--repo naming origin: said" "$(ctx .hookSpecificOutput.additionalContext)" "ytstack:lesson"
+git -C "$P" remote remove origin
+runs a1 "gh run list --json conclusion,workflowName --branch $DEF" '[{"conclusion":"success","workflowName":"ci"},{"conclusion":"failure","workflowName":"ci"}]'
+eq "JSON: a failure behind a newer success of its workflow: silent" "" "$OUT"
 runs a1 "gh run list --branch $DEF" "$GREEN"; eq "all green: silent" "" "$OUT"
 runs a1 "gh run list --branch feature-x" "$(printf 'completed\tfailure\tx\tci\tfeature-x\tpush\t104\t1m\t1h\n')"; eq "another branch: silent" "" "$OUT"
 runs a1 "gh run list" "$(printf 'completed\tfailure\tx\tci\t%s\tpush\t105\t1m\t1h\n' "$DEF")"; eq "no --branch: silent" "" "$OUT"
