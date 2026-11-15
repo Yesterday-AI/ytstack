@@ -542,6 +542,48 @@ sroute "$SC"
 eq "the task plan states none with a reason: exit 0" 0 "$EC"
 has "and its line is printed" "spec: .ytstack/M001-S01-T01-PLAN.md -- spec impact: none -- restores the described behaviour" "$OUT"
 rm -f "$RS/.ytstack/M001-S01-T01-PLAN.md"
+# review #88 items 1, 6, 11: what the report names is checked against the spec
+report "core: src/a.sh (Behavior)"; sroute "$SC" r
+eq "the report names a code file as the spec edit: exit 10" 10 "$EC"
+has "and says that it is no spec file" "reason: spec -- the report names src/a.sh for core, which is neither .ytstack/spec/core.md nor one of its sources" "$OUT"
+splan "$SD"; report 'core: `.ytstack/spec/core.md` (Behavior)'; sroute "$SD" r
+eq "a path in backticks is read like a bare one: exit 0" 0 "$EC"
+splan "$SC"; report "none -- "; sroute "$SC" r
+eq "none without a reason: exit 10" 10 "$EC"
+has "and says so" "reason: spec -- the report's Spec: line gives no reason after \"none --\"" "$OUT"
+# item 2: a task plan of a task with no commit in the range, unchanged by it, does not count
+printf -- '---\ntask: T05\n---\n\n# plan\n\n## Spec impact\n\n- core: Behavior -- c\n' > "$RS/.ytstack/M001-S01-T05-PLAN.md"
+report "none -- no behaviour or contract changes"; sroute "$SC" r
+eq "a plan of a task outside the range is not checked: exit 0" 0 "$EC"
+hasnt "and is not named" "M001-S01-T05-PLAN.md" "$OUT"
+rm -f "$RS/.ytstack/M001-S01-T05-PLAN.md"
+
+# item 2: in a slice lane one task's stated impact covers its own areas only
+R2="$TMP/routes2"; mkdir -p "$R2/src" "$R2/web" "$R2/.ytstack/spec"
+( cd "$R2" || exit 1
+  git init -q -b main && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false || exit 1
+  echo a > src/a.sh; echo w > web/w.ts
+  printf -- '---\nproject: p\n---\n\n# p\n\n## Areas\n\n| Area | File |\n|---|---|\n| core | [core.md](core.md) |\n| web | [web.md](web.md) |\n\n## Keeping this true\n\n- x\n' > .ytstack/spec/SPEC.md
+  for A in core web; do P=src; [ "$A" = web ] && P=web
+    printf -- '---\narea: %s\nstatus: implemented\npaths:\n  - %s/**\nauto_merge: low\n---\n\n# %s\n\n## Behavior\n\n- a\n\n## Invariants and security boundaries\n\n- x\n\n## Decisions that apply now\n\n- none\n' "$A" "$P" "$A" > ".ytstack/spec/$A.md"
+  done
+  git add -A && git commit -qm base
+  git checkout -q -b code && echo b >> src/a.sh && git commit -qam "M001-S01-T01: a" && echo z >> web/w.ts && git commit -qam "M001-S01-T02: web behaviour"
+  git checkout -q -b moved main && mkdir lib && git mv src/a.sh lib/a.sh && git commit -qm "M001-S01-T01: move"
+  git checkout -q main ) >/dev/null 2>&1
+B2=$(git -C "$R2" rev-parse main); C2=$(git -C "$R2" rev-parse code); M2=$(git -C "$R2" rev-parse moved)
+cp "$RS/.ytstack/LANES.md" "$R2/.ytstack/LANES.md"
+r2plan() { printf -- '---\nstatus: in-progress\n---\n\n# Slice Plan\n\n## Tasks\n\n- [x] T01 -- a\n- [x] T02 -- web\n\n## Review\n\n- Round 1: %s..%s -- approved; blocking: 0; follow-ups: 0; risk: low; invariants: none; by: review-M001-S01\n' "${B2:0:7}" "${1:0:7}" > "$R2/.ytstack/M001-S01-PLAN.md"; }
+r2plan "$C2"
+printf -- '---\ntask: T01\n---\n\n# plan\n\n## Files\n\n- `src/a.sh`\n\n## Spec impact\n\nnone -- restores the described behaviour\n' > "$R2/.ytstack/M001-S01-T01-PLAN.md"
+quiet; run "$R2" route --lane M001-S01 --base "$B2" --head "$C2"
+eq "T01 says none, T02 changed another area unplanned: exit 10" 10 "$EC"
+has "T01's statement covers core" "spec: core unchanged -- restores the described behaviour (.ytstack/M001-S01-T01-PLAN.md)" "$OUT"
+has "web needs its own edit or reason" "reason: spec -- web: the change touches its paths" "$OUT"
+# item 4: a file renamed out of an area still touches it
+r2plan "$M2"; rm -f "$R2/.ytstack/M001-S01-T01-PLAN.md"
+quiet; run "$R2" route --lane M001-S01 --base "$B2" --head "$M2"
+has "a file moved out of an area counts for that area" "reason: spec -- core: the change touches its paths" "$OUT"
 quiet; run "$RS" route --lane M001-S01 --base "$SB" --head "$SC" --report "$TMP/none.md"
 eq "a report file that cannot be read: exit 64" 64 "$EC"
 # The checks inventory: a CI change without its line in REVIEW.md "## Checks".

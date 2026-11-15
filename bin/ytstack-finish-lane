@@ -78,14 +78,17 @@
 #             no review record: "route: person". The evidence directory of a
 #             visual lens is read from the main checkout of the repository.
 #             Then the spec delta (issue #75), when the project has a
-#             technical spec: each plan of the lane that states a "Spec
-#             impact" is checked with `ytstack-spec impact` on --base..--head;
-#             without one, every area whose paths the diff touches needs its
-#             area file or a source in the diff, or "Spec: none -- <reason>"
-#             in the worker's report (--report F). A path the report names
-#             as edited must be in the diff. Printed as "spec:" lines; each
-#             gap is a "reason: spec -- ..." line and turns "unattended" into
-#             "person".
+#             technical spec: each plan of the lane that belongs to the range
+#             (changed in it, or with a commit "<ref>:" in it) and states a
+#             "Spec impact" is checked with `ytstack-spec impact` on
+#             --base..--head. Every area whose paths the diff touches (a
+#             rename with both paths) needs its area file or a source in the
+#             diff, a plan of the range that says "none -- <reason>" for the
+#             files of its commits, or "Spec: none -- <reason>" in the
+#             worker's report (--report F). A path the report names is the
+#             area file or a source of that area, and in the diff. Printed as
+#             "spec:" lines; each gap is a "reason: spec -- ..." line and
+#             turns "unattended" into "person".
 #
 # Exit codes: 0 done; 1 refused or a gate does not hold (the reason is
 # printed); 64 usage. route: 0 "route: unattended"; 10 "route: person"; 65 git
@@ -503,31 +506,64 @@ EOF
   return 1
 }
 
+# area_paths <area>: the area file (relative to the root) and its sources, one
+# per line; status 1 when the project has no such area.
+area_paths() {
+  local f="$YT_DIR/spec/$1.md"
+  [ -f "$f" ] || return 1
+  printf '%s\n' "${f#"$TOP"/}"
+  yt_fm "$f" | awk -F'\t' '$1 == "sources" { print $2 }'
+}
+# areas_of: the areas whose paths cover the paths on stdin, one per line
+areas_of() {
+  local p
+  set --
+  while IFS= read -r p; do [ -z "$p" ] || set -- "$@" "$p"; done
+  [ $# -eq 0 ] || bash "$SELF_DIR/ytstack-spec" -C "$TOP" areas --names "$@" 2>/dev/null
+}
+trim() { printf '%s' "$1" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'; }
+
 # spec_delta <lane> <base> <head> <report or "">: whether the technical spec
 # moved with the change (issue #75). Prints "spec: ..." lines for what holds and
-# one "reason: spec -- ..." line per gap; returns 1 when there is a gap. In
-# order: the impact every plan of the lane states (bin/ytstack-spec impact on
-# base..head; a slice lane's task plans too), the paths the report's "Spec:"
-# line names (each must be in the diff), and, when no plan states an impact,
-# every area whose paths the diff touches: its area file or a source changed,
-# or the report says "none -- <reason>". The area files are read from this
-# checkout's working tree.
+# one "reason: spec -- ..." line per gap; returns 1 when there is a gap.
+# 1. The plans of the lane that belong to this range (changed in it, or with a
+#    commit "<ref>:" / "<ref>-..." in it; a slice lane's task plans too) and
+#    state a "Spec impact" are checked with bin/ytstack-spec impact on
+#    base..head. One that says "none -- <reason>" covers the areas of the
+#    files its own commits changed.
+# 2. What the report's "Spec:" line names: "none" needs a reason; each
+#    "<area>: <path>" is the area file or a source of that area, and in the
+#    diff. Backticks do not count.
+# 3. Every area whose paths the diff touches (a rename with its old and its
+#    new path) needs its area file or a source in the diff, a plan of 1 that
+#    covers it, or the report's reason.
+# The area files are read from this checkout's working tree.
 spec_delta() {
-  local lane="$1" base="$2" head="$3" report="$4" spec="$SELF_DIR/ytstack-spec" bad=0 stated=0
-  local claim="" p out ec l e a ep f s hit why
+  local lane="$1" base="$2" head="$3" report="$4" spec="$SELF_DIR/ytstack-spec" bad=0
+  local claim="" noneclaim="" subjects cover="" p rp ref out ec l e a ep f s why r
   [ -f "$YT_DIR/spec/SPEC.md" ] || { echo "spec: no technical spec"; return 0; }
   [ -f "$spec" ] || { echo "reason: spec -- bin/ytstack-spec is not next to this script: the spec delta is unknown"; return 1; }
-  [ -z "$report" ] || claim=$(sed -n 's/^Spec:[ \t]*//p' "$report" | head -1)
+  [ -z "$report" ] || claim=$(sed -n 's/^Spec:[[:space:]]*//p' "$report" | head -1 | tr -d '`')
+  subjects=$(git log --no-merges --format=%s "$base..$head" 2>/dev/null)
 
   while IFS= read -r p; do
     [ -n "$p" ] || continue
+    rp=${p#"$TOP"/}; ref=$(basename "$p" -PLAN.md)
+    touched_by "$rp" || printf '%s\n' "$subjects" | grep -E "^$ref[:-]" >/dev/null || continue
     out=$(bash "$spec" -C "$TOP" impact --plan "$p" --base "$base" --head "$head" 2>&1); ec=$?
     case "$ec" in
       3) continue ;;
-      0) stated=1; echo "spec: ${p#"$TOP"/} -- $(printf '%s\n' "$out" | grep -v '^$' | tr '\n' ';' | sed 's/;$//; s/;/; /g')" ;;
-      *) stated=1; bad=1
+      0) echo "spec: $rp -- $(printf '%s\n' "$out" | grep -v '^$' | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
+         case "$out" in "spec impact: "[Nn]one" -- "*)
+           r=${out#spec impact: * -- }
+           for a in $(git log --no-merges --no-renames --name-only --format= -E --grep "^$ref[:-]" "$base..$head" 2>/dev/null | areas_of); do
+             cover="$cover$a	$r ($rp)
+"
+           done ;;
+         esac ;;
+      *) bad=1
          while IFS= read -r l; do
-           case "$l" in FAIL*|UNVERIFIABLE*|impact:*) echo "reason: spec -- ${p#"$TOP"/}: $l" ;; esac
+           case "$l" in FAIL*|UNVERIFIABLE*|impact:*) echo "reason: spec -- $rp: $l" ;; esac
          done <<EOF
 $out
 EOF
@@ -537,48 +573,43 @@ EOF
 $(yt_find_artifacts "$YT_DIR" "$lane-PLAN.md" | head -1; yt_find_artifacts "$YT_DIR" "$lane-T[0-9][0-9]-PLAN.md")
 EOF
 
-  # What the report says was edited has to be in the diff.
-  case "$claim" in [Nn]one\ --*|"") ;; *)
-    while IFS= read -r e; do
-      e=$(printf '%s' "$e" | sed 's/^[ \t]*//'); ep=${e#*: }; ep=${ep%% *}
-      [ -n "$ep" ] && [ "$ep" != "$e" ] || continue
-      touched_by "$ep" || { echo "reason: spec -- the report names $ep, which the change does not touch"; bad=1; }
-    done <<EOF
+  case "$claim" in
+    "") ;;
+    [Nn]one|[Nn]one\ --*)
+      noneclaim=$(trim "${claim#* --}"); [ "$noneclaim" != "$claim" ] || noneclaim=""
+      [ -n "$noneclaim" ] || { echo "reason: spec -- the report's Spec: line gives no reason after \"none --\""; bad=1; } ;;
+    *)
+      while IFS= read -r e; do
+        e=$(trim "$e"); a=${e%%:*}; ep=${e#*: }; ep=${ep%% *}
+        [ -n "$ep" ] && [ "$ep" != "$e" ] || continue
+        if ! area_paths "$a" | grep -Fx -- "$ep" >/dev/null; then
+          echo "reason: spec -- the report names $ep for $a, which is neither ${YT_DIR#"$TOP"/}/spec/$a.md nor one of its sources"; bad=1
+        elif ! touched_by "$ep"; then
+          echo "reason: spec -- the report names $ep, which the change does not touch"; bad=1
+        fi
+      done <<EOF
 $(printf '%s\n' "$claim" | tr ';' '\n')
 EOF
+      ;;
   esac
-  [ "$stated" -eq 0 ] || return "$bad"
 
-  # No plan states the impact: every touched area needs its edit or a reason.
-  set --
-  while IFS= read -r p; do [ -z "$p" ] || set -- "$@" "$p"; done <<EOF
-$CHANGED
-EOF
-  [ $# -gt 0 ] || { echo "spec: the change touches no file"; return "$bad"; }
-  hit=$(bash "$spec" -C "$TOP" areas --names "$@" 2>/dev/null)
-  [ -n "$hit" ] || { echo "spec: no area covers the changed paths"; return "$bad"; }
-  for a in $hit; do
+  [ -n "$CHANGED" ] || { echo "spec: the change touches no file"; return "$bad"; }
+  s=$(printf '%s\n' "$CHANGED" | areas_of)
+  [ -n "$s" ] || { echo "spec: no area covers the changed paths"; return "$bad"; }
+  for a in $s; do
     f="$YT_DIR/spec/$a.md"; why=""
     case "$f" in "$TOP"/*) f=${f#"$TOP"/} ;; *)
       echo "reason: spec -- $a: $f lies outside the repository, the diff cannot show its edit"; bad=1; continue ;;
     esac
-    for s in "$f" $(yt_fm "$TOP/$f" | awk -F'\t' '$1 == "sources" { print $2 }'); do
-      touched_by "$s" && { why="$s changed"; break; }
-    done
-    if [ -z "$why" ]; then
-      case "$claim" in
-        [Nn]one\ --*) why="unchanged -- ${claim#* -- } (the worker's report)" ;;
-        *) while IFS= read -r e; do
-             e=$(printf '%s' "$e" | sed 's/^[ \t]*//'); ep=${e#*: }; ep=${ep%% *}
-             [ "${e%%:*}" = "$a" ] && touched_by "$ep" && { why="$ep changed (the worker's report)"; break; }
-           done <<EOF
-$(printf '%s\n' "$claim" | tr ';' '\n')
+    while IFS= read -r ep; do
+      [ -n "$ep" ] && touched_by "$ep" && { why="-- $ep changed"; break; }
+    done <<EOF
+$(area_paths "$a")
 EOF
-           ;;
-      esac
-    fi
+    [ -n "$why" ] || why=$(printf '%s' "$cover" | awk -F'\t' -v a="$a" '$1 == a { print "unchanged -- " $2; exit }')
+    [ -n "$why" ] || [ -z "$noneclaim" ] || why="unchanged -- $noneclaim (the worker's report)"
     if [ -n "$why" ]; then
-      case "$why" in unchanged*) echo "spec: $a $why" ;; *) echo "spec: $a -- $why" ;; esac
+      echo "spec: $a $why"
     else
       echo "reason: spec -- $a: the change touches its paths, neither $f nor its sources changed, and no plan or report says why (a task plan's \"## Spec impact\", or \"Spec: none -- <reason>\" in the report given with --report)"
       bad=1
@@ -654,7 +685,8 @@ cmd_route() {
   r=$(bash "$SELF_DIR/ytstack-risk" "$@"); ec=$?
   # A gap in the spec delta keeps the change from merging without a person.
   if [ "$ec" -eq 0 ] || [ "$ec" -eq 10 ]; then
-    CHANGED=$(git -c core.quotePath=false diff --name-only "$base..$head" 2>/dev/null)
+    # --no-renames, as ytstack-risk reads a diff: a moved file counts with both paths.
+    CHANGED=$(git -c core.quotePath=false diff --no-renames --name-only "$base..$head" 2>/dev/null)
     if ! s=$(spec_delta "$lane" "$base" "$head" "$report") && [ "$ec" -eq 0 ]; then
       r=$(printf '%s\n' "$r" | sed '1s/^route: unattended$/route: person/'); ec=10
     fi
