@@ -22,7 +22,7 @@ are part of the host guide.
 - `gh`, logged in, for `ship`, `document-release` and the pull request steps of `finish-lane`. GitHub is the only pull request host the pipeline supports.
 - For `visual-review` only: a browser tool in the session that renders a page and returns a screenshot (a Playwright-style browser server or command line, or the host's built-in browser). `curl` or a web fetch does not count. Without one the visual lens records `not run`.
 
-  Upgrading from ytstack 0.5 or older with gstack installed only for ytstack: gstack's `./setup` registered about 60 skills in `~/.claude/skills/` (folders with a `.gstack-owned` marker) plus `~/.claude/skills/gstack`. ytstack no longer uses them; remove them with gstack's own `~/.claude/skills/gstack/bin/gstack-uninstall --keep-state` (read its `--help` first: it also removes gstack installs for other agents).
+  Upgrading from ytstack 0.5 or older with gstack installed only for ytstack: gstack's `./setup` registered about 60 skills in `~/.claude/skills/` (folders with a `.gstack-owned` marker) plus `~/.claude/skills/gstack`. ytstack no longer uses them; remove them with gstack's own `~/.claude/skills/gstack/bin/gstack-uninstall --keep-state` (read its `--help` first: it also removes gstack installs for other agents). Everything else an upgrade needs: "Upgrading from 0.x" below.
 
 ### Local dev (recommended for first try)
 
@@ -356,7 +356,185 @@ bin/ytstack-pr-watch enable
 bin/ytstack-pr-watch install-worker --yes   # macOS; without --yes it only prints the plan
 ```
 
-PRs a session opens with `gh pr create` are then watched. Claude Code gets the news with your next prompt; Codex is woken when the thread is idle. The worker keeps a reserve of your GitHub API quota for your agents. Off by default, and `bin/ytstack-pr-watch disable` turns it off again. Details, policy and limits: [`docs/pr-watch.md`](docs/pr-watch.md).
+PRs a session opens with `gh pr create` are then watched. Claude Code gets the news with your next prompt; Codex is woken when the thread is idle. The worker keeps a reserve of your GitHub API quota for your agents. Off by default, and `bin/ytstack-pr-watch disable` turns it off again. Details, policy and limits: [`docs/pr-watch.md`](docs/pr-watch.md). Step by step, with the checks: "Setting up the factory tools" below, step 2.
+
+## Setting up the factory tools
+
+The sections above say what each tool does. This one is the setup, in order, with a check after every step. The factory tools: the risk route (who merges), the PR watch (news about your pull requests), the release watch and the signal intake (after the merge), the upkeep run (what went stale), standing instructions and external plans. Each one is off until you set it up, and a project that sets up none of them works as before: every merge goes to you.
+
+The commands name `bin/...` inside the ytstack plugin. In a shell outside a session, find the installed one first:
+
+```bash
+YT=$(ls -d ~/.claude/plugins/cache/*/ytstack/*/ | sort -V | tail -1)   # then "$YT/bin/ytstack-risk" ...
+```
+
+Inside a session the SessionStart context names the absolute path, and the agent runs the commands for you when you ask ("set up risk routing").
+
+**Which steps you need.**
+
+- **New project** (`init-project` just ran): steps 1 and 2 now. `init-project` wrote the spec areas as `planned`, so step 1 is short: one `REVIEW.md`, no `auto_merge` until an area has code that was checked. Step 3 when the product deploys somewhere or reports errors somewhere. Step 4 once more than one session works on the project.
+- **Existing project** (`adopt-brownfield` ran) **or an upgrade from 0.6 or older**: first make sure the spec exists (`ls .ytstack/spec/SPEC.md`). Without it, say "write the technical spec": `adopt-brownfield` adds only `.ytstack/spec/` and touches nothing else. Then steps 1 to 5, and the "Upgrading from 0.x" checklist below for your version.
+
+### 1. Risk routing: who merges
+
+1. Write `.ytstack/spec/REVIEW.md`. Every section is optional; start with what the project already knows:
+
+   ```markdown
+   # Review policy
+
+   ## Always a person
+
+   - infra/**
+
+   ## Lenses
+
+   - ui | applies: src/components/**, **/*.css | reads: docs/design-guidelines.md | evidence: visual
+
+   ## Own reviewers
+
+   - code | marker: (`code`) | lessons: .github/reviewers/code.md
+   ```
+
+   A lens needs its `reads` documents in the repository; an own reviewer needs its `lessons` file. Leave out `## Own reviewers` when the project has no review roles of its own. Format: [`docs/ux/review-policy-format.md`](docs/ux/review-policy-format.md).
+2. Link it from `.ytstack/spec/SPEC.md` (one line, `[Review policy](REVIEW.md)`); `ytstack-spec lint` fails on an unlinked `REVIEW.md`.
+3. Give the areas that may merge without you a ceiling in their frontmatter: `auto_merge: low` (docs, tests, small changes) or `auto_merge: normal`. No field means `none`. Only areas whose code was checked against the description (`status: implemented`) are good candidates.
+4. Say who merges in `.ytstack/PREFERENCES.md`, under `## Ceremony`: `merge_by: risk` (the default, written down so the choice is visible), `human` (always you) or `coordinator`.
+5. Commit the three edits in one pull request and merge it yourself: a change to `REVIEW.md`, `PREFERENCES.md` or an area's frontmatter always routes to a person, and the policy is read at the base commit, so it applies from the next change on.
+
+Check:
+
+```bash
+bin/ytstack-risk check            # exit 0: "review policy ok: 1 lens(es), 1 own reviewer(s)"; exit 1: one line per problem
+bash bin/ytstack-spec lint        # 0 failure(s)
+```
+
+Then route one recent pull request dry. Nothing is merged; the route only reads (the review records on the host with `--pr`, the diff from git):
+
+```bash
+n=142                                                   # a recent PR number
+gh pr view $n --json baseRefOid,headRefOid --jq '.baseRefOid+" "+.headRefOid'
+git fetch origin pull/$n/head                          # the head commit, if you do not have it
+git merge-base <baseRefOid> <headRefOid>               # the base the route compares against
+bin/ytstack-risk route --pr $n --base <merge-base> --head <headRefOid> --author <who wrote it>
+```
+
+It prints `route: unattended` or `route: person`, then `class`, `ceiling`, `floor`, `areas`, `lenses`, `round:` (where the review record came from: `host review <id> by <login> on <sha>`, `plan` or `none`) and one `reason:` line per condition that failed. On a pull request from before step 5 expect `person`: no review carries a round line yet. What to look at: the `areas` are the ones you expect, the `ceiling` is what you set in step 3, and every `reason:` names something you agree should go to a person. `round: none` means no review on that pull request has the record lines; `finish-lane` and `code-review` post them in the review body from now on ("Records on the host" in the format document).
+
+### 2. PR watch: news about your pull requests
+
+Once per user, not per project. Needs `python3` 3.9 or newer and `gh` signed in; the worker runs on macOS (on Linux `install-worker` prints a systemd user timer and writes nothing).
+
+1. Switch on the hooks: `bin/ytstack-pr-watch enable` (writes `pr_watch=on` to `~/.ytstack/config`).
+2. Look at the worker plan: `bin/ytstack-pr-watch install-worker`. It names the launcher, the LaunchAgent and the `PATH` it will use.
+3. Install it: `bin/ytstack-pr-watch install-worker --yes`. **If your `gh` comes from asdf or mise**, the plan's `PATH` must not point at a shim: launchd has no shell profile, so a shim cannot run there. `install-worker` takes the first `gh` on your `PATH` that runs on its own and refuses with "No gh (GitHub CLI) on PATH that runs on its own" when only a shim exists. Then install `gh` from a package manager (`brew install gh`) and run step 3 again. A worker installed before 0.8.2 may still carry a shim: run step 3 once more.
+4. Restart every running Claude Code and Codex session. A session keeps the hooks it loaded at its start: one that was running before step 1 registers no pull request until it restarts.
+5. A coordinator (the one session that owns a repository's pull requests) registers every open one once, at its start and after every restart, without `--session` (it defaults to the current session):
+
+   ```bash
+   bin/ytstack-pr-watch register --repo OWNER/REPO --all-open
+   ```
+
+   This also covers the pull requests its subagents opened: their hook calls carry the parent's session. Independent sessions in the same repository register only their own (`register --repo OWNER/REPO --pr N`); `--all-open` skips, by name, pull requests another session owns.
+6. When a coordinator rotates to a fresh session, the successor takes over the watches in one call, with the old session's id from the handoff ("This session is ..." in its SessionStart context):
+
+   ```bash
+   bin/ytstack-pr-watch handover --from claude:<old session id>
+   ```
+
+Check:
+
+```bash
+bin/ytstack-pr-watch status | jq -r '.health.heartbeat'   # epoch seconds of the last tick: under 600 s old
+bin/ytstack-pr-watch status | jq '.watches | length'      # the watches of all sessions
+```
+
+After the next worker read of a watched pull request with a red check (every minute while it moves, every 5 minutes once it settled), your next prompt in the owning session shows a notice. Optional: a review policy per repository in `~/.ytstack/pr-watch/state/policy.json`, so a pull request counts as `ready` only after its review bots finished ([`docs/pr-watch.md`](docs/pr-watch.md), "Policy"). Coming from a local install of the watcher: "Migrating from a local install" in the same document.
+
+### 3. `RUNTIME.md` "Release" and "Signals": after the merge
+
+`ytstack-watch release` and `signal-intake` read these two sections of `.ytstack/RUNTIME.md`; without them they stop and run nothing.
+
+1. "Release", when the product deploys somewhere. `deployed` is a command that prints the commit the target serves; `healthy` exits 0 while it is healthy:
+
+   ```markdown
+   ## Release
+
+   - target: production (https://app.example.com)
+   - deployed: curl -fsS https://app.example.com/version
+   - healthy: curl -fsS https://app.example.com/healthz
+   - settle: 180
+   ```
+
+2. "Signals", when production reports somewhere. One line per source, a command that only reads:
+
+   ```markdown
+   ## Signals
+
+   - errors | read: glitchtip-cli issues --project shop --since 24h --format tsv | kind: errors
+   ```
+
+   Credentials by name from the environment, never a value: the file is committed.
+
+Check:
+
+```bash
+bin/ytstack-runtime check                           # runtime ok: <the sections>
+bin/ytstack-runtime sections                        # Release and Signals listed
+bin/ytstack-runtime get release deployed            # the command
+bin/ytstack-runtime signals                         # one tab-separated line per source
+bin/ytstack-watch release --commit "$(git rev-parse origin/main)" --timeout 60
+```
+
+The last line watches the commit that is already live (when `main` is what production runs): it should end with `Result: released` or `no health command`. `not arrived` (exit 2) means the `deployed` command does not print the commit, which is what to fix. Then say "anything new in production?" once: `signal-intake` reads every source and records findings under `.ytstack/signals/`. Format: [`docs/ux/runtime-format.md`](docs/ux/runtime-format.md).
+
+### 4. Upkeep on a schedule
+
+1. Run it once by hand: `bin/ytstack-upkeep`. Exit 0 with `nothing needs a look`, 10 with a list. It only reads.
+2. Put it on a schedule: the GitHub Actions workflow (opens one issue, never a second while one is open) or the crontab line (leaves one question file under `.ytstack/questions/` with `--question`), both in [`docs/recipes/recurring-upkeep.md`](docs/recipes/recurring-upkeep.md). Pin the ytstack checkout in the workflow to a release tag.
+
+Check: start the workflow once by hand (`gh workflow run ytstack-upkeep.yml`) and read its log; for cron, the log file after the first run.
+
+### 5. Standing instructions and external plans
+
+- **Standing instructions.** What you ask for once and for all ("status only at slice boundaries", "never merge on Fridays") is written down when you say it, one file per instruction under `.ytstack/standing/` (since 0.10.0). Say it to the coordinator; it writes the file. Check: `bin/ytstack-check --standing` (names, frontmatter, every `supersedes` names an earlier entry). A project with only `.ytstack/STANDING.md` keeps working; new instructions go into the directory. Format: [`docs/ux/coordinator-format.md`](docs/ux/coordinator-format.md), "`standing/`".
+- **External plans.** A plan kept outside `.ytstack/` (`plans/*.md` tables or checklists) is invisible to `ytstack-frontier`. Check: `bin/ytstack-plans scan` prints one line per plan directory; `verdict=large answer=none` means it was never mapped. Say "reconcile .ytstack": `reconcile` asks once whether to map the open rows into milestones and slices, and records your answer in `PREFERENCES.md`. Your plan files are never written. Format: [`docs/ux/external-plans.md`](docs/ux/external-plans.md).
+
+### What the session start tells you
+
+When a session starts (or after `/clear`, not on resume or compaction), the SessionStart context lists the factory tools that are off although the project would use them, under "Factory tools (said once per session)":
+
+| Line starts with | Means | Fix, or silence it |
+|---|---|---|
+| `Risk routing is not set up` | `.ytstack/spec/` exists and `merge_by` is `risk`, but there is no `REVIEW.md` or no area with `auto_merge: low` or `normal`: every merge goes to you | step 1; or `merge_by: human` in `PREFERENCES.md` |
+| `PR watch is off for this GitHub repository` | no `pr_watch` line in `~/.ytstack/config` | step 2; or `pr_watch=off` in `~/.ytstack/config` |
+| `PR watch is on, but its worker ...` | the worker never ticked, or its last tick is 10 minutes old or more | `bin/ytstack-pr-watch status`, then `install-worker --yes` again |
+| `RUNTIME.md has no "Release" section` / `"Signals" section` | the project deploys (a `Dockerfile`, `fly.toml`, a deploy workflow, ...) or reports errors (incidents, signals, Sentry or GlitchTip config) | step 3 |
+
+`bin/ytstack-upkeep` lists the same lines in its last section, `factory tools`; they never count as findings.
+
+In Claude Code a second notice comes with a prompt, once per installed version: `ytstack X installed, this session loaded A: reload the skills you use`, followed by the CHANGELOG entry titles in between. The plugin was updated while the session ran, and the skill text the session already loaded is the old one. Invoke the skills you use again; restart the session when the new version brings hooks (a running session keeps the hooks it started with). Codex and Kimi sessions get no version notice.
+
+## Upgrading from 0.x
+
+After every update:
+
+1. Update the catalog and the plugin: `claude plugin marketplace update yesterday-public-plugins && claude plugin update ytstack` (or `ytstack@ytstack` with the self-marketplace).
+2. Restart the running Claude Code, Codex and Kimi sessions. A session keeps the skill text and the hooks it started with. A Claude Code session on a release that has the version notice says so itself ("What the session start tells you" above).
+3. The PR watch worker needs nothing: its launcher runs the engine of the version Claude Code has installed.
+4. Run `bin/ytstack-upkeep` once in each project. Its last section, `factory tools`, names what is still off.
+
+Then, by the version you come from (newest first; coming from an older one, do every block down to yours):
+
+- **From 0.10.x** (the release after 0.10.0): nothing to migrate. A coordinator that rotates hands its PR watches to the successor with `bin/ytstack-pr-watch handover --from claude:<old session id>`. `finish-lane` and `code-review` now post the review record lines in the review body on the pull request, and `ytstack-risk route --pr <n>` reads them from there, so a repository where agents may not write in the main checkout can route `unattended`. A plan under `plans/` shows up in `bin/ytstack-plans scan`; `reconcile` offers to map it (step 5 above).
+- **From 0.9.x:** standing instructions can live as one file each in `.ytstack/standing/` (0.10.0). `STANDING.md` keeps working; nothing to move. After the first entry: `bin/ytstack-check --standing`.
+- **From 0.9.0 or 0.9.1:** a Claude Code session that registered with its bare id had its PR watch notices stored for a Codex thread and never saw them. Run one `register` in that session (a coordinator: `register --repo OWNER/REPO --all-open`, without `--session`); it moves those watches and their notices (0.9.2).
+- **From 0.9.0 or older:** a session that ran when the PR watch was switched on registered nothing. Restart it; the coordinator then runs `register --repo OWNER/REPO --all-open` once (0.9.1).
+- **From 0.8.x or older:** review lessons are new (0.9.0). A project with review roles of its own adds `## Own reviewers` to `REVIEW.md` (step 1); `bin/ytstack-upkeep` then lists merged pull requests without an escape check.
+- **From 0.8.0 or 0.8.1 with `gh` from asdf or mise:** run `bin/ytstack-pr-watch install-worker --yes` again; the old worker may carry a shim that cannot run under launchd (0.8.2).
+- **From 0.7.x:** the PR watch is new and off (0.8.0). Switch it on with step 2. If you ran the watcher as a local tool before: `bin/ytstack-pr-watch migrate --from <old install>` (prints the plan; `--yes` copies), then "Migrating from a local install" in [`docs/pr-watch.md`](docs/pr-watch.md) for the rest.
+- **From 0.6 or older:** projects have no technical spec yet (0.7.0). Say "write the technical spec": `adopt-brownfield` writes `.ytstack/spec/` and touches no other artifact. Then steps 1 and 3. `merge_by: risk` became the default, but without an `auto_merge` field in an area every merge still goes to you. Older task plans without `## Spec impact` close fine: `summarize-task` works the impact out at closure.
+- **From 0.5 or older:** gstack is no longer used. If it was installed only for ytstack, remove its skills with `~/.claude/skills/gstack/bin/gstack-uninstall --keep-state` (see Prerequisites; read its `--help` first).
+- **From 0.3 or older:** add the `## Ceremony` block to `.ytstack/PREFERENCES.md` ("Dialing ceremony up or down"), or keep the defaults (task, loop, on, on, team off). Leftover `~/.ytstack/.*-prompted` files can be deleted; nothing reads them.
 
 ## Reading the state
 
@@ -430,7 +608,7 @@ For everything else, just talk.
 - **A visual lens says `not run`.** The session that ran it had no browser tool, no "Run" section in `RUNTIME.md`, or the product did not come up. `not run` is never a pass: the change goes to you until what was missing exists.
 - **No secrets in `RUNTIME.md`.** It is committed. Commands read credentials from the environment; `bin/ytstack-runtime check` fails on a token-looking string, but cannot see a short password.
 - **`ytstack-watch release` exits 4.** `RUNTIME.md` has no "Release" section with a `deployed` line; nothing was run.
-- **Coordinator mode has not run against a real host yet.** The suites use a stand-in for `gh` and fixture targets; no unattended merge or real release watch has happened in a session.
+- **No unattended merge and no release watch has run against a real host yet.** The suites use a stand-in for `gh` and fixture targets. In the field, a coordinator did two production releases with hand-made post-checks on 2026-11-14 (issue #54); a "Release" section is what would let `ytstack-watch release` do that check.
 - **Agent picks the wrong skill?** Sharpen that skill's `description:` field to cover the intent more explicitly. Don't reintroduce phrase-lists -- that's the antipattern the design principle #6 warns about (see README).
 
 ## More

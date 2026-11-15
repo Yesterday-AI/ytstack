@@ -13,7 +13,7 @@ RATE_RESERVE = 0.3    # share of the hourly REST quota left to the user's agents
 from datetime import datetime
 from . import github, codex, claude
 from .evaluate import evaluate, notification_events, conflict_unknown
-from .state import connect, enqueue, home, policy, register
+from .state import connect, enqueue, home, policy, register, successor
 
 
 def timestamp(value):
@@ -48,10 +48,15 @@ def discover(db):
         with db:
             db.execute('DELETE FROM meta WHERE key=?', (f'discovery:{group["repo"]}:{group["branch"]}',))
         for pr in prs:
-            eligible = [b for b in bindings if timestamp(pr['created_at']) >= b['since'] - 5]
+            # A handed-over session counts as its successor: a still-running subagent of the
+            # old session re-binds the branch under the old id after the handover.
+            eligible = {}
+            for b in bindings:
+                if timestamp(pr['created_at']) >= b['since'] - 5:
+                    eligible.setdefault(successor(db, b['session']), b)
             if len(eligible) == 1:
-                b = eligible[0]
-                candidates.append(dict(repo=b['repo'], number=pr['number'], session=b['session'], cwd=b['cwd'], since=b['since']-5))
+                session, b = next(iter(eligible.items()))
+                candidates.append(dict(repo=b['repo'], number=pr['number'], session=session, cwd=b['cwd'], since=b['since']-5))
             elif len(eligible) > 1:
                 existing = db.execute('SELECT session FROM watches WHERE repo=? AND number=?',
                                       (group['repo'], pr['number'])).fetchone()

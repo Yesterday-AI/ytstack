@@ -1104,6 +1104,7 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - `finish-lane` and `code-review` put the round line, and the lens lines, at the end of the review body on the pull request; the plan gets the same line where the session may write, never through a commit on the lane's branch for the route's sake.
 - `finish-lane` routes with `--pr {N}`; on a host other than GitHub the plan stays the only record.
 - The reviewer's GitHub login is printed, not compared with the author: agents usually share one account. `by:` still tells reviewer from author.
+- Added after the PR #66 review: `author_association` is only a prefilter (`MEMBER` is any organization member, `COLLABORATOR` includes read and triage). For each reviewer whose record line is used, `route` reads `gh api repos/<repo>/collaborators/<login>/permission --jq .permission` once and needs `admin`, `maintain` or `write`; another permission or a failed read routes to a person. A reviewer whose newest review requests changes routes to a person also when that review has no record line.
 
 **Supersedes:** None. Extends the 2026-11-13 risk-gate entry (M025): the review records may live on the host.
 

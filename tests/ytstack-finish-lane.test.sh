@@ -73,6 +73,7 @@ case "${1:-} ${2:-}" in
   "pr view")     [ ! -f "$GH_FIX/view.fail" ] || { echo "fake gh: view failed" >&2; exit 1; }; answer "$GH_FIX/view.json" ;;
   "api graphql") answer "$GH_FIX/graphql.json" ;;
   "api repos/"*/pulls/*/reviews) answer "$GH_FIX/reviews.json" ;;
+  "api repos/"*/collaborators/*/permission) printf '{"permission":"write"}\n' > "$GH_FIX/perm.json"; answer "$GH_FIX/perm.json" ;;
   "pr merge")
     [ ! -f "$GH_FIX/merge.fail" ] || { echo "fake gh: head commit does not match" >&2; exit 1; }
     [ -f "$GH_FIX/merge.queue" ] || { jq '.state = "MERGED"' "$GH_FIX/view.json" > "$GH_FIX/view.tmp" && mv "$GH_FIX/view.tmp" "$GH_FIX/view.json"; } ;;

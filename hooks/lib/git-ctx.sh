@@ -703,15 +703,41 @@ yt_pr_watch_heartbeat() {
   return 0
 }
 
+# yt_fm <file>: the frontmatter of a Markdown file as "key<TAB>value" lines;
+# list items repeat the key, surrounding quotes are dropped. The reader of
+# bin/ytstack-risk (its fm) and the same as in bin/ytstack-spec: keep in step.
+yt_fm() {
+  awk '
+    NR == 1 { if ($0 != "---") exit; next }
+    $0 == "---" { exit }
+    /^[ \t]*#/ { next }
+    /^[A-Za-z_][A-Za-z0-9_]*:/ {
+      key = $0; sub(/:.*/, "", key)
+      val = $0; sub(/^[^:]*:[ \t]*/, "", val); sub(/[ \t]+$/, "", val)
+      if (val == "" || val == "[]") next
+      gsub(/^["'\'']|["'\'']$/, "", val)
+      print key "\t" val; next
+    }
+    /^[ \t]+-[ \t]+/ {
+      val = $0; sub(/^[ \t]+-[ \t]+/, "", val); sub(/[ \t]+$/, "", val)
+      gsub(/^["'\'']|["'\'']$/, "", val)
+      if (key != "" && val != "") print key "\t" val
+    }
+  ' "$1"
+}
+
 # yt_factory_notices <yt_dir> <toplevel> -> YT_FACTORY_NOTICES: one line per
 # factory tool that is off although the project would use it, "" when none.
 # Cheap local evidence only (no host call), so hooks can run it:
 #   risk     .ytstack/spec/ exists, merge_by resolves to risk, and spec/REVIEW.md
-#            is missing or no area file allows auto_merge low or normal. An
-#            explicit merge_by human or coordinator is a choice: silent.
-#   pr-watch origin is a GitHub URL and ~/.ytstack/config has no pr_watch line
-#            (pr_watch=off is a choice: silent), or pr_watch=on and the worker's
-#            heartbeat is missing or YT_PRW_STALE (600) seconds old or older.
+#            is missing or no area file allows auto_merge low or normal (in
+#            its frontmatter, quotes allowed, read with yt_fm). An explicit
+#            merge_by human or coordinator is a choice: silent.
+#   pr-watch origin is a GitHub URL and ~/.ytstack/config has no line that
+#            turns the hook on (as hooks/pr-watch reads it: any pr_watch=on
+#            line; a pr_watch=off line without one is a choice: silent), or
+#            it is on and the worker's heartbeat is missing or YT_PRW_STALE
+#            (600) seconds old or older.
 #   runtime  deploy evidence (one of the files in the loop below at the toplevel,
 #            or a workflow whose name holds "deploy") without a "Release"
 #            section, or signal evidence (an incident record, a finding whose
@@ -719,7 +745,7 @@ yt_pr_watch_heartbeat() {
 #            .env.example) without a "Signals" section. The sections come from
 #            `ytstack-runtime sections`, run only when there is evidence.
 yt_factory_notices() {
-  local ytd="$1" top="${2:-${YT_TOPLEVEL:-$PWD}}" mb url cfg age deploy="" signal="" f secs miss="" lib secs_list tools
+  local ytd="$1" top="${2:-${YT_TOPLEVEL:-$PWD}}" mb url cfg age deploy="" signal="" f secs miss="" lib secs_list tools am_ok
   YT_FACTORY_NOTICES=""
   [ -n "$ytd" ] && [ -d "$ytd" ] || return 0
   if [ -d "$ytd/spec" ]; then
@@ -728,16 +754,27 @@ yt_factory_notices() {
       if [ ! -f "$ytd/spec/REVIEW.md" ]; then
         miss="no spec/REVIEW.md"
       fi
-      if ! grep -l -E '^auto_merge:[[:space:]]*(low|normal)[[:space:]]*$' "$ytd"/spec/*.md >/dev/null 2>&1; then
-        miss="${miss:+$miss, }no area allows auto_merge low or normal"
-      fi
+      # auto_merge from the frontmatter of the area files, read as ytstack-risk does.
+      am_ok=""
+      for f in "$ytd"/spec/*.md; do
+        [ -f "$f" ] || continue
+        case "$(yt_fm "$f" | awk -F'\t' '$1 == "auto_merge" { print $2; exit }')" in
+          low|normal) am_ok=1; break ;;
+        esac
+      done
+      [ -n "$am_ok" ] || miss="${miss:+$miss, }no area allows auto_merge low or normal"
       [ -z "$miss" ] || YT_FACTORY_NOTICES="Risk routing is not set up ($miss): every merge goes to a person. Policy: docs/ux/review-policy-format.md; merge_by: human in PREFERENCES.md silences this."
     fi
   fi
   url=$(git -C "$top" config --get remote.origin.url 2>/dev/null || true)
   case "$url" in
     *github.com[:/]*)
-      cfg=$(grep -E '^[[:space:]]*pr_watch[[:space:]]*=' "${HOME:-/nonexistent}/.ytstack/config" 2>/dev/null | tail -1 | tr -d '[:space:]')
+      # As hooks/pr-watch reads it: on when any line says on; an off line
+      # is a choice; no line, or another value, leaves the hook off.
+      cfg="${HOME:-/nonexistent}/.ytstack/config"
+      if grep -Eq '^[[:space:]]*pr_watch[[:space:]]*=[[:space:]]*on[[:space:]]*$' "$cfg" 2>/dev/null; then cfg=pr_watch=on
+      elif grep -Eq '^[[:space:]]*pr_watch[[:space:]]*=[[:space:]]*off[[:space:]]*$' "$cfg" 2>/dev/null; then cfg=pr_watch=off
+      else cfg=""; fi
       case "$cfg" in
         pr_watch=on)
           yt_pr_watch_heartbeat

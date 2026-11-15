@@ -46,13 +46,16 @@
 #         With --pr N the records come from the host first: one `gh api` read
 #         of the pull request's reviews (repository: --repo, or what gh
 #         resolves from the checkout). A review counts when it is submitted,
-#         not dismissed and by an owner, member or collaborator; its body
+#         not dismissed and by an owner, member or collaborator who can
+#         write (one more `gh api` read of the permission per reviewer whose
+#         line is used: admin, maintain or write); its body
 #         lines "- Round N: ..." and "- Lens <name>: ..." are records, newest
 #         review last. The newest such line counts; the plan only when no
 #         review has one (--plan is then optional). A host line must name the
 #         commit the host tied its review to, and its validity is computed
-#         from that commit. A review that requests changes, a line that
-#         names another commit and a read that fails all route to a person.
+#         from that commit. A review that requests changes and is the newest
+#         review of its reviewer (record line or not), a line that names
+#         another commit and a read that fails all route to a person.
 #         With --pr one more line follows lenses:
 #           round: host review <id> by <login> on <sha> | plan | none
 # check   validates .ytstack/spec/REVIEW.md of the working tree.
@@ -176,26 +179,9 @@ sha256_of() {
 
 # ---- readers -------------------------------------------------------------------
 # fm <file>: frontmatter as "key<TAB>value" lines; list items repeat the key.
-# The same reader as in bin/ytstack-spec: keep the two in step.
-fm() {
-  awk '
-    NR == 1 { if ($0 != "---") exit; next }
-    $0 == "---" { exit }
-    /^[ \t]*#/ { next }
-    /^[A-Za-z_][A-Za-z0-9_]*:/ {
-      key = $0; sub(/:.*/, "", key)
-      val = $0; sub(/^[^:]*:[ \t]*/, "", val); sub(/[ \t]+$/, "", val)
-      if (val == "" || val == "[]") next
-      gsub(/^["'\'']|["'\'']$/, "", val)
-      print key "\t" val; next
-    }
-    /^[ \t]+-[ \t]+/ {
-      val = $0; sub(/^[ \t]+-[ \t]+/, "", val); sub(/[ \t]+$/, "", val)
-      gsub(/^["'\'']|["'\'']$/, "", val)
-      if (key != "" && val != "") print key "\t" val
-    }
-  ' "$1"
-}
+# yt_fm of hooks/lib/git-ctx.sh, shared with the session-start notices; the
+# same reader as in bin/ytstack-spec: keep the two in step.
+fm() { yt_fm "$1"; }
 fm_get()  { fm "$1" | awk -F'\t' -v k="$2" '$1 == k { print $2; exit }'; }
 fm_list() { fm "$1" | awk -F'\t' -v k="$2" '$1 == k { print $2 }'; }
 
@@ -625,14 +611,17 @@ record_fields() {
 # ---- the records on the host -----------------------------------------------------
 # The reviews of the pull request, one line per record line in a review body:
 #   <commit_id> TAB <login> TAB <review id> TAB <submitted_at> TAB <state> TAB <line>
-# Only reviews that are submitted and not dismissed, by somebody with write
-# access to the repository (owner, member, collaborator): anybody else can post
-# a review on a public pull request. No field is empty, so read splits right.
+# and one more line per review whose <line> is "@review", for the state of
+# every reviewer (requests_changes). Only reviews that are submitted and not
+# dismissed, by an owner, member or collaborator: anybody else can post a
+# review on a public pull request. Whether the reviewer of a record that is
+# used can write is read once more (host_trust). No field is empty, so read
+# splits right.
 # shellcheck disable=SC2016
 REVIEWS_JQ='.[] | select(.state != "PENDING" and .state != "DISMISSED")
   | select(.author_association == "OWNER" or .author_association == "MEMBER" or .author_association == "COLLABORATOR")
-  | . as $r | (.body // "") | split("\n")[] | sub("\r$"; "")
-  | select(test("^- (Round [0-9]+|Lens [a-z0-9][a-z0-9-]*): "))
+  | . as $r | ("@review", ((.body // "") | split("\n")[] | sub("\r$"; "")
+      | select(test("^- (Round [0-9]+|Lens [a-z0-9][a-z0-9-]*): "))))
   | [ ($r.commit_id // "-"), ($r.user.login // "-"), ($r.id | tostring), ($r.submitted_at // "-"), $r.state, . ] | join("\t")'
 HOST_ERR=""
 # host_records: fills $W/host, ordered by the time of submission (newest last).
@@ -646,6 +635,20 @@ host_records() {
     HOST_ERR=$(grep . "$W/host.err" | head -1); HOST_ERR=${HOST_ERR:-gh failed without a message}; return 1
   fi
   sort -s -t "$(printf '\t')" -k4,4 "$W/host.raw" > "$W/host"
+}
+
+# requests_changes: "<review id> TAB <login>" for every reviewer whose newest
+# review requests changes, record line or not. As on the host, a later
+# approval of the same reviewer lifts the request; a comment-only review
+# does not (GitHub keeps the request until an approval or a dismissal).
+requests_changes() {
+  awk -F'\t' '
+    $6 == "@review" {
+      if (!($2 in st)) { order[++n] = $2; st[$2] = $5; id[$2] = $3 }
+      else if ($5 != "COMMENTED") { st[$2] = $5; id[$2] = $3 }
+    }
+    END { for (i = 1; i <= n; i++) if (st[order[i]] == "CHANGES_REQUESTED") print id[order[i]] "\t" order[i] }
+  ' "$W/host"
 }
 
 # pick <ERE>: the newest record line that matches. From the host when one of
@@ -667,6 +670,29 @@ EOF
   [ -z "$REC" ] || REC_FROM=plan
 }
 
+# host_trust <subject>: the reviewer of the picked host record can write to
+# the repository. author_association is wider: MEMBER is any member of the
+# organization, COLLABORATOR includes read and triage. One read per reviewer
+# (cached in $W/perm); a read that fails routes to a person.
+host_trust() {
+  local repo="$REPO" p err
+  [ -n "$repo" ] || repo='{owner}/{repo}'
+  p=$(awk -F'\t' -v l="$REC_LOGIN" '$1 == l { print $2; exit }' "$W/perm" 2>/dev/null)
+  if [ -z "$p" ]; then
+    if p=$(cd "$TOP" && gh api "repos/$repo/collaborators/$REC_LOGIN/permission" --jq .permission 2> "$W/perm.err"); then
+      p=${p:-none}
+    else
+      err=$(grep . "$W/perm.err" | head -1); p="!${err:-gh failed without a message}"
+    fi
+    printf '%s\t%s\n' "$REC_LOGIN" "$p" >> "$W/perm"
+  fi
+  case "$p" in
+    admin|maintain|write) ;;
+    "!"*) note route "$1" "host review $REC_ID by $REC_LOGIN: the permission of $REC_LOGIN could not be read: ${p#!}" ;;
+    *) note route "$1" "host review $REC_ID by $REC_LOGIN: $REC_LOGIN has '$p' access to the repository, not write" ;;
+  esac
+}
+
 # host_check <subject> <commit the line names>: a record from the host is
 # taken for the commit the host tied the review to. A line that names another
 # one leaves open what was reviewed; a review that requests changes on the
@@ -674,6 +700,7 @@ EOF
 host_check() {
   [ "$REC_FROM" = host ] || return 0
   [ "$REC_STATE" != CHANGES_REQUESTED ] || note route "$1" "host review $REC_ID requests changes"
+  host_trust "$1"
   case "$REC_COMMIT" in
     "$2"*) [ "${#2}" -ge 7 ] && return 0 ;;
   esac
@@ -839,6 +866,17 @@ EOF
       [ -z "$moved" ] || note route review "the newest round reviewed $(short "$rh") and $(printf '%s\n' "$moved" | grep -c .) path(s) changed since, first $(printf '%s\n' "$moved" | sed -n 1p): it is not valid for $(short "$HEADC")"
     fi
   fi
+  # Any reviewer whose newest review requests changes holds the change, also
+  # with no record line in that review. The round's own review was named
+  # above already.
+  local cr_id cr_login round_id=""
+  [ "$REC_FROM" != host ] || [ "$REC_STATE" != CHANGES_REQUESTED ] || round_id="$REC_ID"
+  while IFS=$'\t' read -r cr_id cr_login; do
+    [ -n "$cr_id" ] && [ "$cr_id" != "$round_id" ] || continue
+    note route review "host review $cr_id by $cr_login requests changes"
+  done <<EOF
+$(requests_changes)
+EOF
 
   # The class is the higher of floor and stated risk; it stays within the
   # ceiling of the touched areas.

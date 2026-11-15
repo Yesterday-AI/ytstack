@@ -89,6 +89,25 @@ def successor(db, session):
         seen.add(session)
 
 
+def known_session(db, session):
+    """Whether the state holds anything for `session`: a watch, a binding, a candidate or a
+    pending notice."""
+    return any(db.execute(f'SELECT 1 FROM {table} WHERE session=? LIMIT 1', (session,)).fetchone()
+               for table in ('watches', 'bindings', 'candidates', 'outbox'))
+
+
+def qualify_known(db, session):
+    """A bare id is a Codex thread. A bare Claude id (copied without its `claude:` prefix) is
+    taken as `claude:<id>` when nothing is stored under the bare id and something is under
+    the qualified one."""
+    if not session or ':' in session:
+        return session
+    qualified = f'claude:{session}'
+    if not known_session(db, session) and known_session(db, qualified):
+        return qualified
+    return session
+
+
 def handover(db, source, target):
     """Hand every watch of `source` to `target`, with its undelivered notices, branch bindings and
     candidates, and forward later registrations for `source` to `target` (a rotating coordinator

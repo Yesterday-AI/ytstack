@@ -16,7 +16,8 @@ if sys.version_info < (3, 9):
 
 from prwatch import admin, claude, github
 from prwatch.hooks import handle
-from prwatch.state import cli, connect, handover, register, policy, successor
+from prwatch.state import (cli, connect, handover, known_session, qualify_known, register, policy,
+                           successor)
 from prwatch.worker import tick
 
 
@@ -137,6 +138,14 @@ def main():
             if args.command == 'handover':
                 if not args.session:
                     parser.error('--to or CODEX_THREAD_ID required')
+                # A bare id is a Codex thread; a bare Claude id (copied from another session)
+                # is qualified when only `claude:<id>` is known, and a Claude session's
+                # successor is a Claude session too.
+                args.source = qualify_known(db, args.source)
+                args.session = qualify_known(db, args.session)
+                if (args.source.startswith('claude:') and ':' not in args.session
+                        and not known_session(db, args.session)):
+                    args.session = claude.qualify(args.session)
                 if args.source == args.session:
                     parser.error('--from and --to name the same session')
                 moved, notices = handover(db, args.source, args.session)

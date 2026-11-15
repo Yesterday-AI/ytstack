@@ -5,6 +5,7 @@ import io
 import os
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -12,7 +13,7 @@ from unittest.mock import patch
 
 ENGINE = Path(__file__).resolve().parents[2] / 'tools/pr-watch'
 sys.path.insert(0, str(ENGINE))
-from prwatch import claude
+from prwatch import claude, github, hooks, worker
 from prwatch.state import connect, enqueue, register
 
 spec = importlib.util.spec_from_file_location('prwatch_cli', ENGINE / 'pr-watch.py')
@@ -128,6 +129,43 @@ class Handover(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn(f'0 watches handed over from {OLD} to {NEW}', out)
         self.assertIn(f'later registrations for {OLD} go to {NEW}', out)
+
+    def test_a_subagent_of_the_old_session_on_a_handed_over_branch_is_adopted(self):
+        # PR #66 review: after the handover a still-running subagent of the old session
+        # touches the branch again; the worker must adopt its PR for the successor instead
+        # of reporting two sessions on the branch.
+        self.seed()
+        self.run_cli('handover', '--from', OLD, '--to', NEW)
+        payload = dict(session_id='old-coordinator', hook_event_name='PreToolUse', cwd='/wt/a',
+                       tool_name='Bash', tool_input={'command': 'git status'})
+        with patch.object(hooks, 'git_binding', return_value=('o/r', 'lane-a')):
+            hooks.handle(payload, 'claude')
+        db = connect()
+        with db:
+            db.execute('UPDATE bindings SET since=?, touched=?', (time.time() - 10, time.time()))
+        pr = dict(head={'ref': 'lane-a', 'repo': {'full_name': 'o/r'}}, number=12,
+                  created_at='2099-01-01T00:00:00Z', state='open')
+        with patch.object(github, 'open_pulls', return_value=[pr]), patch.object(github, 'api', return_value=pr):
+            worker.discover(db)
+        db.close()
+        self.assertEqual(self.rows("SELECT * FROM meta WHERE key LIKE 'ownership:%'"), [])
+        self.assertEqual(self.rows('SELECT session FROM watches WHERE number=12'), [{'session': NEW}])
+
+    def test_a_bare_claude_id_is_qualified(self):
+        # PR #66 review: `--from <bare claude id>` matched nothing.
+        self.seed()
+        code, out = self.run_cli('handover', '--from', 'old-coordinator', '--to', 'new-coordinator')
+        self.assertEqual(code, 0)
+        self.assertIn(f'2 watches handed over from {OLD} to {NEW}', out)
+        self.assertEqual(self.rows('SELECT session FROM watches WHERE number=1'), [{'session': NEW}])
+
+    def test_a_bare_codex_thread_stays_bare(self):
+        db = connect()
+        with db:
+            register(db, 'o/r', 1, 'thread-old', '/tmp')
+        db.close()
+        code, out = self.run_cli('handover', '--from', 'thread-old', '--to', 'thread-new')
+        self.assertEqual(self.rows('SELECT session FROM watches WHERE number=1'), [{'session': 'thread-new'}])
 
     def test_refuses_the_same_session_and_a_missing_target(self):
         for argv in (('handover', '--from', OLD, '--to', OLD), ('handover', '--from', OLD)):

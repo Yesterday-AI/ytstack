@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The risk route can trust the review on the pull request** (issue #54):
+  `ytstack-risk route --pr N [--repo OWNER/NAME]` reads the review round and
+  lens lines from the reviews on the pull request, which the host ties to their
+  commit. A repository whose rules count only reviews on the current head can
+  now route `unattended` without committing a round line that moves the head.
+  Only reviews by owners, members and collaborators with write access count
+  (the reviewer's permission is read once); a change request
+  that is its reviewer's newest review (with or without a record line), a
+  line naming another commit or a failed read sends the change to a person.
+  `ytstack-finish-lane route --pr N` passes the pull request on and also routes
+  a lane without a plan file.
+- **A session hears which factory tool is off** (issue #54): at session start,
+  one line each says when risk routing is not set up (every merge goes to a
+  person), when the PR watch is off or its worker has not ticked for 10
+  minutes, and when `RUNTIME.md` lacks "Release" or "Signals" although the
+  project deploys or has production signals. A project that uses none of these
+  tools sees nothing; `merge_by: human` and `pr_watch=off` count as choices.
+  `ytstack-upkeep` lists the same lines in a new "factory tools" section.
+- **A session learns when ytstack was updated under it** (issue #61): after a
+  plugin update, the next prompt in Claude Code says once "ytstack X
+  installed, this session loaded A: reload the skills you use", with the
+  changelog titles in between.
+- `ytstack-pr-watch handover --from <session>` hands every PR watch of a
+  session, with its pending notices, to its successor; pull requests the old
+  session's subagents open afterwards are watched for the successor.
+- **Plans kept outside `.ytstack/` become visible** (issue #54):
+  `bin/ytstack-plans` finds a plan such as `plans/*.md` tables or checklists
+  that `ytstack-frontier` cannot see. `reconcile` and `adopt-brownfield` ask
+  once whether a large one (10 or more open rows) should be mapped into
+  milestones and slices; each open row then links back to its line, the plan
+  files are never edited, and the answer is kept in `PREFERENCES.md`.
+- `ytstack-runtime sections` names the filled-in sections of `RUNTIME.md`.
+- **QUICKSTART "Setting up the factory tools"**: risk routing, the PR watch,
+  the "Release" and "Signals" sections of `RUNTIME.md`, upkeep on a schedule,
+  standing instructions and external plans, each as numbered steps with the
+  command and a check (among them a dry `ytstack-risk route --pr <n>` on a
+  recent pull request), for a new project and for an adopted or upgraded one,
+  plus what the session-start "Factory tools" lines and the version notice mean.
+- **QUICKSTART "Upgrading from 0.x"**: what to run after a plugin update, by
+  the version you come from.
+
+### Changed
+
+- **`coordinate` runs the factory tools** (issue #54): Step 7 names, for the
+  risk route, the PR watch, the release watch, signals and review lessons, the
+  command, when it runs and when it is skipped. The route now runs before
+  every merge, also one the coordinator makes itself, and the preamble shows
+  which tools the project has switched on.
+- **`coordinate` rotates in one step while lanes run** (issue #61): the
+  handoff carries the PR watch session, the background watches and each
+  running worker's address; the successor takes the watches over and the old
+  session only relays its workers' reports.
+- `finish-lane` and `code-review` put the round and lens lines into the body
+  of the review on the pull request, and `finish-lane` routes with `--pr`.
+- README and QUICKSTART say what has run against a real host so far, and what
+  has not: no unattended merge and no release watch yet.
+
+### Fixed
+
+- `bin/ytstack-risk --help` printed a sed error instead of the commands.
+
 ## [0.10.0] - 2026-11-15
 
 ### Added

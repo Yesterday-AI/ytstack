@@ -1,15 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-15T00:45:00Z
-current_milestone: M031
+last_updated: 2026-11-15T02:30:00Z
+current_milestone: M032
 active_slice: none
 active_task: none
 ---
 
 # State
 
-**Status (2026-11-15, planning):** M031 planned (L, 5 slices: factory tools explicit, issue #54 rest and #61 leftovers), then M032 (M, incident to lesson loop, #53) and M033 (S, upstream feedback channel, #55). Ready to slice M031. Next action: run `ytstack:slice-milestone` for M031.
+**Status (2026-11-15, M031):** M031 DONE (5/5 slices, 15 tasks, built by parallel workers on `m031-s0N-*` branches and merged into `plan-m031`): `coordinate` 0.4.0 Step 7 "Run the factory tools" and one-step rotation with `ytstack-pr-watch handover`; `ytstack-risk route --pr` reads the round from the review on the host; session-start factory-tool notices and the `version-notice` prompt hook; QUICKSTART setup guide and upgrade checklist; `bin/ytstack-plans` with the external-plan question in `reconcile` and `adopt-brownfield`. Not run: evals `coordinator-resume`, `risk-route`, `external-plan`, `reconcile`, `adopt-brownfield` (at release). M032 (lesson loop, #53) in progress on `m032-lesson-loop`; M033 (#55) after it.
 
 **Status (2026-11-15, 0.10.0):** Release of issue #57 (PR #63, `38486b8`: `.ytstack/standing/` one file per instruction, `yt_standing`, `ytstack-check --standing`, `ytstack-risk` rule document, `coordinate` 0.3.0) and the main points of issue #61 (PRs #62, #64: skipped checks, head moved after own push, status block only on change, merge suggestion only after a bot finding). Open next: from #61 the "plugin updated, reload skills" notice and a one-step coordinator rotation; then plan the rest of #54, #53 and #55.
 
