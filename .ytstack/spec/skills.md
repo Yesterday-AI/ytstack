@@ -8,7 +8,7 @@ sources:
   - docs/ux/skill-structure.md
   - docs/ux/askuserquestion-format.md
   - docs/ux/agent-structure.md
-verified_at: 1e27f96
+verified_at: 8399866
 ---
 
 # skills

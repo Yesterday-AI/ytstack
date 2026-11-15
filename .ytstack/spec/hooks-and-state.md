@@ -10,7 +10,7 @@ sources:
   - docs/statusline.md
   - docs/pr-watch.md
   - docs/kimi.md
-verified_at: 1e27f96
+verified_at: 8399866
 ---
 
 # hooks-and-state
