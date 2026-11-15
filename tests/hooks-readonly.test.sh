@@ -120,6 +120,32 @@ lacks "ss-main: long next action -> not dropped"          "$CTX" "(omitted: see 
 if [ "${#CTX}" -le 9500 ]; then ok "ss-main: cut injection fits the guard (${#CTX})"; else bad "ss-main: cut injection fits the guard" "${#CTX}"; fi
 cp "$TMP/state.good" "$MAIN/.ytstack/STATE.md"
 
+# ---- 1e2. session-start: standing entries in force, filtered by role (issue #74)
+SDIR="$MAIN/.ytstack/standing"; mkdir -p "$SDIR"
+sw() { printf -- '---\ngiven: %s\nscope: %s\nsupersedes: %s\n%b---\n\n%s\n' "$2" "$3" "$4" "$5" "$6" > "$SDIR/$1.md"; }
+sw 20261101T1000Z-old 2026-11-01T10:00:00Z "every lane" "" "" "Old rule."
+sw 20261101T1100Z-new 2026-11-01T11:00:00Z "every lane" 20261101T1000Z-old "" "Lanes run their own tests. Second sentence."
+sw 20261101T1200Z-coord 2026-11-01T12:00:00Z "the coordinator" "" "" "Lanes are tracked in LANES.md at all times."
+sw 20261101T1300Z-window 2026-11-01T13:00:00Z "everyone" "" 'until: 2026-11-01T14:00Z\n' "Hold merges until the measurement ends."
+sw 20261101T1400Z-all 2026-11-01T14:00:00Z "this project" "" 'check: false\nuntil-check: touch $HOME/RAN\n' "Status only at slice boundaries."
+run session-start "{\"session_id\":\"s1st\",\"cwd\":$(jstr "$MAIN"),\"source\":\"compact\"}" HOME="$TMP/h"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has   "ss-standing: block names the role (lane without marker)" "$CTX" "Standing instructions in force (role: lane"
+has   "ss-standing: entry with scope and first sentence" "$CTX" "- 20261101T1100Z-new (every lane): Lanes run their own tests."
+lacks "ss-standing: superseded entry skipped" "$CTX" "20261101T1000Z-old"
+lacks "ss-standing: expired entry skipped" "$CTX" "20261101T1300Z-window"
+lacks "ss-standing: coordinator entry not for a lane" "$CTX" "20261101T1200Z-coord"
+has   "ss-standing: entry naming no role is for everyone" "$CTX" "20261101T1400Z-all"
+[ ! -e "$TMP/h/RAN" ] && ok "ss-standing: no until-check runs in the hook" || bad "ss-standing: no until-check runs in the hook"
+mkdir -p "$TMP/xdg/ytstack/sessions/s1co"; printf '%s\n' "$MAIN/.ytstack" > "$TMP/xdg/ytstack/sessions/s1co/coordinate"
+run session-start "{\"session_id\":\"s1co\",\"cwd\":$(jstr "$MAIN"),\"source\":\"compact\"}" XDG_STATE_HOME="$TMP/xdg"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has   "ss-standing: coordinate marker -> role coordinator" "$CTX" "(role: coordinator"
+has   "ss-standing: coordinator sees its entry" "$CTX" "20261101T1200Z-coord (the coordinator)"
+if [ "${#CTX}" -le 9500 ]; then ok "ss-standing: injection fits the guard (${#CTX})"; else bad "ss-standing: injection fits the guard" "${#CTX}"; fi
+eq  "ss-standing: git status shows only the fixture entries" "?? .ytstack/standing/" "$(git -C "$MAIN" status --porcelain)"
+rm -rf "$SDIR" "$TMP/xdg"
+
 # ---- 1f. session-start: no roadmap in progress -> clean count, no stderr noise
 run session-start "{\"session_id\":\"s1j\",\"cwd\":$(jstr "$MAIN")}"
 eq "ss-main: no in-progress roadmap -> no 'integer expression' error on stderr" 0 "$(grep -c 'integer expression' "$ERR")"

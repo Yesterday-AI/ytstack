@@ -264,6 +264,29 @@ has "prepare with --branch: the checkout stays" "git checkout -B work main" "$G"
 has "prepare with --branch: the commit sentence is replaced" "Commit nothing. Do not merge or push." "$G"
 hasnt "prepare: no commit prefix anywhere" "Commit each task" "$OUT"
 
+# ---- 3b. standing instructions in the brief (issue #74) ------------------------
+echo "# render: standing instructions"
+SDIR="$R/.ytstack/standing"; mkdir -p "$SDIR"
+printf -- '---\ngiven: 2026-11-01T10:00:00Z\nscope: every lane\nsupersedes:\n---\n\nRun the full suite before the report.\n' > "$SDIR/20261101T1000Z-full-suite.md"
+printf -- '---\ngiven: 2026-11-01T11:00:00Z\nscope: the coordinator\nsupersedes:\n---\n\nTrack lanes in LANES.md.\n' > "$SDIR/20261101T1100Z-lanes.md"
+printf -- '---\ngiven: 2026-11-01T12:00:00Z\nscope: every reviewer\nsupersedes:\n---\n\nName the reviewed commit.\n' > "$SDIR/20261101T1200Z-commit.md"
+printf -- '---\ngiven: 2026-11-01T13:00:00Z\nscope: this project\nsupersedes:\n---\n\nEnglish in code and commits.\n' > "$SDIR/20261101T1300Z-english.md"
+run "$R" render --task M001-S01-T01
+eq "with entries: a Standing instructions section after Read for context" "Outcome,Kind,Scope,Read for context,Standing instructions,Verification,Spec impact,Work contract,Report," \
+  "$(printf '%s\n' "$OUT" | sed -n 's/^## //p' | tr '\n' ',')"
+SI=$(part "Standing instructions")
+has "implement: the lane entry" "- 20261101T1000Z-full-suite (every lane): Run the full suite before the report." "$SI"
+has "implement: the entry naming no role" "20261101T1300Z-english (this project)" "$SI"
+hasnt "implement: no coordinator entry" "20261101T1100Z-lanes" "$SI"
+hasnt "implement: no reviewer entry" "20261101T1200Z-commit" "$SI"
+run "$R" render --task M001-S01-T01 --kind review --head abc1234
+SI=$(part "Standing instructions")
+has "review: the reviewer entry" "20261101T1200Z-commit (every reviewer)" "$SI"
+hasnt "review: no lane entry" "20261101T1000Z-full-suite" "$SI"
+rm -rf "$SDIR"
+run "$R" render --task M001-S01-T01
+hasnt "no entries: no section" "## Standing instructions" "$OUT"
+
 # ---- 4. render --lens ---------------------------------------------------------
 echo "# render --lens"
 # A policy with a visual lens, a lens without evidence that names a skill, and
