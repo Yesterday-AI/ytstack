@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# ytstack upstream: the helper of the feedback channel to Yesterday-AI/ytstack.
+# The channel and its rules: docs/ux/upstream-feedback.md.
+#
+#   ytstack-upstream [-C DIR] mode
+#   ytstack-upstream draft --kind bug|gap|proposal|evidence --title TEXT [--host NAME] [--out FILE]
+#   ytstack-upstream check FILE
+#
+# mode   prints the effective setting of `upstream_feedback` for the project
+#        in DIR (default: $PWD): `mode:` suggest | file | off, `set:` the value
+#        and where it came from (preferences | config | default), `gh:` yes |
+#        no | not checked, `repo:`. gh is asked (`gh auth status`) only for
+#        file; without gh or a login the mode is suggest and a `note:` says
+#        why. An invalid value prints a `warning:` line. Exit 0; 64 usage.
+# draft  writes an issue body with TODO lines for what the agent has to fill,
+#        the ytstack version, the host and the OS, and prints `path:` and
+#        `title:`. Default path under $TMPDIR, never in the checkout. Exit 0;
+#        1 the file exists; 64 usage. Never calls gh.
+# check  the rules a machine can see before anything is posted. Exit 0
+#        `draft ok`; 1 one line per problem (or a missing file); 64 usage.
+#
+# Nothing here posts. The agent posts with gh after check passed.
+
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+. "$HERE/hooks/lib/git-ctx.sh"
+REPO="Yesterday-AI/ytstack"
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+
+usage() { sed -n '5,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+case "$CMD" in mode|draft|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+[ -d "$DIR" ] || { echo "ytstack-upstream: -C '$DIR' is not a directory" >&2; exit 64; }
+
+cmd_mode() {
+  local gh=not\ checked mode
+  yt_git_ctx "$DIR"
+  yt_resolve_yt_dir >/dev/null
+  YT_PREF_WARNINGS=""
+  yt_upstream_feedback "${YT_DIR:-}"
+  mode=$YT_PREF_UPSTREAM_FEEDBACK
+  if [ "$mode" = file ]; then
+    if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then gh=yes; else gh=no; mode=suggest; fi
+  fi
+  echo "mode: $mode"
+  echo "set: $YT_PREF_UPSTREAM_FEEDBACK ($YT_PREF_UPSTREAM_FEEDBACK_FROM)"
+  echo "gh: $gh"
+  echo "repo: $REPO"
+  [ "$gh" != no ] || echo "note: file needs a signed-in gh (gh auth status); suggesting instead"
+  [ -z "$YT_PREF_WARNINGS" ] || printf '%s\n' "$YT_PREF_WARNINGS" | sed 's/^/warning: /'
+  return 0
+}
+
+host() {
+  if [ -n "${CLAUDECODE:-}" ]; then echo claude-code
+  elif [ -n "${CODEX_THREAD_ID:-}${CODEX_SANDBOX:-}${CODEX_HOME:-}" ]; then echo codex
+  elif [ -n "${KIMI_PLUGIN_ROOT:-}${KIMI_CODE_HOME:-}" ]; then echo kimi
+  else echo unknown; fi
+}
+
+cmd_draft() {
+  local kind="" title="" h="" out="" ver slug
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --kind) kind="${2:-}"; shift 2 || shift ;;
+      --title) title="${2:-}"; shift 2 || shift ;;
+      --host) h="${2:-}"; shift 2 || shift ;;
+      --out) out="${2:-}"; shift 2 || shift ;;
+      *) usage >&2; return 64 ;;
+    esac
+  done
+  case "$kind" in bug|gap|proposal|evidence) ;; *) echo "ytstack-upstream: --kind is bug, gap, proposal or evidence" >&2; return 64 ;; esac
+  [ -n "$title" ] || { echo "ytstack-upstream: --title is required" >&2; return 64; }
+  h=${h:-$(host)}
+  ver=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$HERE/.claude-plugin/plugin.json" 2>/dev/null | head -1)
+  if [ -z "$out" ]; then
+    slug=$(printf '%s' "$title" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-' | sed 's/--*/-/g; s/^-//; s/-$//' | cut -c1-40)
+    out="${TMPDIR:-/tmp}"; out="${out%/}/ytstack-upstream-$(date -u +%Y%m%dT%H%M%SZ)-${slug:-draft}.md"
+  fi
+  [ ! -e "$out" ] || { echo "ytstack-upstream: $out exists; pick another --out" >&2; return 1; }
+  {
+    printf 'Kind: %s\n\n## What happened\n\n' "$kind"
+    printf 'TODO: one observation in your own words. No names of people or customers, no private repository names unless the person allowed them.\n\n'
+    printf '## Evidence\n\nTODO: versions, the commands with their output, counts. Paths relative or with ~/, commits short.\n\n'
+    printf '## Proposal\n\nTODO: what would have prevented it, or "none".\n\n'
+    printf -- '---\nytstack %s | host %s | %s\n' "${ver:-unknown}" "$h" "$(uname -s)"
+    printf 'Searched: TODO: the gh issue list --search query and what it found (no match, or #<n>)\n'
+  } > "$out" || { echo "ytstack-upstream: cannot write $out" >&2; return 1; }
+  echo "path: $out"
+  echo "title: $title"
+}
+
+cmd_check() {
+  local f="${1:-}"
+  [ -n "$f" ] || { usage >&2; return 64; }
+  [ -f "$f" ] || { echo "ytstack-upstream: no file $f" >&2; return 1; }
+  awk '
+    function problem(t) { bad++; print t }
+    # token(value): the rule of bin/ytstack-handover, unchanged. A run of 32 or
+    # more hex digits, or of 40 or more characters from [A-Za-z0-9+_=-] that
+    # mixes upper case, lower case and digits. Upgrade together with it.
+    function token(v,   i, c, run) {
+      v = v " "; run = ""
+      for (i = 1; i <= length(v); i++) {
+        c = substr(v, i, 1)
+        if (c ~ /[A-Za-z0-9+_=-]/) { run = run c; continue }
+        if (length(run) >= 32 && run !~ /[^0-9A-Fa-f]/) return 1
+        if (length(run) >= 40 && run ~ /[A-Z]/ && run ~ /[a-z]/ && run ~ /[0-9]/) return 1
+        run = ""
+      }
+      return 0
+    }
+    { sub(/\r$/, ""); at = "line " NR ": " }
+    /^## / { sec = substr($0, 4) }
+    sec == "Evidence" && $0 !~ /^## / && $0 ~ /[^ \t]/ && $0 !~ /^---/ { evidence++ }
+    /^---/ { sec = "" }
+    /TODO:/ { problem(at "still a TODO: write it, or delete the line") }
+    /^Searched:/ { v = $0; sub(/^Searched:[ \t]*/, "", v); if (v != "" && v !~ /^TODO:/) searched = 1 }
+    {
+      line = $0
+      while (match(line, /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z][A-Za-z]+/)) {
+        addr = substr(line, RSTART, RLENGTH); line = substr(line, RSTART + RLENGTH)
+        if (addr !~ /noreply/) { problem(at "an email address; leave people out, or ask the person"); break }
+      }
+      if (token($0)) problem(at "a token-looking string; never paste a secret (a commit is written short)")
+      if ($0 ~ /\/(Users|home)\/[A-Za-z0-9._-]+\// && $0 !~ /\/Users\/Shared\//) problem(at "a home directory path names a person; write ~/ or a relative path")
+    }
+    END {
+      if (!evidence) problem("Evidence is empty: versions, commands, counts")
+      if (!searched) problem("no Searched: line with the search for existing issues")
+      if (!bad) print "draft ok"
+      exit bad ? 1 : 0
+    }' "$f"
+}
+
+case "$CMD" in
+  mode) cmd_mode ;;
+  draft) cmd_draft "$@" ;;
+  check) cmd_check "$@" ;;
+esac

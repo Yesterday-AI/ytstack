@@ -299,6 +299,8 @@ yt_pref() {
 #                         value reads as human, see below)
 #   YT_PREF_EVIDENCE_DIR  where a visual review stores its screenshots
 #                         (default .ytstack/evidence)
+#   YT_PREF_UPSTREAM_FEEDBACK  suggest | file | off (default suggest; falls
+#                         back to ~/.ytstack/config, see yt_upstream_feedback)
 #   YT_PREF_WARNINGS      one line per invalid value (reset to default)
 yt_prefs() {
   local ytd="$1"
@@ -333,6 +335,34 @@ yt_prefs() {
 }merge_by: '$YT_PREF_MERGE_BY' is not human|coordinator|risk (using human)"; YT_PREF_MERGE_BY=human ;; esac
   YT_PREF_EVIDENCE_DIR=$(yt_pref "$ytd" evidence_dir .ytstack/evidence)
   case "$YT_PREF_EVIDENCE_DIR" in ?*/) YT_PREF_EVIDENCE_DIR=${YT_PREF_EVIDENCE_DIR%/} ;; esac
+  yt_upstream_feedback "$ytd"
+  return 0
+}
+
+# yt_upstream_feedback <yt_dir>: where feedback about ytstack itself goes (M033,
+# docs/ux/upstream-feedback.md). PREFERENCES.md first, then the last
+# `upstream_feedback=` line of ~/.ytstack/config, then suggest. Sets
+#   YT_PREF_UPSTREAM_FEEDBACK       suggest | file | off
+#   YT_PREF_UPSTREAM_FEEDBACK_FROM  preferences | config | default
+# and appends to YT_PREF_WARNINGS. An invalid value reads as suggest: a typo
+# never publishes to the public repository.
+yt_upstream_feedback() {
+  local ytd="$1" v line
+  YT_PREF_UPSTREAM_FEEDBACK_FROM=preferences
+  v=$(yt_pref "$ytd" upstream_feedback "")
+  if [ -z "$v" ]; then
+    YT_PREF_UPSTREAM_FEEDBACK_FROM=default
+    line=$(grep -E '^[[:space:]]*upstream_feedback[[:space:]]*=' "${HOME:-/nonexistent}/.ytstack/config" 2>/dev/null | tail -1)
+    if [ -n "$line" ]; then
+      v="${line#*=}"; v="${v%%#*}"
+      v=$(printf '%s' "$v" | tr -d "[:space:]\"'")
+      [ -z "$v" ] || YT_PREF_UPSTREAM_FEEDBACK_FROM=config
+    fi
+  fi
+  YT_PREF_UPSTREAM_FEEDBACK=${v:-suggest}
+  case "$YT_PREF_UPSTREAM_FEEDBACK" in suggest|file|off) ;; *)
+    YT_PREF_WARNINGS="${YT_PREF_WARNINGS:+$YT_PREF_WARNINGS
+}upstream_feedback: '$YT_PREF_UPSTREAM_FEEDBACK' is not suggest|file|off (using suggest)"; YT_PREF_UPSTREAM_FEEDBACK=suggest ;; esac
   return 0
 }
 
