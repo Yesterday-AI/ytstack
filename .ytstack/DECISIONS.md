@@ -1106,3 +1106,20 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - The reviewer's GitHub login is printed, not compared with the author: agents usually share one account. `by:` still tells reviewer from author.
 
 **Supersedes:** None. Extends the 2026-11-13 risk-gate entry (M025): the review records may live on the host.
+
+## 2026-11-15: A plan outside `.ytstack/` is detected by a script and mapped by the agent, after one question (M031-S05, issue #54)
+
+**Context:** In meinKontext the v2 plan lives in `plans/*.md`: boards of work packages (`| Done | ID | Deliverable | ... |`) and checklists under each package, 80 files. `ytstack-frontier` reads only milestones and slices in `.ytstack/`, saw nothing, and the lanes were tracked by hand. Measured read-only on 2026-11-15: 23 files hold work rows, 1467 open and 462 done; most open rows are unticked checklists under packages whose board row is done.
+
+**Options considered:**
+- A) Detect only and leave the plan where it is (a pointer in the backlog, as `adopt-brownfield` already did).
+- B) A script that detects and also writes the milestones and slices from the rows.
+- C) A script that detects and lists the rows with exact pointers; the agent maps them by written rules after the user said yes.
+
+**Chose:** C. `bin/ytstack-plans` (`scan`, `rows`) is read-only. `reconcile` and `adopt-brownfield` ask one question per directory (map all / map the files I name / leave it) and record the answer as `external_plans: <dir> mapped|declined <date>` in `PREFERENCES.md`. The rules are in `docs/ux/external-plans.md`. Thresholds: a file is a plan file from 3 work rows, a directory is offered from 10 open rows.
+
+**Reason:** Detection is mechanical and must be cheap and testable; it is. The mapping is not: whether a board row or a checklist item is the unit, whether a done package's unticked checklist is work, and which dependency is real need judgment the rows do not carry, so a script would either flood the frontier with finished work or need the same judgment encoded as heuristics. A (detect only) leaves the reported problem in place.
+
+**How to apply:** Never write a file under the external plan's directory. Map open rows only, one milestone per plan file (per section above 12 slices), the board as authority when there is one, `**Blocked by:**` only for a dependency on another mapped open row (anything else blocks the frontier for good). Every slice carries `**Source:** path:line (row id, read date)`. The recommendation is A up to five plan files with open rows, B above. `STATE.md` is not changed.
+
+**Supersedes:** None. Narrows the `adopt-brownfield` backlog slot: a large plan directory gets the mapping offer instead of the backlog pointer.

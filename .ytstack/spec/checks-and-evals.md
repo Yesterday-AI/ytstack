@@ -15,6 +15,7 @@ paths:
   - bin/ytstack-runtime
   - bin/ytstack-signals
   - bin/ytstack-upkeep
+  - bin/ytstack-plans
   - tests/**
   - evals/**
   - docs/recipes/**
@@ -26,6 +27,7 @@ sources:
   - docs/ux/review-policy-format.md
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
+  - docs/ux/external-plans.md
 verified_at: aa66c09
 ---
 
@@ -86,6 +88,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **The coordinator scripts** (formats and rules: `docs/ux/coordinator-format.md`; each has a suite of the same name under `tests/`)
 
 - `bin/ytstack-frontier`: `list` prints lane, state and detail per slice (done, claimed, blocked, ready); `claim` refuses a held lane and names the holder; `claim`, `set` and `release` change one row of `LANES.md` under a lock; `check` validates the file. The lock is the file `LANES.md.lock`, created by the shell under noclobber and not by `mkdir`, which is no lock on Ubuntu 26.04 (see `.ytstack/KNOWLEDGE.md`).
+- `bin/ytstack-plans` (`docs/ux/external-plans.md`): `scan` counts the work rows (task-list items, rows of tables with a status or checkbox column, nothing in a code fence) of `plans/`, `roadmap/` and their variants and prints one line per directory with `verdict=large` from 10 open rows and the answer recorded in `PREFERENCES.md`; exit 0 only for a large directory without an answer. `rows` prints `path:line`, state, id, section and title per row. It writes nothing; the mapping is the agent's (`reconcile`, `adopt-brownfield`).
 - `bin/ytstack-questions`: `new`, `list`, `next`, `ask` (once), `answer` (refused without text under "Answer"), `check`.
 - `bin/ytstack-finish-lane`: one step per call (`leftovers`, `commit`, `push`, `open-pr`, `wait-head`, `body-check`, `gates`, `merge`, `route`); every gate is read from GitHub through `gh` at the moment of the call, and `merge` passes the reviewed commit to the host so that a moved head cannot be merged. `route --lane <ref> [--pr <n>]` reads the lane's worker (the author) and plan from `LANES.md` and runs `bin/ytstack-risk route`; with `--pr` it passes the pull request on, and a lane without a plan file is routed from the host's reviews. `leftovers` and `commit` leave the evidence directory out. Its suite uses a stand-in for `gh` and a local bare remote.
 - `bin/ytstack-handover`: `new` copies `skills/handover-step/template.sh`; `check` is the static verification of a staged script (syntax, unchanged helper block, no raw command, a confirmation of its own before every mutation, no pipe into a shell). The helpers hold the same rule when the script runs: one yes carries one change.
@@ -149,8 +152,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 - The checker does not read `AskUserQuestion` bodies, sentinel-file names or `allowed-tools`. Those parts of `docs/ux/` are enforced by review.
 - An em-dash is a warning, and only `skills/*/SKILL.md` bodies are scanned. Both workflows accept warnings, so an em-dash does not turn CI red. Docs, agents and hooks are not scanned.
 - `bin/ytstack-finish-lane` and `bin/ytstack-watch` have run only against a stand-in for `gh`. Unknown -- their behaviour against GitHub (the JSON shapes, the built-in `--jq`, a merge queue).
-- No workflow runs `claude plugin validate .`, `claude plugin eval`, `tests/run-all.sh --linux`, the checker with `--strict`, or `bin/ytstack-gstack-diff`.
-- The Python Codex tests run on ubuntu only.
+- No workflow runs `claude plugin validate .`, `claude plugin eval`, `tests/run-all.sh --linux`, the checker with `--strict`, or `bin/ytstack-gstack-diff`. The Python Codex tests run on ubuntu only.
 - `.claude/skills/check-consistency/SKILL.md` is a manual audit of README against docs and plugin content. No workflow runs it and the checker does not scan `.claude/skills/`.
 
 ## Where implemented
@@ -159,9 +161,8 @@ Everything that tells a contributor whether a change is acceptable: the static c
 - `bin/ytstack-spec` -- the spec tool; `tests/ytstack-spec.test.sh` pins it.
 - `bin/ytstack-brief` -- brief renderer and report check; `tests/ytstack-brief.test.sh` pins it.
 - `bin/ytstack-frontier`, `bin/ytstack-questions`, `bin/ytstack-finish-lane`, `bin/ytstack-handover`, `bin/ytstack-watch` -- the coordinator scripts, each with `tests/<name>.test.sh`.
-- `bin/ytstack-risk`, `bin/ytstack-review-escapes`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it).
-- `tests/run-all.sh` -- the suite runner. `tests/*.test.sh` -- the suites. `tests/codex_plugin_test.py`, `kimi_plugin_test.py`, `kimi_lifecycle_test.py`, `kimi_live_test.py` -- the Python host tests.
-- `evals/<case>/` -- the eval cases. `evals/README.md` -- how to run them.
+- `bin/ytstack-risk`, `bin/ytstack-review-escapes`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, `bin/ytstack-plans`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it).
+- `tests/run-all.sh` -- the suite runner. `tests/*.test.sh` -- the suites. `tests/codex_plugin_test.py`, `kimi_plugin_test.py`, `kimi_lifecycle_test.py`, `kimi_live_test.py` -- the Python host tests. `evals/<case>/` -- the eval cases. `evals/README.md` -- how to run them.
 - `.github/workflows/ci.yml`, `plugin-check.yml`, `secret-scan.yml`.
 - `docs/ux/skill-structure.md`, `docs/ux/agent-structure.md`, `docs/ux/writing-style.md` -- the contracts the checker enforces in part.
 - `CONTRIBUTING.md` ("Release checklist") -- the checks expected before a release.
@@ -172,8 +173,7 @@ Run from the repository root.
 
 - `bin/ytstack-check` -- pass: exit code 0 or 2 and no `[fail]` line. At `verified_at` it exits 2 with `OK (with 9 warnings)`; every warning is a missing recommended section or a Checklist without "MUST".
 - `bash tests/run-all.sh` -- pass: exit 0, one `PASS` line per file in `tests/*.test.sh`, last line `ALL SUITES PASSED`.
-- `python3 -m unittest discover -s tests -p 'codex*_test.py'` -- pass: last line `OK`.
-- `python3 -m unittest discover -s tests -p 'kimi_plugin_test.py' -v` and the same pattern for `kimi_lifecycle_test.py` -- pass: two and nine tests, each `OK`.
+- `python3 -m unittest discover -s tests -p 'codex*_test.py'` -- pass: last line `OK`. `python3 -m unittest discover -s tests -p 'kimi_plugin_test.py' -v` and the same pattern for `kimi_lifecycle_test.py` -- pass: two and nine tests, each `OK`.
 - `python3 -m unittest discover -s tests -p 'kimi_live_test.py' -v` -- seven native tests on a machine with Kimi; local 2.5.3 and official Linux 2.6.2 each passed without skips at `1b7bfc8`.
 - `claude plugin validate .` -- pass: `✔ Validation passed`, exit 0.
 
@@ -188,7 +188,7 @@ Not covered by these checks: `claude plugin eval` (costs money). `bash tests/run
 - DECISIONS.md -- "2026-11-13: Production findings and incidents are skill work on read-only access; a mitigation is a handover script a person runs (M027)". Source of `bin/ytstack-signals`.
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)". Source of `bin/ytstack-spec` and the two spec checks.
 - DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)". Source of `bin/ytstack-brief`.
-- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)". Source of the five coordinator scripts; the pipeline and the watcher support GitHub through `gh` only. Extended by "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/`; `STANDING.md` stays valid (issue #57)", the source of `check_standing`.
+- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)". Source of the five coordinator scripts; the pipeline and the watcher support GitHub through `gh` only. Extended by "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/`; `STANDING.md` stays valid (issue #57)", the source of `check_standing`, and by "2026-11-15: A plan outside `.ytstack/` is detected by a script and mapped by the agent, after one question (M031-S05, issue #54)", the source of `bin/ytstack-plans`.
 - DECISIONS.md -- "2026-04-23: UX contracts enforced by CI, not convention"
 - DECISIONS.md -- "2026-05-31: Add `kind: reference` skill class (exempt from procedure-section contract)"
 - DECISIONS.md -- "2026-11-07: Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree". Source of the banned shell patterns and the shared-resolver rule in the checker.

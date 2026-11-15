@@ -66,6 +66,22 @@ own_reviewers_on() {
 }
 own_reviewers_off() { rm -rf "$WT/.github" "$WT/.ytstack/spec/REVIEW.md"; rmdir "$WT/.ytstack/spec" 2>/dev/null; return 0; }
 
+# ext_plan_checks: a large plan outside .ytstack/ is offered once (M031-S05);
+# uses $s and $P of the loop below.
+ext_plan_checks() {
+  run_pre "$P" "$WT"
+  has "$s: no plan directory -> nothing offered" "$OUT" "EXTERNAL_PLAN_OFFER: no"
+  mkdir -p "$WT/plans"
+  { printf '# v2 plan\n\n## Steps\n\n'; i=1; while [ $i -le 10 ]; do printf -- '- [ ] step %d\n' $i; i=$((i+1)); done; } > "$WT/plans/v2.md"
+  run_pre "$P" "$WT"
+  has "$s: 10 open rows in plans/ -> offered" "$OUT" "EXTERNAL_PLAN_OFFER: yes"
+  has "$s: the directory line is printed" "$OUT" "dir=plans files=1 open=10 done=0 verdict=large answer=none"
+  printf 'external_plans: plans declined 2026-11-15\n' >> "$WT/.ytstack/PREFERENCES.md"
+  run_pre "$P" "$WT"
+  has "$s: a recorded answer -> not offered again" "$OUT" "EXTERNAL_PLAN_OFFER: no"
+  rm -rf "$WT/plans" "$WT/.ytstack/PREFERENCES.md"
+}
+
 PD="$TMP/plugin-data"
 run_pre() { # run_pre <script> <cwd> -> sets OUT (stdout) and EC (exit code) in this shell
   ( cd "$2" || exit 2; env CLAUDE_PROJECT_DIR="$ELSEWHERE" CLAUDE_PLUGIN_DATA="$PD" HOME="$TMP/home" bash "$1" 2>"$TMP/err" >"$TMP/out" ); EC=$?
@@ -160,7 +176,8 @@ for s in $SKILLS; do
       has "$s: draft stub counted"            "$OUT" "DRAFT_STUBS: 1"
       has "$s: planned-never-sliced counted"  "$OUT" "PLANNED_NEVER_SLICED: 1"
       has "$s: untracked counted (3 new files)" "$OUT" "UNTRACKED: 3"
-      rm -f "$WT/.ytstack/M999-S01-T09-SUMMARY.md" "$WT/.ytstack/M777-ROADMAP.md" "$WT/.ytstack/stray.md" ;;
+      rm -f "$WT/.ytstack/M999-S01-T09-SUMMARY.md" "$WT/.ytstack/M777-ROADMAP.md" "$WT/.ytstack/stray.md"
+      ext_plan_checks ;;
     reassess-roadmap)
       # bounded work (M023): open gates, non-converging reviews, the two numbers
       has "$s: no gates in the bare fixture -> accepted follows work" "$OUT" "SLICES_ACCEPTED: 0"
@@ -209,7 +226,8 @@ for s in $SKILLS; do
       has "$s: brownfield -> candidate README -> PROJECT.md" "$OUT" "README.md (4"
       has "$s: brownfield -> candidate adr -> DECISIONS.md" "$OUT" "docs/adr/ (1 files) -> DECISIONS.md"
       has "$s: brownfield -> README one-liner picked" "$OUT" "README_ONELINER: Acme turns invoices into forecasts."
-      has "$s: brownfield -> no entry doc" "$OUT" "ENTRY_DOC: none" ;;
+      has "$s: brownfield -> no entry doc" "$OUT" "ENTRY_DOC: none"
+      ext_plan_checks ;;
     plan-milestone|reassess-roadmap)
       has "$s: worktree -> TRACKER none when STATE.md has no field" "$OUT" "TRACKER: none"
       cp "$WT/.ytstack/STATE.md" "$TMP/state.bak"; printf 'tracker: linear\n' >> "$WT/.ytstack/STATE.md"
