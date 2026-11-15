@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# ytstack PreToolUse hook on Agent and SendMessage (issue #76, part of #75):
+# in a coordinate session (the marker of hooks/standing-prompt), a dispatch
+# whose prompt carries no rendered brief gets one line of additionalContext:
+# render it with ytstack-brief. It never blocks (no permissionDecision).
+#
+# The marker of a rendered brief is its first line "# Brief: <ref> (<project>)"
+# (skills/spawn-milestone-team/brief-template.md); it counts anywhere in the
+# prompt, at the start of a line. SendMessage is checked only when its text is
+# longer than 400 characters: a short follow-up ("go on", an answer) is no
+# dispatch. Every Agent dispatch is appended to <session dir>/dispatches (epoch
+# per line) for the LANES.md staleness check of hooks/stop.
+#
+# Files only. Fail open: any problem ends silent with exit 0.
+
+set -uo pipefail
+trap '' PIPE
+
+. "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
+
+yt_read_stdin
+SID="${YT_SESSION_ID:-}"
+case "$SID" in ''|.|..|*[!A-Za-z0-9._-]*) exit 0 ;; esac
+SD="$(yt_session_home)/$SID"
+[ -f "$SD/coordinate" ] || exit 0
+JQ=$(yt_jq)
+[ -n "$JQ" ] || exit 0
+TOOL=$(printf '%s' "$YT_STDIN" | "$JQ" -r '.tool_name // ""' 2>/dev/null)
+TEXT=$(printf '%s' "$YT_STDIN" | "$JQ" -r '(.tool_input // {}) | (.prompt // .message // .content // "") | if type == "string" then . else tostring end' 2>/dev/null)
+case "$TOOL" in
+  Agent|Task) printf '%s\n' "$(date +%s)" >> "$SD/dispatches" 2>/dev/null ;;
+  SendMessage) [ "${#TEXT}" -gt 400 ] || exit 0 ;;
+  *) exit 0 ;;
+esac
+case "$TEXT" in "# Brief: "*|*"
+# Brief: "*) exit 0 ;; esac
+
+ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+MSG="ytstack: this $TOOL prompt carries no rendered brief (no line \"# Brief: <ref> (<project>)\"). If it dispatches lane work, the path is: bash \"$ROOT/bin/ytstack-frontier\" claim <lane> --by <worker>, then bash \"$ROOT/bin/ytstack-brief\" render --task|--slice <ref> [--kind ...] as the prompt (ytstack:coordinate Step 5). A hand-written brief skips the scope, the verification, the spec areas and the standing instructions. A lookup that is no lane needs nothing."
+printf '%s' "$MSG" | "$JQ" -Rs '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: .}}' 2>/dev/null
+exit 0

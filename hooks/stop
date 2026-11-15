@@ -17,6 +17,10 @@
 #      branch of a pushed standing PR) added it after that prompt. Local git
 #      only, no network. Afterwards the flags count as handled
 #      (<session dir>/standing-stop), so the same prompts never block twice.
+#   3. Coordinate lints (coordinate mode, issue #76): LANES.md behind the
+#      session's dispatches and reports, the STATE pointer behind the newest
+#      milestone. Said once per session; after YT_LINT_STREAK_N sessions in a
+#      row (default 3) the stop is blocked once. See the section below.
 #
 # Resolution: payload `cwd` via hooks/lib/git-ctx.sh (never CLAUDE_PROJECT_DIR).
 # Respects `stop_hook_active` (set when a previous Stop hook already continued
@@ -64,6 +68,66 @@ Record each one that holds beyond the task at hand, in your own words: bash \"${
 BLOCK_REASON=""
 standing_block
 
+# ---- 3. coordinate lints, escalating (issue #76) ----------------------------------
+# lanes: LANES.md older than the newest lane event minus 5 minutes (a claim comes
+# right before its dispatch), or missing although lanes were dispatched; the
+# events are <session dir>/dispatches (hooks/pre-tool-use-agent) and reports
+# (hooks/standing-prompt). state: the STATE pointer is behind the newest
+# milestone on disk (yt_state_lint W2). Each is said once per session as a
+# systemMessage. A finding present in YT_LINT_STREAK_N sessions in a row (default
+# 3; counter <state base>/repos/<repo key>/coordinate-lints, kind TAB count TAB
+# last session) blocks the stop once in that session.
+LINT_MSG=""
+coordinate_lints() {
+  local sid="${YT_SESSION_ID:-}" sd ytd last lm f kind present n s streak need tmp text
+  case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  sd="$(yt_session_home)/$sid"
+  [ -f "$sd/coordinate" ] || return 0
+  ytd=$(sed -n 1p "$sd/coordinate" 2>/dev/null)
+  [ -n "$ytd" ] && [ -d "$ytd" ] || return 0
+  need="${YT_LINT_STREAK_N:-3}"; case "$need" in ''|*[!0-9]*) need=3 ;; esac
+  yt_git_ctx "$(dirname "$ytd")"
+  streak="$(yt_state_base)/repos/${YT_REPO_KEY:-unknown}/coordinate-lints"
+  mkdir -p "$(dirname "$streak")" 2>/dev/null || return 0
+  last=$(cat "$sd/dispatches" "$sd/reports" 2>/dev/null | awk '$1 + 0 > m { m = $1 + 0 } END { print m + 0 }')
+  yt_state_lint "$ytd" >/dev/null
+  for kind in lanes state; do
+    text=""
+    if [ "$kind" = lanes ] && [ "${last:-0}" -gt 0 ]; then
+      lm=$(yt_mtime "$ytd/LANES.md"); case "$lm" in ''|*[!0-9]*) lm=0 ;; esac
+      if [ "$lm" -eq 0 ]; then
+        text="lanes were dispatched in this session, but $ytd/LANES.md does not exist: claim every lane with ytstack-frontier claim before its dispatch."
+      elif [ $((lm + 300)) -lt "$last" ]; then
+        text="LANES.md last changed $(( (last - lm) / 60 )) min before the newest dispatch or report of this session: ytstack-frontier claim before a dispatch, ytstack-frontier set after a report."
+      fi
+    elif [ "$kind" = state ]; then
+      text=$(printf '%s\n' "${YT_STATE_WARNINGS:-}" | grep 'is behind the newest milestone' | head -1)
+      [ -z "$text" ] || text="STATE lint: $text. Set current_milestone in $ytd/STATE.md."
+    fi
+    present=no; [ -z "$text" ] || present=yes
+    n=$(awk -F '\t' -v k="$kind" '$1 == k { print $2 }' "$streak" 2>/dev/null); case "$n" in ''|*[!0-9]*) n=0 ;; esac
+    s=$(awk -F '\t' -v k="$kind" '$1 == k { print $3 }' "$streak" 2>/dev/null)
+    if [ "$present" = yes ]; then
+      [ "$s" = "$sid" ] || n=$((n + 1))
+    else
+      n=0; rm -f "$sd/lint-warned-$kind" 2>/dev/null
+    fi
+    tmp="$streak.$$"
+    { awk -F '\t' -v k="$kind" '$1 != k' "$streak" 2>/dev/null; printf '%s\t%s\t%s\n' "$kind" "$n" "$sid"; } > "$tmp" 2>/dev/null && mv -f "$tmp" "$streak" 2>/dev/null
+    [ "$present" = yes ] || continue
+    if [ "$n" -ge "$need" ] && [ ! -e "$sd/lint-blocked-$kind" ]; then
+      : > "$sd/lint-blocked-$kind" 2>/dev/null
+      BLOCK_REASON="${BLOCK_REASON:+$BLOCK_REASON
+
+}ytstack: this coordinator warning came in $n sessions in a row and now holds the stop once: $text Fix it now, then stop."
+    elif [ ! -e "$sd/lint-warned-$kind" ]; then
+      : > "$sd/lint-warned-$kind" 2>/dev/null
+      LINT_MSG="${LINT_MSG:+$LINT_MSG }ytstack: $text"
+    fi
+  done
+}
+coordinate_lints
+
 # ---- 1. task reminder --------------------------------------------------------------
 task_msg() {
   local ytd state m s t summary
@@ -85,6 +149,7 @@ task_msg() {
 }
 MSG=""
 task_msg
+[ -z "$LINT_MSG" ] || MSG="${MSG:+$MSG }$LINT_MSG"
 
 [ -n "$MSG$BLOCK_REASON" ] || exit 0
 if [ -n "$JQ" ]; then

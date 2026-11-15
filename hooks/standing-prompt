@@ -14,7 +14,8 @@
 #      appends it to <session dir>/standing-flags for hooks/stop and injects
 #      one line: record it under .ytstack/standing/ before the next dispatch.
 # A prompt that starts with "<" (a task notification, a system message) is no
-# human prompt and is skipped.
+# human prompt and is skipped; a task notification (a worker's report) is
+# appended to <session dir>/reports for hooks/stop.
 #
 # Files and grep only; no command of a standing entry runs here. Fail open:
 # any problem ends silent with exit 0. Output: the UserPromptSubmit
@@ -49,7 +50,12 @@ else
   exit 0
 fi
 PROMPT="${PROMPT:0:4000}"
-case "${PROMPT#"${PROMPT%%[![:space:]]*}"}" in ''|'<'*) exit 0 ;; esac
+# A worker's report arrives as a task notification: a lane event for the
+# LANES.md check of hooks/stop (issue #76), not a human prompt.
+case "${PROMPT#"${PROMPT%%[![:space:]]*}"}" in
+  '<task-notification'*) printf '%s\n' "$(date +%s)" >> "$SD/reports" 2>/dev/null; exit 0 ;;
+  ''|'<'*) exit 0 ;;
+esac
 
 NOW=$(date +%s)
 printf '%s\n' "$NOW" >> "$SD/prompts" 2>/dev/null || exit 0
