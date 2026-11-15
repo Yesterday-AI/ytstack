@@ -300,6 +300,11 @@ EOF
     B_CONTEXT="$B_CONTEXT$NL- \`$(rel "$YT_DIR/KNOWLEDGE.md")\`"
   fi
 
+  # The standing instructions for this kind of lane (issue #74): the active
+  # entries whose scope names lanes (a review: reviewers) or no role at all.
+  x=lane; [ "$lane" != review ] || x=reviewer
+  B_STANDING=$(yt_standing_lines "$YT_DIR" "$x" 0 full)
+
   # What the worker may do: the kind's fixed sentences, then its commit rule,
   # which the Git section repeats. The inserted values are a validated
   # reference and hex digits, so no character of them is special to the
@@ -344,7 +349,7 @@ EOF
   # shortcut: values travel through the environment, so one value is limited to
   # what the OS allows per variable (about 128 KB on Linux); upgrade to
   # temporary files if a plan section ever gets that long.
-  export B_REF B_PROJECT B_OUTCOME B_KIND B_LENS B_FILES B_CONTEXT B_VERIFICATION B_SPEC_IMPACT B_GATES B_BRANCH B_BASE B_COMMIT_RULE B_CONTRACT
+  export B_REF B_PROJECT B_OUTCOME B_KIND B_LENS B_FILES B_CONTEXT B_STANDING B_VERIFICATION B_SPEC_IMPACT B_GATES B_BRANCH B_BASE B_COMMIT_RULE B_CONTRACT
   awk '
     function flush() { if (!drop) printf "%s", buf; buf = ""; drop = 0 }
     /^<!--/ { next }

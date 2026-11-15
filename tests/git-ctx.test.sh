@@ -419,6 +419,26 @@ ST2="$TMP/st2/.ytstack"; mkdir -p "$ST2/standing"
 printf -- '---\ngiven: 2026-11-14T12:25:00Z\nscope: x\nsupersedes:\n---\n\nOld.\n' > "$ST2/standing/20261114T1225Z-old.md"
 printf -- '---\ngiven: 2026-11-14T12:25:30Z\nscope: x\nsupersedes:\n---\n\nNew.\n' > "$ST2/standing/20261114T122530Z-new.md"
 eq "standing: optional seconds sort as :00 (12:25:30 before 12:25)" "20261114T122530Z-new.md 20261114T1225Z-old.md" "$(st "$ST2" | cut -f1 | tr '\n' ' ' | sed 's/ $//')"
+# until, kind end, the fields and the role filter (issues #73, #74)
+ST3="$TMP/st3/.ytstack"; mkdir -p "$ST3/standing"
+printf -- '---\ngiven: 2026-11-14T10:00:00Z\nscope: every lane\nsupersedes:\nuntil: 2026-11-14T12:37Z\n---\n\nHold merges. Until the test ends.\n' > "$ST3/standing/20261114T1000Z-hold.md"
+printf -- '---\ngiven: 2026-11-14T10:10:00Z\nscope: the coordinator\nsupersedes:\nuntil-condition: PR 1879 merged\ncheck: test -f LANES.md\n---\n\n- Keep LANES.md current!\n' > "$ST3/standing/20261114T1010Z-lanes.md"
+printf -- '---\ngiven: 2026-11-14T10:20:00Z\nscope: every reviewer\nsupersedes:\n---\n\nName the commit.\n' > "$ST3/standing/20261114T1020Z-commit.md"
+printf -- '---\ngiven: 2026-11-14T10:30:00Z\nscope: every reviewer\nsupersedes: 20261114T1020Z-commit\nkind: end\n---\n\nEnded: x.\n' > "$ST3/standing/20261114T1030Z-end-commit.md"
+printf -- '---\ngiven: 2026-11-14T10:40:00Z\nscope: this project\nsupersedes:\n---\n\nEnglish in code.\n' > "$ST3/standing/20261114T1040Z-english.md"
+sf() { ( . "$LIB"; yt_standing_fields "$@" ); }
+eq "standing fields: before until -> active, end entry and its target gone" \
+  "20261114T1040Z-english.md|20261114T1010Z-lanes.md|20261114T1000Z-hold.md" "$(sf "$ST3" 20261114120000 | cut -f1 | tr '\n' '|' | sed 's/|$//')"
+eq "standing fields: until passed -> expired" "expired" "$(sf "$ST3" 20261114130000 | awk -F '\t' '$1 ~ /hold/ { print $9 }')"
+eq "standing fields: until exactly now -> expired" "expired" "$(sf "$ST3" 20261114123700 | awk -F '\t' '$1 ~ /hold/ { print $9 }')"
+eq "standing fields: the keys and the first sentence" "the coordinator|-|PR 1879 merged|-|test -f LANES.md|Keep LANES.md current!|active" \
+  "$(sf "$ST3" 20261114120000 | awk -F '\t' '$1 ~ /lanes/ { print $3 "|" $4 "|" $5 "|" $6 "|" $7 "|" $8 "|" $9 }')"
+eq "standing: yt_standing skips the expired entry" "20261114T1040Z-english.md 20261114T1010Z-lanes.md" "$(st "$ST3" | cut -f1 | tr '\n' ' ' | sed 's/ $//')"
+sl() { ( . "$LIB"; yt_standing_lines "$@" ); }
+eq "standing lines: coordinator sees all active" 2 "$(sl "$ST3" coordinator | grep -c .)"
+eq "standing lines: lane sees the role-free entry only" "- 20261114T1040Z-english (this project): English in code." "$(sl "$ST3" lane)"
+eq "standing lines: the cap leaves a pointer" "- ... 1 more: bin/ytstack-standing list" "$(sl "$ST3" coordinator 1 | sed -n 2p)"
+eq "session home follows XDG_STATE_HOME" "/x/ytstack/sessions" "$( . "$LIB"; XDG_STATE_HOME=/x yt_session_home )"
 
 echo
 echo "$PASS passed, $FAIL failed"

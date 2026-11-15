@@ -22,6 +22,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); echo "  ok   - $1"; }
+eq()  { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected '$2' got '$3'"; fi; }
 bad() { FAIL=$((FAIL+1)); echo "  FAIL - $1${2:+ ($2)}"; }
 has() { case "$2" in *"$3"*) ok "$1";; *) bad "$1" "missing '$3'";; esac; }
 
@@ -106,10 +107,16 @@ upstream_checks() {
 
 PD="$TMP/plugin-data"
 run_pre() { # run_pre <script> <cwd> -> sets OUT (stdout) and EC (exit code) in this shell
-  ( cd "$2" || exit 2; env CLAUDE_PROJECT_DIR="$ELSEWHERE" CLAUDE_PLUGIN_DATA="$PD" HOME="$TMP/home" bash "$1" 2>"$TMP/err" >"$TMP/out" ); EC=$?
+  ( cd "$2" || exit 2; env CLAUDE_PROJECT_DIR="$ELSEWHERE" CLAUDE_PLUGIN_DATA="${PRE_PD-$PD}" HOME="$TMP/home" XDG_STATE_HOME="$TMP/xdg" CLAUDE_CODE_SESSION_ID="${PRE_SID:-}" bash "$1" 2>"$TMP/err" >"$TMP/out" ); EC=$?
   OUT=$(cat "$TMP/out")
 }
 mkdir -p "$TMP/home"
+# seed_home_handoff: an automatic handoff where Claude Code's hooks write it (their
+# CLAUDE_PLUGIN_DATA, ~/.claude/plugins/data/<plugin id>), which the Bash tool does not see.
+HPD="$TMP/home/.claude/plugins/data/ytstack-ytstack"
+seed_home_handoff() {
+  printf '{"session_id":"seedhome","cwd":%s}' "$(printf '%s' "$MAIN" | jq -Rs .)" | ( cd "$ELSEWHERE" && HOME="$TMP/home" CLAUDE_PLUGIN_DATA="$HPD" bash "$ROOT/hooks/pre-compact" >/dev/null 2>&1 )
+}
 
 # Seed one automatic handoff for the main fixture (what pre-compact does on compaction)
 printf -- '---\nkind: handoff\nevent: user-triggered\ntimestamp: 2026-01-01T00:00:00Z\n---\n# manual\n' > "$MAIN/.ytstack/HANDOFF.md"
@@ -297,19 +304,39 @@ for s in $SKILLS; do
       has "$s: task-ref commit -> COMMITS_SOURCE task-ref" "$OUT" "COMMITS_SOURCE: task-ref"
       case "$OUT" in *"BASE_SHA: none"*) bad "$s: task-ref commit -> BASE_SHA resolved";; *) ok "$s: task-ref commit -> BASE_SHA resolved";; esac ;;
     coordinate)
+      # The Bash tool has no CLAUDE_PLUGIN_DATA: the handoff the hook wrote there is found anyway.
+      seed_home_handoff
+      PRE_PD="" run_pre "$P" "$MAIN"
+      has "$s: no CLAUDE_PLUGIN_DATA in the shell -> the hook's handoff is found" "$OUT" "HANDOFF_AUTO: 20"
+      has "$s: and its path" "$OUT" "($HPD/repos/"
+      rm -rf "$TMP/home/.claude"
+      run_pre "$P" "$WT"
+      # the operating checklist (issue #76): printed from docs/ux/coordinator-format.md
+      has "$s: prints the operating checklist" "$OUT" "OPERATING_CHECKLIST_BEGIN
+Coordinator operating checklist"
       # standing instructions, one file per entry (issue #57); STANDING.md alone stays valid
       has "$s: no standing directory" "$OUT" "STANDING: no"
-      has "$s: and no entries" "$OUT" "no standing directory"
+      has "$s: and no entries" "$OUT" "active (0):"
       mkdir -p "$WT/.ytstack/standing"
       printf -- '---\ngiven: 2026-11-14T12:25:00Z\nscope: every author\nsupersedes:\n---\n\nAt most 10.\n' > "$WT/.ytstack/standing/20261114T1225Z-at-most-ten.md"
       printf -- '---\ngiven: 2026-11-14T14:36:00Z\nscope: every lane\nsupersedes: 20261114T1225Z-at-most-ten\n---\n\nAt most 15.\n' > "$WT/.ytstack/standing/20261114T1436Z-at-most-fifteen.md"
       printf '# Standing instructions\n\nSee standing/.\n' > "$WT/.ytstack/STANDING.md"
       run_pre "$P" "$WT"
       has "$s: STANDING.md as an index is still named" "$OUT" "STANDING: yes"
-      has "$s: the entry in force is listed" "$OUT" "STANDING_ENTRIES_BEGIN
-20261114T1436Z-at-most-fifteen.md	2026-11-14T14:36:00Z	every lane
-STANDING_ENTRIES_END"
+      has "$s: the newest entry and its age come first" "$OUT" "STANDING_ENTRIES_BEGIN
+newest entry: 20261114T1436Z-at-most-fifteen ("
+      has "$s: the entry in force is listed with its text" "$OUT" "active (1):
+- 20261114T1436Z-at-most-fifteen (every lane): At most 15."
+      case "$OUT" in *"- 20261114T1225Z-at-most-ten"*) bad "$s: the superseded entry is not listed";; *) ok "$s: the superseded entry is not listed";; esac
       rm -rf "$WT/.ytstack/standing" "$WT/.ytstack/STANDING.md"
+      # coordinate mode (issue #72): the preamble writes the session marker the standing hooks read
+      has "$s: no session id -> no marker" "$OUT" "COORDINATE_MARKER: none"
+      PRE_SID=pre-1 run_pre "$P" "$WT"
+      has "$s: session id -> marker written" "$OUT" "COORDINATE_MARKER: written"
+      eq "$s: the marker names the resolved .ytstack" "$WT/.ytstack" "$(sed -n 1p "$TMP/xdg/ytstack/sessions/pre-1/coordinate" 2>/dev/null)"
+      _K=$( . "$ROOT/hooks/lib/git-ctx.sh"; yt_git_ctx "$WT"; printf '%s' "$YT_REPO_KEY" )
+      eq "$s: and the repository key on line 2" "$_K" "$(sed -n 2p "$TMP/xdg/ytstack/sessions/pre-1/coordinate" 2>/dev/null)"
+      rm -rf "$TMP/xdg"
       # the factory tools (M031, issue #54): Step 7 skips by what the project switched on
       run_pre "$P" "$WT"
       # issue #85: the bins of the running version, canonical, for "$YT_BIN/ytstack-<name>"
@@ -467,7 +494,12 @@ LESSONS_END"
       has "$s: main -> latest auto handoff from out-of-tree state" "$OUT" "LATEST_AUTO_HANDOFF: $PD/repos/"
       has "$s: main -> auto handoff timestamp read" "$OUT" "AUTO_HANDOFF_TS: 20"
       has "$s: main -> manual handoff event read" "$OUT" "MANUAL_HANDOFF_EVENT: user-triggered"
-      has "$s: main -> manual handoff timestamp read" "$OUT" "MANUAL_HANDOFF_TS: 2026-01-01T00:00:00Z" ;;
+      has "$s: main -> manual handoff timestamp read" "$OUT" "MANUAL_HANDOFF_TS: 2026-01-01T00:00:00Z"
+      # The Bash tool has no CLAUDE_PLUGIN_DATA: the handoff the hook wrote there is found anyway.
+      seed_home_handoff
+      PRE_PD="" run_pre "$P" "$MAIN"
+      has "$s: no CLAUDE_PLUGIN_DATA in the shell -> the hook's handoff is found" "$OUT" "LATEST_AUTO_HANDOFF: $HPD/repos/"
+      rm -rf "$TMP/home/.claude" ;;
   esac
 done
 
