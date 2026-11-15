@@ -340,7 +340,7 @@ Without `--permission-mode acceptEdits`, Write operations stall on permission di
 
 Type `/ytstack:<skill-name>` only when you want to override the auto-pick, skip a step, or explicitly re-run one (e.g. `/ytstack:plan-ceo-review` to re-challenge a milestone you already sliced). The using-ytstack directive loaded at session start enforces this model via the Skill tool.
 
-See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example written in the same natural-language style.
+See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example written in the same natural-language style. Setting up risk routing, the PR watch, the release watch, signals and the upkeep run: [Setting up the factory tools](./QUICKSTART.md#setting-up-the-factory-tools). After `claude plugin update ytstack`: [Upgrading from 0.x](./QUICKSTART.md#upgrading-from-0x).
 
 ## Dialing ceremony up or down
 
@@ -364,6 +364,7 @@ Milestone states are data, not prose: `planned`, `in-progress`, `done`, `dropped
 | File or tool | What it is for |
 | --- | --- |
 | `.ytstack/LANES.md`, `bin/ytstack-frontier` | one row per delegated lane; slice plans name what blocks them; the frontier is what is open, unblocked and unclaimed; a claim precedes every dispatch, so no lane starts twice |
+| `bin/ytstack-plans` | a plan kept outside `.ytstack/` (`plans/*.md` tables or checklists) is invisible to the frontier; `scan` finds one with at least 10 open rows, and `ytstack:reconcile` (or `adopt-brownfield`) asks once whether to map its open rows into milestones and slices, each with a pointer back to its row. The plan files are never written ([`docs/ux/external-plans.md`](./docs/ux/external-plans.md)) |
 | `bin/ytstack-finish-lane`, `ytstack:finish-lane` | a reported lane becomes a merged pull request: commit what it left, push, wait until the host shows the head, review pinned to that commit, the required lenses, the route, gates read from the host, merge at the reviewed commit, then the release watch (GitHub through `gh`; who merges is `merge_by`) |
 | `bin/ytstack-risk` | whether a change may merge without a person: `floor` from the diff, `route` from the review records, the ceilings of the touched areas and the lenses, `check` for `REVIEW.md`, `manifest` for the screenshots of a visual review |
 | `bin/ytstack-review-escapes` | for a project with review agents of its own ("Own reviewers" in `REVIEW.md`): which findings a review bot made on a pull request were fixed and which own role reported them first; a fixed finding no role caught is an escape (exit 10). Read-only through `gh` |
@@ -375,7 +376,9 @@ Milestone states are data, not prose: `planned`, `in-progress`, `done`, `dropped
 | `ytstack:lane-retro` | samples finished lanes; a mechanical mistake becomes a check that replaces an instruction line |
 | `bin/ytstack-upkeep` | one read-only run over `.ytstack/` that lists what needs a look (spec, STATE, gates, questions, lanes, runtime, review policy); `--question` leaves one question file. On a schedule: [`docs/recipes/recurring-upkeep.md`](./docs/recipes/recurring-upkeep.md) |
 
-A status never states a pull request's state from memory: host facts are read fresh and carry their read time. Nothing in this group has run against a real host or in a real multi-lane run yet; the suites use a stand-in for `gh` and fixture targets, and no eval or session has yet merged a change without a person or watched a real release.
+A status never states a pull request's state from memory: host facts are read fresh and carry their read time. How to switch these tools on, step by step with a check each: [QUICKSTART, "Setting up the factory tools"](./QUICKSTART.md#setting-up-the-factory-tools).
+
+What has run where: the suites use a stand-in for `gh` and fixture targets. Against a real host, `bin/ytstack-review-escapes` has read 30 merged pull requests of one repository (read-only, M030). No eval or session has yet merged a change without a person, and none has run `ytstack-watch release` against a real target. The nearest field case: on 2026-11-14 a coordinator on a large repository dispatched two production releases and did the post-check of each by hand (issue #54), the steps a "Release" section and `ytstack-watch release` are meant to take over.
 
 ## Where ytstack writes
 
@@ -432,7 +435,7 @@ ytstack/
 ├── kimi/                        Kimi runtime adapter
 ├── tools/pr-watch/              PR watch engine (Python 3.9+, stdlib only), driven by bin/ytstack-pr-watch
 ├── skills/                      39 skill packages shared by all hosts
-├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-brief (brief for a dispatched worker, report check), ytstack-frontier (lanes, claims, what may start), ytstack-finish-lane (a lane to a merged pull request), ytstack-risk (whether a change merges without a person), ytstack-review-escapes (review-bot findings the own reviewers missed), ytstack-runtime (the product per worktree, RUNTIME.md), ytstack-handover (staged script for a human-only step), ytstack-questions (questions for the human), ytstack-watch (pull request changes, release watch), ytstack-upkeep (what needs a look, for a schedule), ytstack-signals (production findings, incident records), ytstack-gstack-diff (upstream changes of the adapted gstack skills), ytstack-status (status line segment), ytstack-pr-watch (opt-in PR watch), ytstack-codex, ytstack-kimi, dev-reinstall
+├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-brief (brief for a dispatched worker, report check), ytstack-frontier (lanes, claims, what may start), ytstack-plans (a plan outside .ytstack/ the frontier cannot see), ytstack-finish-lane (a lane to a merged pull request), ytstack-risk (whether a change merges without a person), ytstack-review-escapes (review-bot findings the own reviewers missed), ytstack-runtime (the product per worktree, RUNTIME.md), ytstack-handover (staged script for a human-only step), ytstack-questions (questions for the human), ytstack-watch (pull request changes, release watch), ytstack-upkeep (what needs a look, for a schedule), ytstack-signals (production findings, incident records), ytstack-gstack-diff (upstream changes of the adapted gstack skills), ytstack-status (status line segment), ytstack-pr-watch (opt-in PR watch), ytstack-codex, ytstack-kimi, dev-reinstall
 ├── tests/                       27 shell test suites + run-all.sh (--linux via Docker), pr_watch/ (unittest), Kimi unittest suites
 ├── vendor/                      read-only subtree: superpowers v7.0.2 (the six gstack skills are adapted under skills/, not vendored)
 ├── docs/

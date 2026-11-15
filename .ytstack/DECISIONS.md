@@ -1084,3 +1084,63 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - `bin/ytstack-check --standing [<project dir>]` validates the names, the frontmatter and that every `supersedes` names an earlier existing entry; the full run checks the plugin's own directory.
 
 **Supersedes:** None. Extends the 2026-11-13 coordinator-mode entry: `STANDING.md` is no longer the only place for standing instructions.
+
+---
+
+## 2026-11-15: The risk route reads the review round from the review on the host first; the plan is the fallback (M031-S02, issue #54)
+
+**Context:** `bin/ytstack-risk route` read the round line only from the plan file in the coordinating checkout. In context-mcp (#1715) agents may not write in the main checkout, and a ruleset counts only reviews on the current head. The round line had to be committed on the pull request's branch; that moved the head, the host no longer counted the review, and the plan in the main checkout still had no line. Every route ended `person`, which defeats `merge_by: risk`.
+
+**Options considered:**
+- A) Read the round from the review on the host: its `commit_id`, its author and the record line in its body.
+- B) Keep round lines outside the branch in a git notes ref.
+- C) Keep the plan as the only source and tell such projects to accept `person`.
+
+**Chose:** A, with the plan as the fallback per kind of record (round, each lens). `route --pr N` reads the pull request's reviews once. A review counts when it is submitted, not dismissed, and by an owner, member or collaborator (`author_association`). The newest record line on the host wins over the plan. The line must name the commit the host tied its review to; validity for the head is computed from that commit. A review in the state `CHANGES_REQUESTED`, a line naming another commit and a failed read route to a person.
+
+**Reason:** `finish-lane` already posted every review on the reviewed head, so the record was on the host and only the reader was missing. The host, not a text field, says which commit was reviewed. Notes refs (B) need a push of their own, are not fetched by default and would have needed a writer in every skill. The write-access filter keeps a stranger's review on a public pull request from approving a route.
+
+**How to apply:**
+- `finish-lane` and `code-review` put the round line, and the lens lines, at the end of the review body on the pull request; the plan gets the same line where the session may write, never through a commit on the lane's branch for the route's sake.
+- `finish-lane` routes with `--pr {N}`; on a host other than GitHub the plan stays the only record.
+- The reviewer's GitHub login is printed, not compared with the author: agents usually share one account. `by:` still tells reviewer from author.
+- Added after the PR #66 review: `author_association` is only a prefilter (`MEMBER` is any organization member, `COLLABORATOR` includes read and triage). For each reviewer whose record line is used, `route` reads `gh api repos/<repo>/collaborators/<login>/permission --jq .permission` once and needs `admin`, `maintain` or `write`; another permission or a failed read routes to a person. A reviewer whose newest review requests changes routes to a person also when that review has no record line.
+
+**Supersedes:** None. Extends the 2026-11-13 risk-gate entry (M025): the review records may live on the host.
+
+## 2026-11-15: A plan outside `.ytstack/` is detected by a script and mapped by the agent, after one question (M031-S05, issue #54)
+
+**Context:** In meinKontext the v2 plan lives in `plans/*.md`: boards of work packages (`| Done | ID | Deliverable | ... |`) and checklists under each package, 80 files. `ytstack-frontier` reads only milestones and slices in `.ytstack/`, saw nothing, and the lanes were tracked by hand. Measured read-only on 2026-11-15: 23 files hold work rows, 1467 open and 462 done; most open rows are unticked checklists under packages whose board row is done.
+
+**Options considered:**
+- A) Detect only and leave the plan where it is (a pointer in the backlog, as `adopt-brownfield` already did).
+- B) A script that detects and also writes the milestones and slices from the rows.
+- C) A script that detects and lists the rows with exact pointers; the agent maps them by written rules after the user said yes.
+
+**Chose:** C. `bin/ytstack-plans` (`scan`, `rows`) is read-only. `reconcile` and `adopt-brownfield` ask one question per directory (map all / map the files I name / leave it) and record the answer as `external_plans: <dir> mapped|declined <date>` in `PREFERENCES.md`. The rules are in `docs/ux/external-plans.md`. Thresholds: a file is a plan file from 3 work rows, a directory is offered from 10 open rows.
+
+**Reason:** Detection is mechanical and must be cheap and testable; it is. The mapping is not: whether a board row or a checklist item is the unit, whether a done package's unticked checklist is work, and which dependency is real need judgment the rows do not carry, so a script would either flood the frontier with finished work or need the same judgment encoded as heuristics. A (detect only) leaves the reported problem in place.
+
+**How to apply:** Never write a file under the external plan's directory. Map open rows only, one milestone per plan file (per section above 12 slices), the board as authority when there is one, `**Blocked by:**` only for a dependency on another mapped open row (anything else blocks the frontier for good). Every slice carries `**Source:** path:line (row id, read date)`. The recommendation is A up to five plan files with open rows, B above. `STATE.md` is not changed.
+
+**Supersedes:** None. Narrows the `adopt-brownfield` backlog slot: a large plan directory gets the mapping offer instead of the backlog pointer.
+
+## 2026-11-15: SessionStart stays read-only; factory-tool notices are said on startup only, the plugin version is recorded by a prompt hook (M031-S03)
+
+**Context:** Issue #54: a coordinator session in context-mcp hand-built a PR babysitter, a review tiering and a release post-check that ytstack already shipped, because nothing told it the tools were off. Issue #61: a session started on 0.7.0 followed the 0.7.0 skill text after the plugin went to 0.9.2. Both need a notice "once per session", and the version notice needs the version the session started on. `session-start` has a read-only contract (2026-11-11 status-line entry: a hook-maintained file "would break the read-only contract of SessionStart").
+
+**Options considered:**
+- A) `session-start` writes the version and a "said" marker into the per-session state directory.
+- B) `session-start` stays read-only and shows the factory lines only when the payload `source` is `startup` or `clear`; a new UserPromptSubmit hook records the version on the session's first prompt and compares on every prompt, with a marker per installed version.
+- C) No record: compare the hook's own plugin root with the installed one.
+
+**Chose:** B. The factory lines come from `yt_factory_notices` in `hooks/lib/git-ctx.sh`, which `bin/ytstack-upkeep` also calls (listed, never counted). `hooks/version-notice` keeps `plugin-version` and `notified-<version>` under `<state base>/sessions/<session-id>/`, keyed by the session only. Explicit choices stay silent: `merge_by: human` or `coordinator`, `pr_watch=off`.
+
+**Reason:** "Once per session" for the factory lines needs no file: a session starts once, and resume and compaction carry a source of their own. A plugin update happens while a session runs, without any SessionStart, so only a prompt hook sees it in time. C misses the `--resume` case, where a new process runs from the new root while the transcript holds the old skill text. Keying the record by session and not by checkout keeps it when the session moves into a worktree. Upkeep must not count a setting: a scheduled run would raise the same question every time.
+
+**How to apply:**
+- A new notice for a session start goes into `yt_factory_notices`, local files only, one line, silent when the project does not use the tool.
+- No hook calls GitHub for a notice; the PR watch heartbeat is read from its local state.
+- `session-start` writes nothing; state a hook needs across events is written by a hook that already writes (here `version-notice`).
+
+**Supersedes:** None.

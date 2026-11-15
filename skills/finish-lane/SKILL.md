@@ -3,7 +3,7 @@ name: finish-lane
 description: "Takes a delegated lane from the worker's report to a pull request merged at the reviewed commit, with every gate read from the host. Use in the coordinating session when a lane reported and its work has to become a merged pull request, or when the user says finish the lane, land this lane, get this lane merged. Not for the session's own branch (finish-branch), not for a release (ship) and not for the worker of the lane."
 metadata:
   tier: task
-  version: 0.3.1
+  version: 0.4.0
 allowed-tools:
   - Bash
   - Read
@@ -39,9 +39,9 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 4. **Push and open the pull request** -- `push`, a body file, `open-pr`
 5. **Wait for the head, check the body** -- `wait-head`, `body-check`, one read of the body against the diff
 6. **Commission the review** -- a `review` lane pinned to that commit, in a fresh context; at most two rounds
-7. **Post the review, record head and round** -- on the pull request, then `ytstack-frontier set`, then the round line with the reviewer's class in the lane's plan
-8. **Dispatch the required lenses** (only if `floor` names some) -- one fresh reviewer per lens with the lens brief, one lens line each in the lane's plan
-9. **Read the route** -- `route`: `unattended`, or `person` with its reasons
+7. **Post the review, record head and round** -- on the pull request with the round line in its body, then `ytstack-frontier set`, then the same line in the lane's plan where you may write
+8. **Dispatch the required lenses** (only if `floor` names some) -- one fresh reviewer per lens with the lens brief, the lens lines posted as a review and in the lane's plan
+9. **Read the route** -- `route --pr`: `unattended`, or `person` with its reasons
 10. **Read the gates** -- `gates`; a failing gate is handled by what it is
 11. **Merge or hand over** -- `MERGE_BY: risk` with route `unattended`, or `coordinator`: `merge`; every other case: stop with the command and the reasons
 12. **Watch the release** (only after a merge, by anyone) -- `ytstack-watch release --commit <merge commit>`; the receipt goes into the report; `not arrived` and `unhealthy` go to the person at once
@@ -271,20 +271,24 @@ The report ends with the class of the change, which the brief asks for: `Risk:`,
 
 ### Step 7: Post the review, record head and round
 
-Write the review to a file: first line `Verdict: approved` or `Verdict: changes requested`, then `Reviewed commit: {SHA}` and `Round: {n}`, then the findings as the reviewer reported them. Post it as a review, not as a comment, so that the host ties it to the head it was submitted on:
+First write the round line, with seven-character commits:
+
+```
+- Round {n}: {base}..{SHA} -- {approved | changes requested}; blocking: {n}; follow-ups: {n}; risk: {low | normal | high}; invariants: {none | area: the rule}; by: review-{REF}
+```
+
+`{base}` is `{BASE_SHA}` in round 1 and the reviewed head of round 1 afterwards. `risk` and `invariants` are the reviewer's `Risk:` and `Invariants touched:` values, unchanged, on this one line: no `;` inside a value, several rules joined with commas. You state no class and you correct none.
+
+Write the review to a file: first line `Verdict: approved` or `Verdict: changes requested`, then `Reviewed commit: {SHA}` and `Round: {n}`, then the findings as the reviewer reported them, and last the round line, at the start of a line of its own. Post it as a review, not as a comment, so that the host ties it to the head it was submitted on:
 
 ```bash
 gh pr review {N} --comment --body-file {REVIEW_FILE}
 "${CLAUDE_SKILL_DIR}/../../bin/ytstack-frontier" set {REF} --head {SHA} --round {n} --status in-review
 ```
 
-Then append the round to the lane's plan in this checkout: the slice plan `{REF}-PLAN.md` for a slice lane, the task plan for a task lane. It goes under `## Review` (add the heading on the first round), with seven-character commits:
+The review on the host is the record the route reads first (`docs/ux/review-policy-format.md`, "Records on the host"): the host ties it to `{SHA}` and names who posted it, and nothing has to be committed on the lane's branch for it. Committing a round line there would move the head away from the review, and a host rule that counts only reviews on the current head would no longer see it.
 
-```
-- Round {n}: {base}..{SHA} -- {approved | changes requested}; blocking: {n}; follow-ups: {n}; risk: {low | normal | high}; invariants: {none | area: the rule}; by: review-{REF}
-```
-
-`{base}` is `{BASE_SHA}` in round 1 and the reviewed head of round 1 afterwards. `risk` and `invariants` are the reviewer's `Risk:` and `Invariants touched:` values, unchanged, on this one line: no `;` inside a value, several rules joined with commas. You state no class and you correct none. A lane without a plan file has no place for the line: say so in the report.
+Then append the same line to the lane's plan in this checkout, when you may write there: the slice plan `{REF}-PLAN.md` for a slice lane, the task plan for a task lane, under `## Review` (add the heading on the first round). Never commit it on the lane's branch for the route's sake. A lane without a plan file, or a checkout you may not write in, keeps the record on the host only: say so in the report.
 
 `changes requested`: the findings go to the worker through whoever dispatches (same branch, same pull request). When the fix is reported, start again at Step 3; that is round 2. Do not read the route or the gates on a head with open findings.
 
@@ -308,13 +312,15 @@ Render the brief of each lens. Never write it by hand:
 
 Each brief is the prompt of one `Agent` call in a fresh context, named `{lens}-{REF}`. A lens reviewer is a lane of kind `review`: it is never the lane's worker, it does not share a context with the reviewer of the round, and it gets nothing beyond the brief. The lenses of one lane go out in one message. A lens with visual evidence loads `ytstack:visual-review`: it starts the product itself at `{SHA}`, in a worktree of its own, and takes its own screenshots. You take none for it and you hand it none; images from the worker's report stay out of the brief. Dispatch it where the product can be started and a browser tool exists.
 
-Check each report with `bin/ytstack-brief check`. It carries `Lens: {lens} -- pass | fail | not run` and `Evidence:`. Record one line per lens in the lane's plan under `## Review`, below the round line, with the seven-character commit and the report's values unchanged:
+Check each report with `bin/ytstack-brief check`. It carries `Lens: {lens} -- pass | fail | not run` and `Evidence:`. Write one line per lens with the seven-character commit and the report's values unchanged:
 
 ```
 - Lens {lens}: {SHA} -- {pass | fail | not run}; by: {lens}-{REF}; evidence: {directory} ({n} images)
 ```
 
 `evidence: none` for a lens that stored none. The directory of a visual lens is relative to the root of the main checkout of the repository; `route` reads it there.
+
+Post the lens lines as one more review on the pull request (`gh pr review {N} --comment --body-file {LENS_FILE}`), and append them to the lane's plan under `## Review`, below the round line, where Step 7 wrote it. This review is now the newest on `{SHA}`, and the gate of Step 10 matches its first line: `Verdict: approved` when no lens failed, `Verdict: changes requested` when one did. Then `Reviewed commit: {SHA}`, then the lens lines, each at the start of a line.
 
 | Verdict | What happens |
 |---|---|
@@ -324,17 +330,17 @@ Check each report with `bin/ytstack-brief check`. It carries `Lens: {lens} -- pa
 
 ### Step 9: Read the route
 
-Whether a person has to look at this change is decided per change, from its risk (`docs/ux/review-policy-format.md`, "The route"). Run this in the checkout of this session, without `-C {WT}`: it reads `LANES.md` and the lane's plan here.
+Whether a person has to look at this change is decided per change, from its risk (`docs/ux/review-policy-format.md`, "The route"). Run this in the checkout of this session, without `-C {WT}`: it reads `LANES.md` and the lane's plan here, and the reviews of the pull request on the host.
 
 ```bash
-"${CLAUDE_SKILL_DIR}/../../bin/ytstack-finish-lane" route --lane {REF} --base {BASE_SHA} --head {SHA}
+"${CLAUDE_SKILL_DIR}/../../bin/ytstack-finish-lane" route --lane {REF} --base {BASE_SHA} --head {SHA} --pr {N}
 ```
 
-The first line says what it read: the lane, the worker of its row as the author, the plan. Then come the lines of `bin/ytstack-risk route`: `route: unattended` or `route: person`, `class:`, `ceiling:`, `floor:`, `areas:`, `lenses:`, and one `reason:` per condition that failed. Exit 0 means `unattended`. Everything else, an error included, means "not unattended". Keep the lines for the report.
+On a host other than GitHub leave out `--pr`: the plan is then the only record. The first line says what it read: the lane, the worker of its row as the author, the plan, the pull request. Then come the lines of `bin/ytstack-risk route`: `route: unattended` or `route: person`, `class:`, `ceiling:`, `floor:`, `areas:`, `lenses:`, `round:` (where the round line came from: a review on the host, the plan, or none), and one `reason:` per condition that failed. Exit 0 means `unattended`. Everything else, an error included, means "not unattended". Keep the lines for the report.
 
 `unattended` needs all of this: a floor from the diff that is not `person`; a newest round line that approves, is valid for `{SHA}`, states `risk` and `invariants: none`, and names a reviewer other than the lane's worker; a class within the ceiling (`auto_merge`) of every area the change touches; and for every required lens a newest line that says `pass`, comes from a reviewer other than the worker, is valid for `{SHA}` and, for a visual lens, names an evidence directory whose `MANIFEST` matches its images. A project that declared nothing gets `person` for every change, which is what `merge_by: human` does.
 
-The route speaks about the change, not about the host: the checks, the threads and the head are Step 10. Do not turn a `person` into an `unattended` by editing the plan, the policy or the lanes table. The reasons go to the person who merges. One reason is yours to repair: "the plan has no round line" means Step 7 did not record the round.
+The route speaks about the change, not about the host: the checks, the threads and the head are Step 10. Do not turn a `person` into an `unattended` by editing the plan, the policy or the lanes table. The reasons go to the person who merges. One reason is yours to repair: "no review ... carries a round line" or "the plan has no round line" means Step 7 did not record the round.
 
 ### Step 10: Read the gates
 
@@ -428,7 +434,7 @@ Invoke `ytstack:review-lessons` with the pull request `{N}`. It reads the review
 > - body: {body ok, n paths | corrected: what}
 > - review: round {n}, {verdict}, at {SHA}; risk {the reviewer's class}, invariants {none | what it named}
 > - lenses: {per lens: verdict, reviewer, evidence directory | none required}
-> - route: {unattended | person}, class {class}, ceiling {ceiling}; {the `reason:` lines, or "no reason"}
+> - route: {unattended | person}, class {class}, ceiling {ceiling}, round from {the `round:` value}; {the `reason:` lines, or "no reason"}
 > - gates: {the gate lines}, read {UTC time}
 > - merge: {merged unattended at <sha>: class <class>, ceiling <ceiling>, lenses <lenses> | merged at <sha> (merge_by: coordinator, the route said <route>) | ready, a person merges: <command>; because: <reasons> | not ready: <gate>}
 > - release: {the five receipt lines | watching <merge commit> since <UTC> | not watched: <why> | nothing merged}
@@ -438,7 +444,7 @@ Invoke `ytstack:review-lessons` with the pull request `{N}`. It reads the review
 
 ## What is written down, and what is not
 
-`.ytstack/` receives what this session did and the identifiers it needs to continue: the pull request number, the reviewed commit, the round, the lane's status, and in the lane's plan one line per review round with the class its reviewer stated and one line per lens with its verdict. It never receives the state of the pull request as if it were current. Checks, threads, mergeability and the head live on the host and change without you, so they are read when they matter, and every status that mentions one says when: `read 2026-11-13T10:42Z`. A gate line from an earlier read is quoted with its time or not at all.
+`.ytstack/` receives what this session did and the identifiers it needs to continue: the pull request number, the reviewed commit, the round, the lane's status, and in the lane's plan one line per review round with the class its reviewer stated and one line per lens with its verdict. The same lines live on the host, in the bodies of the reviews, tied to the commit they reviewed; the route reads them there first. It never receives the state of the pull request as if it were current. Checks, threads, mergeability and the head live on the host and change without you, so they are read when they matter, and every status that mentions one says when: `read 2026-11-13T10:42Z`. A gate line from an earlier read is quoted with its time or not at all.
 
 ## Terminal State
 

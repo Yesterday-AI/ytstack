@@ -5,7 +5,7 @@
 #   ytstack-upkeep [-C DIR] [--question] [--open-days N] [--asked-days N] [--lane-hours N]
 #
 # Prints one report for the project of DIR (default: $PWD): a first line with
-# the directory and the UTC time of the read, eight sections with a count and
+# the directory and the UTC time of the read, nine sections with a count and
 # one "  - " line per item, and a last line with the sum.
 #   spec           failures of `ytstack-spec lint` and the areas that
 #                  `ytstack-spec drift` lists, when there is a technical spec
@@ -30,6 +30,10 @@
 #                  days), at most MERGED_LIMIT (50) of them. Cost: one
 #                  `gh pr list` call, plus one `gh repo view` when origin is no
 #                  GitHub URL; a read that fails is an item
+#   factory tools  the factory tools that are off although the project would
+#                  use them (yt_factory_notices in hooks/lib/git-ctx.sh: risk
+#                  routing, PR watch, the "Release" and "Signals" sections of
+#                  RUNTIME.md); listed, not counted: a setting is not a finding
 #
 # It only reads. With --question, and only when something needs a look, it
 # writes ONE question file through `ytstack-questions new` ("Upkeep found N
@@ -95,13 +99,14 @@ fi
 # tool <name> <args...>: one of the sibling scripts on the project, under the
 # bash that runs this one.
 tool() { local t="$1"; shift; "$BASH" "$BIN/$t" -C "$DIR" "$@"; }
-# section <name> <items, one per line> [<note>]: adds the section to the report.
+# section <name> <items, one per line> [<note>] [nocount]: adds the section to
+# the report; with "nocount" its items do not add to the total.
 section() {
   local n
   n=$(printf '%s\n' "$2" | awk 'NF { n++ } END { print n + 0 }')
   REPORT="$REPORT$NL$1: $n${3:+ ($3)}"
   [ "$n" -eq 0 ] || REPORT="$REPORT$NL$(printf '%s\n' "$2" | awk 'NF { print "  - " $0 }')"
-  TOTAL=$((TOTAL + n))
+  [ "${4:-}" = nocount ] || TOTAL=$((TOTAL + n))
 }
 # age <time>: the seconds since a UTC time, with or without seconds in it;
 # nothing for a value that is no time (the check of its own script names that).
@@ -267,6 +272,14 @@ else
   fi
 fi
 section "review checks" "$items" "$note"
+
+# ---- factory tools -----------------------------------------------------------------
+# A factory tool that is off although the project would use it (the same lines
+# the SessionStart injection shows, yt_factory_notices). A setting, not a
+# finding: listed, never counted, so a scheduled run raises no question for it.
+yt_factory_notices "$YT_DIR" "$YT_TOPLEVEL"
+note=""; [ -z "$YT_FACTORY_NOTICES" ] || note="not counted: settings, not findings"
+section "factory tools" "$YT_FACTORY_NOTICES" "$note" nocount
 
 # ---- the report, and the question --------------------------------------------------
 case "$TOTAL" in

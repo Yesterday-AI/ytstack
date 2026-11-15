@@ -36,6 +36,8 @@ for ev in PreToolUse PostToolUse; do
 done
 eq "pr-watch timeouts are 15 s" "15" \
   "$(jq -r --arg c "$PW" '[.hooks[][].hooks[] | select(.command == $c) | .timeout] | unique | join(",")' "$J")"
+eq "version-notice is the first UserPromptSubmit entry, 5 s" 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/version-notice"|5' \
+  "$(jq -r '.hooks.UserPromptSubmit[0].hooks[0] | "\(.command)|\(.timeout)"' "$J")"
 eq "session-start stays the first SessionStart entry" 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/session-start"' \
   "$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$J")"
 

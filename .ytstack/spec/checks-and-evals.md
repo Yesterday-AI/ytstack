@@ -15,6 +15,7 @@ paths:
   - bin/ytstack-runtime
   - bin/ytstack-signals
   - bin/ytstack-upkeep
+  - bin/ytstack-plans
   - tests/**
   - evals/**
   - docs/recipes/**
@@ -26,7 +27,8 @@ sources:
   - docs/ux/review-policy-format.md
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
-verified_at: 851b2f4
+  - docs/ux/external-plans.md
+verified_at: 7ac1dfb
 ---
 
 # checks-and-evals
@@ -58,7 +60,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **`bin/ytstack-risk`: whether a change may merge without a person** (`docs/ux/review-policy-format.md`)
 
 - `floor --base <sha> --head <sha>` prints the lowest class of the tree difference (`low`, `normal` or `person`), one `reason:` per path and rule, the touched areas, their ceiling and the required lenses. It reads the policy at the base commit, never from the working tree; git matches the globs.
-- `route --plan <file> --base <sha> --head <sha> --author <worker>` exits 0 with `route: unattended` only when the floor is not `person`, the newest round line approves, states `risk` and `invariants: none`, names a reviewer other than the author and is valid for the head, the class is within the ceiling, and every required lens has a passing line with its evidence (for `evidence: visual` a `MANIFEST` whose hashes match). Every other case exits 10 with `route: person` and one reason per failed condition. `by: self` and a missing `--author` always route to a person.
+- `route [--plan <file>] [--pr <n> [--repo <owner/name>]] --base <sha> --head <sha> --author <worker>` exits 0 with `route: unattended` only when the floor is not `person`, the newest round line approves, states `risk` and `invariants: none`, names a reviewer other than the author and is valid for the head, the class is within the ceiling, and every required lens has a passing line with its evidence (for `evidence: visual` a `MANIFEST` whose hashes match). Every other case exits 10 with `route: person` and one reason per failed condition. `by: self` and a missing `--author` always route to a person. With `--pr` the round and lens lines come first from the bodies of the pull request's reviews (one `gh api` read; submitted, not dismissed, by an owner, member or collaborator; the reviewer of a used line must have `admin`, `maintain` or `write` permission, read once per reviewer, a failed read routes to a person), each taken for the `commit_id` the host tied its review to; the plan counts only when no review carries a line of that kind, and a `round:` line names the source. A line naming another commit than the host's, a review that requests changes (also one without a record line, when it is its reviewer's newest review) and a failed read route to a person.
 - `check` validates `REVIEW.md`, its "Own reviewers" too (slug names, a unique `marker`, a `lessons` file that exists); `reviewers` prints the own reviewers tab separated; `manifest <dir>` writes hash and name of every image into the `MANIFEST` of an evidence directory.
 
 **`bin/ytstack-review-escapes`: review-bot findings the own reviewers missed** (`docs/ux/review-policy-format.md`, "Escapes")
@@ -67,7 +69,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 **`bin/ytstack-runtime`: `RUNTIME.md` and the product per worktree** (`docs/ux/runtime-format.md`)
 
-- Every other script and skill reads the "Run", "Release" and "Signals" sections through it. `get <section> <key>` (exit 1 when missing), `signals` (tab separated), `check` (each defect of the three sections, a token-looking string; a file without them passes).
+- Every other script and skill reads the "Run", "Release" and "Signals" sections through it. `get <section> <key>` (exit 1 when missing), `signals` (tab separated), `sections` (the sections that have a list line, also when `check` fails; read by `yt_factory_notices`), `check` (each defect of the three sections, a token-looking string; a file without them passes).
 - `up [--timeout <s>]` starts the product in a process group of its own on a free port of the range, at a start position derived from the worktree, waits for `ready` and prints `URL:`, `PORT:`, `PID:`, `LOG:` and `COMMIT:`; a start that exits or a `ready` that does not pass ends with exit 1, the end of the log and nothing running. `down` ends that group and only a process it started; `status`. A zombie counts as ended (the process state is read, not only `kill -0`), and nothing inside a code fence is read as a heading or a key. The state of an instance lives outside the checkout, per worktree.
 
 **`bin/ytstack-signals`: production findings and incident records** (`docs/ux/signal-format.md`)
@@ -75,7 +77,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 - `new` records a finding once: a second sighting of the key raises its count, a sighting of a `fixed` one writes a regression with `reopens:`, a `dismissed` one stays dismissed; writes under a noclobber lock. `list`, `set`, `incident new`, `check` (findings and incident records; every mitigation names a handover script that passes `bin/ytstack-handover check` unless declined).
 - `--kind review` records an escaped review-bot finding (key `review:<role>:<class-slug>`) without a "Signals" source; `review-checked` records and asks which merged pull request had its escape check, in `signals/review-checks`; `--tally` adds caught/escaped per role as a fourth field, which `check` validates.
 
-**`bin/ytstack-upkeep`**: one read-only run over `.ytstack/` with eight counted sections (spec, state, gates, questions, lanes, runtime, review policy, review checks); exit 0 with `nothing needs a look`, 10 otherwise. `review checks` lists, only when `REVIEW.md` declares own reviewers, the merged pull requests without a line in `signals/review-checks` (an anchored window from 14 days before the earliest time in that file, or 14 days ago without one, at most 90 days back; cut at 500 with a notice), from one `gh pr list --search merged:>=<day>` (one call per 100) (plus one `gh repo view` when `origin` is not a GitHub URL); a failed read is an item, a missing `gh` or `jq` a note. `--question` writes one question file and none while an earlier `Upkeep found ...` is open or asked. `docs/recipes/recurring-upkeep.md` puts it on a schedule.
+**`bin/ytstack-upkeep`**: one read-only run over `.ytstack/` with eight counted sections (spec, state, gates, questions, lanes, runtime, review policy, review checks) and a ninth, `factory tools`, that lists the lines of `yt_factory_notices` (a factory tool that is off although the project would use it, `hooks-and-state`) and is never counted; exit 0 with `nothing needs a look`, 10 otherwise. `review checks` lists, only when `REVIEW.md` declares own reviewers, the merged pull requests without a line in `signals/review-checks` (an anchored window from 14 days before the earliest time in that file, or 14 days ago without one, at most 90 days back; cut at 500 with a notice), from one `gh pr list --search merged:>=<day>` (one call per 100) (plus one `gh repo view` when `origin` is not a GitHub URL); a failed read is an item, a missing `gh` or `jq` a note. `--question` writes one question file and none while an earlier `Upkeep found ...` is open or asked. `docs/recipes/recurring-upkeep.md` puts it on a schedule.
 
 **`bin/ytstack-brief`: the brief of a dispatched worker and its report**
 
@@ -86,8 +88,9 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **The coordinator scripts** (formats and rules: `docs/ux/coordinator-format.md`; each has a suite of the same name under `tests/`)
 
 - `bin/ytstack-frontier`: `list` prints lane, state and detail per slice (done, claimed, blocked, ready); `claim` refuses a held lane and names the holder; `claim`, `set` and `release` change one row of `LANES.md` under a lock; `check` validates the file. The lock is the file `LANES.md.lock`, created by the shell under noclobber and not by `mkdir`, which is no lock on Ubuntu 26.04 (see `.ytstack/KNOWLEDGE.md`).
+- `bin/ytstack-plans` (`docs/ux/external-plans.md`): `scan` counts the work rows (task-list items, rows of tables with a status or checkbox column, nothing in a code fence) of `plans/`, `roadmap/` and their variants and prints one line per directory with `verdict=large` from 10 open rows and the answer recorded in `PREFERENCES.md`; exit 0 only for a large directory without an answer. `rows` prints `path:line`, state, id, section and title per row; a relative PATH is read from where the command was started, else from the repository root, and the output names files relative to the root. It writes nothing; the mapping is the agent's (`reconcile`, `adopt-brownfield`).
 - `bin/ytstack-questions`: `new`, `list`, `next`, `ask` (once), `answer` (refused without text under "Answer"), `check`.
-- `bin/ytstack-finish-lane`: one step per call (`leftovers`, `commit`, `push`, `open-pr`, `wait-head`, `body-check`, `gates`, `merge`, `route`); every gate is read from GitHub through `gh` at the moment of the call, and `merge` passes the reviewed commit to the host so that a moved head cannot be merged. `route --lane <ref>` reads the lane's worker (the author) and plan from `LANES.md` and runs `bin/ytstack-risk route`. `leftovers` and `commit` leave the evidence directory out. Its suite uses a stand-in for `gh` and a local bare remote.
+- `bin/ytstack-finish-lane`: one step per call (`leftovers`, `commit`, `push`, `open-pr`, `wait-head`, `body-check`, `gates`, `merge`, `route`); every gate is read from GitHub through `gh` at the moment of the call, and `merge` passes the reviewed commit to the host so that a moved head cannot be merged. `route --lane <ref> [--pr <n>]` reads the lane's worker (the author) and plan from `LANES.md` and runs `bin/ytstack-risk route`; with `--pr` it passes the pull request on, and a lane without a plan file is routed from the host's reviews. `leftovers` and `commit` leave the evidence directory out. Its suite uses a stand-in for `gh` and a local bare remote.
 - `bin/ytstack-handover`: `new` copies `skills/handover-step/template.sh`; `check` is the static verification of a staged script (syntax, unchanged helper block, no raw command, a confirmation of its own before every mutation, no pipe into a shell). The helpers hold the same rule when the script runs: one yes carries one change.
 - `bin/ytstack-watch`: polls pull requests through `gh` and prints a line only when head, checks, review or mergeability changed; `--once` prints the snapshot with its read time. `release --commit <sha>` runs `deployed` of "Release" until it names the commit (or `--timeout`, default 900 s), then `healthy` for the settle time, and ends with five receipt lines (`Target:`, `Commit:`, `Arrived:`, `Health:`, `Result:`) with read times. Exit 0 released or no health command, 2 not arrived, 3 unhealthy, 4 no "Release" section, 1 `RUNTIME.md` fails its check. It runs only those two commands and changes nothing.
 
@@ -96,7 +99,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 - Plain bash, no framework. A suite prints one line per assertion and ends with its pass and fail count; fixtures live in `mktemp` directories. The comment at the top of each file states the contract it pins.
 - `tests/run-all.sh` runs every suite from a neutral temporary directory and prints `PASS` or `FAIL` per suite with that suite's last line. It stops at the first failing suite, prints up to ten of its `FAIL` lines and exits 1. The last line is `ALL SUITES PASSED` or `SUITE FAILURE`. `--linux` runs the same inside an `alpine/git` container with the repository mounted read-only; without a working Docker daemon it prints a skip line and exits 0.
 - `tests/ytstack-check.test.sh` tests the checker on a copy of the plugin tree. `tests/ytstack-spec.test.sh` tests `bin/ytstack-spec` on fixture repositories, one case per rule. `tests/ytstack-brief.test.sh` does the same for `bin/ytstack-brief` and compares the rendered contract with the real `skills/minimal-code/SKILL.md`. `tests/evidence-rule.test.sh` pins the evidence reuse rule: the verifier, the dispatcher and the skills area reuse a PASS only for the same commit, and its git fixture shows why (an unchanged planned file, a changed imported helper, a failing check).
-- `tests/pr-watch.test.sh` runs the PR watch engine's `unittest` suite (`tests/pr_watch/`, standard library, `gh` and the Codex daemon mocked) and then shell cases for `hooks/pr-watch` (off, on, malformed input), `bin/ytstack-pr-watch` (enable/disable, install-worker and migrate plans, migrate copy, the worker launcher's engine choice; `register --all-open` is covered in `tests/pr_watch/test_register_all.py`, the `claude:` qualification of a bare session id in `test_session_spelling.py`, skipped checks, a moved head (with `remote_head` against a real temporary repository), the once-per-change status block and the merge suggestion in `test_under_load.py`) under a temporary HOME. The resolver rule of `bin/ytstack-check` exempts `hooks/pr-watch` by name (`_HOOKS_WITHOUT_RESOLVER`).
+- `tests/pr-watch.test.sh` runs the PR watch engine's `unittest` suite (`tests/pr_watch/`, standard library, `gh` and the Codex daemon mocked) and then shell cases for `hooks/pr-watch` (off, on, malformed input), `bin/ytstack-pr-watch` (enable/disable, install-worker and migrate plans, migrate copy, the worker launcher's engine choice; `register --all-open` is covered in `tests/pr_watch/test_register_all.py`, the `claude:` qualification of a bare session id in `test_session_spelling.py`, the handover to a successor session in `test_handover.py`, skipped checks, a moved head (with `remote_head` against a real temporary repository), the once-per-change status block and the merge suggestion in `test_under_load.py`) under a temporary HOME. The resolver rule of `bin/ytstack-check` exempts `hooks/pr-watch` by name (`_HOOKS_WITHOUT_RESOLVER`).
 
 **Python host tests: `tests/*_test.py`**
 
@@ -149,8 +152,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 - The checker does not read `AskUserQuestion` bodies, sentinel-file names or `allowed-tools`. Those parts of `docs/ux/` are enforced by review.
 - An em-dash is a warning, and only `skills/*/SKILL.md` bodies are scanned. Both workflows accept warnings, so an em-dash does not turn CI red. Docs, agents and hooks are not scanned.
 - `bin/ytstack-finish-lane` and `bin/ytstack-watch` have run only against a stand-in for `gh`. Unknown -- their behaviour against GitHub (the JSON shapes, the built-in `--jq`, a merge queue).
-- No workflow runs `claude plugin validate .`, `claude plugin eval`, `tests/run-all.sh --linux`, the checker with `--strict`, or `bin/ytstack-gstack-diff`.
-- The Python Codex tests run on ubuntu only.
+- No workflow runs `claude plugin validate .`, `claude plugin eval`, `tests/run-all.sh --linux`, the checker with `--strict`, or `bin/ytstack-gstack-diff`. The Python Codex tests run on ubuntu only.
 - `.claude/skills/check-consistency/SKILL.md` is a manual audit of README against docs and plugin content. No workflow runs it and the checker does not scan `.claude/skills/`.
 
 ## Where implemented
@@ -159,9 +161,8 @@ Everything that tells a contributor whether a change is acceptable: the static c
 - `bin/ytstack-spec` -- the spec tool; `tests/ytstack-spec.test.sh` pins it.
 - `bin/ytstack-brief` -- brief renderer and report check; `tests/ytstack-brief.test.sh` pins it.
 - `bin/ytstack-frontier`, `bin/ytstack-questions`, `bin/ytstack-finish-lane`, `bin/ytstack-handover`, `bin/ytstack-watch` -- the coordinator scripts, each with `tests/<name>.test.sh`.
-- `bin/ytstack-risk`, `bin/ytstack-review-escapes`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it).
-- `tests/run-all.sh` -- the suite runner. `tests/*.test.sh` -- the suites. `tests/codex_plugin_test.py`, `kimi_plugin_test.py`, `kimi_lifecycle_test.py`, `kimi_live_test.py` -- the Python host tests.
-- `evals/<case>/` -- the eval cases. `evals/README.md` -- how to run them.
+- `bin/ytstack-risk`, `bin/ytstack-review-escapes`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, `bin/ytstack-plans`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it).
+- `tests/run-all.sh` -- the suite runner. `tests/*.test.sh` -- the suites. `tests/codex_plugin_test.py`, `kimi_plugin_test.py`, `kimi_lifecycle_test.py`, `kimi_live_test.py` -- the Python host tests. `evals/<case>/` -- the eval cases. `evals/README.md` -- how to run them.
 - `.github/workflows/ci.yml`, `plugin-check.yml`, `secret-scan.yml`.
 - `docs/ux/skill-structure.md`, `docs/ux/agent-structure.md`, `docs/ux/writing-style.md` -- the contracts the checker enforces in part.
 - `CONTRIBUTING.md` ("Release checklist") -- the checks expected before a release.
@@ -172,8 +173,7 @@ Run from the repository root.
 
 - `bin/ytstack-check` -- pass: exit code 0 or 2 and no `[fail]` line. At `verified_at` it exits 2 with `OK (with 9 warnings)`; every warning is a missing recommended section or a Checklist without "MUST".
 - `bash tests/run-all.sh` -- pass: exit 0, one `PASS` line per file in `tests/*.test.sh`, last line `ALL SUITES PASSED`.
-- `python3 -m unittest discover -s tests -p 'codex*_test.py'` -- pass: last line `OK`.
-- `python3 -m unittest discover -s tests -p 'kimi_plugin_test.py' -v` and the same pattern for `kimi_lifecycle_test.py` -- pass: two and nine tests, each `OK`.
+- `python3 -m unittest discover -s tests -p 'codex*_test.py'` -- pass: last line `OK`. `python3 -m unittest discover -s tests -p 'kimi_plugin_test.py' -v` and the same pattern for `kimi_lifecycle_test.py` -- pass: two and nine tests, each `OK`.
 - `python3 -m unittest discover -s tests -p 'kimi_live_test.py' -v` -- seven native tests on a machine with Kimi; local 2.5.3 and official Linux 2.6.2 each passed without skips at `1b7bfc8`.
 - `claude plugin validate .` -- pass: `✔ Validation passed`, exit 0.
 
@@ -182,13 +182,13 @@ Not covered by these checks: `claude plugin eval` (costs money). `bash tests/run
 ## Decisions that apply now
 
 - DECISIONS.md -- "2026-11-14: Kimi uses native plugin bootstrap and pending lifecycle context (M020)". Source of the offline Kimi CI checks and the separately run native suite.
-- DECISIONS.md -- "2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)". Source of `bin/ytstack-risk` and the lint rules for `auto_merge` and `REVIEW.md`.
+- DECISIONS.md -- "2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)". Source of `bin/ytstack-risk` and the lint rules for `auto_merge` and `REVIEW.md`. Extended by "2026-11-15: The risk route reads the review round from the review on the host first; the plan is the fallback (M031-S02, issue #54)".
 - DECISIONS.md -- "2026-11-13: `RUNTIME.md` has three sections with a fixed line format, read only through `bin/ytstack-runtime` (M025-S01)"
 - DECISIONS.md -- "2026-11-13: After a merge the release is watched, not driven; upkeep is a script and a recipe, not a skill (M026)". Source of `release` and `bin/ytstack-upkeep`.
 - DECISIONS.md -- "2026-11-13: Production findings and incidents are skill work on read-only access; a mitigation is a handover script a person runs (M027)". Source of `bin/ytstack-signals`.
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)". Source of `bin/ytstack-spec` and the two spec checks.
 - DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)". Source of `bin/ytstack-brief`.
-- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)". Source of the five coordinator scripts; the pipeline and the watcher support GitHub through `gh` only. Extended by "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/`; `STANDING.md` stays valid (issue #57)", the source of `check_standing`.
+- DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)". Source of the five coordinator scripts; the pipeline and the watcher support GitHub through `gh` only. Extended by "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/`; `STANDING.md` stays valid (issue #57)", the source of `check_standing`, and by "2026-11-15: A plan outside `.ytstack/` is detected by a script and mapped by the agent, after one question (M031-S05, issue #54)", the source of `bin/ytstack-plans`.
 - DECISIONS.md -- "2026-04-23: UX contracts enforced by CI, not convention"
 - DECISIONS.md -- "2026-05-31: Add `kind: reference` skill class (exempt from procedure-section contract)"
 - DECISIONS.md -- "2026-11-07: Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree". Source of the banned shell patterns and the shared-resolver rule in the checker.

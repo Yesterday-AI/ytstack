@@ -66,6 +66,22 @@ own_reviewers_on() {
 }
 own_reviewers_off() { rm -rf "$WT/.github" "$WT/.ytstack/spec/REVIEW.md"; rmdir "$WT/.ytstack/spec" 2>/dev/null; return 0; }
 
+# ext_plan_checks: a large plan outside .ytstack/ is offered once (M031-S05);
+# uses $s and $P of the loop below.
+ext_plan_checks() {
+  run_pre "$P" "$WT"
+  has "$s: no plan directory -> nothing offered" "$OUT" "EXTERNAL_PLAN_OFFER: no"
+  mkdir -p "$WT/plans"
+  { printf '# v2 plan\n\n## Steps\n\n'; i=1; while [ $i -le 10 ]; do printf -- '- [ ] step %d\n' $i; i=$((i+1)); done; } > "$WT/plans/v2.md"
+  run_pre "$P" "$WT"
+  has "$s: 10 open rows in plans/ -> offered" "$OUT" "EXTERNAL_PLAN_OFFER: yes"
+  has "$s: the directory line is printed" "$OUT" "dir=plans files=1 open=10 done=0 verdict=large answer=none"
+  printf 'external_plans: plans declined 2026-11-15\n' >> "$WT/.ytstack/PREFERENCES.md"
+  run_pre "$P" "$WT"
+  has "$s: a recorded answer -> not offered again" "$OUT" "EXTERNAL_PLAN_OFFER: no"
+  rm -rf "$WT/plans" "$WT/.ytstack/PREFERENCES.md"
+}
+
 PD="$TMP/plugin-data"
 run_pre() { # run_pre <script> <cwd> -> sets OUT (stdout) and EC (exit code) in this shell
   ( cd "$2" || exit 2; env CLAUDE_PROJECT_DIR="$ELSEWHERE" CLAUDE_PLUGIN_DATA="$PD" HOME="$TMP/home" bash "$1" 2>"$TMP/err" >"$TMP/out" ); EC=$?
@@ -160,7 +176,8 @@ for s in $SKILLS; do
       has "$s: draft stub counted"            "$OUT" "DRAFT_STUBS: 1"
       has "$s: planned-never-sliced counted"  "$OUT" "PLANNED_NEVER_SLICED: 1"
       has "$s: untracked counted (3 new files)" "$OUT" "UNTRACKED: 3"
-      rm -f "$WT/.ytstack/M999-S01-T09-SUMMARY.md" "$WT/.ytstack/M777-ROADMAP.md" "$WT/.ytstack/stray.md" ;;
+      rm -f "$WT/.ytstack/M999-S01-T09-SUMMARY.md" "$WT/.ytstack/M777-ROADMAP.md" "$WT/.ytstack/stray.md"
+      ext_plan_checks ;;
     reassess-roadmap)
       # bounded work (M023): open gates, non-converging reviews, the two numbers
       has "$s: no gates in the bare fixture -> accepted follows work" "$OUT" "SLICES_ACCEPTED: 0"
@@ -209,7 +226,8 @@ for s in $SKILLS; do
       has "$s: brownfield -> candidate README -> PROJECT.md" "$OUT" "README.md (4"
       has "$s: brownfield -> candidate adr -> DECISIONS.md" "$OUT" "docs/adr/ (1 files) -> DECISIONS.md"
       has "$s: brownfield -> README one-liner picked" "$OUT" "README_ONELINER: Acme turns invoices into forecasts."
-      has "$s: brownfield -> no entry doc" "$OUT" "ENTRY_DOC: none" ;;
+      has "$s: brownfield -> no entry doc" "$OUT" "ENTRY_DOC: none"
+      ext_plan_checks ;;
     plan-milestone|reassess-roadmap)
       has "$s: worktree -> TRACKER none when STATE.md has no field" "$OUT" "TRACKER: none"
       cp "$WT/.ytstack/STATE.md" "$TMP/state.bak"; printf 'tracker: linear\n' >> "$WT/.ytstack/STATE.md"
@@ -258,7 +276,63 @@ for s in $SKILLS; do
       has "$s: the entry in force is listed" "$OUT" "STANDING_ENTRIES_BEGIN
 20261114T1436Z-at-most-fifteen.md	2026-11-14T14:36:00Z	every lane
 STANDING_ENTRIES_END"
-      rm -rf "$WT/.ytstack/standing" "$WT/.ytstack/STANDING.md" ;;
+      rm -rf "$WT/.ytstack/standing" "$WT/.ytstack/STANDING.md"
+      # the factory tools (M031, issue #54): Step 7 skips by what the project switched on
+      run_pre "$P" "$WT"
+      has "$s: bare fixture -> merge_by risk" "$OUT" "MERGE_BY: risk"
+      has "$s: bare fixture -> no review policy" "$OUT" "REVIEW_POLICY: no"
+      has "$s: bare fixture -> no own reviewers" "$OUT" "OWN_REVIEWERS: no"
+      has "$s: bare fixture -> PR watch off" "$OUT" "PR_WATCH: off"
+      has "$s: bare fixture -> no release section" "$OUT" "RELEASE: no"
+      has "$s: bare fixture -> no signal sources" "$OUT" "SIGNALS: 0"
+      own_reviewers_on
+      printf '# Runtime\n\n## Release\n\n- deployed: echo abc1234\n\n## Signals\n\n- errors | read: echo none\n- latency | read: echo none\n' > "$WT/.ytstack/RUNTIME.md"
+      mkdir -p "$TMP/home/.ytstack"; echo "pr_watch=on" > "$TMP/home/.ytstack/config"
+      # A version-manager shim (asdf) does not run under the fixture HOME: hand the engine the interpreter itself.
+      export YTSTACK_PYTHON="$(python3 -c 'import sys; print(sys.executable)')"
+      run_pre "$P" "$WT"
+      has "$s: REVIEW.md -> review policy" "$OUT" "REVIEW_POLICY: yes"
+      has "$s: own reviewers declared" "$OUT" "OWN_REVIEWERS: yes"
+      has "$s: a Release section" "$OUT" "RELEASE: yes"
+      has "$s: two signal sources" "$OUT" "SIGNALS: 2"
+      has "$s: flag on, no worker tick -> no heartbeat" "$OUT" "PR_WATCH: on, no heartbeat"
+      "$YTSTACK_PYTHON" - "$TMP/home/.ytstack/pr-watch/state/watch.sqlite3" <<'PY'
+import sqlite3, sys, time
+db = sqlite3.connect(sys.argv[1])
+with db:
+    db.execute("INSERT OR REPLACE INTO meta VALUES('heartbeat', ?)", (str(int(time.time()) - 77),))
+PY
+      run_pre "$P" "$WT"
+      case "$OUT" in *"PR_WATCH: on, heartbeat 7"[0-9]" s ago"*) ok "$s: a worker tick -> heartbeat age";; *) bad "$s: a worker tick -> heartbeat age" "$(printf '%s' "$OUT" | grep PR_WATCH)";; esac
+      rm -rf "$TMP/home/.ytstack" "$WT/.ytstack/RUNTIME.md"; own_reviewers_off; unset YTSTACK_PYTHON
+      # every bin/ command that Step 7 names exists, with the subcommand its usage names
+      awk '/^\*\*Step 7 --/ { p = 1 } /^\*\*Step 8 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" > "$TMP/step7.md"
+      for want in 'ytstack-finish-lane route' 'ytstack-risk route' 'ytstack-pr-watch register --repo <owner/name> --all-open' \
+                  'ytstack-watch release --commit' 'ytstack:signal-intake' 'ytstack:incident' 'ytstack:review-lessons'; do
+        grep -qF -- "$want" "$TMP/step7.md" && ok "$s: Step 7 names $want" || bad "$s: Step 7 names $want"
+      done
+      # the rotation in one step (issue #61): the successor takes the PR watches over, the workers' addresses travel
+      awk '/^\*\*Step 12 --/ { p = 1 } /^\*\*Step 13 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" > "$TMP/step12.md"
+      for want in 'ytstack-pr-watch handover --from' 'PR watch session:' 'Running workers:' 'address' 'relay' 'Reports after the rotation'; do
+        grep -qF -- "$want" "$TMP/step12.md" && ok "$s: Step 12 names $want" || bad "$s: Step 12 names $want"
+      done
+      awk '/^\*\*Step 3 --/ { p = 1 } /^\*\*Step 4 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF 'ytstack-pr-watch handover --from' \
+        && ok "$s: Step 3 runs the handover for a rotation" || bad "$s: Step 3 runs the handover for a rotation"
+      grep -qF '## Rotation' "$ROOT/docs/ux/coordinator-format.md" && ok "$s: coordinator-format documents the rotation block" || bad "$s: coordinator-format documents the rotation block"
+      # every command of the Procedure, not only Step 7
+      awk '/^## Procedure/ { p = 1 } /^## Terminal State/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" \
+        | grep -o '`ytstack-[a-z-]*[^`]*`' | tr -d '`' | sort -u > "$TMP/step7.cmds"
+      [ -s "$TMP/step7.cmds" ] && ok "$s: Procedure commands found ($(wc -l < "$TMP/step7.cmds" | tr -d ' '))" || bad "$s: Procedure commands found"
+      while read -r tool rest; do
+        [ -f "$ROOT/bin/$tool" ] || { bad "$s: $tool exists in bin/"; continue; }
+        # the subcommand: the first word that is no option and no placeholder, after -C DIR
+        set -- $rest; sub=""
+        while [ $# -gt 0 ]; do
+          case "$1" in -C) shift 2 ;; -*|'<'*) break ;; *) sub="$1"; break ;; esac
+        done
+        if [ -z "$sub" ]; then ok "$s: $tool exists"; continue; fi
+        sed -n '1,40p' "$ROOT/bin/$tool" | grep -qw -- "$sub" && ok "$s: $tool $sub is in its usage" || bad "$s: $tool $sub is in its usage"
+      done < "$TMP/step7.cmds" ;;
     finish-lane)
       # who merges (M025): risk unless PREFERENCES says otherwise; a typo reads as human
       has "$s: no merge_by in PREFERENCES -> risk" "$OUT" "MERGE_BY: risk"

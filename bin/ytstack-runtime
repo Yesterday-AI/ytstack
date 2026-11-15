@@ -4,6 +4,7 @@
 #
 #   ytstack-runtime [-C DIR] get <section> <key>
 #   ytstack-runtime [-C DIR] signals
+#   ytstack-runtime [-C DIR] sections
 #   ytstack-runtime [-C DIR] check
 #   ytstack-runtime [-C DIR] up [--timeout <seconds>]
 #   ytstack-runtime [-C DIR] down
@@ -18,7 +19,9 @@
 #   get      0 the value; 1 no RUNTIME.md, no such section, no such key; 64 usage
 #   signals  0; one line per source: name, kind, read, scope (tab separated,
 #            "-" for an empty one)
-#   check    0 "runtime ok: <the sections that exist>"; 1 one line per problem
+#   sections 0; the sections that have a list line, one per line (also when
+#            check fails); nothing without RUNTIME.md
+#   check   0 "runtime ok: <the sections that exist>"; 1 one line per problem
 #   up       0 URL:, PORT:, PID:, LOG: and COMMIT: of the instance; 1 not
 #            started or not ready, with the reason and the end of the log on
 #            stderr and nothing left running; 64 usage
@@ -33,9 +36,9 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '5,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '5,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "ytstack-runtime: $*" >&2; exit 1; }
-case "$CMD" in get|signals|check|up|down|status) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+case "$CMD" in get|signals|sections|check|up|down|status) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 # The resolver falls back to $PWD for a missing directory: refuse it here.
 [ -d "$DIR" ] || { echo "ytstack-runtime: -C '$DIR' is not a directory" >&2; exit 64; }
 
@@ -141,6 +144,7 @@ parse() {
     }
     END {
       if (mode == "get") exit (found ? 0 : (has[S] ? 1 : 2))
+      if (mode == "sections") { n = split("Run Release Signals", u, " "); for (i = 1; i <= n; i++) if (has[u[i]]) print u[i]; exit 0 }
       if (mode != "check") exit 0
       if (has["Run"]) {
         if (!(("Run", "start") in V)) problem("Run: no start")
@@ -187,6 +191,10 @@ cmd_get() {
 }
 
 cmd_signals() { ! have_file || parse signals; }
+
+# The sections that count as present (a list line in them), also when check
+# fails; read by yt_factory_notices in hooks/lib/git-ctx.sh.
+cmd_sections() { ! have_file || parse sections; }
 
 cmd_check() {
   if ! have_file; then echo "runtime ok: no RUNTIME.md"; return 0; fi
@@ -407,6 +415,7 @@ cmd_status() {
 case "$CMD" in
   get)     cmd_get "$@" ;;
   signals) cmd_signals ;;
+  sections) cmd_sections ;;
   check)   cmd_check ;;
   up)      cmd_up "$@" ;;
   down)    cmd_down ;;

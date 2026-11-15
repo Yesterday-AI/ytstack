@@ -1,0 +1,241 @@
+#!/usr/bin/env bash
+# ytstack plans: a plan that lives outside .ytstack/, which ytstack-frontier
+# cannot see. Read only: no plan file is ever written.
+# Format, thresholds and the mapping: docs/ux/external-plans.md.
+#
+#   ytstack-plans [-C DIR] scan
+#   ytstack-plans [-C DIR] rows [--open] [PATH...]
+#
+# scan   one line per candidate directory that holds plan files:
+#          dir=<dir> files=<n> open=<n> done=<n> verdict=large|small answer=none|mapped|declined
+#        "no external plan" when no candidate directory holds one.
+#        Candidates (relative to the repository root): plans plan planning roadmap
+#        docs/plans docs/plan docs/planning docs/roadmap; *.md up to 3 levels deep.
+#        A plan file has at least 3 work rows. A directory is large at
+#        YTSTACK_PLAN_MIN_OPEN open rows (default 10). The answer comes from
+#        "external_plans: <dir> mapped|declined <date>" lines in PREFERENCES.md.
+# rows   one line per work row, tab separated: path:line, state (open, done,
+#        dropped), id (an ID-like column, else -), section (nearest heading,
+#        else -), title (at most 100 characters). Without PATH: the plan files
+#        of every candidate directory; a PATH (file or directory) is listed in
+#        full. A relative PATH is read from where the command was started,
+#        else from the repository root (as scan names a directory). --open
+#        keeps the open rows.
+#
+# Work rows: task-list items (- [ ], * [x], + [X]) and the data rows of a
+# Markdown table whose header names a status column (Status, State, Done,
+# Progress, Stand, Erledigt) or whose first data row has a checkbox cell.
+# Fenced code blocks are skipped.
+#
+# Exit codes
+#   scan   0 at least one large directory without an answer; 1 otherwise
+#   rows   0
+#   64     usage, or -C names no directory
+
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/hooks/lib/git-ctx.sh"
+
+CANDIDATES="plans plan planning roadmap docs/plans docs/plan docs/planning docs/roadmap"
+MIN_FILE_ROWS=3
+MIN_OPEN=${YTSTACK_PLAN_MIN_OPEN:-10}
+case "$MIN_OPEN" in ''|*[!0-9]*) MIN_OPEN=10 ;; esac
+
+usage() { sed -n '5,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD="${1:-}"
+case "$CMD" in
+  scan|rows) shift ;;
+  -h|--help|help) usage; exit 0 ;;
+  *) usage >&2; exit 64 ;;
+esac
+[ -d "$DIR" ] || { echo "ytstack-plans: -C '$DIR' is not a directory" >&2; exit 64; }
+
+yt_git_ctx "$DIR"
+yt_resolve_yt_dir >/dev/null
+TOP="${YT_TOPLEVEL:-$DIR}"
+CALLER="$PWD"
+cd "$TOP" || exit 64
+TOP_P=$(pwd -P)
+
+# from_caller <path>: a PATH argument read from where the command was started,
+# relative to TOP when it lies inside it (as the output names files).
+from_caller() {
+  local p="$1" d b
+  case "$p" in /*) ;; *) p="$CALLER/$p" ;; esac
+  if [ -d "$p" ]; then p=$(cd "$p" && pwd -P)
+  elif [ -e "$p" ]; then d=$(cd "$(dirname "$p")" && pwd -P); b=$(basename "$p"); p="$d/$b"
+  else printf '%s' "$1"; return 0; fi
+  case "$p" in
+    "$TOP_P") p=. ;;
+    "$TOP_P"/*) p=${p#"$TOP_P"/} ;;
+  esac
+  printf '%s' "$p"
+}
+
+# md_files <dir>: the Markdown files of a directory, sorted, relative to TOP.
+md_files() {
+  find "$1" -maxdepth 3 -type f -name '*.md' -not -path '*/node_modules/*' 2>/dev/null | LC_ALL=C sort
+}
+
+# work_rows <file...>: one line per work row (format of "rows").
+work_rows() {
+  [ $# -gt 0 ] || return 0
+  awk '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function clean(s) { s = trim(s); gsub(/\*\*|__|`/, "", s); return trim(s) }
+    function cells(line, arr,   n, i) {
+      line = trim(line); sub(/^\|/, "", line); sub(/\|$/, "", line)
+      n = split(line, arr, "|")
+      for (i = 1; i <= n; i++) arr[i] = clean(arr[i])
+      return n
+    }
+    function is_sep(line) { return line ~ /^[ \t]*\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$/ }
+    function state(s,   l) {
+      l = tolower(clean(s))
+      if (l ~ /^\[x\]/) return "done"
+      if (l ~ /^\[ \]/) return "open"
+      if (l ~ /^(done|merged|complete|completed|shipped|closed|finished|landed|released|erledigt|fertig)([^a-z]|$)/) return "done"
+      if (index(s, "✅") == 1 || index(s, "✓") == 1 || index(s, "✔") == 1 || index(s, "☑") == 1) return "done"
+      if (l ~ /^(dropped|cancel|superseded|obsolete|wontfix|won.t|skipped|abandoned|verworfen)/ || index(s, "❌") == 1 || l ~ /^~~/) return "dropped"
+      return "open"
+    }
+    function emit(st, id, title) {
+      gsub(/\t/, " ", title); title = clean(title)
+      if (length(title) > 100) title = substr(title, 1, 97) "..."
+      print FILENAME ":" FNR "\t" st "\t" (id == "" ? "-" : id) "\t" (sec == "" ? "-" : sec) "\t" (title == "" ? "-" : title)
+    }
+    FNR == 1 { fence = 0; tbl = 0; pend = ""; sec = "" }
+    /^[ \t]*(```|~~~)/ { fence = !fence; tbl = 0; pend = ""; next }
+    fence { next }
+    /^#+[ \t]/ {
+      s = $0; sub(/^#+[ \t]+/, "", s); sub(/[ \t]+#+[ \t]*$/, "", s)
+      sec = clean(s); gsub(/\t/, " ", sec); tbl = 0; pend = ""; next
+    }
+    /^[ \t]*[-*+][ \t]+\[[ xX]\]([ \t]|$)/ {
+      t = $0; sub(/^[ \t]*[-*+][ \t]+/, "", t)
+      emit(t ~ /^\[[xX]\]/ ? "done" : "open", "", substr(t, 4))
+      tbl = 0; pend = ""; next
+    }
+    /^[ \t]*\|/ {
+      if (tbl == 3) next
+      if (tbl == 1 || tbl == 2) {
+        n = cells($0, c)
+        if (tbl == 1) {
+          if (!scol) for (i = 1; i <= n; i++) if (c[i] ~ /^\[[ xX]\]$/) { scol = i; break }
+          if (!scol) { tbl = 3; next }
+          tbl = 2
+        }
+        title = ""
+        if (tcol) title = c[tcol]
+        else for (i = 1; i <= n; i++) if (i != scol && i != icol && c[i] != "") { title = c[i]; break }
+        emit(state(c[scol]), icol ? c[icol] : "", title)
+        next
+      }
+      if (pend != "" && is_sep($0)) {
+        n = cells(pend, h); scol = 0; icol = 0; tcol = 0
+        for (i = 1; i <= n; i++) {
+          l = tolower(h[i])
+          if (!scol && l ~ /^(status|state|done|progress|stand|erledigt)$/) scol = i
+          else if (!icol && l ~ /^(id|ref|key|#|no\.?|nr\.?|wp|lane|ticket|issue)$/) icol = i
+          else if (!tcol && l ~ /^(deliverable|title|task|description|what|name|item|scope|goal|work|work package|package|summary|change|outcome)$/) tcol = i
+        }
+        tbl = 1; pend = ""; next
+      }
+      pend = $0; next
+    }
+    { tbl = 0; pend = "" }
+  ' "$@"
+}
+
+# answer <dir>: what PREFERENCES.md records for the directory.
+answer() {
+  local a=""
+  if [ -n "$YT_DIR" ] && [ -f "$YT_DIR/PREFERENCES.md" ]; then
+    a=$(YTP_DIR="$1" awk '
+      /^[ \t]*external_plans[ \t]*:/ {
+        sub(/^[ \t]*external_plans[ \t]*:[ \t]*/, "")
+        d = $1; sub(/\/$/, "", d)
+        if (d == ENVIRON["YTP_DIR"] && ($2 == "mapped" || $2 == "declined")) { print $2; exit }
+      }
+    ' "$YT_DIR/PREFERENCES.md")
+  fi
+  printf '%s' "${a:-none}"
+}
+
+cmd_scan() {
+  [ $# -eq 0 ] || { usage >&2; return 64; }
+  local d line any="" offer="" files ans verdict
+  for d in $CANDIDATES; do
+    [ -d "$d" ] || continue
+    files=$(md_files "$d")
+    [ -n "$files" ] || continue
+    # shellcheck disable=SC2086 -- the paths come from find under fixed names
+    line=$(IFS='
+'; work_rows $files | awk -F'\t' -v min="$MIN_FILE_ROWS" '
+      { f = $1; sub(/:[0-9]+$/, "", f); n[f]++; s[f, $2]++ }
+      END {
+        for (f in n) if (n[f] >= min) { k++; o += s[f, "open"]; dn += s[f, "done"] }
+        print k + 0, o + 0, dn + 0
+      }')
+    set -- $line
+    [ "${1:-0}" -gt 0 ] || continue
+    verdict=small; [ "$2" -ge "$MIN_OPEN" ] && verdict=large
+    ans=$(answer "$d")
+    echo "dir=$d files=$1 open=$2 done=$3 verdict=$verdict answer=$ans"
+    any=1
+    [ "$verdict" = large ] && [ "$ans" = none ] && offer=1
+  done
+  [ -n "$any" ] || echo "no external plan"
+  [ -n "$offer" ]
+}
+
+cmd_rows() {
+  local open="" d p files="" plan
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --open) open=1; shift ;;
+      --) shift; break ;;
+      -*) usage >&2; return 64 ;;
+      *) break ;;
+    esac
+  done
+  if [ $# -gt 0 ]; then
+    for p in "$@"; do
+      p=$(from_caller "${p%/}")
+      if [ -d "$p" ]; then files="$files$(md_files "$p")
+"
+      elif [ -f "$p" ]; then files="$files$p
+"
+      else echo "ytstack-plans: no such file or directory: $p" >&2; return 64
+      fi
+    done
+    plan=all
+  else
+    for d in $CANDIDATES; do
+      [ -d "$d" ] && files="$files$(md_files "$d")
+"
+    done
+    plan=only
+  fi
+  # shellcheck disable=SC2086
+  (IFS='
+'; work_rows $files) | awk -F'\t' -v min="$MIN_FILE_ROWS" -v plan="$plan" -v open="$open" '
+    { f = $1; sub(/:[0-9]+$/, "", f); file[NR] = f; row[NR] = $0; st[NR] = $2; n[f]++ }
+    END {
+      for (i = 1; i <= NR; i++) {
+        if (plan == "only" && n[file[i]] < min) continue
+        if (open != "" && st[i] != "open") continue
+        print row[i]
+      }
+    }'
+  return 0
+}
+
+case "$CMD" in
+  scan) cmd_scan "$@" ;;
+  rows) cmd_rows "$@" ;;
+esac

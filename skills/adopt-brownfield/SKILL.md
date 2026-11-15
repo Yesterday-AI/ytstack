@@ -3,7 +3,7 @@ name: adopt-brownfield
 description: "Brings an existing codebase under ytstack by reference, without a greenfield pitch. Use when a repo has a README, docs, CHANGELOG, ADRs or months of commits but no .ytstack/ yet, when a project has .ytstack/ but no technical spec under .ytstack/spec/ yet (adds only the spec), or when the user says adopt ytstack, set up ytstack here, onboard this codebase, map the codebase, write the technical spec. Not for ideas without code yet (office-hours, then init-project) and not for repos that already have .ytstack/ with a spec (resume-session)."
 metadata:
   tier: core
-  version: 0.2.1
+  version: 0.3.0
   triggers:
     - adopt ytstack
     - existing project
@@ -54,6 +54,7 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 4. **Ask per artifact** -- one AskUserQuestion per candidate slot: reference / extract / move / leave
 5. **Map the codebase** -- dispatch up to 4 read-only subagents, write `.ytstack/codebase/{stack,architecture,conventions,concerns}.md`
 6. **Write the artifacts** -- PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES, each per its Step 4 decision; templates only for gaps
+6b. **Offer the external plan mapping** (only if `EXTERNAL_PLAN_OFFER: yes`) -- one AskUserQuestion; after a yes, open rows become milestones and slices
 7. **Write the technical spec** -- propose areas from `codebase/architecture.md` and the docs index, confirm them with one AskUserQuestion, read the code per area, write `.ytstack/spec/SPEC.md` + `.ytstack/spec/<area>.md` (pointer-only where a document exists)
 8. **Check the spec format** -- run `ytstack-spec lint` and fix what it reports; by hand against `docs/ux/spec-format.md` when the script is not reachable
 9. **Write the `.gitignore` block** -- `.ytstack/.local/` via `yt_ensure_gitignore`
@@ -137,6 +138,12 @@ _README_ONELINER=""
 if [ -f README.md ]; then
   _README_ONELINER=$(awk 'NF==0{next} /^#/{next} /^[!<\[|`-]/{next} {print; exit}' README.md | cut -c1-200)
 fi
+# A large plan outside .ytstack/ that ytstack-frontier cannot see (M031-S05).
+_EXT_PLAN="unknown (bin/ytstack-plans not reachable)"; _EXT_OFFER=no
+_PLANS_BIN="${CLAUDE_SKILL_DIR}/../../bin/ytstack-plans"
+if [ -f "$_PLANS_BIN" ]; then
+  _EXT_PLAN=$(bash "$_PLANS_BIN" -C "$_PROJECT_DIR" scan 2>/dev/null) && _EXT_OFFER=yes
+fi
 
 echo "BRANCH: $(git branch --show-current 2>/dev/null || echo unknown)"
 echo "PROJECT_SLUG: $_PROJECT_SLUG"
@@ -153,6 +160,8 @@ echo "ENTRY_DOC: ${_ENTRY_DOC:-none}"
 echo "PITCH: ${_PITCH:-none}"
 echo "README_ONELINER: ${_README_ONELINER:-none}"
 echo "BROWNFIELD_SIGNALS: $_BF_SIGNALS"
+echo "EXTERNAL_PLAN_OFFER: $_EXT_OFFER"
+echo "EXTERNAL_PLAN:"; printf '%s\n' "$_EXT_PLAN" | sed 's/^/  /'
 echo "CANDIDATES:"
 if [ -n "$_BF_HINTS" ]; then printf '%s\n' "$_BF_HINTS" | sed 's/^/  - /'; else echo "  (none detected)"; fi
 ```
@@ -187,7 +196,7 @@ Read each candidate named under `CANDIDATES` (first 40 lines of each file is eno
 > | DECISIONS.md | `docs/adr/` ({n} records) | reference: one entry per ADR, linked | {conflict if two decision sources exist} |
 > | KNOWLEDGE.md | `docs/*.md` ({n} files) | reference: link index with H1 summaries | |
 > | RUNTIME.md | `package.json` scripts, `.env.example`, `compose.yml`, `.github/workflows/` | extract: commands, services, env keys, deploy target | values never copied, keys only |
-> | ROADMAP backlog | `docs/plans/` / `ROADMAP.md` / `BACKLOG.md` | reference | open items become backlog, not a milestone |
+> | ROADMAP backlog | `docs/plans/` / `ROADMAP.md` / `BACKLOG.md` | reference | open items become backlog, not a milestone; a directory with `verdict=large` under `EXTERNAL_PLAN` gets the mapping offer of Step 6b instead |
 > | STATE.md | nothing | gap: scaffold | `tracker:` field for Linear / GitHub Projects / Paperclip / Jira |
 > | Technical spec | {documents that describe a part of the system: `docs/architecture.md`, `docs/adr/`, an API reference, feature docs} + the codebase map | one file per system area under `.ytstack/spec/`, pointer-only where a document exists | you confirm the area list after the codebase is mapped; an area is marked implemented only after its code was read |
 > | Entry point | `{ENTRY_DOC}` | pointer section | never duplicated |
@@ -201,7 +210,7 @@ If `PITCH` is not `none`: a pitch for new scope exists alongside the old codebas
 
 ### Step 4: Ask per artifact
 
-One question per slot that has a source (PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, backlog), in that order, one message each. Do not ask for gaps and do not ask for the entry point. The technical spec has its own question in Step 7, once the codebase map exists.
+One question per slot that has a source (PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, backlog), in that order, one message each. Do not ask for gaps and do not ask for the entry point. Do not ask the backlog question for a directory that Step 6b offers to map; ask it only for the other backlog sources. The technical spec has its own question in Step 7, once the codebase map exists.
 
 If `YTSTACK_NON_INTERACTIVE` is `true`, auto-pick the RECOMMENDATION for every slot and log one line each: `[ytstack:adopt-brownfield] auto-picked {X} for {SLOT} because YTSTACK_NON_INTERACTIVE=true`.
 
@@ -464,6 +473,31 @@ explain_level: default
 
 Write `{YT_DIR}/backlog/README.md`: one line per open item found in the source with a relative link; heading `# Backlog (inherited from {SOURCE})`. Items become milestones only when `ytstack:plan-milestone` picks them up.
 
+### Step 6b: Offer the external plan mapping
+
+Only when `EXTERNAL_PLAN_OFFER` is `yes` (a spec-only run skips this step; `ytstack:reconcile` offers it there). A directory such as `plans/` holds tables or checklists with at least ten open rows, and `ytstack-frontier` reads only milestones and slices inside `.ytstack/`. The rules (what counts, the mapping, the pointer back) are in `${CLAUDE_SKILL_DIR}/../../docs/ux/external-plans.md`; read it before you ask. For each directory with `verdict=large answer=none`, run `"${CLAUDE_SKILL_DIR}/../../bin/ytstack-plans" rows --open {dir}` and count the open rows per file.
+
+If `YTSTACK_NON_INTERACTIVE` is `true`, take the RECOMMENDATION (for B: the file with the most open rows) and log `[ytstack:adopt-brownfield] auto-picked {X} for the external plan in {dir} because YTSTACK_NON_INTERACTIVE=true`. Otherwise use AskUserQuestion:
+
+> Adopting ytstack for **{PROJECT_SLUG}** on branch `{BRANCH}`; the memory files are written. `{dir}/` holds a plan ytstack cannot see yet: {files} plan files, {open} open rows, {done} done. Most open rows: {up to five files with their open count}.
+>
+> The lane list (`ytstack-frontier`, which says what may start next and who works on what) reads only the milestones and slices inside `.ytstack/`. Mapping writes each open row of your plan as a slice or a task with a link back to its line, so the list sees that work from the first session on. Your plan files stay exactly as they are, and finished rows are only counted.
+>
+> RECOMMENDATION: Choose A when at most five files hold open rows, B otherwise, because a plan directory that grew for months usually holds finished plans whose checklists nobody ticked; mapping those would fill the lane list with work that is done.
+>
+> A) Map all -- one milestone per plan file with open rows, one slice per open work package, `status: planned`; `{dir}/` is not touched
+>    Completeness: 10/10, effort: human: review ~5 min / CC: ~10 min, tier: core
+>
+> B) Map the files I name -- tell me which files; the others stay unmapped
+>    Completeness: 8/10, effort: human: ~2 min / CC: ~5 min, tier: core
+>
+> C) Leave it -- record that you declined; the backlog slot keeps its pointer to `{dir}/`
+>    Completeness: 3/10, effort: human: 0 / CC: 0, tier: core
+>
+> (to re-ask later: delete the `external_plans: {dir}` line in `.ytstack/PREFERENCES.md`, then run `ytstack:reconcile`)
+
+On A or B, map by the document's section "The mapping" and run its "Afterwards" steps, including `ytstack-frontier list --milestone M###` for each new milestone; `STATE.md` keeps `current_milestone: none`. Either way, add the line `external_plans: {dir} mapped|declined {TODAY}` to `PREFERENCES.md` and a row `| Plan | {dir}/ | mapped: M###..M### / declined | .ytstack/M###-*.md |` to the Adoption table of `PROJECT.md`. Nothing in `{dir}/` is edited, moved or deleted, whatever the answer (the HARD-GATE above).
+
 ### Step 7: Write the technical spec
 
 The artifacts say what the project is and where work stands. The technical spec says what applies now, per part of the system: `.ytstack/spec/SPEC.md` (the entry point, one page) and one `.ytstack/spec/<area>.md` per area. The binding format is `docs/ux/spec-format.md` in the ytstack plugin (`${CLAUDE_SKILL_DIR}/../../docs/ux/spec-format.md`). Read it before writing; the templates below are that format filled in for an existing codebase.
@@ -646,6 +680,7 @@ If `ENTRY_DOC` is `none`, write nothing and include the block in the report so t
 > | Codebase map | 4 subagents | `.ytstack/codebase/{stack,architecture,conventions,concerns}.md` |
 > | Technical spec | {n} areas: {i} implemented, {p} partial, {q} planned; {k} pointer-only | `.ytstack/spec/SPEC.md` + `.ytstack/spec/{area}.md` |
 > | Entry point | pointer section | `{ENTRY_DOC}` |
+> | External plan | {mapped: {M} milestones, {S} slices from `{dir}/`, listed by `ytstack-frontier` / declined} (only after Step 6b) | `.ytstack/M###-*.md` |
 >
 > Spec, not established: {one line per area that is `planned` or `partial`, carries an `Unknown` or needs a new `verified_at` after a squash merge: `{area}` -- {what is missing}; or "nothing open"}. Spec format check: {clean | fixed: {what} | done by hand, `ytstack-spec` not reachable}.
 >
