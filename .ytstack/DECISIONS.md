@@ -1164,3 +1164,24 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - A person dismisses a class with `set <id> --state dismissed` and a reason; a lesson is not deleted.
 
 **Supersedes:** None. Extends the 2026-11-13 production findings entry (M027): the ledger also holds lessons.
+
+## 2026-11-15: Feedback about ytstack itself goes through one channel with a setting; a script checks the body, the agent posts (M033-S01, issue #55)
+
+**Context:** Issue #55: the only guidance on feeding experience back was one paragraph in `using-ytstack`, for bugs only and only as a suggestion. Experience reports (#54), proposals from real runs (#53) and field evidence happened only because a person told every session to write them. The milestone's discuss phase locked the default: `suggest`, because filing publishes text to a public repository.
+
+**Options considered:**
+- A) A longer paragraph in `using-ytstack` with all rules, no script.
+- B) A script that searches, drafts and posts (`ytstack-upstream file`).
+- C) A setting `upstream_feedback` read with the other preferences, the rules in `docs/ux/upstream-feedback.md`, a script that prints the effective mode, drafts and checks a body and never posts; the agent searches and posts with `gh`.
+
+**Chose:** C. `upstream_feedback: suggest | file | off` in `PREFERENCES.md`, else the last `upstream_feedback=` line of `~/.ytstack/config`, else `suggest`; an invalid value reads as `suggest`. `bin/ytstack-upstream mode` reads it through `yt_upstream_feedback` and prints `suggest` for `file` without a `gh` login. `check` fails on a placeholder left, no evidence, no recorded search, an email address, a token-looking string and a home directory path. `retro` and `lane-retro` end with an "Upstream" section, `lesson` routes a ytstack class to the channel; a non-interactive run sends nothing.
+
+**Reason:** `using-ytstack` is injected in full at every session start and this repository's injection sits near the 10,000-character cap, so the rules cannot live there (A). A script that posts (B) would publish without a step where the agent reads the search result and decides between a new issue and a comment on an existing one, which is judgement, and it would make a test suite able to publish. With C the part a machine can see is checked before anything is public, and the part only a reader can judge (is this the same behaviour, is this name private) stays with the agent, as the document says.
+
+**How to apply:**
+- A new rule a machine can check goes into `ytstack-upstream check` and its suite; a rule of judgement goes into the document.
+- A skill that ends with experience about ytstack points at the document and does not repeat its steps.
+- Nothing is posted from a non-interactive run or a dispatched worker; their drafts wait for a person.
+- The project's own bugs and lessons never go upstream; work in the ytstack repository uses its own artifacts.
+
+**Supersedes:** None.

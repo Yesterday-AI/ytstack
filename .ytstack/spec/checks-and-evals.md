@@ -16,6 +16,7 @@ paths:
   - bin/ytstack-signals
   - bin/ytstack-upkeep
   - bin/ytstack-plans
+  - bin/ytstack-upstream
   - tests/**
   - evals/**
   - docs/recipes/**
@@ -28,7 +29,8 @@ sources:
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
   - docs/ux/external-plans.md
-verified_at: 10228f6
+  - docs/ux/upstream-feedback.md
+verified_at: c5b405d
 ---
 
 # checks-and-evals
@@ -79,6 +81,8 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 **`bin/ytstack-upkeep`**: one read-only run over `.ytstack/` with eight counted sections (spec, state, gates, questions, lanes, runtime, review policy, review checks) and a ninth, `factory tools`, that lists the lines of `yt_factory_notices` (a factory tool that is off although the project would use it, `hooks-and-state`) and is never counted; exit 0 with `nothing needs a look`, 10 otherwise. `review checks` lists, only when `REVIEW.md` declares own reviewers, the merged pull requests without a line in `signals/review-checks` (an anchored window from 14 days before the earliest time in that file, or 14 days ago without one, at most 90 days back; cut at 500 with a notice), from one `gh pr list --search merged:>=<day>` (one call per 100) (plus one `gh repo view` when `origin` is not a GitHub URL); a failed read is an item, a missing `gh` or `jq` a note. `--question` writes one question file and none while an earlier `Upkeep found ...` is open or asked. `docs/recipes/recurring-upkeep.md` puts it on a schedule.
 
+**`bin/ytstack-upstream`** (`docs/ux/upstream-feedback.md`): `mode` prints the effective `upstream_feedback` through `yt_upstream_feedback`, the repository and the path of the rules, and asks `gh auth status` only for `file` (without a login: `mode: suggest` and a note); `draft` writes an issue body with `TODO:` lines, the ytstack version, host and OS under `$TMPDIR` and never calls `gh`; `check` exits 1 on a `TODO:` left, an empty "Evidence", no filled `Searched:` line, an email address (not `noreply`), a token-looking string (the rule of `bin/ytstack-handover`) or a home directory path. It never posts; the agent does, after `check`.
+
 **`bin/ytstack-brief`: the brief of a dispatched worker and its report**
 
 - A bash script on awk. `render --task <ref>` or `--slice <ref>` prints a brief built from the plan files and `skills/spawn-milestone-team/brief-template.md`, and includes the body of `skills/minimal-code/SKILL.md` as the work contract, read at render time. It prints no brief when the plan, its `## Files` section, the template or the contract is missing (exit 1).
@@ -114,7 +118,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **Behavioural evals: `evals/`**
 
 - One directory per case: `case.yaml` (name, tags, the scaffold script), `prompt.md` (run settings in the frontmatter, then a user-phrased prompt that does not name the skill), `fixture.sh` (builds the repository and `.ytstack/` state the skill expects) and `graders/*.md`.
-- Every case has a `skill-fired` grader of type `tool_used` and one or more outcome graders of type `file_exists` or `regex`. No grader calls a model.
+- Every case of a skill has a `skill-fired` grader of type `tool_used` and one or more outcome graders of type `file_exists` or `regex`; `upstream-suggest` and `upstream-file` test the `using-ytstack` directive and grade the `bin/ytstack-upstream` and `gh` calls instead (their system prompt turns a filing command into `echo`). No grader calls a model.
 - A run is started with `claude plugin eval`; the command and its flags are in `evals/README.md` ("Run").
 - Each case is a real model session on the account that starts the run. `--max-cost-usd` caps the spend. What a run cost: `.ytstack/KNOWLEDGE.md` ("Eval runs"), which is also where a run is recorded.
 - Results go to `evals/results/<timestamp>/`, which `.gitignore` excludes.
@@ -138,8 +142,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 ## Error behavior
 
-- No `.claude-plugin/plugin.json` above the start path: the checker prints an error on stderr and exits 1.
-- A crash inside the manifest version comparison becomes a warning ("version agreement check skipped"), not a traceback.
+- No `.claude-plugin/plugin.json` above the start path: the checker prints an error on stderr and exits 1. A crash inside the manifest version comparison becomes a warning ("version agreement check skipped"), not a traceback.
 - After the first failing suite `tests/run-all.sh` runs no further suite, so one run shows one broken suite.
 
 ## Runtime and deployment assumptions
@@ -149,19 +152,16 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 ## Known limits
 
-- The checker does not read `AskUserQuestion` bodies, sentinel-file names or `allowed-tools`. Those parts of `docs/ux/` are enforced by review.
-- An em-dash is a warning, and only `skills/*/SKILL.md` bodies are scanned. Both workflows accept warnings, so an em-dash does not turn CI red. Docs, agents and hooks are not scanned.
-- `bin/ytstack-finish-lane` and `bin/ytstack-watch` have run only against a stand-in for `gh`. Unknown -- their behaviour against GitHub (the JSON shapes, the built-in `--jq`, a merge queue).
+- The checker does not read `AskUserQuestion` bodies, sentinel-file names or `allowed-tools`. Those parts of `docs/ux/` are enforced by review. An em-dash is a warning, and only `skills/*/SKILL.md` bodies are scanned. Both workflows accept warnings, so an em-dash does not turn CI red. Docs, agents and hooks are not scanned.
+- `bin/ytstack-finish-lane`, `bin/ytstack-watch` and `ytstack-upstream mode` have run only against a stand-in for `gh`; the two `upstream-*` eval cases have not run. Unknown -- their behaviour against GitHub (the JSON shapes, the built-in `--jq`, a merge queue).
 - No workflow runs `claude plugin validate .`, `claude plugin eval`, `tests/run-all.sh --linux`, the checker with `--strict`, or `bin/ytstack-gstack-diff`. The Python Codex tests run on ubuntu only.
 - `.claude/skills/check-consistency/SKILL.md` is a manual audit of README against docs and plugin content. No workflow runs it and the checker does not scan `.claude/skills/`.
 
 ## Where implemented
 
-- `bin/ytstack-check` -- the checker; its docstring names the flags and exit codes.
-- `bin/ytstack-spec` -- the spec tool; `tests/ytstack-spec.test.sh` pins it.
-- `bin/ytstack-brief` -- brief renderer and report check; `tests/ytstack-brief.test.sh` pins it.
+- `bin/ytstack-check` -- the checker; its docstring names the flags and exit codes. `bin/ytstack-spec` (the spec tool) and `bin/ytstack-brief` (brief renderer and report check), pinned by `tests/ytstack-spec.test.sh` and `tests/ytstack-brief.test.sh`.
 - `bin/ytstack-frontier`, `bin/ytstack-questions`, `bin/ytstack-finish-lane`, `bin/ytstack-handover`, `bin/ytstack-watch` -- the coordinator scripts, each with `tests/<name>.test.sh`.
-- `bin/ytstack-risk`, `bin/ytstack-review-escapes`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, `bin/ytstack-plans`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it).
+- `bin/ytstack-risk`, `bin/ytstack-review-escapes`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, `bin/ytstack-plans`, `bin/ytstack-upstream`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it).
 - `tests/run-all.sh` -- the suite runner. `tests/*.test.sh` -- the suites. `tests/codex_plugin_test.py`, `kimi_plugin_test.py`, `kimi_lifecycle_test.py`, `kimi_live_test.py` -- the Python host tests. `evals/<case>/` -- the eval cases. `evals/README.md` -- how to run them.
 - `.github/workflows/ci.yml`, `plugin-check.yml`, `secret-scan.yml`.
 - `docs/ux/skill-structure.md`, `docs/ux/agent-structure.md`, `docs/ux/writing-style.md` -- the contracts the checker enforces in part.
@@ -185,7 +185,7 @@ Not covered by these checks: `claude plugin eval` (costs money). `bash tests/run
 - DECISIONS.md -- "2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)". Source of `bin/ytstack-risk` and the lint rules for `auto_merge` and `REVIEW.md`. Extended by "2026-11-15: The risk route reads the review round from the review on the host first; the plan is the fallback (M031-S02, issue #54)".
 - DECISIONS.md -- "2026-11-13: `RUNTIME.md` has three sections with a fixed line format, read only through `bin/ytstack-runtime` (M025-S01)"
 - DECISIONS.md -- "2026-11-13: After a merge the release is watched, not driven; upkeep is a script and a recipe, not a skill (M026)". Source of `release` and `bin/ytstack-upkeep`.
-- DECISIONS.md -- "2026-11-13: Production findings and incidents are skill work on read-only access; a mitigation is a handover script a person runs (M027)". Source of `bin/ytstack-signals`.
+- DECISIONS.md -- "2026-11-13: Production findings and incidents are skill work on read-only access; a mitigation is a handover script a person runs (M027)". Source of `bin/ytstack-signals`. "2026-11-15: Feedback about ytstack itself goes through one channel with a setting; a script checks the body, the agent posts (M033-S01, issue #55)" is the source of `bin/ytstack-upstream`.
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)". Source of `bin/ytstack-spec` and the two spec checks.
 - DECISIONS.md -- "2026-11-13: Verification, review and orchestration work are bounded like code (M023, issue #35)". Source of `bin/ytstack-brief`.
 - DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)". Source of the five coordinator scripts; the pipeline and the watcher support GitHub through `gh` only. Extended by "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/`; `STANDING.md` stays valid (issue #57)", the source of `check_standing`, and by "2026-11-15: A plan outside `.ytstack/` is detected by a script and mapped by the agent, after one question (M031-S05, issue #54)", the source of `bin/ytstack-plans`.

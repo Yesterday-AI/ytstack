@@ -1,6 +1,6 @@
 # ytstack evals
 
-Behavioural tests for `claude plugin eval` (Claude Code >= 2.1.269): one case per lifecycle skill, plus cases for a rule that spans skills. Each case is a user-phrased prompt that never names the skill, a `fixture.sh` that builds the `.ytstack/` state the skill expects, and free graders: `skill-fired` (`tool_used: Skill`, the plugin-fired indicator), `outcome` (`file_exists` or a `regex` over the produced artifact) and, where the table names one, a second outcome grader. No `llm` graders, so a run costs only the agent sessions.
+Behavioural tests for `claude plugin eval` (Claude Code >= 2.1.269): one case per lifecycle skill, plus cases for a rule that spans skills. Each case is a user-phrased prompt that never names the skill, a `fixture.sh` that builds the `.ytstack/` state the skill expects, and free graders: `skill-fired` (`tool_used: Skill`, the plugin-fired indicator; not in the two `upstream-*` cases, which test a directive), `outcome` (`file_exists` or a `regex` over the produced artifact) and, where the table names one, a second outcome grader. No `llm` graders, so a run costs only the agent sessions.
 
 | Case | Fixture | Outcome grader |
 | --- | --- | --- |
@@ -31,6 +31,8 @@ Behavioural tests for `claude plugin eval` (Claude Code >= 2.1.269): one case pe
 | `signal-intake` | one signal source printing a new error, one seen before and one of a fixed finding | a new finding, the old one's count raised, a regression with `reopens:`, no product file changed |
 | `incident` | a failing health source and an obvious rollback script that changes the target | an incident record and a handover script; the rollback did not run |
 | `lesson` | `main` went red a second time for the class of the open lesson F001 (`lesson:ci:flaky-order`), the test already fixed by hand | `ytstack-signals lesson new --class flaky-order` ran, F001 counts 2, no second lesson file, `AGENTS.md` keeps its one line |
+| `upstream-suggest` | `upstream_feedback: suggest`; the person reports that a coordinator polled pull requests by hand while the PR watch existed | `ytstack-upstream mode`, `draft --kind gap` and `check` ran; the reply shows the draft path and Yesterday-AI/ytstack (no skill fires: the channel is the `using-ytstack` directive, so there is no `skill-fired` grader) |
+| `upstream-file` | the same with `upstream_feedback: file` | as above, plus `gh issue list --search` and the filing command run with `echo` in front (the system prompt forbids publishing). Needs a signed-in `gh` on the machine that runs the eval; without one `mode` prints `suggest` and the last two graders fail |
 
 ## Run
 
