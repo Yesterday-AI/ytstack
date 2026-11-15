@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Standing instructions are recorded under load** (issue #72): in a
+  `coordinate` session the new prompt hook `hooks/standing-prompt` flags a
+  prompt that reads like a standing instruction ("always", "never", "from now
+  on", "until", "priorisiere", "fass ... nicht an", ...) and says to record it
+  before the next dispatch; the Stop hook holds the turn once when flagged
+  prompts got no entry. Coordinate mode is a session marker the `coordinate`
+  preamble writes. Claude Code only.
+- **`bin/ytstack-standing`**: `add` records an entry in one command, in its
+  own worktree with a commit and one standing pull request per UTC day (or in
+  place with `--here`); `end` closes one; `list` prints the active entries,
+  the ended ones, the conditions to check and the failed checks. The
+  `coordinate` preamble prints it, with the newest entry's age and the human
+  prompts since.
+- **Temporary and conditional entries** (issue #73): optional `until`,
+  `until-condition` and `until-check`; an ended entry is closed by an entry of
+  `kind: end`. `ytstack-check --standing` validates the new keys.
+- **Standing entries reach every context** (issue #74): `hooks/session-start`
+  injects the active entries for the session's role (also after a
+  compaction), `ytstack-brief render` puts the ones for lanes or reviewers
+  into the brief, and an optional `check:` command shows a broken instruction
+  in the `coordinate` preamble. Commands of an entry run only there, bounded
+  by a timeout.
+
+### Changed
+
+- `coordinate` 0.6.0: Step 9 records with `ytstack-standing add` and says
+  that agent memory is no substitute; Step 3 acts on ended entries,
+  conditions and failed checks.
+
 ## [0.11.0] - 2026-11-15
 
 ### Added

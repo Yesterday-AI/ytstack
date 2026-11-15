@@ -1,6 +1,6 @@
 # Coordinator formats
 
-One session that owns a plan and delegates all of it needs four things on disk, so that it can lose its context and continue from files: who works on what (lanes), what may start next (the frontier), what only the human can decide (questions) and what the human asked for once and for all (standing instructions). This document fixes their formats. The skills that use them are `coordinate`, `spawn-milestone-team`, `finish-lane`, `handover-step`, `lane-retro` and `reassess-roadmap`; the scripts are `bin/ytstack-frontier`, `bin/ytstack-questions`, `bin/ytstack-finish-lane`, `bin/ytstack-handover`, `bin/ytstack-watch` and `bin/ytstack-brief`.
+One session that owns a plan and delegates all of it needs four things on disk, so that it can lose its context and continue from files: who works on what (lanes), what may start next (the frontier), what only the human can decide (questions) and what the human asked for once and for all (standing instructions). This document fixes their formats. The skills that use them are `coordinate`, `spawn-milestone-team`, `finish-lane`, `handover-step`, `lane-retro` and `reassess-roadmap`; the scripts are `bin/ytstack-frontier`, `bin/ytstack-questions`, `bin/ytstack-finish-lane`, `bin/ytstack-handover`, `bin/ytstack-watch`, `bin/ytstack-brief` and `bin/ytstack-standing`.
 
 All files live in the project's `.ytstack/` directory and are user-owned like every artifact there.
 
@@ -177,13 +177,50 @@ One review per lane, a second only for the fix.
 | `given` | The UTC time, ISO (`YYYY-MM-DDTHH:MMZ`, seconds optional). The same minute as the file name, whose time orders the entries; missing seconds count as `00`. |
 | `scope` | Where the instruction applies. Not empty. |
 | `supersedes` | Empty, or the file name (without `.md`) of the earlier entry this one replaces. |
+| `until` | Optional. An ISO UTC time after `given`; from then on the entry has ended. |
+| `until-condition` | Optional. One sentence naming the event that ends the entry ("PR #1879 merged"). The coordinator checks it when the list names it. |
+| `until-check` | Optional. A command that exits 0 once the entry has ended (`gh pr view 1879 --json state -q .state \| grep -qx MERGED`). It may stand alone (the command is the condition) or beside `until-condition` (the sentence says for people what it checks). |
+| `check` | Optional. A command that exits non-zero while the instruction is not kept; its first output line is the warning (`test -n "$(find .ytstack/LANES.md -mmin -120)" \|\| echo "LANES.md older than 2 h"; ...`). |
+| `kind` | Optional. Only `end`: the entry closes the one its `supersedes` names and is no instruction itself. |
 
 Rules:
 
 - Own words, never a quotation. The body is the instruction.
 - An entry is not edited after it is written and nothing is deleted. An instruction that replaces another is a new file whose `supersedes` names the old one; from then on the old one no longer holds.
-- Readers take the entries newest first and skip every entry that another entry supersedes. `yt_standing` in `hooks/lib/git-ctx.sh` prints them; the preambles of `coordinate`, `finish-lane` and `signal-intake` list them between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END`. The coordinator reads every listed file at every start and after every compaction, before it acts.
+- An entry ends by its `until`, by an `until-check` that exits 0, or when the coordinator finds its `until-condition` met. It is then closed with a short entry of `kind: end` that supersedes it, whose body says what ended it ("Ended: PR #1879 merged at 2026-11-15T10:02Z."); `ytstack-standing end <entry> --reason "..."` writes it. That keeps the record append-only.
+- Readers take the entries newest first and skip every entry that another entry supersedes, every entry of `kind: end` and every entry whose `until` has passed. `yt_standing` in `hooks/lib/git-ctx.sh` prints them; the preambles of `finish-lane` and `signal-intake` list them between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END`, the preamble of `coordinate` lists there what `ytstack-standing list` prints. The coordinator reads every listed file at every start and after every compaction, before it acts.
 - A `README.md` in the directory is a note for people and is not an entry.
+
+### Writing and listing: `bin/ytstack-standing`
+
+- `add "<text>" --scope "<scope>" [--supersedes <entry>] [--until <ISO UTC>] [--until-condition "<sentence>"] [--until-check "<command>"] [--check "<command>"]` writes the entry, named from UTC now and the first words of the text. By default it writes in a worktree of its own outside the checkout (`<state base>/repos/<repo key>/standing-worktree`), on the branch `standing/<YYYYMMDD>`, commits, pushes and opens one pull request per UTC day, or adds to the open one (through `ytstack-pr-watch create` when the PR watch is on, else `gh pr create`). `--here` writes into the resolved `standing/` and commits nothing; user scope always does that. The entry has to pass `ytstack-check --standing`, else nothing is written.
+- `end <entry> --reason "<text>"` writes the closing entry (`kind: end`, the scope of the closed one).
+- `list` prints, in this order: the newest entry with its age and the number of human prompts this session sent since (from `hooks/standing-prompt`), the active entries as `- <name> (<scope>): <first sentence>` (also those on a `standing/*` branch that is not merged yet, marked `pending`), the ended ones (to close), the conditions to check now, and the failed checks. `--no-checks` runs no command.
+
+### Where the commands of an entry run
+
+`until-check` and `check` come from a file in the repository. They run only in `ytstack-standing list` (and so in the `coordinate` preamble), each with `bash -c` in the checkout's toplevel, stdin closed, at most `YTSTACK_STANDING_TIMEOUT` seconds (default 5, a timeout counts as "not ended" and as a failed check), and at most ten commands per call. No hook runs them: `hooks/session-start`, `hooks/standing-prompt` and `hooks/stop` read files only, and an `until` that passed is the only end they apply. A change under `standing/` goes to a person (`bin/ytstack-risk floor`), so a command cannot enter the list unreviewed.
+
+### Scope and roles
+
+The scope is free text. Three roles are read from it, as whole words, case-insensitive:
+
+| Role | Words in the scope |
+|---|---|
+| coordinator | `coordinator`, `coordinators` |
+| lane | `lane`, `lanes`, `worker`, `workers`, `implementer`, `implementers` |
+| reviewer | `reviewer`, `reviewers`, `review`, `reviews` |
+
+A scope that names no role applies to everyone. The coordinator gets every entry. `hooks/session-start` injects the active entries for the session's role (coordinator when the `coordinate` preamble left its session marker, else lane), at most six lines, cut for the injection cap to one pointer line. `ytstack-brief render` puts the entries for its kind (`review`: reviewer, else lane) under "Standing instructions".
+
+### Coordinate mode and the two hooks
+
+The `coordinate` preamble writes the session marker `<session home>/<session id>/coordinate` (`yt_session_home`: `${XDG_STATE_HOME:-~/.local/state}/ytstack/sessions`; the id is `CLAUDE_CODE_SESSION_ID`), with the resolved `.ytstack` on its first line. Only then do the two hooks act, so a session that never ran `coordinate` is not touched.
+
+- `hooks/standing-prompt` (UserPromptSubmit) counts every human prompt and flags one that reads like a standing instruction (always, never, from now on, until, while, prioritise, don't touch, remember; German immer, nie, ab jetzt, bis, waehrend, priorisiere, fass ... nicht an, denk dran). A flagged prompt gets one line of context: record it before the next dispatch.
+- `hooks/stop` blocks the stop once when flagged prompts have no entry since: an entry counts when its name time is in or after the minute of the first flagged prompt, in the working tree or added on any ref of the repository after it (local branches, and the remote-tracking branch a pushed standing pull request left). Local git only. The same prompts never block twice.
+
+Claude Code only: Codex registers no UserPromptSubmit hook of ytstack, and Kimi's shell has no session id to write the marker with.
 
 ### `STANDING.md`
 
@@ -226,4 +263,4 @@ The old session stays open as a relay until every listed worker has reported. Pe
 - `bin/ytstack-questions check`: ids are unique and match the file name, `state` holds a listed value, `asked` and `answered` are set exactly when the state says so, an answered file has text under `## Answer`.
 - `bin/ytstack-brief check`: the report labels, the three `Status:` values and their consistency with `Blockers:`.
 - `bin/ytstack-handover check`: the staged script of a human-only step (see `skills/handover-step/SKILL.md`).
-- `bin/ytstack-check --standing [<project dir>]`: every entry in `standing/` has a name of the form above with a date and time that exist, `given` as an existing ISO UTC time in the minute of its name, a `scope` and a body, and every `supersedes` names an earlier entry that exists (missing seconds count as `00`). Without a directory argument it resolves `.ytstack` like the skill preambles, user scope included.
+- `bin/ytstack-check --standing [<project dir>]`: every entry in `standing/` has a name of the form above with a date and time that exist, `given` as an existing ISO UTC time in the minute of its name, a `scope` and a body, and every `supersedes` names an earlier entry that exists (missing seconds count as `00`); `until` is an existing ISO UTC time after `given`, `until-condition`, `until-check` and `check` are one non-empty line when present, `kind` is `end` or absent, and an `end` names the entry it closes. Without a directory argument it resolves `.ytstack` like the skill preambles, user scope included.

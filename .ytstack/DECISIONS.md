@@ -1218,3 +1218,43 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **Chose:** A roadmap status `backlog` (frontmatter and the global ROADMAP column): planned, kept, not picked by `ytstack-frontier` while no milestone is current. Making it current sets `status: planned` and `current_milestone` again.
 
 **Supersedes:** None. Extends the roadmap state values in `docs/ux/skill-structure.md`.
+
+## 2026-11-15: Coordinate mode is a session marker the coordinate preamble writes; the standing hooks act only with it (issue #72)
+
+**Context:** A 12-hour coordinator run got seven standing instructions in one day and recorded none in `.ytstack/standing/`; it wrote them to its private memory. Issue #72 asks for a prompt hook that flags such instructions and a Stop check that holds the turn when they were not recorded, both only in coordinate mode. Nothing marked a session as a coordinator: `LANES.md` exists in every checkout of a project that ever coordinated, also in a worker's or a human's other session.
+
+**Options considered:**
+- A) `LANES.md` (or `standing/`) in the resolved `.ytstack` means coordinate mode.
+- B) The `coordinate` preamble writes a marker per session out of tree; the hooks act only with it.
+- C) Parse the transcript for a `ytstack:coordinate` invocation.
+
+**Chose:** B. The marker is `<session home>/<session id>/coordinate` with the resolved `.ytstack` on its first line. `<session home>` is `${XDG_STATE_HOME:-~/.local/state}/ytstack/sessions` (`yt_session_home`), not `yt_state_base`: Claude Code exports `CLAUDE_PLUGIN_DATA` to hooks only, so a skill preamble in the Bash tool and a hook would resolve two different directories. The session id in the preamble is `CLAUDE_CODE_SESSION_ID`, the hook payload's `session_id` in the hooks.
+
+**Reason:** A marker is written exactly by the session that runs the skill and survives compactions and worktree moves (keyed by the session only, like `plugin-version`). A would flag prompts of every session in the project. C is slow, host-specific and undocumented.
+
+**How to apply:**
+- `hooks/standing-prompt` (UserPromptSubmit) and the standing part of `hooks/stop` end at once without the marker; they read files and local git only, never the network and never a command of an entry.
+- The prompt counter (`prompts`) and the flags (`standing-flags`) live beside the marker; `hooks/stop` writes `standing-stop`, so the same flagged prompts block once.
+- Claude Code only. Codex registers no ytstack UserPromptSubmit hook and a Kimi shell has no session id; both keep the skill's Step 9 and the preamble's prompt-gap line without the hooks.
+
+**Supersedes:** None. Narrows "2026-11-15: SessionStart stays read-only ...": session state a skill writes goes under the session home, not under `yt_state_base`.
+
+## 2026-11-15: Standing entries end by `until`, `until-condition` or `until-check` and are closed by an entry of `kind: end`; their commands run only in `ytstack-standing list` (issues #73, #74)
+
+**Context:** Many standing instructions are temporary ("until the load test ends", "while the v2 plan runs"). They could only be written as prose and ended when someone remembered. Issue #74 adds a compliance self-check (`check:`), a SessionStart injection of the active entries and the entries in lane briefs. Both kinds of command come from a file in the repository.
+
+**Options considered:**
+- A) `until` only; conditions stay prose.
+- B) `until`, `until-condition` and `until-check` (a command, exit 0 = ended), plus `check` (non-zero = not kept); an ended entry is closed by a new entry.
+- C) As B, but an ended entry is edited or deleted.
+
+**Chose:** B. `until-check` may stand alone: the command is then the condition; with `until-condition` the sentence says for people what it checks. The closing entry has `kind: end` and `supersedes: <entry>` and is no instruction itself; `ytstack-standing end` writes it. The commands run only in `ytstack-standing list`, which the `coordinate` preamble calls: `bash -c` in the checkout's toplevel, stdin closed, `YTSTACK_STANDING_TIMEOUT` seconds each (default 5), at most ten per call; a timeout counts as not ended and as a failed check. No hook runs them; `session-start` and the readers apply only a passed `until`. Roles in the scope (coordinator, lane, reviewer as whole words) filter the injection and the briefs; a scope naming no role is for everyone.
+
+**Reason:** Append-only stays (C would lose why and when an instruction ended). A hook runs on every prompt or session start under a seconds budget; a repository command there would slow every session and run before a person looked at it. In the coordinate preamble the session is already working in the repository, and a change under `standing/` goes to a person (`bin/ytstack-risk floor`).
+
+**How to apply:**
+- `bin/ytstack-check --standing` validates the keys: `until` a real ISO UTC time after `given`, the three others one line, `kind` only `end`, an `end` names its entry.
+- `bin/ytstack-standing add` writes by default in its own worktree on `standing/<YYYYMMDD>`, commits, pushes and opens or updates one pull request per UTC day (`ytstack-pr-watch create` when the PR watch is on); `--here` and user scope write in place.
+- The SessionStart injection keeps at most six lines and is the last block cut for the 10,000-character cap, after the Next action, the factory tools and the minimal-code line.
+
+**Supersedes:** None. Extends "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/` ..." with optional keys and a closing entry.
