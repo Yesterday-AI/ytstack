@@ -31,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--head` to check a commit range that is not checked out. `finish-lane`
   0.6.0.
 
+### Added
+
+- **A checks inventory in `REVIEW.md`** (issue #75): a `## Checks` section
+  lists the machine checks a reviewer can rely on, one line each
+  (`<name> | file: <path> | guards: <what holds>`); `ytstack-risk check`
+  validates it. A pull request that adds a guard adds its line there:
+  `code-review` 0.5.1 treats a guard without its line as a finding, and
+  `ytstack-finish-lane route` prints a `checks:` line when a change edits CI
+  and the inventory did not move.
+
 ## [0.11.0] - 2026-11-15
 
 ### Added

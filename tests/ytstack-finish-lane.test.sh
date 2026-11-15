@@ -544,6 +544,15 @@ has "and its line is printed" "spec: .ytstack/M001-S01-T01-PLAN.md -- spec impac
 rm -f "$RS/.ytstack/M001-S01-T01-PLAN.md"
 quiet; run "$RS" route --lane M001-S01 --base "$SB" --head "$SC" --report "$TMP/none.md"
 eq "a report file that cannot be read: exit 64" 64 "$EC"
+# The checks inventory: a CI change without its line in REVIEW.md "## Checks".
+( cd "$RS" && git checkout -q -b ci main && mkdir -p .github/workflows && echo 'on: push' > .github/workflows/levels.yml \
+  && git add -A .github && git commit -qm "M001-S01-T01: level guard" && git checkout -q main ) >/dev/null 2>&1
+SG=$(git -C "$RS" rev-parse ci); splan "$SG"
+printf '# Review policy\n\n## Checks\n\n- spec | file: .ytstack/spec/core.md | guards: x\n' > "$RS/.ytstack/spec/REVIEW.md"
+sroute "$SG"
+has "a CI change without its line in the checks inventory is named" 'checks: the change edits CI (.github/workflows/levels.yml) and .ytstack/spec/REVIEW.md "## Checks" did not change' "$OUT"
+rm -f "$RS/.ytstack/spec/REVIEW.md"; sroute "$SG"
+hasnt "without an inventory there is no such line" "checks:" "$OUT"
 
 # A visual lens. The reviewer stored its images in the main checkout; the
 # coordinating session works in a linked worktree of the same repository.

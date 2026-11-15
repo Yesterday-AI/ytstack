@@ -517,7 +517,6 @@ spec_delta() {
   local claim="" p out ec l e a ep f s hit why
   [ -f "$YT_DIR/spec/SPEC.md" ] || { echo "spec: no technical spec"; return 0; }
   [ -f "$spec" ] || { echo "reason: spec -- bin/ytstack-spec is not next to this script: the spec delta is unknown"; return 1; }
-  CHANGED=$(git -c core.quotePath=false diff --name-only "$base..$head" 2>/dev/null)
   [ -z "$report" ] || claim=$(sed -n 's/^Spec:[ \t]*//p' "$report" | head -1)
 
   while IFS= read -r p; do
@@ -588,8 +587,24 @@ EOF
   return "$bad"
 }
 
+# checks_note: when REVIEW.md keeps a checks inventory ("## Checks", the
+# machine checks reviewers rely on) and the change edits CI without touching
+# REVIEW.md, one "checks:" line: a guard the change adds or changes gets its
+# line there. A note, not a gap: a change to CI goes to a person anyway.
+checks_note() {
+  local p ci=""
+  [ -f "$YT_DIR/spec/REVIEW.md" ] && grep -x '## Checks' "$YT_DIR/spec/REVIEW.md" >/dev/null || return 0
+  touched_by "${YT_DIR#"$TOP"/}/spec/REVIEW.md" && return 0
+  while IFS= read -r p; do
+    case "$p" in .github/workflows/*|.gitlab-ci.yml) ci="$ci${ci:+, }$p" ;; esac
+  done <<EOF
+$CHANGED
+EOF
+  [ -z "$ci" ] || echo "checks: the change edits CI ($ci) and .ytstack/spec/REVIEW.md \"## Checks\" did not change: a guard it adds or changes gets its line there"
+}
+
 cmd_route() {
-  local lane="" base="" head="" pr="" report="" author="" plan="" shown root r ec s
+  local lane="" base="" head="" pr="" report="" author="" plan="" shown root r ec s="" n
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || bad_usage "$1 needs a value"
     case "$1" in
@@ -639,9 +654,11 @@ cmd_route() {
   r=$(bash "$SELF_DIR/ytstack-risk" "$@"); ec=$?
   # A gap in the spec delta keeps the change from merging without a person.
   if [ "$ec" -eq 0 ] || [ "$ec" -eq 10 ]; then
+    CHANGED=$(git -c core.quotePath=false diff --name-only "$base..$head" 2>/dev/null)
     if ! s=$(spec_delta "$lane" "$base" "$head" "$report") && [ "$ec" -eq 0 ]; then
       r=$(printf '%s\n' "$r" | sed '1s/^route: unattended$/route: person/'); ec=10
     fi
+    n=$(checks_note); [ -z "$n" ] || s="$s${s:+$'\n'}$n"
   fi
   printf '%s\n' "$r"
   [ -z "${s:-}" ] || printf '%s\n' "$s"

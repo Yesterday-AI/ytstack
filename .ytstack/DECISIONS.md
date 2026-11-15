@@ -1277,3 +1277,22 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - No technical spec: `spec: no technical spec`, nothing changes.
 
 **Supersedes:** None.
+
+## 2026-11-15: The checks inventory is a `## Checks` section of `REVIEW.md`, not an area file (issue #75)
+
+**Context:** A guard that a lane added (component levels in CI) was described only in its receipt; reviewers had no place that says which machine checks they can rely on.
+
+**Options considered:**
+- A) `.ytstack/spec/checks.md` as an area file.
+- B) A sixth section `## Checks` in `REVIEW.md`: `<name> | file: <path> | guards: <text>`.
+
+**Chose:** B.
+
+**Reason:** An area file describes a part of the system with fixed sections, `paths` and a `status` (`docs/ux/spec-format.md`); an inventory of checks across areas has none of these, and `lint`, `drift` and `impact` would read it as an area. `REVIEW.md` is already the page of what reviewers go by, it is read at the base commit and its changes are `person`, so the inventory cannot be relaxed on the route it informs.
+
+**How to apply:**
+- The line says what holds; the rule itself stays in the area file or its source.
+- `ytstack-risk check` checks the form and that `file` exists. Whether a change adds a guard is the reviewer's judgment (`code-review`); `finish-lane` only notes a CI edit without an inventory change.
+- This repository keeps no `REVIEW.md` yet; its checks are listed in `checks-and-evals.md`.
+
+**Supersedes:** None.

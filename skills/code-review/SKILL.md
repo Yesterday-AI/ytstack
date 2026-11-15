@@ -2,7 +2,7 @@
 name: code-review
 metadata:
   tier: task
-  version: 0.5.0
+  version: 0.5.1
 description: "Reviews the active task's commits with a fresh-context reviewer subagent and handles the feedback with technical rigor, through the vendored superpowers requesting-code-review and receiving-code-review procedures, with the task plan and commit range injected. Use after a task's commits exist and before summarize-task, before a merge or PR, or when the user says review this, code review, check my changes. Not for reviewing a plan (plan-eng-review) and not without commits for the task."
 allowed-tools:
   - Bash
@@ -106,7 +106,7 @@ You are invoked inside a ytstack project after the active task's commits exist. 
 
 HARD-GATE: if `IS_GIT=no`, abort. If `ACTIVE_TASK` has `none` in it or `TASK_PLAN_EXISTS=no`, abort with "no active task plan; run `ytstack:plan-task` or review a plain diff without ytstack". If `COMMITS_SOURCE=none` or `BASE_SHA=none`, abort with "no commits found for the task; commit with the `M###-S##-T##:` prefix (or set `commit_ref_pattern` in PREFERENCES) and re-run".
 
-**Spec check, bounded to the touched area.** When `SPEC_EXISTS=yes`, add to the reviewer's requirements the plan's `## Spec impact` section and the paths listed under `SPEC_AREAS` (the area files of `.ytstack/spec/` that cover the changed files). The reviewer reads those area files, and the section of a `sources` document they point to, against the diff. Two things are findings: the diff changes behaviour, an interface, an invariant or an error path that an area file describes while the plan says `none`; or an area file (or its source) now states something the diff contradicts. A change that restores the described behaviour needs no spec edit and is not a finding. The reviewer does not audit the rest of the spec, other areas or the repository's documentation.
+**Spec check, bounded to the touched area.** When `SPEC_EXISTS=yes`, add to the reviewer's requirements the plan's `## Spec impact` section and the paths listed under `SPEC_AREAS` (the area files of `.ytstack/spec/` that cover the changed files). The reviewer reads those area files, and the section of a `sources` document they point to, against the diff. Two things are findings: the diff changes behaviour, an interface, an invariant or an error path that an area file describes while the plan says `none`; or an area file (or its source) now states something the diff contradicts. A change that restores the described behaviour needs no spec edit and is not a finding. A third is a finding when `.ytstack/spec/REVIEW.md` keeps a `## Checks` section (the machine checks reviewers rely on, `docs/ux/review-policy-format.md`): the diff adds a guard or changes what one guards (a check script, a lint rule, a CI step) and the section did not change with it. The reviewer does not audit the rest of the spec, other areas or the repository's documentation.
 
 ## Bounded review (ytstack)
 
