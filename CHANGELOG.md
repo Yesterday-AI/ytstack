@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **New artifacts follow the directory their milestone lives in** (issue #70):
+  when a milestone's roadmap or files already sit in
+  `.ytstack/milestones/M###/` (or a `backlog/<PREFIX>/` directory), new plans,
+  summaries, reviews and retros of that milestone are written there instead of
+  flat into `.ytstack/`. The lib functions `yt_artifact_dir` and
+  `yt_artifact_path` decide; skills print `ARTIFACT_DIR`. Flat stays the
+  default and nothing is moved. Readers that built flat paths (plan-task,
+  summarize-task, slice-milestone, reassess-roadmap, retro, the review and
+  execution skills, finish-branch, ship, spawn-milestone-team, grill,
+  handoff-session, and the stop, pre-tool-use-edit, session-start,
+  task-created, teammate-idle hooks) now find those files there too.
+  `plan-milestone` counts moved milestones when it numbers the next one, and
+  `ytstack-risk` counts their files as process records.
+
 ## [0.11.0] - 2026-11-15
 
 ### Added
