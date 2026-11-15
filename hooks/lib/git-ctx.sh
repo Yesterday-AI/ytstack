@@ -640,40 +640,117 @@ yt_find_artifacts() {
   return 0
 }
 
-# ---- standing instructions, one file per entry (issue #57) --------------------
+# ---- standing instructions, one file per entry (issues #57, #72, #73, #74) ------
 # yt_standing <yt_dir> -> the standing entries in force, newest first, one per
 # line: <file name> TAB <given> TAB <scope>. Entries live in
 # <yt_dir>/standing/<YYYYMMDDTHHMMZ>-<slug>.md (docs/ux/coordinator-format.md);
 # the time in the name orders them (missing seconds count as 00). An entry that another entry names in `supersedes`
-# is skipped. Prints nothing when the directory does not exist; STANDING.md
-# is read by the caller as before.
+# is skipped, so is an entry whose `until` has passed and an entry of
+# `kind: end` (it only closes another one). Prints nothing when the directory
+# does not exist; STANDING.md is read by the caller as before.
 yt_standing() {
-  local sd="$1/standing" names
+  yt_standing_fields "$1" | awk -F '\t' '$9 == "active" { print $1 "\t" $2 "\t" ($3 == "-" ? "" : $3) }'
+  return 0
+}
+
+# yt_standing_fields <yt_dir> [<now as YYYYMMDDHHMMSS, UTC>] -> every entry no
+# other entry supersedes and not of kind end, newest first, TAB separated:
+#   name given scope until until-condition until-check check summary state
+# An empty value is "-". summary is the first sentence of the body (at most 160
+# characters). state is "expired" when `until` is at or before now, else
+# "active". Files only: no command of an entry runs here (bin/ytstack-standing
+# list runs until-check and check).
+yt_standing_fields() {
+  local sd="$1/standing" names now="${2:-}"
   [ -n "$1" ] && [ -d "$sd" ] || return 0
+  [ -n "$now" ] || now=$(date -u +%Y%m%d%H%M%S)
   names=$(ls "$sd" 2>/dev/null | grep -E '^[0-9]{8}T[0-9]{4}([0-9]{2})?Z-[A-Za-z0-9._-]+\.md$')
   [ -n "$names" ] || return 0
   # shellcheck disable=SC2086  # the names match the pattern above: no spaces
   ( cd "$sd" && awk -v q="'" '
     function clean(v,  f) {
-      gsub(/^[ \t]+|[ \t]+$/, "", v)
+      gsub(/\t/, " ", v); gsub(/^[ \t]+|[ \t]+$/, "", v)
       f = substr(v, 1, 1)
       if (length(v) >= 2 && (f == q || f == "\"") && substr(v, length(v)) == f) v = substr(v, 2, length(v) - 2)
       return v
     }
+    function d(v) { return v == "" ? "-" : v }
+    function val(key) { return clean(substr($0, length(key) + 2)) }
     # Sort key YYYYMMDDHHMMSS: a name without seconds counts as :00, so that
     # 20261114T1225Z sorts before 20261114T122530Z.
-    function out(  k) { k = substr(fn, 1, 8) substr(fn, 10, 4) (substr(fn, 14, 1) == "Z" ? "00" : substr(fn, 14, 2)); print k "\t" fn "\t" g "\t" s "\t" u }
-    FNR == 1 { if (fn != "") out(); fn = FILENAME; infm = ($0 == "---"); g = ""; s = ""; u = ""; next }
+    function out(  k) {
+      k = substr(fn, 1, 8) substr(fn, 10, 4) (substr(fn, 14, 1) == "Z" ? "00" : substr(fn, 14, 2))
+      print k "\t" fn "\t" d(g) "\t" d(s) "\t" d(u) "\t" d(un) "\t" d(uc) "\t" d(uk) "\t" d(ck) "\t" d(kd) "\t" d(sm)
+    }
+    FNR == 1 { if (fn != "") out(); fn = FILENAME; infm = ($0 == "---"); g = s = u = un = uc = uk = ck = kd = sm = ""; next }
     infm && /^---[ \t]*$/ { infm = 0; next }
-    infm && /^given:/      { g = clean(substr($0, 7)) }
-    infm && /^scope:/      { s = clean(substr($0, 7)) }
-    infm && /^supersedes:/ { u = clean(substr($0, 12)); sub(/\.md$/, "", u) }
+    infm && /^given:/           { g = val("given") }
+    infm && /^scope:/           { s = val("scope") }
+    infm && /^supersedes:/      { u = val("supersedes"); sub(/\.md$/, "", u) }
+    infm && /^until:/           { un = val("until") }
+    infm && /^until-condition:/ { uc = val("until-condition") }
+    infm && /^until-check:/     { uk = val("until-check") }
+    infm && /^check:/           { ck = val("check") }
+    infm && /^kind:/            { kd = val("kind") }
+    !infm && sm == "" && NF {
+      sm = $0; gsub(/\t/, " ", sm); sub(/^[ ]*([-*#>]+[ ]+)?/, "", sm)
+      if (match(sm, /[.!?]( |$)/)) sm = substr(sm, 1, RSTART)
+      if (length(sm) > 160) sm = substr(sm, 1, 157) "..."
+    }
     END { if (fn != "") out() }
-  ' $names ) | sort -r | awk -F '\t' '
-    { n[NR] = $2; l[NR] = $2 "\t" $3 "\t" $4; if ($5 != "" && $5 != "none" && $5 != "None" && $5 != "-") sup[$5] = 1 }
-    END { for (i = 1; i <= NR; i++) { b = n[i]; sub(/\.md$/, "", b); if (!(b in sup)) print l[i] } }
+  ' $names ) | sort -r | awk -F '\t' -v now="$now" '
+    function key(t) { gsub(/[^0-9]/, "", t); return length(t) == 12 ? t "00" : t }
+    { r[NR] = $0; n[NR] = $2; if ($5 != "-" && $5 != "none" && $5 != "None") sup[$5] = 1 }
+    END {
+      for (i = 1; i <= NR; i++) {
+        split(r[i], f, "\t"); b = n[i]; sub(/\.md$/, "", b)
+        if ((b in sup) || f[10] == "end") continue
+        st = (f[6] != "-" && length(key(f[6])) == 14 && key(f[6]) <= now) ? "expired" : "active"
+        print f[2] "\t" f[3] "\t" f[4] "\t" f[6] "\t" f[7] "\t" f[8] "\t" f[9] "\t" f[11] "\t" st
+      }
+    }
   '
   return 0
+}
+
+# yt_standing_lines <yt_dir> <role> [<max lines>] -> the active entries that
+# apply to <role> as "- <name> (<scope>): <summary>", newest first; past
+# <max lines> one line "- ... <n> more: bin/ytstack-standing list". Roles
+# (docs/ux/coordinator-format.md, "Scope and roles"): coordinator gets every
+# entry; lane and reviewer get the entries whose scope names their role or no
+# role at all. Role words in the scope: coordinator(s); lane(s), worker(s),
+# implementer(s); reviewer(s), review(s).
+yt_standing_lines() {
+  yt_standing_fields "$1" | awk -F '\t' -v role="${2:-coordinator}" -v max="${3:-0}" '
+    function roles(s,  t, r) {
+      t = " " tolower(s) " "; gsub(/[^a-z]+/, " ", t); r = ""
+      if (t ~ / (coordinator|coordinators)( |$)/) r = r "c"
+      if (t ~ / (lane|lanes|worker|workers|implementer|implementers)( |$)/) r = r "l"
+      if (t ~ / (reviewer|reviewers|review|reviews)( |$)/) r = r "r"
+      return r
+    }
+    $9 != "active" { next }
+    { rs = roles($3) }
+    role != "coordinator" && rs != "" && index(rs, substr(role, 1, 1)) == 0 { next }
+    { n++; if (max > 0 && n > max) { more++; next }
+      b = $1; sub(/\.md$/, "", b)
+      print "- " b " (" $3 "): " ($8 == "-" ? "(no text)" : $8) }
+    END { if (more) print "- ... " more " more: bin/ytstack-standing list" }
+  '
+  return 0
+}
+
+# yt_session_home -> the directory of per-session state that a hook and the
+# Bash tool of the same session both find: ${XDG_STATE_HOME:-~/.local/state}/
+# ytstack/sessions. Not yt_state_base: Claude Code sets CLAUDE_PLUGIN_DATA for
+# hooks only, never for commands of the Bash tool. Files under
+# <home>/<session id>/: `coordinate` (written by the coordinate preamble: the
+# YT_DIR on line 1), `prompts` (hooks/standing-prompt: one epoch per human
+# prompt), `standing-flags` (epoch TAB YYYYMMDDHHMM TAB ISO TAB excerpt per
+# prompt that looks like a standing instruction), `standing-stop` (hooks/stop:
+# the epoch up to which flags were handled).
+yt_session_home() {
+  printf '%s' "${XDG_STATE_HOME:-$HOME/.local/state}/ytstack/sessions"
 }
 
 # ---- factory tools that are off (M031-S03, issues #54 and #61) -----------------

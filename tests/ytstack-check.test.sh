@@ -391,6 +391,32 @@ eq "time: 29 February of a common year -> FAIL" 1 "$(printf '%s' "$OUT" | grep -
 eq "time: 31 November -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "november-31.md: the time in the name is not a real")"
 eq "time: second 60 in given -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "bad-given-seconds.md: given 2026-11-14T23:59:60Z is not a real")"
 rm -f "$SD"/*.md
+# temporary and conditional entries, checks, end entries (issues #73, #74)
+xentry() { # xentry <name> <given> <extra frontmatter lines, %b> [supersedes]
+  printf -- '---\ngiven: %s\nscope: x\nsupersedes: %s\n%b---\n\nAn instruction.\n' "$2" "${4:-}" "$3" > "$SD/$1.md"
+}
+xentry 20261114T1000Z-window 2026-11-14T10:00:00Z 'until: 2026-11-14T12:37Z\n'
+xentry 20261114T1010Z-cond 2026-11-14T10:10:00Z 'until-condition: PR #1879 merged\nuntil-check: gh pr view 1879 --json state -q .state | grep -qx MERGED\n'
+xentry 20261114T1020Z-check-alone 2026-11-14T10:20:00Z 'until-check: test -f done\ncheck: test -f LANES.md\n'
+xentry 20261114T1030Z-end-window 2026-11-14T10:30:00Z 'kind: end\n' 20261114T1000Z-window
+OUT=$("$CHECK" --standing "$PRJ" 2>&1); EC=$?
+eq "until, until-condition, until-check, check, kind end: well-formed -> exit 0" 0 "$EC"
+xentry 20261114T1100Z-until-bad 2026-11-14T11:00:00Z 'until: tomorrow\n'
+xentry 20261114T1110Z-until-early 2026-11-14T11:10:00Z 'until: 2026-11-14T11:00Z\n'
+xentry 20261114T1120Z-until-unreal 2026-11-14T11:20:00Z 'until: 2026-11-31T11:00Z\n'
+xentry 20261114T1130Z-kind-bad 2026-11-14T11:30:00Z 'kind: note\n'
+xentry 20261114T1140Z-end-nothing 2026-11-14T11:40:00Z 'kind: end\n'
+xentry 20261114T1150Z-check-empty 2026-11-14T11:50:00Z 'check: ""\n'
+OUT=$("$CHECK" --standing "$PRJ" 2>&1); EC=$?
+eq "broken optional keys -> exit 1" 1 "$EC"
+eq "until not ISO -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1100Z-until-bad.md: until 'tomorrow' is not an ISO UTC time")"
+eq "until before given -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1110Z-until-early.md: until 2026-11-14T11:00Z is not after given")"
+eq "until not a real time -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1120Z-until-unreal.md: until 2026-11-31T11:00Z is not a real")"
+eq "kind other than end -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1130Z-kind-bad.md: kind 'note' is not 'end'")"
+eq "kind end without supersedes -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1140Z-end-nothing.md: kind end closes an entry, but supersedes names none")"
+eq "an empty check -> FAIL" 1 "$(printf '%s' "$OUT" | grep -c "1150Z-check-empty.md: check is empty")"
+eq "the well-formed optional keys stay quiet" 0 "$(printf '%s' "$OUT" | grep -c "1000Z-window\|1010Z-cond\|1020Z-check-alone\|1030Z-end-window")"
+rm -f "$SD"/*.md
 # user scope: no .ytstack in the repository, the entries under ~/.ytstack/projects/<repo key>
 UREPO="$TMP/userscope"; mkdir -p "$UREPO" "$TMP/home"
 ( cd "$UREPO" && git init -q ) >/dev/null 2>&1
