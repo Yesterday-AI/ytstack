@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Who decides** (issue #78): a coordinator decides what no plan line and
+  no standing entry reserves, and records it in `DECISIONS.md`. A person
+  gets only what `escalate:` in `PREFERENCES.md` lists (default: a rule or
+  concept violation, a plan deviation, an irreversible or production step
+  without a plan line, a secret, spend) and what is `reserved`; a plan line
+  reserves only when it says verdict, approval or sign-off. The
+  `coordinate` preamble prints `ESCALATE`, Step 8 carries the default, and
+  the operating checklist has the rule as line 6.
+- **Question class and context gate** (issue #78): question files carry
+  `class: escalation|info` and `because:`. `ytstack-questions new --decides`
+  needs `--because <item>` and refuses an item that is not on the list;
+  `--info <who>` asks for a fact and decides nothing. `ytstack-questions ask`
+  refuses a question whose Context has no `Source:` or no `Purpose:` line.
+  Files without `class` stay valid and read as escalation. `ytstack-upkeep
+  --question` writes its report as `class: info`; `reassess-roadmap`,
+  `lesson` and `review-lessons` write theirs as `reserved`.
+
 - **Progress per phase** (issue #81): `ytstack-status --phases [--json]`
   prints done, in review and total per milestone and in total. When a total
   changed since the last report, the line says by how much and why (slices
