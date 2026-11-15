@@ -9,7 +9,8 @@
 # mode   prints the effective setting of `upstream_feedback` for the project
 #        in DIR (default: $PWD): `mode:` suggest | file | off, `set:` the value
 #        and where it came from (preferences | config | default), `gh:` yes |
-#        no | not checked, `repo:`. gh is asked (`gh auth status`) only for
+#        no | not checked, `repo:`, `rules:` (the path of the channel's
+#        rules in this plugin). gh is asked (`gh auth status`) only for
 #        file; without gh or a login the mode is suggest and a `note:` says
 #        why. An invalid value prints a `warning:` line. Exit 0; 64 usage.
 # draft  writes an issue body with TODO lines for what the agent has to fill,
@@ -49,6 +50,7 @@ cmd_mode() {
   echo "set: $YT_PREF_UPSTREAM_FEEDBACK ($YT_PREF_UPSTREAM_FEEDBACK_FROM)"
   echo "gh: $gh"
   echo "repo: $REPO"
+  echo "rules: $HERE/docs/ux/upstream-feedback.md"
   [ "$gh" != no ] || echo "note: file needs a signed-in gh (gh auth status); suggesting instead"
   [ -z "$YT_PREF_WARNINGS" ] || printf '%s\n' "$YT_PREF_WARNINGS" | sed 's/^/warning: /'
   return 0

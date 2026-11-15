@@ -3,7 +3,7 @@ name: adopt-brownfield
 description: "Brings an existing codebase under ytstack by reference, without a greenfield pitch. Use when a repo has a README, docs, CHANGELOG, ADRs or months of commits but no .ytstack/ yet, when a project has .ytstack/ but no technical spec under .ytstack/spec/ yet (adds only the spec), or when the user says adopt ytstack, set up ytstack here, onboard this codebase, map the codebase, write the technical spec. Not for ideas without code yet (office-hours, then init-project) and not for repos that already have .ytstack/ with a spec (resume-session)."
 metadata:
   tier: core
-  version: 0.3.0
+  version: 0.3.1
   triggers:
     - adopt ytstack
     - existing project
@@ -464,6 +464,7 @@ Run `ytstack:plan-milestone` for the next discrete initiative. If day-to-day iss
 Local preferences for {PROJECT_NAME}. Apply to every ytstack session for this project.
 
 explain_level: default
+upstream_feedback: suggest  # what concerns ytstack itself: suggest = draft and ask; file = file or comment at Yesterday-AI/ytstack (public); off
 
 - Never duplicate `docs/` content into `.ytstack/`; link out instead.
 - `commit_ref_pattern:` (optional) -- see `ytstack:summarize-task`; default `^M###-S##-T##:`.

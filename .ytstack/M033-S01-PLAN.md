@@ -5,7 +5,7 @@ project: ytstack
 created: 2026-11-15T00:50:00Z
 status: in-progress
 task_count: 4
-completed_tasks: 1
+completed_tasks: 2
 ---
 
 # M033-S01 -- Slice Plan
@@ -17,7 +17,7 @@ completed_tasks: 1
 ## Tasks
 
 - [x] T01 -- The setting and the helper: `yt_prefs` reads `upstream_feedback` from `PREFERENCES.md`, then from `~/.ytstack/config` (`upstream_feedback=...`), default `suggest`, an invalid value reads as `suggest`; `bin/ytstack-upstream` with `mode` (the effective setting, `file` falls back to `suggest` without `gh` auth), `draft` (an issue body with version, host and placeholders; never posts) and `check` (placeholders left, no evidence, no search line, an email address, a token-looking string, a home directory path). Tests in `tests/git-ctx.test.sh` and a new `tests/ytstack-upstream.test.sh`.
-- [ ] T02 -- The channel: `docs/ux/upstream-feedback.md` (what goes upstream, when, the rules, the three settings, the helper); `using-ytstack` "Reporting ytstack issues" becomes a short pointer to it within the SessionStart budget; the `PREFERENCES.md` templates of `init-project` and `adopt-brownfield` carry the key.
+- [x] T02 -- The channel: `docs/ux/upstream-feedback.md` (what goes upstream, when, the rules, the three settings, the helper); `using-ytstack` "Reporting ytstack issues" becomes a short pointer to it within the SessionStart budget; the `PREFERENCES.md` templates of `init-project` and `adopt-brownfield` carry the key.
 - [ ] T03 -- `retro` and `lane-retro` end with an "Upstream" section filed per the setting; `lesson` routes a lesson that concerns ytstack itself to the channel. Preamble flags pinned in `tests/skill-preambles.test.sh`.
 - [ ] T04 -- Eval cases `upstream-suggest` and `upstream-file` (not run), `evals/README.md` rows, the `skills`, `checks-and-evals` and `artifacts` area files, a `DECISIONS.md` entry.
 

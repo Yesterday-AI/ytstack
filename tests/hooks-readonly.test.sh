@@ -73,6 +73,8 @@ has "ss-main: manual HANDOFF.md mentioned with event" "$CTX" "HANDOFF.md (event:
 lacks "ss-main: no CLAUDE_PROJECT_DIR path leaked" "$CTX" "$ELSEWHERE"
 eq  "ss-main: git status clean" "" "$(git -C "$MAIN" status --porcelain)"
 if [ "${#CTX}" -lt 10000 ]; then ok "ss-main: context under 10,000 chars (${#CTX})"; else bad "ss-main: context under 10,000 chars" "${#CTX}"; fi
+# the upstream feedback channel (M033): the directive names the setting and the helper, the rules live in a doc
+has "ss-main: directive names upstream_feedback" "$CTX" "per \`upstream_feedback\`. \`ytstack-upstream mode\` prints it"
 
 # ---- 1b. session-start, two milestones in progress (M018 states) ----------
 printf -- '---\nmilestone: M998\nstatus: in-progress\n---\n' > "$MAIN/.ytstack/M998-ROADMAP.md"

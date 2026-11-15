@@ -3,7 +3,7 @@ name: init-project
 description: "Scaffolds .ytstack/ (PROJECT, DECISIONS, KNOWLEDGE, RUNTIME, STATE, PREFERENCES) for a new project from a validated pitch. Use after office-hours wrote OFFICE-HOURS.md, or when the user says init ytstack, set up ytstack, start a ytstack project in a fresh repo. Not for unvalidated ideas (office-hours first) and not for mature codebases with docs and commits but no .ytstack/ (adopt-brownfield; init-project routes there by itself)."
 metadata:
   tier: core
-  version: 0.2.1
+  version: 0.2.2
   triggers:
     - init ytstack
     - setup ytstack
@@ -381,6 +381,7 @@ autonomy: loop           # loop = chain plan-task -> TDD -> verify -> summarize 
 quick_lane: on           # one-sentence changes go through ytstack:quick-task (Q### artifacts), no pitch, no review
 minimal_code: on         # inject the minimal-code guard (YAGNI ladder, never-cut list) at session start
 team: off                # off = spawn-milestone-team dispatches worktree subagents (default); on = Claude Code Agent Teams (experimental)
+upstream_feedback: suggest  # what concerns ytstack itself: suggest = draft and ask; file = file or comment at Yesterday-AI/ytstack (public); off
 
 ## Model preferences
 

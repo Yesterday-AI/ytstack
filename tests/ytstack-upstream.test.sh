@@ -5,7 +5,8 @@
 # Contract:
 #   mode   the effective setting: suggest by default, PREFERENCES.md over
 #          ~/.ytstack/config; gh is asked only for file, and file without a
-#          gh login is suggest with a note; the repository is named
+#          gh login is suggest with a note; the repository and the path of
+#          the rules are named
 #   draft  an issue body with version, host, OS and TODO lines under $TMPDIR
 #          (or --out), never inside the checkout, never over an existing file;
 #          refuses an unknown kind or a missing title; never calls gh
@@ -65,6 +66,8 @@ has "default: suggest" "mode: suggest" "$OUT"
 has "default: where it came from" "set: suggest (default)" "$OUT"
 has "default: gh not asked" "gh: not checked" "$OUT"
 has "the repository is named" "repo: Yesterday-AI/ytstack" "$OUT"
+has "the rules are named by path" "rules: $ROOT/docs/ux/upstream-feedback.md" "$OUT"
+[ -f "$ROOT/docs/ux/upstream-feedback.md" ] && ok "the rules file exists" || bad "the rules file exists"
 eq "suggest: gh was not called" "" "$(cat "$GH_LOG")"
 
 printf 'upstream_feedback: off\n' > "$P/.ytstack/PREFERENCES.md"
