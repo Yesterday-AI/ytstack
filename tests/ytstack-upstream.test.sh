@@ -17,6 +17,9 @@
 # Run: /bin/bash tests/ytstack-upstream.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
 set -uo pipefail
+# A non-interactive or teammate session never posts (mode prints suggest):
+# the suite sets these itself, also when it runs in CI.
+unset YTSTACK_NON_INTERACTIVE OPENCLAW_SESSION CLAUDE_AGENT_TEAM_MEMBER CI
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 BIN="$ROOT/bin/ytstack-upstream"
@@ -85,6 +88,16 @@ has "file without a gh login: suggest" "mode: suggest" "$OUT"
 has "the setting stays visible" "set: file (config)" "$OUT"
 has "gh: no" "gh: no" "$OUT"
 has "a note says why" "note: file needs a signed-in gh" "$OUT"
+
+for v in YTSTACK_NON_INTERACTIVE OPENCLAW_SESSION CLAUDE_AGENT_TEAM_MEMBER CI; do
+  : > "$GH_LOG"
+  OUT=$(cd "$TMP" && env "$v=1" PATH="$FAKE:$PATH" HOME="$H" GH_LOG="$GH_LOG" GH_AUTH=yes bash "$BIN" -C "$P" mode 2>&1)
+  has "file in a session with $v: suggest" "mode: suggest" "$OUT"
+  has "and a note names $v" "note: a non-interactive or teammate session ($v is set) never posts" "$OUT"
+  eq "and gh is not asked with $v" "" "$(cat "$GH_LOG")"
+done
+OUT=$(cd "$TMP" && env CI=false PATH="$FAKE:$PATH" HOME="$H" GH_LOG="$GH_LOG" GH_AUTH=yes bash "$BIN" -C "$P" mode 2>&1)
+has "CI=false is no non-interactive session" "mode: file" "$OUT"
 
 printf 'upstream_feedback: suggest\n' > "$P/.ytstack/PREFERENCES.md"
 run -C "$P" mode; has "PREFERENCES over the config" "set: suggest (preferences)" "$OUT"

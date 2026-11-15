@@ -3,7 +3,7 @@ name: using-ytstack
 description: "Establishes how agents find and invoke ytstack skills. Requires Skill-tool invocation before any response when a ytstack skill applies. Auto-injected by the SessionStart hook. Not meant for direct user invocation."
 metadata:
   tier: core
-  version: 0.3.0
+  version: 0.3.1
   kind: directive
 user-invocable: false
 ---
@@ -98,7 +98,7 @@ Follow its Checklist exactly. Create TodoWrite entries per item. Don't improvise
 
 ## Feeding ytstack upstream
 
-A ytstack skill, hook or script misbehaved, was missing or needed a workaround, or a retro or lesson found something about ytstack itself: that goes to https://github.com/Yesterday-AI/ytstack/issues per `upstream_feedback`. `ytstack-upstream mode` prints it (`suggest`: draft and ask; `file`: search, then file or comment; `off`) and the path of the rules. Never work around a ytstack bug silently.
+A ytstack skill, hook or script misbehaved, was missing or needed a workaround, or a retro or lesson found something about ytstack itself: that goes to https://github.com/Yesterday-AI/ytstack/issues per `upstream_feedback`. `ytstack-upstream mode` prints it (`suggest`: draft and ask; `file`: search, then file or comment; `off`) and the path of the rules; a non-interactive or teammate session gets `suggest` and never posts. Never work around a ytstack bug silently.
 
 ## Summary
 

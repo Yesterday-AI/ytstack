@@ -1185,5 +1185,6 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - Nothing is posted from a non-interactive run or a dispatched worker; their drafts wait for a person.
 - The project's own bugs and lessons never go upstream; work in the ytstack repository uses its own artifacts.
 - `check` is stricter than the token rule of `bin/ytstack-handover`, because a draft is published: known secret shapes, token runs across `/` and `+`, every home path form, a login in a GitHub noreply address, and the `--title` that is posted (PR #67 review).
+- A non-interactive run is detected by the script, not left to the agent: `mode` prints `suggest` with a `note:` when `YTSTACK_NON_INTERACTIVE`, `OPENCLAW_SESSION`, `CLAUDE_AGENT_TEAM_MEMBER` or `CI` is set (PR #67 review).
 
 **Supersedes:** None.

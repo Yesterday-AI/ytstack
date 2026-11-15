@@ -29,7 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opt-in because the repository is public), or stays quiet (`off`). Rules in
   `docs/ux/upstream-feedback.md`.
 - `bin/ytstack-upstream`: `mode` shows the setting in effect (`file` without a
-  `gh` login falls back to `suggest`), `draft` writes an issue body with
+  `gh` login, or in a non-interactive, CI or teammate session, falls back to
+  `suggest`), `draft` writes an issue body with
   version and host, `check` blocks leftover placeholders, missing evidence, no
   search for existing issues, email addresses (also a GitHub noreply address
   with your login), secrets (AWS, GitHub, `sk-`, Slack, GitLab, npm, PEM keys

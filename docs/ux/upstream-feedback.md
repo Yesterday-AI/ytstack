@@ -34,7 +34,7 @@ Only what concerns ytstack itself: a skill, a hook, a script under `bin/`, an ar
 | `file` | Searches, drafts, checks, then posts (`gh issue create`) or comments on the issue it found (`gh issue comment`), and tells the person the link in one line. |
 | `off` | Nothing goes upstream and nothing is suggested. A ytstack bug is still named to the person in the conversation. |
 
-`file` is opt-in because it publishes text to a public repository under the person's GitHub account. `bin/ytstack-upstream mode` prints the effective value; for `file` it asks `gh auth status`, and without `gh` or a login it prints `mode: suggest` with a note. The agent follows the `mode:` line, not the file.
+`file` is opt-in because it publishes text to a public repository under the person's GitHub account. `bin/ytstack-upstream mode` prints the effective value; for `file` it asks `gh auth status`, and without `gh` or a login it prints `mode: suggest` with a note. A session nobody answers in never posts: with `YTSTACK_NON_INTERACTIVE`, `OPENCLAW_SESSION`, `CLAUDE_AGENT_TEAM_MEMBER` or `CI` set (not `0`, `false` or `no`), `mode` prints `mode: suggest` and a `note:` naming the variable, without asking `gh`; the draft waits for a person. The agent follows the `mode:` line, not the file.
 
 ## The steps
 

@@ -12,7 +12,10 @@
 #        no | not checked, `repo:`, `rules:` (the path of the channel's
 #        rules in this plugin). gh is asked (`gh auth status`) only for
 #        file; without gh or a login the mode is suggest and a `note:` says
-#        why. An invalid value prints a `warning:` line. Exit 0; 64 usage.
+#        why. In a session nobody answers in (YTSTACK_NON_INTERACTIVE,
+#        OPENCLAW_SESSION, CLAUDE_AGENT_TEAM_MEMBER or CI set) file is
+#        suggest, gh is not asked, and a `note:` names the variable. An
+#        invalid value prints a `warning:` line. Exit 0; 64 usage.
 # draft  writes an issue body with TODO lines for what the agent has to fill,
 #        the ytstack version, the host and the OS, and prints `path:` and
 #        `title:`. Default path under $TMPDIR, never in the checkout. Exit 0;
@@ -38,13 +41,27 @@ usage() { sed -n '5,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 case "$CMD" in mode|draft|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 [ -d "$DIR" ] || { echo "ytstack-upstream: -C '$DIR' is not a directory" >&2; exit 64; }
 
+# noninteractive: the name of the first variable that marks a session nobody
+# answers in (a headless run, an OpenClaw session, a teammate, CI); "0",
+# "false" and "no" do not count. Status 1 without one.
+noninteractive() {
+  local n v
+  for n in YTSTACK_NON_INTERACTIVE OPENCLAW_SESSION CLAUDE_AGENT_TEAM_MEMBER CI; do
+    v=${!n:-}
+    case "$v" in ""|0|false|FALSE|False|no) ;; *) echo "$n"; return 0 ;; esac
+  done
+  return 1
+}
+
 cmd_mode() {
-  local gh=not\ checked mode
+  local gh=not\ checked mode ni=""
   yt_git_ctx "$DIR"
   yt_resolve_yt_dir >/dev/null
   YT_PREF_WARNINGS=""
   yt_upstream_feedback "${YT_DIR:-}"
   mode=$YT_PREF_UPSTREAM_FEEDBACK
+  # Such a session never posts: file reads as suggest, gh is not asked.
+  if [ "$mode" != off ] && ni=$(noninteractive); then mode=suggest; fi
   if [ "$mode" = file ]; then
     if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then gh=yes; else gh=no; mode=suggest; fi
   fi
@@ -54,6 +71,7 @@ cmd_mode() {
   echo "repo: $REPO"
   echo "rules: $HERE/docs/ux/upstream-feedback.md"
   [ "$gh" != no ] || echo "note: file needs a signed-in gh (gh auth status); suggesting instead"
+  [ -z "$ni" ] || echo "note: a non-interactive or teammate session ($ni is set) never posts; the draft waits for a person"
   [ -z "$YT_PREF_WARNINGS" ] || printf '%s\n' "$YT_PREF_WARNINGS" | sed 's/^/warning: /'
   return 0
 }
