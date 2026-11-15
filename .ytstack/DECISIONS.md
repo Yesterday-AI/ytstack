@@ -1396,5 +1396,6 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - PR watch: `stall_minutes` in `policy.json` (`defaults` or per repository, 0 = off); `ytstack-watch --stall MINUTES` (0 = off). A focus or stall mark joins a line's fingerprint only when set, so existing fingerprints stay equal across the upgrade.
 - The PR watch's state is `action_required` (it includes unresolved threads); `ytstack-watch` counts checks red, a conflict and changes requested on the head, the states its five fields show.
 - A new caller that needs "who holds PR N and is it alive" calls `ytstack-frontier owner`, not its own `LANES.md` reader.
+- `ytstack-watch` reads a blocking review per reviewer: one whose newest review on the head requests changes blocks, also when another reviewer approved later (the rule of `ytstack-finish-lane`). A failed read of an open focus pull request keeps the 20-second cadence (PR #92 review).
 
 **Supersedes:** None. Extends "2026-11-15: Lane liveness is part of `ytstack-frontier check`, worktree cleanup only prints commands, peers are list lines in `LANES.md` (issue #84)" and "2026-11-15: PR watch bulk registration takes only your own ready PRs; bins are called through `YT_BIN` (issue #85)".

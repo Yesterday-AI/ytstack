@@ -32,7 +32,8 @@
 #          the others are still read every --interval seconds.
 # --stall MINUTES   (default 15, 0 = off; not with --once) one line when an
 #          open pull request sat in an actionable state (checks red, a merge
-#          conflict, or changes requested on the head commit) for that long
+#          conflict, or a reviewer whose newest review on the head requests
+#          changes, also after another reviewer approved) for that long
 #          without a new head, and one more after the next window of the same
 #          length; a new head or a state that is no longer actionable starts
 #          the clock again. When LANES.md names the lane that holds it, the
@@ -310,25 +311,31 @@ def one:
      else ($r.state | ascii_downcase) + "@" + (($r.commit.oid // "unknown")[0:7]) end),
     (if .mergeable == "MERGEABLE" then "mergeable"
      elif .mergeable == "CONFLICTING" then "conflict"
-     else "unknown" end)
+     else "unknown" end),
+    # blocked: a reviewer whose newest review on the head requests changes
+    # (another reviewer approving later does not lift it; as ytstack-finish-lane)
+    (.headRefOid as $h
+     | [ (.reviews // [])[] | select(.submittedAt != null and .commit.oid == $h) ]
+     | if any(group_by(.author.login)[]; max_by(.submittedAt).state == "CHANGES_REQUESTED")
+       then "blocked" else "-" end)
   ] | join(" ")'
 
 ERRF=$(mktemp "${TMPDIR:-/tmp}/ytwatch.XXXXXX") || exit 1
 trap 'rm -f "$ERRF"' EXIT
 
-# read_pr <n>: sets ST HEAD CHECKS REVIEW MERGE; on failure returns 1 with the
-# reason in ERR. An answer that is not the five expected words is a failure.
+# read_pr <n>: sets ST HEAD CHECKS REVIEW MERGE BLOCK; on failure returns 1 with
+# the reason in ERR. An answer that is not the six expected words is a failure.
 read_pr() {
   local out extra
   if ! out=$(gh pr view "$1" --json state,headRefOid,statusCheckRollup,reviews,mergeable --jq "$JQ" 2>"$ERRF"); then
     ERR=$(head -1 "$ERRF"); ERR=${ERR:-gh exited with an error and no message}
     return 1
   fi
-  read -r ST HEAD CHECKS REVIEW MERGE extra <<EOF
+  read -r ST HEAD CHECKS REVIEW MERGE BLOCK extra <<EOF
 $out
 EOF
   case "$ST" in open|merged|closed) ;; *) ERR="unexpected answer from gh: '$out'"; return 1 ;; esac
-  [ -n "$MERGE" ] && [ -z "$extra" ] || { ERR="unexpected answer from gh: '$out'"; return 1; }
+  [ -n "$BLOCK" ] && [ -z "$extra" ] || { ERR="unexpected answer from gh: '$out'"; return 1; }
 }
 
 clock() { if [ -n "${YTSTACK_WATCH_CLOCK:-}" ]; then "$YTSTACK_WATCH_CLOCK"; else date -u +%s; fi; }
@@ -339,7 +346,7 @@ stall() {
   local n=$1 why="" t k own
   [ "$CHECKS" != red ] || why="checks red"
   [ "$MERGE" != conflict ] || why="${why:+$why, }conflict"
-  [ "$REVIEW" != "changes_requested@$HEAD" ] || why="${why:+$why, }review changes_requested"
+  [ "$BLOCK" != blocked ] || why="${why:+$why, }review changes_requested"
   if [ "$ST" != open ] || [ -z "$why" ]; then STALL_AT[$n]=""; return 0; fi
   t=$(clock)
   if [ -z "${STALL_AT[$n]:-}" ] || [ "${STALL_HEAD[$n]}" != "$HEAD" ]; then
@@ -368,6 +375,8 @@ while :; do
     if ! read_pr "$n"; then
       failed=yes; left=$((left + 1))
       if [ "$ONCE" = yes ]; then echo "#$n error: $ERR read $(now)"; else echo "$(now) #$n error: $ERR"; fi
+      # not finished: a focus pull request keeps its 20 seconds
+      case ",$FOCUS," in *",$n,"*) focus_open=yes ;; esac
       continue
     fi
     # The host answers "unknown" while it recomputes mergeability, for every

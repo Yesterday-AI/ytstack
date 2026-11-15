@@ -15,7 +15,8 @@
 #   focus     --focus PRs are read every 20 seconds and listed first, the
 #             others every --interval
 #   stall     a STALL line when an open pull request sat in an actionable state
-#             (red checks, a conflict, changes requested on the head) without
+#             (red checks, a conflict, a reviewer's newest review on the head
+#             requests changes) without
 #             a new head for --stall minutes (default 15), once per window,
 #             two windows; with the lane of LANES.md that holds it and that
 #             lane's last commit (ytstack-frontier owner)
@@ -332,6 +333,18 @@ like "STALL 2 after the next window, with what is actionable now" \
   "^$STAMP #20 STALL 2: conflict, review changes_requested; no new head for 30 min \(head a1b2c3d\); lane M001-S01 " "$S2"
 eq "one line per window, two windows only" "1 1" "$(lines "$S1") $(lines "$S2")"
 eq "nothing after the new head: no STALL from poll 9 on" 0 "$(printf '%s\n' "$OUT" | sed -n '/head=b2c3d4e/,$p' | grep -c STALL)"
+# PR #92 review: a later approval by another reviewer does not lift a changes request
+fresh
+OTHER='{"author":{"login":"rev2"},"state":"CHANGES_REQUESTED","submittedAt":"2026-11-15T13:00:00Z","commit":{"oid":"'"$A"'"}}'
+pr "$FIX/now"   20 OPEN "$A" "$RUN_OK" "$OTHER,$(review APPROVED "$A" 2026-11-15T14:00:00Z)" MERGEABLE
+pr "$FIX/step5" 20 MERGED "$A" "$RUN_OK" "$OTHER,$(review APPROVED "$A" 2026-11-15T14:00:00Z)" MERGEABLE
+swatch --pr 20
+like "a reviewer's changes request stays blocking after another reviewer approved" "^$STAMP #20 STALL 1: review changes_requested; " "$OUT"
+fresh
+pr "$FIX/now"   20 OPEN "$A" "$RUN_OK" "$OTHER,$(review APPROVED "$A" 2026-11-15T14:00:00Z),$(echo "$OTHER" | sed 's/CHANGES_REQUESTED/APPROVED/; s/13:00/15:00/')" MERGEABLE
+pr "$FIX/step5" 20 MERGED "$A" "$RUN_OK" "" MERGEABLE
+swatch --pr 20
+eq "the same reviewer's newer approval lifts it" 0 "$(printf '%s\n' "$OUT" | grep -c STALL)"
 fresh
 pr "$FIX/now" 20 OPEN "$A" "$RUN_BAD" "" MERGEABLE
 pr "$FIX/step4" 20 OPEN "$A" "$RUN_BUSY" "" MERGEABLE           # poll 4: the checks run again: not actionable
@@ -365,6 +378,13 @@ eq "it sleeps 20 seconds while a focus pull request is open" "20 20 20 20 20 20 
 eq "the focus pull request is read every poll" 8 "$(grep -c 'pr view 30' "$FIX/calls")"
 eq "the other one every 60 seconds (polls 1, 4, 7)" 3 "$(grep -c 'pr view 31' "$FIX/calls")"
 like "the focus pull request comes first" "^$STAMP #30 " "$(L 1)"
+# PR #92 review: a failed read of an open focus pull request keeps the 20 seconds
+fresh
+pr "$FIX/now"   30 OPEN "$A" "$RUN_OK" "" MERGEABLE
+mkdir -p "$FIX/step2" "$FIX/step3"; echo "HTTP 502: Bad Gateway" > "$FIX/step2/30.err"; : > "$FIX/step3/30.err.gone"
+pr "$FIX/step3" 30 MERGED "$A" "$RUN_OK" "" MERGEABLE
+watch --focus 30 --interval 300
+eq "after a failed read of a focus pull request the loop still sleeps 20 seconds" "20 20" "$(tr '\n' ' ' < "$FIX/sleeps" | sed 's/ $//')"
 fresh
 pr "$FIX/now" 30 OPEN "$A" "$RUN_OK" "" MERGEABLE
 pr "$FIX/now" 31 OPEN "$A" "$RUN_OK" "" MERGEABLE
