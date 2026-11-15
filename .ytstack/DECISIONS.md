@@ -1123,3 +1123,23 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** Never write a file under the external plan's directory. Map open rows only, one milestone per plan file (per section above 12 slices), the board as authority when there is one, `**Blocked by:**` only for a dependency on another mapped open row (anything else blocks the frontier for good). Every slice carries `**Source:** path:line (row id, read date)`. The recommendation is A up to five plan files with open rows, B above. `STATE.md` is not changed.
 
 **Supersedes:** None. Narrows the `adopt-brownfield` backlog slot: a large plan directory gets the mapping offer instead of the backlog pointer.
+
+## 2026-11-15: SessionStart stays read-only; factory-tool notices are said on startup only, the plugin version is recorded by a prompt hook (M031-S03)
+
+**Context:** Issue #54: a coordinator session in context-mcp hand-built a PR babysitter, a review tiering and a release post-check that ytstack already shipped, because nothing told it the tools were off. Issue #61: a session started on 0.7.0 followed the 0.7.0 skill text after the plugin went to 0.9.2. Both need a notice "once per session", and the version notice needs the version the session started on. `session-start` has a read-only contract (2026-11-11 status-line entry: a hook-maintained file "would break the read-only contract of SessionStart").
+
+**Options considered:**
+- A) `session-start` writes the version and a "said" marker into the per-session state directory.
+- B) `session-start` stays read-only and shows the factory lines only when the payload `source` is `startup` or `clear`; a new UserPromptSubmit hook records the version on the session's first prompt and compares on every prompt, with a marker per installed version.
+- C) No record: compare the hook's own plugin root with the installed one.
+
+**Chose:** B. The factory lines come from `yt_factory_notices` in `hooks/lib/git-ctx.sh`, which `bin/ytstack-upkeep` also calls (listed, never counted). `hooks/version-notice` keeps `plugin-version` and `notified-<version>` under `<state base>/sessions/<session-id>/`, keyed by the session only. Explicit choices stay silent: `merge_by: human` or `coordinator`, `pr_watch=off`.
+
+**Reason:** "Once per session" for the factory lines needs no file: a session starts once, and resume and compaction carry a source of their own. A plugin update happens while a session runs, without any SessionStart, so only a prompt hook sees it in time. C misses the `--resume` case, where a new process runs from the new root while the transcript holds the old skill text. Keying the record by session and not by checkout keeps it when the session moves into a worktree. Upkeep must not count a setting: a scheduled run would raise the same question every time.
+
+**How to apply:**
+- A new notice for a session start goes into `yt_factory_notices`, local files only, one line, silent when the project does not use the tool.
+- No hook calls GitHub for a notice; the PR watch heartbeat is read from its local state.
+- `session-start` writes nothing; state a hook needs across events is written by a hook that already writes (here `version-notice`).
+
+**Supersedes:** None.

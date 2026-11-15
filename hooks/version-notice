@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# ytstack UserPromptSubmit hook: tell a session once when the installed plugin
+# is newer than the one it loaded (M031-S03, issue #61). A session keeps the
+# skill text it loaded; after an update it follows the old text until the
+# skills are invoked again.
+#
+#   1. The first prompt of a session records the version of the plugin root
+#      this hook runs from (CLAUDE_PLUGIN_ROOT) in
+#      <state base>/sessions/<session id>/plugin-version. The file is keyed by
+#      the session only, not by the checkout, so a session that moves into a
+#      worktree keeps it. SessionStart stays read-only (DECISIONS 2026-11-15).
+#   2. Every prompt compares the recorded version with the installed one:
+#      installPath of the ytstack entries in installed_plugins.json
+#      (${CLAUDE_CONFIG_DIR:-~/.claude}/plugins), else the newest sibling of
+#      this plugin root in the plugin cache without an .orphaned_at marker,
+#      else this root. Newer: one notice line plus one line with the entry
+#      titles of the installed CHANGELOG.md between the two versions (bounded),
+#      then a marker notified-<version>, so each installed version is said once.
+#
+# Local files only, no network. Fail open: any problem ends silent with exit 0.
+# Output: the UserPromptSubmit additionalContext JSON; YTSTACK_HOOK_FORMAT=plain
+# prints the text.
+
+set -uo pipefail
+trap '' PIPE
+
+. "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
+
+yt_read_stdin
+SID="${YT_SESSION_ID:-}"
+case "$SID" in ''|.|..|*[!A-Za-z0-9._-]*) exit 0 ;; esac
+ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+# version_of <plugin root> -> the "version" of its manifest ("" when none).
+version_of() {
+  local m
+  for m in "$1/.claude-plugin/plugin.json" "$1/.codex-plugin/plugin.json"; do
+    [ -f "$m" ] || continue
+    sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$m" | head -1
+    return 0
+  done
+}
+# newer <a> <b>: true when version a is above b (numeric major.minor.patch;
+# a suffix after "-" or "+" is ignored).
+newer() {
+  awk -v a="$1" -v b="$2" 'BEGIN {
+    sub(/[-+].*/, "", a); sub(/[-+].*/, "", b)
+    na = split(a, x, "."); nb = split(b, y, ".")
+    for (i = 1; i <= 3; i++) { p = (i <= na) ? x[i] + 0 : 0; q = (i <= nb) ? y[i] + 0 : 0; if (p != q) exit !(p > q) }
+    exit 1
+  }'
+}
+# best <roots, one per line> -> the root with the highest version.
+best() {
+  local r v top="" topv=""
+  while IFS= read -r r; do
+    [ -n "$r" ] && [ -d "$r" ] || continue
+    v=$(version_of "$r"); [ -n "$v" ] || continue
+    if [ -z "$topv" ] || newer "$v" "$topv"; then top="$r"; topv="$v"; fi
+  done
+  printf '%s' "$top"
+}
+
+OWN=$(version_of "$ROOT")
+[ -n "$OWN" ] || exit 0
+DIR="$(yt_state_base)/sessions/$SID"
+mkdir -p "$DIR" 2>/dev/null || exit 0
+REC="$DIR/plugin-version"
+if [ ! -s "$REC" ]; then
+  printf '%s\n' "$OWN" > "$REC.$$" 2>/dev/null && mv -f "$REC.$$" "$REC" 2>/dev/null || exit 0
+fi
+LOADED=$(head -1 "$REC" 2>/dev/null)
+[ -n "$LOADED" ] || exit 0
+
+INST_ROOT=""
+CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/installed_plugins.json"
+if [ -f "$CFG" ]; then
+  JQ=$(yt_jq)
+  if [ -n "$JQ" ]; then
+    PATHS=$("$JQ" -r '(.plugins // {}) | to_entries[] | select((.key | split("@")[0]) == "ytstack")
+      | .value | (if type == "array" then .[] else . end) | .installPath // empty' "$CFG" 2>/dev/null)
+  elif [ -n "$(yt_python)" ]; then
+    PATHS=$("$(yt_python)" -I -c '
+import json, sys
+try:
+    p = json.load(open(sys.argv[1])).get("plugins", {})
+except Exception:
+    p = {}
+for k, v in p.items():
+    if k.split("@")[0] != "ytstack":
+        continue
+    for i in v if isinstance(v, list) else [v]:
+        if isinstance(i, dict) and i.get("installPath"):
+            print(i["installPath"])
+' "$CFG" 2>/dev/null)
+  else
+    PATHS=""
+  fi
+  INST_ROOT=$(printf '%s\n' "$PATHS" | best)
+fi
+if [ -z "$INST_ROOT" ]; then
+  PARENT=$(dirname "$ROOT")
+  case "$(basename "$PARENT")" in
+    ytstack*)
+      INST_ROOT=$(for d in "$PARENT"/*; do [ -d "$d" ] && [ ! -e "$d/.orphaned_at" ] && printf '%s\n' "$d"; done | best) ;;
+  esac
+fi
+[ -n "$INST_ROOT" ] || INST_ROOT="$ROOT"
+INST=$(version_of "$INST_ROOT")
+[ -n "$INST" ] || exit 0
+newer "$INST" "$LOADED" || exit 0
+MARK="$DIR/notified-$INST"
+case "$INST" in *[!A-Za-z0-9._+-]*) exit 0 ;; esac
+[ ! -e "$MARK" ] || exit 0
+: > "$MARK" 2>/dev/null || exit 0
+
+TEXT="ytstack $INST installed, this session loaded $LOADED: reload the skills you use (invoke them again through the Skill tool; the skill text in this session is the old one)."
+if [ -f "$INST_ROOT/CHANGELOG.md" ]; then
+  CHANGES=$(awk -v lo="$LOADED" -v hi="$INST" -v max=600 -v file="$INST_ROOT/CHANGELOG.md" '
+    function num(v, i,   x, n) { sub(/[-+].*/, "", v); n = split(v, x, "."); return (i <= n) ? x[i] + 0 : 0 }
+    function gt(a, b,   i) { for (i = 1; i <= 3; i++) if (num(a, i) != num(b, i)) return num(a, i) > num(b, i); return 0 }
+    function flush() { if (cur != "" && titles != "") add(cur ": " titles); titles = "" }
+    function add(s) {
+      if (cut) return
+      if (length(out) + length(s) + 2 > max) { cut = 1; return }
+      out = (out == "" ? s : out ". " s)
+    }
+    /^## \[/ {
+      flush()
+      v = $0; sub(/^## \[/, "", v); sub(/\].*/, "", v)
+      cur = (v ~ /^[0-9]/ && gt(v, lo) && !gt(v, hi)) ? v : ""
+      next
+    }
+    cur != "" && /^- \*\*/ {
+      t = $0; sub(/^- \*\*/, "", t); sub(/\*\*.*/, "", t); sub(/[.:]+$/, "", t)
+      titles = (titles == "" ? t : titles "; " t)
+    }
+    END {
+      flush()
+      if (out == "") exit
+      print "What changed (" file "): " out (cut ? ". ... more in the file." : ".")
+    }' "$INST_ROOT/CHANGELOG.md")
+  [ -z "$CHANGES" ] || TEXT="$TEXT
+$CHANGES"
+fi
+
+if [ "${YTSTACK_HOOK_FORMAT:-json}" = plain ]; then
+  printf '%s\n' "$TEXT"
+  exit 0
+fi
+JQ=$(yt_jq)
+if [ -n "$JQ" ]; then
+  printf '%s' "$TEXT" | "$JQ" -Rs '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: .}}'
+elif [ -n "$(yt_python)" ]; then
+  printf '%s' "$TEXT" | "$(yt_python)" -I -c 'import sys, json; print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": sys.stdin.read()}}))'
+fi
+exit 0

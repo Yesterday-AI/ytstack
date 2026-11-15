@@ -36,6 +36,7 @@ The lifecycle hooks under `hooks/` and the shared library `hooks/lib/git-ctx.sh`
 - `yt_brownfield_signals` counts up to six signs of an existing codebase and names which file would feed which artifact. The comment above the function lists the counted signals and the hint-only ones.
 - `yt_commit_ref_pattern` renders a task's commit pattern from `commit_ref_pattern` in `PREFERENCES.md`, or from the default. `yt_task_commits` lists commits whose subject matches it. When none match, it falls back to the commits on the current branch after the merge-base with the default branch, and reports which source it used.
 - `yt_find_artifacts` lists artifacts newest first from the flat layout and from the alternative layouts named in its comment. Reading tolerates those layouts. Writing stays flat.
+- `yt_factory_notices` returns one line per factory tool that is off although the project would use it, from local files only: risk routing (`spec/` without `REVIEW.md` or without an area allowing `auto_merge: low|normal`, while `merge_by` is `risk`), the PR watch on a GitHub `origin` (no `pr_watch` line in `~/.ytstack/config`, or `on` with a heartbeat missing or 10 minutes old; `yt_pr_watch_heartbeat` reads `watch.sqlite3`, else the time of `worker.lock`), and `RUNTIME.md` without "Release" or "Signals" while deploy or signal evidence exists (`ytstack-runtime sections`). `merge_by: human|coordinator` and `pr_watch=off` are choices and stay silent. `yt_read_stdin` also sets `YT_SOURCE`.
 - `yt_standing` lists the standing instructions in force from `.ytstack/standing/` (name, `given`, `scope`, tab separated), newest first by the time in the name (missing seconds count as `00`), without the entries another entry names in `supersedes`. It prints nothing without the directory; `STANDING.md` is read by the skills themselves.
 
 ### STATE lint and progress block
@@ -67,7 +68,8 @@ Every hook except `pr-watch` sources the library and resolves from the payload `
 
 | Hook | Event | Reads from the payload | Effect | Exit |
 |---|---|---|---|---|
-| `session-start` | SessionStart | `cwd` | prints the injection as JSON on stdout, writes nothing | 0 |
+| `session-start` | SessionStart | `cwd`, `source` | prints the injection as JSON on stdout, writes nothing | 0 |
+| `version-notice` | UserPromptSubmit (first entry) | `session_id` | records the plugin version of the session's first prompt in `<base>/sessions/<session-id>/plugin-version`; when the installed version (`installed_plugins.json`, else the newest cache sibling without `.orphaned_at`) is newer, prints once per installed version "ytstack X installed, this session loaded A: reload the skills you use" and the CHANGELOG entry titles in between (cut at 600 characters), and writes `notified-<X>` | 0 |
 | `pre-compact` | PreCompact | `cwd`, `session_id`, `trigger` | writes `HANDOFF.auto.md` into the session state directory, renames a fresh `latest-handoff` symlink into the worktree state directory, prints compaction guidance on stdout | 0 |
 | `session-end` | SessionEnd | `cwd`, `session_id`, `reason` | appends one JSON line to `session.jsonl` in the session state directory | 0 |
 | `stop` | Stop | `cwd`, `stop_hook_active` | prints a `systemMessage` when the active task has no summary or only a draft | 0 |
@@ -89,8 +91,8 @@ Every hook except `pr-watch` sources the library and resolves from the payload `
 - Always: the full text of `skills/using-ytstack/SKILL.md` in an `<EXTREMELY_IMPORTANT>` envelope. If that file is missing, the hook prints nothing. If `YTSTACK_HOST_CONTEXT` is set, its text goes in front of the skill text.
 - No `.ytstack`: a greenfield block that routes build intent to `office-hours`. With two or more brownfield signals it routes to `adopt-brownfield` and names the signals.
 - `.ytstack` without `STATE.md`: a one-line repair notice.
-- Otherwise a state block, in this order: scope, project, pointer, last update, working tree with the linked-worktree flag, `.ytstack` path, a Next action excerpt, the three newest summary names, a notice when more than one milestone roadmap is `in-progress`, the manual and the latest automatic handoff, a lifecycle hint for a finished slice or a finished milestone without retro, up to five STATE lint findings, the minimal-code line when `minimal_code` is on, and a closing line that names the files as the source of truth. When `spec/SPEC.md` exists, the closing line names it as the place for what applies now.
-- Cap: the hook measures the injection without the host context. Above the guard threshold in the script, which sits just under the host's 10,000-character limit, it cuts the Next action excerpt to what still fits and marks the cut; when less than a useful rest would remain, it replaces the excerpt with a one-line note. If the text is still above the threshold, it warns on stderr and emits the text anyway. Nothing else is dropped.
+- Otherwise a state block, in this order: scope, project, pointer, last update, working tree with the linked-worktree flag, `.ytstack` path, a Next action excerpt, the three newest summary names, a notice when more than one milestone roadmap is `in-progress`, the manual and the latest automatic handoff, a lifecycle hint for a finished slice or a finished milestone without retro, up to five STATE lint findings, the minimal-code line when `minimal_code` is on, a "Factory tools" block with the lines of `yt_factory_notices` (only when the payload `source` is `startup` or `clear`, or absent on a SessionStart, so it is said once per session without a file), and a closing line that names the files as the source of truth. When `spec/SPEC.md` exists, the closing line names it as the place for what applies now.
+- Cap: the hook measures the injection without the host context. Above the guard threshold in the script, which sits just under the host's 10,000-character limit, it cuts the Next action excerpt to what still fits and marks the cut; when less than a useful rest would remain, it replaces the excerpt with a one-line note. Next, the Factory tools block shrinks to one line that counts them and names `bin/ytstack-upkeep`. If the text is still above the threshold, it warns on stderr and emits the text anyway. Nothing else is dropped.
 - Output is the existing Claude-compatible JSON envelope by default. `YTSTACK_HOOK_FORMAT=plain` emits the raw context instead. Kimi's helper uses this mode only to prepare pending context, not as a claim that SessionStart stdout is consumed.
 
 ### Kimi pending bridge
@@ -103,7 +105,7 @@ See `docs/statusline.md`. It was read against `bin/ytstack-status` at `verified_
 
 ## Interfaces and contracts
 
-- `hooks/hooks.json` registers the nine hooks for Claude Code: event, matcher, timeout. The Codex and Kimi registrations are in the `host-adapters` area.
+- `hooks/hooks.json` registers the nine lifecycle hooks, `version-notice` and `pr-watch` for Claude Code: event, matcher, timeout. The Codex and Kimi registrations are in the `host-adapters` area.
 - The `YT_*` globals each function sets are named in the comment above that function. Consumers are every hook, the skill preambles and `bin/ytstack-status`.
 - Files other parts read: `HANDOFF.auto.md` and `latest-handoff` (read by `hooks/session-start` and `skills/resume-session/SKILL.md`), draft and auto summaries (replaced by `summarize-task`, listed by `reconcile`). Kimi also reads and removes `pending-context.md` through its helper.
 - The `progress` block and the segment's exit codes: `docs/statusline.md`.
@@ -111,7 +113,7 @@ See `docs/statusline.md`. It was read against `bin/ytstack-status` at `verified_
 ## Invariants and security boundaries
 
 - No hook resolves its target from `CLAUDE_PROJECT_DIR`. `bin/ytstack-check` fails on that name in a hook script, on `[ -d .git ]` and on a basename slug.
-- Volatile state (automatic handoff, journal, Kimi pending context) is written outside the tree. The only in-tree location is the `.ytstack/.local` fallback.
+- Volatile state (automatic handoff, journal, Kimi pending context, the session's plugin version) is written outside the tree. `version-notice` writes only `plugin-version` and `notified-<version>` under `<base>/sessions/<session-id>/`, keyed by the session and not by the checkout, and only for a session id of letters, digits, `.`, `_` and `-`. The only in-tree location is the `.ytstack/.local` fallback.
 - No hook creates or changes `.ytstack/HANDOFF.md` or `STATE.md`.
 - Two hooks write deliberate artifacts into the resolved `.ytstack`: `post-tool-use-bash` (the draft stub) and `task-completed` (auto summary, checkbox). Both write into the checkout the payload names, so a session that works in a linked worktree leaves the main checkout unchanged.
 - `session-start`, `stop`, `pre-tool-use-edit`, `task-created` and `teammate-idle` write no files. Plain mode does not change this; the Kimi helper owns the pending write.
@@ -138,16 +140,17 @@ See `docs/statusline.md`. It was read against `bin/ytstack-status` at `verified_
 - `post-tool-use-bash` attributes a commit to the payload `cwd`, also when the command changed directory first.
 - The scope check in `pre-tool-use-edit` is a substring match over the whole task plan, not over its Files section.
 - `session.jsonl` has no reader in this repository.
+- Codex and Kimi do not register `version-notice`; their sessions get no version notice. With several ytstack entries in `installed_plugins.json` the highest version counts. The PR watch notice keys on a GitHub `origin`, not on open pull requests (that needs a host call).
 - The key digest depends on the tool `yt_sha16` finds first, so keys can differ between machines.
 
 ## Where implemented
 
 - `hooks/lib/git-ctx.sh` -- resolver, state directories, preferences, lint, progress parser, brownfield signals, commit discovery
 - `hooks/hooks.json` -- registration
-- `hooks/session-start`, `hooks/pre-compact`, `hooks/session-end`, `hooks/stop`, `hooks/pre-tool-use-edit`, `hooks/post-tool-use-bash`, `hooks/task-created`, `hooks/task-completed`, `hooks/teammate-idle`
+- `hooks/session-start`, `hooks/version-notice`, `hooks/pre-compact`, `hooks/session-end`, `hooks/stop`, `hooks/pre-tool-use-edit`, `hooks/post-tool-use-bash`, `hooks/task-created`, `hooks/task-completed`, `hooks/teammate-idle`
 - `bin/ytstack-status` -- status line segment
 - `bin/ytstack-check` (`check_resolver_contract`) -- banned patterns
-- Tests: `tests/git-ctx.test.sh`, `tests/hooks-json.test.sh`, `tests/hooks-readonly.test.sh`, `tests/hooks-stop.test.sh`, `tests/hooks-worktree.test.sh`, `tests/hooks-concurrency.test.sh`, `tests/post-tool-use-bash.test.sh`, `tests/pre-compact.test.sh`, `tests/session-end.test.sh`, `tests/ytstack-status.test.sh`, `tests/kimi_lifecycle_test.py`
+- Tests: `tests/git-ctx.test.sh`, `tests/hooks-json.test.sh`, `tests/hooks-readonly.test.sh`, `tests/hooks-stop.test.sh`, `tests/hooks-worktree.test.sh`, `tests/hooks-concurrency.test.sh`, `tests/post-tool-use-bash.test.sh`, `tests/pre-compact.test.sh`, `tests/session-end.test.sh`, `tests/session-notices.test.sh`, `tests/ytstack-status.test.sh`, `tests/kimi_lifecycle_test.py`
 
 ## How to verify
 
@@ -163,6 +166,7 @@ bash tests/hooks-concurrency.test.sh
 bash tests/post-tool-use-bash.test.sh
 bash tests/pre-compact.test.sh
 bash tests/session-end.test.sh
+bash tests/session-notices.test.sh
 bash tests/ytstack-status.test.sh
 python3 -m unittest discover -s tests -p 'kimi_lifecycle_test.py' -v
 ```
@@ -171,6 +175,7 @@ python3 -m unittest discover -s tests -p 'kimi_lifecycle_test.py' -v
 
 ## Decisions that apply now
 
+- DECISIONS.md -- "2026-11-15: SessionStart stays read-only; factory-tool notices are said on startup only, the plugin version is recorded by a prompt hook (M031-S03)"
 - DECISIONS.md -- "2026-11-14: Kimi uses native plugin bootstrap and pending lifecycle context (M020)" (plain output is explicit, the helper owns pending context and consumes it once)
 - DECISIONS.md -- "2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)" (`merge_by` and `evidence_dir` in `yt_prefs`)
 - DECISIONS.md -- "2026-11-07: Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree"

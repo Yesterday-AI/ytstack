@@ -166,6 +166,19 @@ if [ "${YT_PREF_MINIMAL_CODE:-on}" = on ]; then
   MINIMAL_CODE_LINES="Minimal-code guard is on (PREFERENCES minimal_code): smallest complete change, smallest sufficient evidence. Before writing code or adding a check, load ytstack:minimal-code via the Skill tool: climb the ladder (needed at all? in the codebase? stdlib? existing dependency? one line?), never cut validation / auth / boundary error handling / accessibility / the one small test, run what the plan's Verification names and no more, end reports with 'Not checked:'."
 fi
 
+# Factory tools that are off although the project would use them (M031-S03).
+# Said once per session without a marker file: only when the session starts or
+# is cleared, never on resume or compaction (Kimi's PostCompact neither).
+FACTORY_LINES=""
+case "${YT_SOURCE:-}:${YT_HOOK_EVENT:-}" in
+  startup:*|clear:*|:|:SessionStart)
+    yt_factory_notices "$YT_DIR" "$YT_TOPLEVEL"
+    if [ -n "$YT_FACTORY_NOTICES" ]; then
+      FACTORY_LINES="Factory tools (said once per session):
+$(printf '%s\n' "$YT_FACTORY_NOTICES" | sed 's/^/- /')"
+    fi ;;
+esac
+
 # Handoffs: the user-written one in the tree, the automatic one out of tree.
 HANDOFF_LINES=""
 if [ -f "$YT_DIR/HANDOFF.md" ]; then
@@ -231,6 +244,11 @@ $LINT_LINES"
 
 $MINIMAL_CODE_LINES"
   fi
+  if [ -n "$FACTORY_LINES" ]; then
+    ctx="$ctx
+
+$FACTORY_LINES"
+  fi
   ctx="$ctx
 
 The files in $YT_DIR are the source of truth for this project's state. Read STATE.md for the full dashboard,${SPEC_HINT} DECISIONS.md for locked architectural choices, KNOWLEDGE.md for patterns and gotchas, ROADMAP.md for the task list. Do not rely on prior-conversation context for these facts."
@@ -267,6 +285,17 @@ if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ]; then
 ---
 
 $STATE_CONTEXT"
+  # Second to go: the factory lines shrink to one pointer line.
+  if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ] && [ -n "$FACTORY_LINES" ]; then
+    _FN=$(printf '%s\n' "$YT_FACTORY_NOTICES" | grep -c .)
+    FACTORY_LINES="Factory tools: $_FN off (list cut for the 10,000-char cap): bin/ytstack-upkeep names them."
+    STATE_CONTEXT=$(build_state_context "$_NEXT_SHORT")
+    FULL_CONTEXT="$DIRECTIVE
+
+---
+
+$STATE_CONTEXT"
+  fi
   if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ]; then
     echo "[ytstack session-start] injection is $(( ${#FULL_CONTEXT} - _HOST_LEN )) chars; Claude Code caps additionalContext at 10,000. Shorten skills/using-ytstack/SKILL.md." >&2
   fi

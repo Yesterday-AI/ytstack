@@ -110,6 +110,8 @@ One line per source: a name (lowercase slug, unique), then `key: value` fields s
 
 `bin/ytstack-runtime signals` prints the sources as tab-separated lines (name, kind, read, scope; `-` for an empty one) and nothing when there is no source. How findings become records: `docs/ux/signal-format.md`.
 
+`bin/ytstack-runtime sections` prints the names of the sections that count as present (a list line in them), one per line, also when `check` fails. The SessionStart hook and `bin/ytstack-upkeep` use it to say when a project deploys or has signals but `RUNTIME.md` has no "Release" or "Signals" section.
+
 ## Reading a value
 
 `bin/ytstack-runtime get <section> <key>` prints the value of one key of "Run" or "Release" and exits 1 when the file, the section or the key is missing. The section is given in any case (`run`, `Release`). Every script and skill reads `RUNTIME.md` through it; none parses the file itself.
