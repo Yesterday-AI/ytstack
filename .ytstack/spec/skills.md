@@ -122,7 +122,7 @@ Formats: `docs/ux/coordinator-format.md`. The four skills below are for the sess
 - `docs/ux/askuserquestion-format.md`: the four-part question body, option annotations, tiers.
 - `docs/ux/agent-structure.md`: agent frontmatter, body sections, size limit.
 - `hooks/lib/git-ctx.sh`: the comment above each function names the globals it sets.
-- The worker brief and the report shape: `skills/spawn-milestone-team/brief-template.md`, rendered by `bin/ytstack-brief`. Dispatch, report check and verifier prompt: `skills/spawn-milestone-team/SKILL.md`, Steps 5 to 7.
+- The worker brief and the report shape: `skills/spawn-milestone-team/brief-template.md`, rendered by `bin/ytstack-brief`; its "Standing instructions" carry the whole text of each entry for the lane's role, pending ones included. Dispatch, report check and verifier prompt: `skills/spawn-milestone-team/SKILL.md`, Steps 5 to 7.
 - The artifacts skills read and write: [artifacts.md](artifacts.md).
 
 ## Invariants and security boundaries
