@@ -1240,3 +1240,24 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - A skill that runs ytstack bins over a long session names them through `YT_BIN`; a short skill keeps `${CLAUDE_SKILL_DIR}/../../bin`, which the host substitutes when it loads the skill.
 
 **Supersedes:** None. Narrows `register --all-open` of "2026-11-14: PR watch ships inside ytstack as an optional, opt-in tool" (issue #54).
+
+## 2026-11-15: New artifacts follow the directory a milestone already lives in (issue #70)
+
+**Context:** Reading tolerated `milestones/`, `milestones/*/`, `backlog/` and `backlog/*/` since M018-S03, but every skill and hook wrote flat into `.ytstack/`. A consumer that moved 299 files of older milestones into `.ytstack/milestones/M###/` got the next plan or summary of such a milestone back at the top level, beside the moved ones.
+
+**Options considered:**
+- A) Keep writing flat and let `reconcile` move stragglers. Leaves the split after every task and needs a cleanup run per milestone.
+- B) Move a milestone's files into `milestones/M###/` as soon as ytstack writes one. Moves user-owned files, which only `reconcile` may do, and changes this repository's own layout.
+- C) Write where the milestone already lives: the directory that holds its roadmap, else any of its files, else flat.
+
+**Chose:** C.
+
+**Reason:** The person decided the layout by moving the files; ytstack follows it without moving anything. A milestone that lives flat, and every new milestone, stays flat, so nothing changes for projects that never moved files.
+
+**How to apply:**
+- One lookup in `hooks/lib/git-ctx.sh`: `yt_artifact_dir <yt_dir> <id>` for the directory, `yt_artifact_path <yt_dir> <file>` for one file (where it exists, else in that directory). No skill or hook builds a milestone path as `$YT_DIR/M###-...` any more.
+- Skills that write or read a milestone's files print `ARTIFACT_DIR` and fall back to `YT_DIR` when the library is not reachable.
+- A file of the milestone that already exists elsewhere (a summary that landed flat before this fix) is read and replaced where it is, not duplicated.
+- `bin/ytstack-risk` counts `M###-*` files in those directories as process records, like the flat ones.
+
+**Supersedes:** None. Narrows "Writing stays flat" of M018-S03 (`yt_find_artifacts`).

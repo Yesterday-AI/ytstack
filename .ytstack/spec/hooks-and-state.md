@@ -10,7 +10,7 @@ sources:
   - docs/statusline.md
   - docs/pr-watch.md
   - docs/kimi.md
-verified_at: c5b405d
+verified_at: db07481
 ---
 
 # hooks-and-state
@@ -35,7 +35,7 @@ The lifecycle hooks under `hooks/` and the shared library `hooks/lib/git-ctx.sh`
 - `yt_epoch` turns an ISO time into seconds with BSD `date -j`, GNU `date -d`, or, for BusyBox, `date -d` on the form `YYYY-MM-DD HH:MM:SS`.
 - `yt_brownfield_signals` counts up to six signs of an existing codebase and names which file would feed which artifact. The comment above the function lists the counted signals and the hint-only ones.
 - `yt_commit_ref_pattern` renders a task's commit pattern from `commit_ref_pattern` in `PREFERENCES.md`, or from the default. `yt_task_commits` lists commits whose subject matches it. When none match, it falls back to the commits on the current branch after the merge-base with the default branch, and reports which source it used.
-- `yt_find_artifacts` lists artifacts newest first from the flat layout and from the alternative layouts named in its comment. Reading tolerates those layouts. Writing stays flat.
+- `yt_find_artifacts` lists artifacts newest first from the flat layout and from the alternative layouts named in its comment. Reading tolerates those layouts. `yt_artifact_dir` and `yt_artifact_path` say where a milestone's files live and where its new ones go: the directory that already holds its roadmap or files, else flat ([artifacts.md](artifacts.md), "Location and scope"). `post-tool-use-bash`, `task-completed`, `stop`, `pre-tool-use-edit` and `session-start` find the milestone's files through them; `task-created` and `teammate-idle` list its slice plans in every layout through `yt_find_artifacts`, one per name, so a plan that landed flat before the milestone moved counts too.
 - `yt_factory_notices` returns one line per factory tool that is off although the project would use it, from local files only: risk routing (`spec/` without `REVIEW.md` or without an area whose frontmatter allows `auto_merge: low|normal`, quotes allowed, read with `yt_fm`, the reader `bin/ytstack-risk` uses; while `merge_by` is `risk`), the PR watch on a GitHub `origin` (no line in `~/.ytstack/config` that turns the hook on, read as `hooks/pr-watch` does: any `pr_watch=on` line; or `on` with a heartbeat missing or 10 minutes old; `yt_pr_watch_heartbeat` reads `watch.sqlite3`, else the time of `worker.lock`), and `RUNTIME.md` without "Release" or "Signals" while deploy or signal evidence exists (`ytstack-runtime sections`). `merge_by: human|coordinator` and `pr_watch=off` are choices and stay silent. `yt_read_stdin` also sets `YT_SOURCE`.
 - `yt_standing` lists the standing instructions in force from `.ytstack/standing/` (name, `given`, `scope`, tab separated), newest first by the time in the name (missing seconds count as `00`), without the entries another entry names in `supersedes`. It prints nothing without the directory; `STANDING.md` is read by the skills themselves.
 

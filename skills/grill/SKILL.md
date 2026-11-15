@@ -2,7 +2,7 @@
 name: grill
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.1.1
 description: "Relentless questioning of an idea before it becomes a milestone, through the vendored superpowers brainstorming procedure with ytstack's pitch, project one-liner and decisions injected; writes the agreed design into the milestone context. Use between office-hours and plan-milestone, when a feature request is bigger than one sentence, or when the user says grill me, poke holes in this, let's think this through, design before we plan. Not for one-sentence changes (quick-task) and not for slicing or task plans (slice-milestone, plan-task)."
 allowed-tools:
   - Bash
@@ -46,7 +46,9 @@ echo "CURRENT_MILESTONE: $_M"
 echo "ONE_LINER: ${_ONE_LINER:-none}"
 echo "PITCH: $_PITCH"
 echo "DECISIONS_COUNT: $_DECISIONS"
-echo "DESIGN_TARGET: $([ "$_M" != none ] && [ -n "$_YT_DIR" ] && echo "$_YT_DIR/$_M-CONTEXT.md" || echo "${_YT_DIR:-.}/GRILL-<slug>.md")"
+# The milestone's CONTEXT lives with its milestone: flat or milestones/M###/ (issue #70)
+if command -v yt_artifact_path >/dev/null 2>&1; then _CTX=$(yt_artifact_path "$_YT_DIR" "$_M-CONTEXT.md"); else _CTX="$_YT_DIR/$_M-CONTEXT.md"; fi
+echo "DESIGN_TARGET: $([ "$_M" != none ] && [ -n "$_YT_DIR" ] && echo "$_CTX" || echo "${_YT_DIR:-.}/GRILL-<slug>.md")"
 ```
 
 ## ytstack invocation notes

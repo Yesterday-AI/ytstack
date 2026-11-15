@@ -27,6 +27,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `"$YT_BIN/ytstack-<name>"`, so a long session no longer calls a removed
   version's path after an update.
 
+### Fixed
+
+- **New artifacts follow the directory their milestone lives in** (issue #70):
+  when a milestone's roadmap or files already sit in
+  `.ytstack/milestones/M###/` (or a `backlog/<PREFIX>/` directory), new plans,
+  summaries, reviews and retros of that milestone are written there instead of
+  flat into `.ytstack/`. The lib functions `yt_artifact_dir` and
+  `yt_artifact_path` decide; skills print `ARTIFACT_DIR`. Flat stays the
+  default and nothing is moved. Readers that built flat paths (plan-task,
+  summarize-task, slice-milestone, reassess-roadmap, retro, the review and
+  execution skills, finish-branch, ship, spawn-milestone-team, grill,
+  handoff-session, and the stop, pre-tool-use-edit, session-start,
+  task-created, teammate-idle hooks) now find those files there too.
+  `plan-milestone` counts moved milestones when it numbers the next one, and
+  `ytstack-risk` counts their files as process records (at most one directory
+  below `milestones/` or `backlog/`). Readers that count or list a milestone's
+  files (reassess-roadmap, retro, spawn-milestone-team, task-created,
+  teammate-idle) also see files of that milestone that landed flat before it
+  moved.
+- `teammate-idle` no longer fails on a slice plan without an open task (`grep
+  -c ... || echo 0` produced `0` twice and broke the sum).
+
 ## [0.11.0] - 2026-11-15
 
 ### Added

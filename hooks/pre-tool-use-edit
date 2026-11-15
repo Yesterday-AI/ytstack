@@ -76,7 +76,7 @@ ACTIVE_TASK=$(sed -n 's/^active_task: *//p' "$STATE_FILE" | head -1)
 
 SCOPE_DRIFT=no
 if [ -n "$ACTIVE_TASK" ] && [ "$ACTIVE_TASK" != "none" ]; then
-  TASK_PLAN="$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK-PLAN.md"
+  TASK_PLAN=$(yt_artifact_path "$YT_DIR" "$CURRENT_MILESTONE-$ACTIVE_SLICE-$ACTIVE_TASK-PLAN.md")
   if [ -f "$TASK_PLAN" ]; then
     # Check if the target path appears in the Files section
     if ! grep -qF "$REL_PATH" "$TASK_PLAN" 2>/dev/null && ! grep -qF "$(basename "$REL_PATH")" "$TASK_PLAN" 2>/dev/null; then

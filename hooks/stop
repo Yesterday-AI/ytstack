@@ -36,7 +36,7 @@ case "$T" in ""|none|all) exit 0 ;; esac
 case "$S" in ""|none|all) exit 0 ;; esac
 case "$M" in ""|none) exit 0 ;; esac
 
-SUMMARY="$YT_DIR/$M-$S-$T-SUMMARY.md"
+SUMMARY=$(yt_artifact_path "$YT_DIR" "$M-$S-$T-SUMMARY.md")
 MSG=""
 if [ ! -f "$SUMMARY" ]; then
   MSG="ytstack: $M-$S-$T is still the active task and has no summary. If the work is done, run /ytstack:summarize-task; if you are pausing, /ytstack:handoff-session keeps the thread."

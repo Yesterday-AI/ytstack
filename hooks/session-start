@@ -131,11 +131,12 @@ NEXT_ACTION=$(awk '/^## Next action/{flag=1; next} /^## /{flag=0} flag' "$STATE_
 # Lifecycle hints (M019-S03): a closed slice or milestone has a documented next step.
 LIFECYCLE_LINES=""
 if [ "${CURRENT_MILESTONE:-none}" != none ]; then
-  _rm="$YT_DIR/$CURRENT_MILESTONE-ROADMAP.md"
-  if [ -f "$_rm" ] && [ "$(sed -n 's/^status: *//p' "$_rm" | head -1)" = done ] && [ ! -f "$YT_DIR/$CURRENT_MILESTONE-RETRO.md" ]; then
+  _rm=$(yt_artifact_path "$YT_DIR" "$CURRENT_MILESTONE-ROADMAP.md")
+  _sp=$(yt_artifact_path "$YT_DIR" "$CURRENT_MILESTONE-${ACTIVE_SLICE:-none}-PLAN.md")
+  if [ -f "$_rm" ] && [ "$(sed -n 's/^status: *//p' "$_rm" | head -1)" = done ] && [ ! -f "$(yt_artifact_path "$YT_DIR" "$CURRENT_MILESTONE-RETRO.md")" ]; then
     LIFECYCLE_LINES="Milestone $CURRENT_MILESTONE is done and has no retro: ytstack:retro, then ytstack:document-release for the version, then ytstack:plan-milestone."
-  elif [ "${ACTIVE_SLICE:-none}" != none ] && [ -f "$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-PLAN.md" ] \
-       && [ "$(sed -n 's/^status: *//p' "$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-PLAN.md" | head -1)" = done ]; then
+  elif [ "${ACTIVE_SLICE:-none}" != none ] && [ -f "$_sp" ] \
+       && [ "$(sed -n 's/^status: *//p' "$_sp" | head -1)" = done ]; then
     LIFECYCLE_LINES="Slice $ACTIVE_SLICE is done: ytstack:reassess-roadmap first; then ytstack:finish-branch (merge / PR / keep) or ytstack:ship (release flow) for the branch."
   fi
 fi
