@@ -19,14 +19,21 @@
 # end writes the entry that closes ENTRY: kind end, supersedes ENTRY, its
 # scope, the body "Ended: TEXT".
 #
-# list prints the active entries (the working tree, plus entries on the
-# branches standing/* and origin/standing/* not merged yet, marked pending),
-# then the ones that ended (until passed, or until-check exited 0), the
+# list prints the active entries (the working tree, plus the pending ones:
+# entries on a local branch standing/* or the upstream it tracks that are not
+# on the default branch yet; a remote branch no local branch tracks is never
+# read), then the ones that ended (until passed, or until-check exited 0), the
 # conditions to check now (until-condition without until-check) and the
-# failed checks (check exited non-zero). It runs until-check and check: each
-# with bash -c in the checkout's toplevel, stdin closed, at most
-# YTSTACK_STANDING_TIMEOUT seconds (default 5) and at most 10 commands per
-# call. --no-checks runs none. No hook runs these commands. The first line
+# failed checks (check exited non-zero). It runs until-check and check only
+# for an entry of the working tree whose file is the one on the default branch
+# (merged and so reviewed): each with bash -c in the checkout's toplevel in a
+# process group of its own, stdin closed, at most YTSTACK_STANDING_TIMEOUT
+# seconds (default 5, then the group is killed) and at most 10 commands per
+# call; every command not run says why ("pending", "not on <branch>", the
+# limit). --no-checks runs none. No hook runs these commands.
+# A new day's branch starts from the newest pending standing branch, so that
+# an entry can supersede or end one that still waits there; an earlier day's
+# branch with unpushed commits is pushed first. The first line
 # names the newest entry, its age and the human prompts this session sent
 # since (counted by hooks/standing-prompt once the coordinate preamble ran).
 #
@@ -57,41 +64,44 @@ yt_resolve_yt_dir >/dev/null
 TOP="$YT_TOPLEVEL"
 oneline() { printf '%s' "$1" | tr '\n\r\t' '   ' | sed 's/  */ /g; s/^ //; s/ $//'; }
 
-# ---- the merged view: working tree plus pending branches ------------------------
-# view <dir>: copies every entry into <dir>; PENDING gets "<name> <branch>" per
-# entry that exists only on a standing branch.
-PENDING=""
-view() {
-  local out="$1" rel ref p b
-  mkdir -p "$out"
-  for p in "$YT_DIR"/standing/*.md; do [ -f "$p" ] && cp "$p" "$out/"; done
+# ---- which commands may run --------------------------------------------------------
+# norun <name> <source>: empty when the entry's commands may run, else the reason.
+# Only an entry of the working tree whose file is the one on the default branch
+# (merged, so a person reviewed it) runs; a pending entry never does. Outside a
+# repository (user scope) and in one without any commit the files are the
+# user's own and run.
+norun() {
+  local base rel want have
+  [ "$2" = - ] || { echo pending; return 0; }
   [ "$YT_IS_GIT" = yes ] || return 0
   case "$YT_DIR" in "$TOP"/*) rel="${YT_DIR#"$TOP"/}" ;; *) return 0 ;; esac
-  for ref in $(git -C "$TOP" for-each-ref --format='%(refname)' refs/heads/standing refs/remotes/origin/standing 2>/dev/null); do
-    for p in $(git -C "$TOP" ls-tree --name-only "$ref" -- "$rel/standing/" 2>/dev/null); do
-      b=$(basename "$p")
-      case "$b" in *.md) ;; *) continue ;; esac
-      [ ! -e "$out/$b" ] || continue
-      git -C "$TOP" show "$ref:$p" > "$out/$b" 2>/dev/null || { rm -f "$out/$b"; continue; }
-      PENDING="$PENDING$b ${ref#refs/*/}
-"
-    done
-  done
+  base=$(yt_standing_default_ref "$TOP")
+  # No default branch yet (a repository without a commit): nothing came from
+  # anyone else, the files are the user's own.
+  [ -n "$base" ] || return 0
+  want=$(git -C "$TOP" rev-parse -q --verify "$base:$rel/standing/$1" 2>/dev/null)
+  have=$(git -C "$TOP" hash-object "$YT_DIR/standing/$1" 2>/dev/null)
+  [ -n "$want" ] && [ "$want" = "$have" ] || echo "not on ${base#refs/*/}"
 }
 
 # ---- bounded run of an entry's command ----------------------------------------------
 RUNS=0
 # bounded <command>: RC (124 on timeout) and LINE (first non-empty output line).
+# The command runs in a process group of its own (job control), and a timeout
+# ends the whole group, children included.
 bounded() {
   local t="${YTSTACK_STANDING_TIMEOUT:-5}" out pid w
   case "$t" in ''|*[!0-9]*) t=5 ;; esac
   out=$(mktemp "${TMPDIR:-/tmp}/ytstd.XXXXXX")
+  set -m
   ( cd "$TOP" && exec bash -c "$1" ) </dev/null >"$out" 2>&1 &
   pid=$!
-  ( sleep "$t"; kill -TERM "$pid"; sleep 1; kill -KILL "$pid" ) >/dev/null 2>&1 &
+  set +m
+  ( sleep "$t"; kill -TERM -- "-$pid" || kill -TERM "$pid"; sleep 1; kill -KILL -- "-$pid" || kill -KILL "$pid" ) >/dev/null 2>&1 &
   w=$!
   wait "$pid"; RC=$?
   kill "$w" 2>/dev/null; wait "$w" 2>/dev/null
+  kill -KILL -- "-$pid" 2>/dev/null
   if [ "$RC" -eq 143 ] || [ "$RC" -eq 137 ]; then RC=124; fi
   LINE=$(sed '/^[[:space:]]*$/d' "$out" | head -1 | cut -c1-200)
   rm -f "$out"
@@ -106,15 +116,14 @@ age() { # age <seconds> -> "2 h 14 min" / "5 min"
 
 # ---- list ----------------------------------------------------------------------------
 cmd_list() {
-  local checks=yes tmp newest e now cnt sd sid name given scope until ucond ucheck check summary state pend
+  local checks=yes fields newest e now cnt sd sid name given scope until ucond ucheck check summary state src pend why
   local active="" ended="" tocheck="" failed="" na=0 ne=0 nt=0 nf=0
   [ $# -eq 0 ] || { [ "$1" = --no-checks ] && [ $# -eq 1 ]; } || { usage >&2; return 64; }
   [ $# -eq 0 ] || checks=no
-  tmp=$(mktemp -d "${TMPDIR:-/tmp}/ytstl.XXXXXX")
-  view "$tmp/standing"
+  fields=$(yt_standing_fields "$YT_DIR" "" pending)
   now=$(date +%s)
 
-  newest=$(ls "$tmp/standing" 2>/dev/null | grep -E '^[0-9]{8}T[0-9]{4}([0-9]{2})?Z-' | sort -r | head -1)
+  newest=$( { ls "$YT_DIR/standing" 2>/dev/null; yt_standing_pending "$YT_DIR" | sed 's#.*/##'; } | grep -E '^[0-9]{8}T[0-9]{4}([0-9]{2})?Z-' | sort -r | head -1)
   sid="${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-}}"
   case "$sid" in *[!A-Za-z0-9._-]*) sid="" ;; esac
   sd="$(yt_session_home)/${sid:-none}"
@@ -131,17 +140,19 @@ cmd_list() {
     printf '; human prompts since: not counted (no coordinate session marker; the coordinate preamble writes it)\n'
   fi
 
-  while IFS="$(printf '\t')" read -r name given scope until ucond ucheck check summary state; do
+  while IFS="$(printf '\t')" read -r name given scope until ucond ucheck check summary state src; do
     [ -n "$name" ] || continue
-    pend=$(printf '%s' "$PENDING" | awk -v n="$name" '$1 == n { print " (pending: " $2 ")" }')
+    pend=""; case "$src" in pending:*) pend=" (pending: ${src#pending:})" ;; esac
+    why=$(norun "$name" "$src")
     if [ "$state" = active ] && [ "$ucheck" != - ]; then
-      if [ "$checks" = yes ] && [ "$RUNS" -lt 10 ]; then
+      if [ "$checks" != yes ]; then summary="$summary [until-check not run]"
+      elif [ -n "$why" ]; then summary="$summary [until-check not run: $why]"
+      elif [ "$RUNS" -ge 10 ]; then summary="$summary [until-check not run: limit of 10 commands per list]"
+      else
         RUNS=$((RUNS + 1)); bounded "$ucheck"
         if [ "$RC" -eq 0 ]; then state=ended-check
         elif [ "$RC" -eq 124 ]; then summary="$summary [until-check timed out]"
         fi
-      else
-        summary="$summary [until-check not run]"
       fi
     fi
     case "$state" in
@@ -150,15 +161,10 @@ cmd_list() {
       ended-check) ne=$((ne + 1)); ended="$ended- ${name%.md}: until-check exited 0 ($ucheck)$pend
 "; continue ;;
     esac
-    na=$((na + 1))
-    active="$active- ${name%.md} ($scope): $summary$( [ "$until" = - ] || printf ' [until %s]' "$until")$pend
-"
-    if [ "$ucond" != - ] && [ "$ucheck" = - ]; then
-      nt=$((nt + 1)); tocheck="$tocheck- ${name%.md}: $ucond
-"
-    fi
-    if [ "$check" != - ]; then
-      if [ "$checks" = yes ] && [ "$RUNS" -lt 10 ]; then
+    if [ "$check" != - ] && [ "$checks" = yes ]; then
+      if [ -n "$why" ]; then summary="$summary [check not run: $why]"
+      elif [ "$RUNS" -ge 10 ]; then summary="$summary [check not run: limit of 10 commands per list]"
+      else
         RUNS=$((RUNS + 1)); bounded "$check"
         if [ "$RC" -ne 0 ]; then
           nf=$((nf + 1)); failed="$failed- ${name%.md}: $( [ "$RC" -eq 124 ] && echo "timed out" || echo "exit $RC")${LINE:+: $LINE} ($check)
@@ -166,10 +172,16 @@ cmd_list() {
         fi
       fi
     fi
+    na=$((na + 1))
+    active="$active- ${name%.md} ($scope): $summary$( [ "$until" = - ] || printf ' [until %s]' "$until")$pend
+"
+    if [ "$ucond" != - ] && [ "$ucheck" = - ]; then
+      nt=$((nt + 1)); tocheck="$tocheck- ${name%.md}: $ucond
+"
+    fi
   done <<EOF
-$(yt_standing_fields "$tmp")
+$fields
 EOF
-  rm -rf "$tmp"
   printf 'active (%d):\n%s' "$na" "$active"
   [ "$ne" -eq 0 ] || printf 'ended (%d), close each with: ytstack-standing end <entry> --reason "<what ended it>"\n%s' "$ne" "$ended"
   [ "$nt" -eq 0 ] || printf 'condition to check now (%d): met -> ytstack-standing end <entry>; not met -> it holds\n%s' "$nt" "$tocheck"
@@ -215,7 +227,7 @@ repo_slug() {
 }
 
 publish() {
-  local wt rel day br base start repo n title body url
+  local wt rel day br base start repo n title body url b
   case "$YT_DIR" in "$TOP"/*) rel="${YT_DIR#"$TOP"/}" ;; *) die "the .ytstack directory $YT_DIR is outside the checkout; use --here" ;; esac
   [ -n "$(git -C "$TOP" remote 2>/dev/null | head -1)" ] || die "no remote: use --here, or add origin"
   day=$(date -u +%Y%m%d); br="standing/$day"
@@ -232,13 +244,30 @@ publish() {
     git -C "$TOP" worktree add -q --detach "$wt" 2>/dev/null || die "cannot add the worktree $wt"
   fi
   [ -z "$(git -C "$wt" status --porcelain 2>/dev/null)" ] || die "the standing worktree $wt has uncommitted changes; commit or remove them first"
+  # An earlier day's branch whose commits never reached origin (a failed push,
+  # then the UTC day changed) is pushed first, or named.
+  for b in $(git -C "$TOP" for-each-ref --format='%(refname:short)' refs/heads/standing); do
+    [ "$b" != "$br" ] || continue
+    if ! git -C "$TOP" rev-parse -q --verify "refs/remotes/origin/$b" >/dev/null \
+       || [ "$(git -C "$TOP" rev-list --count "refs/remotes/origin/$b..refs/heads/$b" 2>/dev/null)" != 0 ]; then
+      if git -C "$TOP" push -q -u origin "$b" 2>/dev/null; then
+        echo "pushed the earlier standing branch $b (its pull request is opened by hand or by the next add of that day: gh pr create --head $b)"
+      else
+        echo "ytstack-standing: the earlier standing branch $b has commits origin does not have and its push failed" >&2
+      fi
+    fi
+  done
   if [ "$(git -C "$wt" branch --show-current)" != "$br" ]; then
     if git -C "$TOP" rev-parse -q --verify "refs/heads/$br" >/dev/null; then
       git -C "$wt" switch -q "$br" 2>/dev/null || die "cannot switch $wt to $br (checked out elsewhere?)"
     else
+      # A new day starts from the newest earlier standing branch that is not
+      # merged yet, so that an entry can supersede or end one that waits in
+      # that pull request; else from the default branch.
       start="origin/$br"
-      git -C "$TOP" rev-parse -q --verify "refs/remotes/$start" >/dev/null || start="origin/$base"
-      git -C "$TOP" rev-parse -q --verify "refs/remotes/$start" >/dev/null || start="$base"
+      git -C "$TOP" rev-parse -q --verify "refs/remotes/$start" >/dev/null || start=$(yt_standing_pending "$YT_DIR" | cut -f1 | grep -v '^origin/' | sort -r | head -1)
+      [ -n "$start" ] || start="origin/$base"
+      git -C "$TOP" rev-parse -q --verify "$start" >/dev/null || start="$base"
       git -C "$wt" switch -q -c "$br" "$start" 2>/dev/null || die "cannot create $br from $start in $wt"
     fi
   fi
@@ -294,14 +323,15 @@ cmd_add() {
     esac
     shift 2
   done
+  # Values that go into the frontmatter or a name verbatim are one line.
+  case "$A_SUP$A_UNTIL$A_SLUG${A_BASE:-}" in *"
+"*|*"$(printf '\r')"*|*"$(printf '\t')"*)
+    echo "ytstack-standing: --supersedes, --until, --slug and --base take one line" >&2; return 64 ;;
+  esac
   if [ "$CMD" = end ]; then
     [ -n "$A_TEXT" ] || { usage >&2; return 64; }
-    local tmp f
-    tmp=$(mktemp -d "${TMPDIR:-/tmp}/ytste.XXXXXX"); view "$tmp/standing"
-    f="$tmp/standing/$A_SUP.md"
-    [ -f "$f" ] || { rm -rf "$tmp"; die "no entry $A_SUP in $YT_DIR/standing/ or on a standing branch"; }
-    A_SCOPE=$(awk 'NR == 1 { next } /^---/ { exit } /^scope:/ { sub(/^scope:[ \t]*/, ""); print; exit }' "$f")
-    rm -rf "$tmp"
+    A_SCOPE=$(yt_standing_fields "$YT_DIR" "" pending | awk -F '\t' -v n="$A_SUP.md" '$1 == n { print $3; exit }')
+    [ -n "$A_SCOPE" ] || die "no entry $A_SUP in force in $YT_DIR/standing/ or on a standing branch"
     A_KIND=end; A_SLUG="end-$(printf '%s' "$A_SUP" | sed -E 's/^[0-9]{8}T[0-9]{4}([0-9]{2})?Z-//')"
     case "$A_TEXT" in *[.!?]) ;; *) A_TEXT="$A_TEXT." ;; esac
   fi
