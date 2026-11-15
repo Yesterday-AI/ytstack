@@ -3,7 +3,7 @@ project: ytstack
 last_updated: 2026-11-14T13:58:34Z
 total_milestones: 24
 completed_milestones: 21
-current_milestone: none (M020 done 2026-11-14; M014 reserved; M011 and M013 absorbed into M019)
+current_milestone: none (M033 done 2026-11-15, released in 0.11.0; M034 planned and on the backlog; M014 reserved; M011 and M013 absorbed into M019)
 ---
 
 # ytstack Roadmap
@@ -51,6 +51,7 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M031 | Factory tools explicit (issue #54 rest, #61 leftovers) -- `coordinate` "Factory tools" step and one-step rotation, `ytstack-risk route` reads the review round from the host, SessionStart/upkeep say which tool is off and when the plugin changed under the session, QUICKSTART setup guide and upgrade checklist, `reconcile` detects external plans. Done 2026-11-15 (5 slices, parallel workers); released in 0.11.0 (PR #66). | **done** | 15 | 15 |
 | M032 | Incident to lesson loop (issue #53) -- incident and lesson records with class, target and count, a shared lesson step called by `incident`, `systematic-debugging`, `finish-lane` and `coordinate`, open lessons in status and frontier, repeats in `retro`. Done 2026-11-15 (3 slices); released in 0.11.0 (PR #67). | **done** | 6 | 6 |
 | M033 | Upstream feedback channel (issue #55) -- `upstream_feedback: suggest / file / off`, the channel in `using-ytstack`, agent rules (search first, evidence, no personal data), "Upstream" section in `retro` and `lane-retro`. Done 2026-11-15 (1 slice); released in 0.11.0 (PR #67). | **done** | 4 | 4 |
+| M034 | Sticky session status (issues #31, #42 follow-up) -- a todo reader per host (Claude task files, Codex plan, Kimi to-dos), the todo state as the first line of `ytstack-status` with optional extra lines, Codex `task-progress`, optional herdr pane metadata and terminal-title sinks; research `docs/research/2026-11-15-sticky-session-status.md`. Planned 2026-11-15, on the backlog. | backlog | 0 | -- |
 
 **Total:** 39 tasks across M001-M009, 37 done (95%). 2 deferred to user action (git init + push, GitHub repo creation). M010 done (6/6, 2026-11-07); M011 task count pending milestone planning.
 

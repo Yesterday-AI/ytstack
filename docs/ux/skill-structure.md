@@ -60,6 +60,7 @@ Milestone (`M###-ROADMAP.md`), slice (`M###-S##-PLAN.md`) and task (`M###-S##-T#
 | `done` | summarize-task (last task / last slice) | all exit criteria met |
 | `dropped` | reassess-roadmap (with consent) | plans stay on disk, deliberately not executed |
 | `shipped-informally` | reassess-roadmap (with consent) | the work happened outside the ytstack loop; one-line note in CONTEXT |
+| `backlog` | the person, by hand (or plan-milestone when asked) | planned and kept for later; `ytstack-frontier` does not pick it while `current_milestone` is `none`; making it current sets `planned` again |
 
 The global `ROADMAP.md` Status column mirrors the frontmatter. Prose such as "Do NOT execute the M003 plans" is not a state; write `dropped`.
 
