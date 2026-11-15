@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ytstack PreCompact hook
 #
-# Fires before the host (Claude Code, or Codex via bin/ytstack-codex) compacts the conversation. Two jobs:
+# Fires before the host (Claude Code, or Codex via bin/ytstack-codex) compacts the conversation. Two jobs
+# (and in a coordinate session a third: count the compaction beside the marker):
 #
 #   1. Write an automatic handoff breadcrumb OUT OF TREE, per session and per
 #      worktree, and refresh the worktree's `latest-handoff` symlink.
@@ -99,6 +100,14 @@ if [ -f "$AUTO" ]; then
 else
   echo "[ytstack pre-compact] could not write $AUTO" >&2
 fi
+
+# A coordinate session (the marker the coordinate preamble writes) counts its
+# compactions beside the marker: hooks/session-start and hooks/stop say to
+# rotate from them (issue #83, coordinate Step 12).
+case "${YT_SESSION_ID:-}" in ''|.|..|*[!A-Za-z0-9._-]*) ;; *)
+  _SD="$(yt_session_home)/$YT_SESSION_ID"
+  [ ! -f "$_SD/coordinate" ] || printf '%s\n' "$(date +%s)" >> "$_SD/compactions" 2>/dev/null ;;
+esac
 
 # Compaction instructions (stdout, exit 0). Keep well under the 10,000-char cap.
 INSTR="ytstack compaction guidance. Preserve verbatim in the summary:

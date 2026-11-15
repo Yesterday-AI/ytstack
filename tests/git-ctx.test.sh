@@ -279,6 +279,14 @@ case "$(lint "$SL/.ytstack")" in *"older than the newest commit"*) ok "lint: sta
 write_state "$NOW" M003 S01 T02
 printf -- '---\nmilestone: M003\nstatus: done\n---\n' > "$SL/.ytstack/M003-ROADMAP.md"
 case "$(lint "$SL/.ytstack")" in *"status: done"*) ok "lint: done milestone still current with open slice";; *) bad "lint: done but current" "$(lint "$SL/.ytstack")";; esac
+printf -- '---\nmilestone: M003\nstatus: in-progress\n---\n' > "$SL/.ytstack/M003-ROADMAP.md"
+# W10 (issue #82): an active task whose pointer did not move for YT_POINTER_STALE_DAYS days
+case "$(lint "$SL/.ytstack")" in *"unchanged since"*) bad "lint: a fresh pointer is no stale task";; *) ok "lint: a fresh pointer is no stale task";; esac
+E5=$(( $(date +%s) - 5 * 86400 ))
+write_state "$(date -u -r "$E5" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$E5" +%Y-%m-%dT%H:%M:%SZ)" M003 S01 T02
+case "$(lint "$SL/.ytstack")" in *"active task M003-S01-T02 unchanged since last_updated "*"(more than 3 days)"*) ok "lint: a pointer 5 days old is one line (W10)";; *) bad "lint: W10" "$(lint "$SL/.ytstack")";; esac
+eq "lint: YT_POINTER_STALE_DAYS moves the threshold" 0 "$( ( YT_POINTER_STALE_DAYS=9; . "$LIB"; yt_state_lint "$SL/.ytstack" >/dev/null; printf '%s' "$YT_STATE_WARNINGS" | grep -c 'unchanged since' ) )"
+write_state "$NOW" M003 S01 T02
 
 # ---- 13b. progress block (M021, issue #31) ------------------------------------
 echo "# progress block"
@@ -439,6 +447,22 @@ eq "standing lines: coordinator sees all active" 2 "$(sl "$ST3" coordinator | gr
 eq "standing lines: lane sees the role-free entry only" "- 20261114T1040Z-english (this project): English in code." "$(sl "$ST3" lane)"
 eq "standing lines: the cap leaves a pointer" "- ... 1 more: bin/ytstack-standing list" "$(sl "$ST3" coordinator 1 | sed -n 2p)"
 eq "session home follows XDG_STATE_HOME" "/x/ytstack/sessions" "$( . "$LIB"; XDG_STATE_HOME=/x yt_session_home )"
+
+# ---- yt_behind_origin: a checkout on the default branch behind origin (issue #82) ----
+echo "# behind origin"
+BO="$TMP/bo-origin.git"; git init -q --bare "$BO"
+BC=$(new_repo bo-clone); mkdir -p "$BC/.ytstack"
+( cd "$BC" || exit 2; git branch -M main; printf 'current_milestone: M001\n' > .ytstack/STATE.md; git add -A; git commit -qm state
+  git remote add origin "$BO"; git push -q -u origin main
+  printf 'current_milestone: M007\n' > .ytstack/STATE.md; git commit -qam next; git push -q origin main
+  git checkout -q --detach HEAD~1 && git branch -q -f main HEAD && git checkout -q main ) >/dev/null 2>&1
+bo() { ( . "$LIB"; yt_behind_origin "$1" "$1/.ytstack"; printf '%s|%s|%s' "$YT_BEHIND_N" "$YT_BEHIND_REF" "$YT_BEHIND_STATE" ); }
+eq "behind: one commit behind origin/main, STATE read from it" "1|origin/main|current_milestone: M007" "$(bo "$BC")"
+( cd "$BC" && git checkout -q -b side ) >/dev/null 2>&1
+eq "behind: another branch is not the default branch" "0||" "$(bo "$BC")"
+( cd "$BC" && git checkout -q main && git merge -q --ff-only origin/main ) >/dev/null 2>&1
+eq "behind: up to date" "0||" "$(bo "$BC")"
+eq "behind: no origin" "0||" "$(bo "$(new_repo bo-plain)")"
 
 echo
 echo "$PASS passed, $FAIL failed"

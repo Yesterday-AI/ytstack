@@ -5,8 +5,11 @@
 #
 #   1. Task reminder (advisory): if STATE.md still points at an active task
 #      whose SUMMARY is missing or a draft stub, surface a one-line reminder
-#      via `systemMessage`. Never blocks for this: the user may well be
-#      stopping on purpose.
+#      via `systemMessage`, once per session and pointer, never in coordinate
+#      mode, not for a pointer the STATE lint reports as days old (W10). A
+#      checkout on the default branch behind origin gets one message with
+#      origin's pointer instead (issue #82). Never blocks for this: the user
+#      may well be stopping on purpose.
 #   2. Standing instructions (coordinate mode only, the session marker of
 #      hooks/standing-prompt): when hooks/standing-prompt flagged human
 #      prompts that were not handled yet and no standing entry was written
@@ -21,6 +24,8 @@
 #      session's dispatches and reports, the STATE pointer behind the newest
 #      milestone. Said once per session; after YT_LINT_STREAK_N sessions in a
 #      row (default 3) the stop is blocked once. See the section below.
+#   4. Rotation (coordinate mode, issue #83): from the second compaction of
+#      the session, one reminder per compaction to rotate (Step 12).
 #
 # Resolution: payload `cwd` via hooks/lib/git-ctx.sh (never CLAUDE_PROJECT_DIR).
 # Respects `stop_hook_active` (set when a previous Stop hook already continued
@@ -145,28 +150,73 @@ coordinate_lints() {
 }
 coordinate_lints
 
-# ---- 1. task reminder --------------------------------------------------------------
+# ---- 4. rotation (coordinate mode, issue #83) ---------------------------------------
+# From the second compaction of a coordinator session (counted by hooks/pre-compact
+# in <session dir>/compactions): one reminder per compaction to rotate (Step 12).
+ROTATE_MSG=""
+rotate_msg() {
+  local sid="${YT_SESSION_ID:-}" sd n
+  case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  sd="$(yt_session_home)/$sid"
+  [ -f "$sd/coordinate" ] || return 0
+  n=$(grep -c . "$sd/compactions" 2>/dev/null); case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  [ "$n" -ge 2 ] && [ "$(cat "$sd/rotate-said" 2>/dev/null)" != "$n" ] || return 0
+  printf '%s\n' "$n" > "$sd/rotate-said" 2>/dev/null || return 0
+  ROTATE_MSG="ytstack: this coordinator session was compacted $n times. Rotate now (ytstack:coordinate Step 12): rows and standing instructions current, HANDOFF.md with the Rotation block, a fresh session with ytstack:coordinate; this one stays open only as a relay."
+}
+rotate_msg
+
+# ---- 1. task reminder (issue #82) ---------------------------------------------------
+# Once per session and pointer (<session dir>/stop-said holds what was said).
+# On the default branch behind origin/<default> (local refs, no fetch) the
+# local STATE.md is stale: one message with the count and origin's pointer
+# instead, also in coordinate mode. A coordinate session holds no task: no
+# reminder. A pointer older than YT_POINTER_STALE_DAYS is the STATE lint's
+# line W10 (SessionStart), not a message on every stop.
+said() { # said <key>: 0 when this session said it already; records it otherwise
+  local sid="${YT_SESSION_ID:-}" f
+  case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) return 1 ;; esac
+  f="$(yt_session_home)/$sid/stop-said"
+  grep -qxF -- "$1" "$f" 2>/dev/null && return 0
+  mkdir -p "${f%/*}" 2>/dev/null && printf '%s\n' "$1" >> "$f" 2>/dev/null
+  return 1
+}
 task_msg() {
-  local ytd state m s t summary
+  local ytd state m s t summary sid="${YT_SESSION_ID:-}" ptr
   yt_git_ctx "${YT_CWD:-$PWD}"
   ytd=$(yt_resolve_yt_dir)
   [ -n "$ytd" ] && [ -f "$ytd/STATE.md" ] || return 0
   state="$ytd/STATE.md"
-  get_field() { sed -n "s/^$1: *//p" "$state" 2>/dev/null | head -1; }
-  m=$(get_field current_milestone); s=$(get_field active_slice); t=$(get_field active_task)
+  get_field() { sed -n "s/^$1: *//p" 2>/dev/null | head -1; }
+  if [ "$YT_IS_GIT" = yes ]; then
+    yt_behind_origin "$YT_TOPLEVEL" "$ytd"
+    if [ "${YT_BEHIND_N:-0}" -gt 0 ]; then
+      said "behind:$(git -C "$YT_TOPLEVEL" rev-parse -q --verify "refs/remotes/$YT_BEHIND_REF" 2>/dev/null)" && return 0
+      ptr="$(printf '%s\n' "$YT_BEHIND_STATE" | get_field current_milestone) / $(printf '%s\n' "$YT_BEHIND_STATE" | get_field active_slice) / $(printf '%s\n' "$YT_BEHIND_STATE" | get_field active_task)"
+      MSG="ytstack: this checkout ($YT_TOPLEVEL) is $YT_BEHIND_N commit(s) behind $YT_BEHIND_REF (local refs, not fetched): its STATE.md is stale. $YT_BEHIND_REF points at $ptr. Bring it up to date (git merge --ff-only $YT_BEHIND_REF) before acting on the pointer."
+      return 0
+    fi
+  fi
+  case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) ;; *) [ ! -f "$(yt_session_home)/$sid/coordinate" ] || return 0 ;; esac
+  m=$(get_field current_milestone < "$state"); s=$(get_field active_slice < "$state"); t=$(get_field active_task < "$state")
   case "$t" in ""|none|all) return 0 ;; esac
   case "$s" in ""|none|all) return 0 ;; esac
   case "$m" in ""|none) return 0 ;; esac
+  yt_state_lint "$ytd" >/dev/null
+  case "${YT_STATE_WARNINGS:-}" in *"active task $m-$s-$t unchanged since"*) return 0 ;; esac
   # The summary where the task's milestone lives (issue #70), flat or nested.
   summary=$(yt_artifact_path "$ytd" "$m-$s-$t-SUMMARY.md")
   if [ ! -f "$summary" ]; then
+    said "task:$m-$s-$t:missing" && return 0
     MSG="ytstack: $m-$s-$t is still the active task and has no summary. If the work is done, run /ytstack:summarize-task; if you are pausing, /ytstack:handoff-session keeps the thread."
   elif [ "$(sed -n 's/^closed: *//p' "$summary" | head -1)" = draft ]; then
+    said "task:$m-$s-$t:draft" && return 0
     MSG="ytstack: $m-$s-$t has only a draft summary stub. Run /ytstack:summarize-task to close it, or /ytstack:handoff-session if you are pausing."
   fi
 }
 MSG=""
 task_msg
+[ -z "$ROTATE_MSG" ] || MSG="${MSG:+$MSG }$ROTATE_MSG"
 [ -z "$LINT_MSG" ] || MSG="${MSG:+$MSG }$LINT_MSG"
 
 [ -n "$MSG$BLOCK_REASON" ] || exit 0

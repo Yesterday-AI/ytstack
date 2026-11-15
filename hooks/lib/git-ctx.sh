@@ -456,6 +456,8 @@ EOF
 #   W7 malformed `progress` block (one finding per problem)
 #   W8 STATE.md larger than YT_STATE_MAX_BYTES (it is a pointer, not a ledger)
 #   W9 earlier status paragraphs beside the current one (history)
+#   W10 an active task with last_updated older than YT_POINTER_STALE_DAYS
+#       (default 3) days: hooks/stop leaves such a pointer to this line
 # W8 and W9 are prompts for ytstack:reconcile; no skill stops on them.
 YT_STATE_MAX_BYTES=12000
 yt_state_lint() {
@@ -505,6 +507,14 @@ yt_state_lint() {
       _yt_warn "last_updated $lu is older than the newest commit touching .ytstack ($(git -C "$ytd" log -1 --format=%cI -- . 2>/dev/null))"
     fi
   fi
+  # W10 (issue #82): a task pointer that has not moved for days
+  local days="${YT_POINTER_STALE_DAYS:-3}"
+  case "$days" in ''|*[!0-9]*) days=3 ;; esac
+  case "$t" in T[0-9][0-9])
+    if [ -n "$lu_epoch" ] && [ $(( $(date +%s) - lu_epoch )) -gt $((days * 86400)) ]; then
+      _yt_warn "active task $m-$s-$t unchanged since last_updated $lu (more than $days days): close it (summarize-task), hand it off, or set active_task none"
+    fi ;;
+  esac
   # W6: current milestone done but a slice still active
   if [ "$m" != none ] && [ -f "$ytd/$m-ROADMAP.md" ] && [ "$s" != none ]; then
     if [ "$(sed -n 's/^status: *//p' "$ytd/$m-ROADMAP.md" | head -1)" = done ]; then
@@ -695,6 +705,25 @@ yt_standing_default_ref() {
   for r in $r refs/remotes/origin/main refs/remotes/origin/master refs/heads/main refs/heads/master; do
     git -C "$1" rev-parse -q --verify "$r" >/dev/null 2>&1 && { printf '%s' "$r"; return 0; }
   done
+  return 0
+}
+
+# yt_behind_origin <toplevel> [yt_dir] (issue #82): is the checkout on the
+# default branch and behind origin's copy of it? Local refs only, no fetch.
+# Sets YT_BEHIND_N (0 when not on the default branch, without an origin ref,
+# or not behind), YT_BEHIND_REF (origin/<branch>) and, for a <yt_dir> inside
+# the checkout, YT_BEHIND_STATE: STATE.md as that ref has it ("" without one).
+yt_behind_origin() {
+  local top="$1" ytd="${2:-}" r cur n
+  YT_BEHIND_N=0; YT_BEHIND_REF=""; YT_BEHIND_STATE=""
+  r=$(yt_standing_default_ref "$top")
+  case "$r" in refs/remotes/origin/*) ;; *) return 0 ;; esac
+  cur=$(git -C "$top" symbolic-ref -q --short HEAD 2>/dev/null)
+  [ -n "$cur" ] && [ "$cur" = "${r#refs/remotes/origin/}" ] || return 0
+  n=$(git -C "$top" rev-list --count "HEAD..$r" 2>/dev/null)
+  case "$n" in ''|0|*[!0-9]*) return 0 ;; esac
+  YT_BEHIND_N=$n; YT_BEHIND_REF="origin/$cur"
+  case "$ytd" in "$top"/*) YT_BEHIND_STATE=$(git -C "$top" show "$r:${ytd#"$top"/}/STATE.md" 2>/dev/null) ;; esac
   return 0
 }
 
