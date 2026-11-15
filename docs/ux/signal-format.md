@@ -143,7 +143,7 @@ bin/ytstack-signals lesson new --area <area> --class <class-slug> --title <text>
 
 A `<path>` is read from the root of the checkout, except one that starts with `.ytstack/`: it names a file in the project's `.ytstack` directory wherever that lives, also in user scope (`~/.ytstack/projects/<key>/`), so `knowledge:.ytstack/KNOWLEDGE.md#<anchor>` works in both. The same holds for the script and receipt paths of an incident record.
 
-A machine check comes first. A knowledge entry or the contract only where no machine can check it. A lesson never lives in `AGENTS.md` or `CLAUDE.md`: the script refuses that target, and the check fails on it.
+A machine check comes first. A knowledge entry or the contract only where no machine can check it. A lesson never lives in `AGENTS.md`, `CLAUDE.md` or `CLAUDE.local.md` (in any case, in any directory): the script refuses that target, and the check fails on it.
 
 What the states mean for a lesson:
 
@@ -276,7 +276,7 @@ Every mitigation is a staged script for a person, made with `bin/ytstack-handove
 - a mitigation that is not `declined` and whose script does not exist or does not pass `bin/ytstack-handover check`, and a `carried out` whose receipt does not exist
 - a file in `signals/` whose name is not `F###-<slug>.md`, an id that differs from the file name or is used by two files, a file without frontmatter
 - a `key` or a `ref` that is not one word of the listed characters, a `source` that is not a lowercase slug, a `kind` or a `state` outside the listed values, a finding of `kind: review` whose key is not `review:<role>:<class-slug>`
-- a lesson whose key is not `lesson:<area>:<class-slug>` with a listed area, whose source is not that area, whose `target` is missing or not `<type>:<where>`, or names `AGENTS.md` or `CLAUDE.md`; a `fixed` lesson whose target is a proposal or a file that does not exist
+- a lesson whose key is not `lesson:<area>:<class-slug>` with a listed area, whose source is not that area, whose `target` is missing or not `<type>:<where>`, or names `AGENTS.md`, `CLAUDE.md` or `CLAUDE.local.md` in any case; a `fixed` lesson whose target is a proposal or a file that does not exist
 - a line of `review-checks` that is not `<owner/name>#<n> <merge sha> <UTC time>`, and a pull request that has two lines
 - `first_seen` or `last_seen` that is not a UTC time with seconds, a `count` that is not a number from 1
 - a `planned` finding whose `ref` is `none`, a `dismissed` finding without a reason under "Assessment"

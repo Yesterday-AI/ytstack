@@ -661,6 +661,10 @@ feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target knowle
 eq "a lesson in AGENTS.md is refused: exit 64" 64 "$EC"; has "and says where it goes instead" "never lives in AGENTS.md" "$OUT"
 feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target contract:docs/CLAUDE.md#rules
 eq "a lesson in CLAUDE.md is refused, also with a path and an anchor: exit 64" 64 "$EC"
+feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target knowledge:agents.md
+eq "a lesson in agents.md (lower case) is refused: exit 64" 64 "$EC"
+feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target contract:sub/CLAUDE.local.md#x
+eq "a lesson in CLAUDE.local.md is refused: exit 64" 64 "$EC"; has "and names the file" "never lives in CLAUDE.local.md" "$OUT"
 feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target tests/x.sh;        eq "a target without a type: exit 64" 64 "$EC"
 feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target rule:tests/x.sh;   eq "a target of an unknown type: exit 64" 64 "$EC"
 feed "x" "$D" lesson new --area ci --class rule --title "A rule";                            eq "no --target: exit 64" 64 "$EC"
@@ -684,6 +688,10 @@ edit "$L3" 's|^target: .*|target: knowledge:.ytstack/GONE.md|'
 defect "a fixed lesson whose target does not exist" "F003-a-receipt-claimed-a-run-that-had-not-ended.md: state fixed, but its target .ytstack/GONE.md does not exist"
 edit "$L3" 's/^target: .*/target: knowledge:AGENTS.md/'
 defect "a lesson in AGENTS.md" "a lesson never lives in AGENTS.md"
+edit "$L3" 's/^target: .*/target: knowledge:docs\/Claude.md/'
+defect "a lesson in Claude.md (any case, any directory)" "a lesson never lives in Claude.md"
+edit "$L3" 's/^target: .*/target: contract:claude.local.md/'
+defect "a lesson in claude.local.md" "a lesson never lives in claude.local.md"
 edit "$L3" '/^target: /d'
 defect "a lesson without a target" "kind lesson, but target \"\" is not"
 edit "$L3" 's/^reopens: none/&\
