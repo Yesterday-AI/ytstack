@@ -299,6 +299,9 @@ yt_pref() {
 #                         value reads as human, see below)
 #   YT_PREF_EVIDENCE_DIR  where a visual review stores its screenshots
 #                         (default .ytstack/evidence)
+#   YT_PREF_ESCALATE      what goes to a person (issue #78): a comma separated
+#                         subset of violation, deviation, irreversible, secret,
+#                         spend (default all five; an invalid item reads as all five)
 #   YT_PREF_UPSTREAM_FEEDBACK  suggest | file | off (default suggest; falls
 #                         back to ~/.ytstack/config, see yt_upstream_feedback)
 #   YT_PREF_WARNINGS      one line per invalid value (reset to default)
@@ -335,6 +338,18 @@ yt_prefs() {
 }merge_by: '$YT_PREF_MERGE_BY' is not human|coordinator|risk (using human)"; YT_PREF_MERGE_BY=human ;; esac
   YT_PREF_EVIDENCE_DIR=$(yt_pref "$ytd" evidence_dir .ytstack/evidence)
   case "$YT_PREF_EVIDENCE_DIR" in ?*/) YT_PREF_EVIDENCE_DIR=${YT_PREF_EVIDENCE_DIR%/} ;; esac
+  # escalate (issue #78, docs/ux/coordinator-format.md "Who decides"): like
+  # merge_by, a typo never takes a class away from the person.
+  local _esc_all="violation, deviation, irreversible, secret, spend" _esc_i _esc_out="" _esc_bad=""
+  YT_PREF_ESCALATE=$(yt_pref "$ytd" escalate "$_esc_all")
+  for _esc_i in $(printf '%s' "$YT_PREF_ESCALATE" | tr ',' ' '); do
+    case "$_esc_i" in violation|deviation|irreversible|secret|spend) _esc_out="${_esc_out:+$_esc_out, }$_esc_i" ;; *) _esc_bad=1 ;; esac
+  done
+  if [ -n "$_esc_bad" ] || [ -z "$_esc_out" ]; then
+    YT_PREF_WARNINGS="${YT_PREF_WARNINGS:+$YT_PREF_WARNINGS
+}escalate: '$YT_PREF_ESCALATE' is not a list of violation|deviation|irreversible|secret|spend (using all five)"; _esc_out="$_esc_all"
+  fi
+  YT_PREF_ESCALATE="$_esc_out"
   yt_upstream_feedback "$ytd"
   return 0
 }

@@ -3,7 +3,7 @@ name: reassess-roadmap
 description: "Checks at a slice boundary whether the milestone roadmap still fits reality: deviations from the summaries, gates that only a person can close or that have lapsed, work that repeats without advancing, stale milestones to mark dropped or shipped-informally, slices to add, split, reorder or remove. Use after summarize-task closed the last task of a slice, or when the user says reassess, review the roadmap, does the plan still hold. Not mid-slice and not for task detail (plan-task)."
 metadata:
   tier: task
-  version: 0.3.1
+  version: 0.3.2
   triggers:
     - reassess roadmap
     - review milestone plan
@@ -211,7 +211,7 @@ Record only what the human answered, in the plan file that holds the gate:
 - lapsed: `- [-] G## -- ... | lapsed: {TODAY} {what happened}`
 - not given: the line stays `- [ ]`; what has to change becomes a task or a slice in Step 5.
 
-**The question queue.** A project that keeps `.ytstack/questions/` (format: `docs/ux/coordinator-format.md`) carries each gate that needs a verdict as one question file, so that it survives the session and is not asked twice. Before the question above is put: for a gate without a file, `"${CLAUDE_SKILL_DIR}/../../bin/ytstack-questions" new --question "<the gate as a question>" --decides "<who>" --blocks "<gate id>"` and fill its Context, Options and Recommendation; a gate whose file is already `asked` is listed as waiting since that time and is not put again unless something changed. When the question goes out: `ytstack-questions ask <id>` for each one in it. When the human answers: write the answer under `## Answer` in the file, then `ytstack-questions answer <id>`, then the gate line as above. A project without the directory skips this paragraph; the gate lines alone carry the state.
+**The question queue.** A project that keeps `.ytstack/questions/` (format: `docs/ux/coordinator-format.md`) carries each gate that needs a verdict as one question file, so that it survives the session and is not asked twice. Before the question above is put: for a gate without a file, `"${CLAUDE_SKILL_DIR}/../../bin/ytstack-questions" new --question "<the gate as a question>" --decides "<who>" --because reserved --blocks "<gate id>"` (a gate reserves a person's verdict) and fill its Context, starting with `Source:` (the gate line and its plan) and `Purpose:` (what the verdict unblocks), Options and Recommendation; a gate whose file is already `asked` is listed as waiting since that time and is not put again unless something changed. When the question goes out: `ytstack-questions ask <id>` for each one in it. When the human answers: write the answer under `## Answer` in the file, then `ytstack-questions answer <id>`, then the gate line as above. A project without the directory skips this paragraph; the gate lines alone carry the state.
 
 A verdict that the plan reserves for a person is never recorded as given by you, by a dispatched agent or by a review. If `YTSTACK_NON_INTERACTIVE` is `true`, ask nothing and record nothing: list the items under "Waiting on a person" in the report, and when `STATE.md` has a `progress:` block set its `waiting_on` to the first item. A finding that the project's own policy rates non-blocking is not a gate and is not listed here; it is a follow-up.
 

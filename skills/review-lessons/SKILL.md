@@ -3,7 +3,7 @@ name: review-lessons
 description: "Looks at the review-bot findings of merged pull requests that the project's own review roles missed and turns repeated or severe ones into a proposed line for the owning role's file, as a question for a person. Use after a pull request merged in a project whose REVIEW.md declares own reviewers, when PR watch or bin/ytstack-upkeep says a merged pull request has no escape check, or when the user says what did the bots catch that our reviewers missed, review lessons, learn from the bot findings. Not for reviewing a change before it merges (code-review) and not for what production reports (signal-intake)."
 metadata:
   tier: task
-  version: 0.1.1
+  version: 0.1.2
 allowed-tools:
   - Bash
   - Read
@@ -252,12 +252,12 @@ A class reached the threshold when the answer of Step 6 was
 And no question between `QUESTIONS_BEGIN` and `QUESTIONS_END`, or written in this run, names the key already. Then one question file per class:
 
 ```bash
-bash "{QUESTIONS_TOOL}" -C "{PROJECT_DIR}" new --question "Add a lesson for review:{role}:{class} to {lessons file}?" --decides "the owner of the {role} reviewer" --blocks {F###}
+bash "{QUESTIONS_TOOL}" -C "{PROJECT_DIR}" new --question "Add a lesson for review:{role}:{class} to {lessons file}?" --decides "the owner of the {role} reviewer" --because reserved --blocks {F###}
 ```
 
-Edit the file it prints (nothing else in it):
+`reserved`: a line in a role's file is approved by a person (`docs/ux/review-policy-format.md`). Edit the file it prints (nothing else in it):
 
-- `## Context`: the finding (`.ytstack/signals/{file}`), how often and in which pull requests the class escaped, the severity, and every escaped thread as a URL. One sentence on why the role owns it, with the line of its file you based that on.
+- `## Context`: `Source: .ytstack/signals/{file}` and `Purpose: a line for {lessons file} that makes the {role} reviewer catch the class`, then the finding (`.ytstack/signals/{file}`), how often and in which pull requests the class escaped, the severity, and every escaped thread as a URL. One sentence on why the role owns it, with the line of its file you based that on.
 - `## Options`:
   - `A) Add this line to {lessons file}, section "{section}": "{the exact line}" -- consequence: the role checks it at every review from the next one on; a task carries the change (ytstack-signals set {F###} --state planned --ref <task>)`
   - `B) Add it with another wording or in another place -- consequence: the same, with the person's text`

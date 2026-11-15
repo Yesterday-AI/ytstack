@@ -1508,3 +1508,22 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - The PR watch shows `STALL 1` first and `STALL 2` only a full window after `STALL 1` was shown, as `ytstack-watch` does; the step shown is kept per session (`stall:<session>`). The lane lookup is one `ytstack-frontier owner --pr N,N,...` call per checkout within one 3-second budget, made before the fingerprints are saved; any failure leaves the line without a lane. A comment does not lift a changes request of the same reviewer, in `ytstack-watch` and in `ytstack-finish-lane gates`. `owner` prefers a held row. A fresh worker gets its own worktree: `git worktree add --detach <new> origin/<branch>`, `claim --worktree <new>` (PR #92 independent review).
 
 **Supersedes:** None. Extends "2026-11-15: Lane liveness is part of `ytstack-frontier check`, worktree cleanup only prints commands, peers are list lines in `LANES.md` (issue #84)" and "2026-11-15: PR watch bulk registration takes only your own ready PRs; bins are called through `YT_BIN` (issue #85)".
+
+## 2026-11-15: A coordinator decides what nobody reserved; a person gets only a closed list of escalations, and a question names its source and purpose (issue #78)
+
+**Context:** A four-day coordinator run (about 500 human prompts, 23 compactions) kept sending decisions to the human that were not his: he corrected that 14 times and asked "what is on me?" 12 more times. A plan sentence that named him as the author of an analysis was read as a reservation of the decision, and a token was requested with neither its source nor its purpose. Step 8 of `coordinate` said when to ask, not who decides; `--decides` was free text and `ask` accepted an empty Context.
+
+**Options considered:**
+- A) More text in Step 8.
+- B) A closed list in `PREFERENCES.md` (`escalate:`), a default in Step 8 (the coordinator decides the rest and records it), and the question script enforcing it: `--decides` needs `--because <item>`, `ask` needs `Source:` and `Purpose:` in the Context.
+- C) As B, with free-text reasons instead of a list.
+
+**Chose:** B. The list is `violation, deviation, irreversible, secret, spend`, default all five; a value with another item reads as all five and warns (like `merge_by`, a typo never takes something away from the person). `reserved` stands beside the list and always holds: a plan line reserves only when it says verdict, approval or sign-off, or a standing entry reserves the decision. Question files get `class: escalation|info` and `because:`; `--info <who>` is for a fact only a person has and decides nothing. A file without `class` reads as `escalation` and stays valid; `check` validates an item against all six, not against the project's list of today. `ask` refuses a Context without both lines also for old files. `ytstack-upkeep` writes its report as `info`; the lesson proposals and the gates of `reassess-roadmap` are `reserved`. The rule is line 6 of the operating checklist, which survives compactions.
+
+**Reason:** The corrections came after compactions, when only files and injected blocks were left; a sentence in Step 8 alone was what failed. A closed list makes "is this mine?" a lookup, and the script refusing a question without its item or its source and purpose puts the check on the path. C would let every question name a reason.
+
+**How to apply:**
+- Unsure whether something is on the list: the coordinator decides it and says why in the `DECISIONS.md` entry.
+- `escalate:` narrows only the five; it cannot add new items. A project that wants more reserves it in the plan or a standing entry.
+
+**Supersedes:** None. Narrows "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files ...": `questions/` holds what a person decides by the list, not every open point.

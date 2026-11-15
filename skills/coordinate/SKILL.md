@@ -3,7 +3,7 @@ name: coordinate
 description: "Coordinator mode for the session that owns a plan and delegates all of it, writing no product code itself. Use when many lanes are in flight, when a plan has dozens of work packages, when a session with open lanes continues after a compaction or a resume, or when the user says coordinate this, run the plan, you are the coordinator, keep the lanes moving, where does each lane stand. Not for one milestone with a handful of independent slices (spawn-milestone-team) and not for doing a task yourself (plan-task)."
 metadata:
   tier: task
-  version: 0.6.3
+  version: 0.7.1
 allowed-tools:
   - Bash
   - Read
@@ -40,7 +40,7 @@ You MUST create a TodoWrite task for each of these items. Items 4 to 13 are one 
 5. **Delegate what is ready** -- claim, render the brief, dispatch, check the report
 6. **Finish reported lanes** -- `ytstack:finish-lane`, one lane at a time per pull request
 7. **Run the factory tools** -- the route before every merge (also your own), the PR watch or `ytstack-watch`, `ytstack-watch release` after every merge to production, signals, review lessons, the lesson of every incident (a red `main`, a slip); each skipped only by its condition
-8. **Queue and ask questions** -- look up, write the file, ask one, late
+8. **Queue and ask questions** -- look up, decide what nobody reserved, write the file only for an `ESCALATE` item or a fact, ask one, late
 9. **Record standing instructions** -- `ytstack-standing add` when they are given, before the next dispatch; never only in agent memory
 10. **Stop loops that do not converge** -- a diagnosis to the human instead of another dispatch
 11. **Report status** -- only on a change the human acts on, or at a boundary he set
@@ -110,9 +110,11 @@ echo "PR_HOST: $_PR_HOST"
 # Factory tools (M031): what the project switched on; Step 7 skips a tool by these lines.
 _BIN=$(cd "${CLAUDE_SKILL_DIR}/../../bin" 2>/dev/null && pwd -P || echo "${CLAUDE_SKILL_DIR}/../../bin")
 echo "YT_BIN=$_BIN"
-_MERGE_BY=human
-command -v yt_prefs >/dev/null 2>&1 && { yt_prefs "$_YT_DIR" >/dev/null; _MERGE_BY="$YT_PREF_MERGE_BY"; }
+_MERGE_BY=human; _ESCALATE="violation, deviation, irreversible, secret, spend"
+command -v yt_prefs >/dev/null 2>&1 && { yt_prefs "$_YT_DIR" >/dev/null; _MERGE_BY="$YT_PREF_MERGE_BY"; _ESCALATE="$YT_PREF_ESCALATE"; }
 echo "MERGE_BY: $_MERGE_BY"
+# Who decides (issue #78): what goes to a person besides what a plan line or a standing entry reserves; Step 8.
+echo "ESCALATE: $_ESCALATE, reserved"
 echo "REVIEW_POLICY: $([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/spec/REVIEW.md" ] && echo yes || echo no)"
 echo "OWN_REVIEWERS: $([ -f "$_BIN/ytstack-risk" ] && [ -n "$(bash "$_BIN/ytstack-risk" -C "$_PROJECT_DIR" reviewers 2>/dev/null)" ] && echo yes || echo no)"
 _PRW=off
@@ -195,7 +197,9 @@ for _f in "$_YT_DIR"/questions/Q[0-9]*.md; do
   _st=$(sed -n 's/^state: *//p' "$_f" | head -1)
   case "$_st" in open|asked) ;; *) continue ;; esac
   _QN=$((_QN + 1))
-  echo "$(basename "$_f") | $_st | asked: $(sed -n 's/^asked: *//p' "$_f" | head -1) | blocks: $(sed -n 's/^blocks: *//p' "$_f" | head -1)"
+  _cl=$(sed -n 's/^class: *//p' "$_f" | head -1); _by=$(sed -n 's/^because: *//p' "$_f" | head -1)
+  [ "$_by" != none ] || _by=""
+  echo "$(basename "$_f") | $_st | ${_cl:-escalation}${_by:+ ($_by)} | asked: $(sed -n 's/^asked: *//p' "$_f" | head -1) | blocks: $(sed -n 's/^blocks: *//p' "$_f" | head -1)"
 done
 [ "$_QN" -gt 0 ] || echo "no open questions"
 echo "QUESTIONS_END"
@@ -265,11 +269,15 @@ A lane named in the `blocks:` of an open or asked question is not ready, whateve
 
 **After a merge.** A pull request that merged, also when a person merged it: set its lane to `merged`, then the release watch and the review lessons of the table. A merged lesson lane also closes its lesson: `ytstack-signals set F### --state fixed` once this checkout has the merged check (the script refuses while the file is missing). The receipt goes into the next status; `not arrived` or `unhealthy` is a status at once. You deploy nothing and roll nothing back: a countermeasure on the target is a step for the human (`ytstack:handover-step`).
 
-**Step 8 -- Queue and ask questions.** First look the question up: the plan, `DECISIONS.md`, the answered files in `questions/`. What they answer is not asked. Otherwise `ytstack-questions new --question "<text>" --decides "<who>" --blocks "<lane or gate>"` and fill Context, Options and Recommendation until the human can answer from the file alone. The state is `open` and the lanes that do not depend on it go on. Ask as late as the work allows: when nothing ready is left that is independent of it, or at a boundary from a standing instruction. Ask one (`ytstack-questions next`), mark it (`ytstack-questions ask <id>`), and use AskUserQuestion:
+**Step 8 -- Queue and ask questions.** First look the question up: the plan, `DECISIONS.md`, the answered files in `questions/`. What they answer is not asked.
 
-> **{Q### -- the title}** in **{project}** on `{BRANCH}`. It blocks {blocks}; {n} lanes go on without it.
+**Who decides.** What the plan or a standing entry does not reserve, you decide: take the decision, record it in `DECISIONS.md` when it lasts, and go on. A person decides only what the preamble's `ESCALATE` line lists (`docs/ux/coordinator-format.md`, "Who decides"): a rule or concept violation, a plan deviation, an irreversible or production step no plan line covers, a secret, spend, and `reserved`. A plan line reserves a decision only when it says verdict, approval or sign-off; a line that names a person as the author of an analysis or of a step reserves nothing. Unsure which applies: it is yours, and the `DECISIONS.md` entry says why.
+
+Otherwise `ytstack-questions new --question "<text>" --decides "<who>" --because <item> --blocks "<lane or gate>"`; for a fact only a person has (a token and where it lives, an access) and no decision, `--info "<who>"` instead. The script refuses an item that is not on the list. Fill Context, Options and Recommendation until the human can answer from the file alone; the Context starts with `Source:` (where the need comes from: the plan line, file, commit, standing entry) and `Purpose:` (what the answer unblocks), and `ytstack-questions ask` refuses a file without them, also an older file: add both lines before you ask it. The state is `open` and the lanes that do not depend on it go on. Ask as late as the work allows: when nothing ready is left that is independent of it, or at a boundary from a standing instruction. Ask one (`ytstack-questions next`), mark it (`ytstack-questions ask <id>`), and use AskUserQuestion:
+
+> **{Q### -- the title}** in **{project}** on `{BRANCH}`. It comes to you because {the because item in words, or "it needs a fact only you have"}. It blocks {blocks}; {n} lanes go on without it.
 >
-> {The Context section in plain words: what exists, what is undecided, which file to open.}
+> {The Context section in plain words: where it comes from, what it is for, what exists, what is undecided, which file to open.}
 >
 > RECOMMENDATION: Choose {letter} because {the one reason from the file}
 >

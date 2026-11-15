@@ -355,6 +355,22 @@ newest entry: 20261114T1436Z-at-most-fifteen ("
       has "$s: YT_BIN is the canonical bin directory" "$OUT" "YT_BIN=$ROOT/bin
 "
       has "$s: bare fixture -> merge_by risk" "$OUT" "MERGE_BY: risk"
+      # who decides (issue #78): the escalation list, and the class of each waiting question
+      has "$s: bare fixture -> the full escalation list" "$OUT" "ESCALATE: violation, deviation, irreversible, secret, spend, reserved"
+      printf 'escalate: secret, spend\n' > "$WT/.ytstack/PREFERENCES.md"
+      bash "$ROOT/bin/ytstack-questions" -C "$WT" new --question "Rotate the key?" --decides "the operator" --because secret >/dev/null
+      bash "$ROOT/bin/ytstack-questions" -C "$WT" new --question "Where is the token?" --info "the operator" >/dev/null
+      printf -- '---\nid: Q003\nstate: open\ndecides: the operator\nopened: 2026-11-13T09:00:00Z\nasked: none\nanswered: none\nblocks: none\n---\n\n# Q003 -- Old?\n' > "$WT/.ytstack/questions/Q003-old.md"
+      run_pre "$P" "$WT"
+      has "$s: escalate from PREFERENCES" "$OUT" "ESCALATE: secret, spend, reserved"
+      has "$s: an escalation names its item" "$OUT" "Q001-rotate-the-key.md | open | escalation (secret) | asked: none"
+      has "$s: an info question" "$OUT" "Q002-where-is-the-token.md | open | info | asked: none"
+      has "$s: a file without class reads as escalation" "$OUT" "Q003-old.md | open | escalation | asked: none"
+      rm -rf "$WT/.ytstack/questions" "$WT/.ytstack/PREFERENCES.md"
+      awk '/^\*\*Step 8 --/ { p = 1 } /^\*\*Step 9 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep_q -F 'verdict, approval or sign-off' \
+        && ok "$s: Step 8 says what reserves a decision" || bad "$s: Step 8 says what reserves a decision"
+      awk '/^\*\*Step 8 --/ { p = 1 } /^\*\*Step 9 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep_q -F -- '--because <item>' \
+        && ok "$s: Step 8 writes a question with its item" || bad "$s: Step 8 writes a question with its item"
       has "$s: bare fixture -> no review policy" "$OUT" "REVIEW_POLICY: no"
       has "$s: bare fixture -> no own reviewers" "$OUT" "OWN_REVIEWERS: no"
       has "$s: bare fixture -> PR watch off" "$OUT" "PR_WATCH: off"

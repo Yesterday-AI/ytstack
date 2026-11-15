@@ -22,6 +22,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seconds. `coordinate` 0.6.3, Step 7: on `STALL 1` ask the lane once for an
   ETA, on `STALL 2` release the lane and give the branch to a fresh worker
   instead of relaying the same instruction again.
+- **Who decides** (issue #78): a coordinator decides what no plan line and
+  no standing entry reserves, and records it in `DECISIONS.md`. A person
+  gets only what `escalate:` in `PREFERENCES.md` lists (default: a rule or
+  concept violation, a plan deviation, an irreversible or production step
+  without a plan line, a secret, spend) and what is `reserved`; a plan line
+  reserves only when it says verdict, approval or sign-off. The
+  `coordinate` preamble (0.7.1) prints `ESCALATE`, Step 8 carries the
+  default, and the operating checklist has the rule as line 6.
+- **Question class and context gate** (issue #78): question files carry
+  `class: escalation|info` and `because:`. `ytstack-questions new --decides`
+  needs `--because <item>` and refuses an item that is not on the list;
+  `--info <who>` asks for a fact and decides nothing. `ytstack-questions ask`
+  refuses a question whose Context has no `Source:` or no `Purpose:` line.
+  Files without `class` stay valid and read as escalation. `ytstack-upkeep
+  --question` writes its report as `class: info`; `reassess-roadmap`,
+  `lesson`, `review-lessons` and `handover-step` write theirs with an item.
 
 - **Progress per phase** (issue #81): `ytstack-status --phases [--json]`
   prints done, in review and total per milestone and in total. When a total
