@@ -3,7 +3,7 @@ name: incident
 description: "Works a production incident together with a person: one record of what is seen, the timeline and the hypotheses, and every mitigation prepared as a staged script that the person starts. Use when the user says production is down, the site is broken for customers, we have an incident, users cannot log in or pay, we need to roll back, or comes back to an incident that is still open. Not for a defect that hurts no running user and not for finding the root cause afterwards (systematic-debugging), not for the routine reading of what production reports (signal-intake), and not for one planned production step (handover-step)."
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.2.0
 allowed-tools:
   - Bash
   - Read
@@ -46,7 +46,8 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 7. **Ask which mitigation** -- ONE question; record the order under "Decisions"; hand the script over
 8. **Read the receipt, read the signals again** -- the result into the record, with new read times
 9. **Mark mitigated** (only when the person says it holds) -- state and time
-10. **Check the record and hand over the cause** -- `ytstack-signals check`, then `ytstack:systematic-debugging`
+10. **Record the lesson** (only once mitigated) -- invoke `ytstack:lesson` with this record's id
+11. **Check the record and hand over the cause** -- `ytstack-signals check`, then `ytstack:systematic-debugging`
 
 ## Process Flow
 
@@ -63,7 +64,8 @@ digraph incident {
     "Person runs the script" [shape=doublecircle];
     "Read receipt, read signals again" [shape=box];
     "Person says it holds?" [shape=diamond];
-    "State mitigated, check the record" [shape=box];
+    "State mitigated" [shape=box];
+    "ytstack:lesson, check the record" [shape=box];
     "Root cause: systematic-debugging" [shape=doublecircle];
     "No person: question in the report" [shape=doublecircle];
 
@@ -79,8 +81,8 @@ digraph incident {
     "Person runs the script" -> "Read receipt, read signals again" [label="receipt"];
     "Read receipt, read signals again" -> "Person says it holds?";
     "Person says it holds?" -> "Hypotheses" [label="no"];
-    "Person says it holds?" -> "State mitigated, check the record" [label="yes"];
-    "State mitigated, check the record" -> "Root cause: systematic-debugging";
+    "Person says it holds?" -> "State mitigated" [label="yes"];
+    "State mitigated" -> "ytstack:lesson, check the record" -> "Root cause: systematic-debugging";
 }
 ```
 
@@ -308,7 +310,11 @@ Only when the person says it holds:
 
 If the person says it is over without a mitigation (the provider recovered, the load went away), that goes under "Decisions" the same way; the state stays `open` until the record is closed.
 
-### Step 10: Check the record and hand over the cause
+### Step 10: Record the lesson
+
+Once the person said it holds, or that it is over, and before the cause is handed on: invoke `ytstack:lesson`. Hand it what happened in two sentences (what users saw, since when, what stopped it, with the receipt path), the area `production`, the record's id `{id}` for `--incident`, and that this session changes no code: a check the lesson needs (an alert, a health source, a guard in the release) becomes work for somebody else. The lesson is what would have shown or stopped this sooner, not the root cause; `systematic-debugging` records the cause's lesson on the same record afterwards. Put its `Recorded:` line into the timeline. A closed record needs at least one lesson (`ytstack-signals check`).
+
+### Step 11: Check the record and hand over the cause
 
 ```bash
 cd "{PROJECT_DIR}" && bash "{SIGNALS_TOOL}" check
@@ -328,6 +334,6 @@ The terminal state is one of:
 - Returning control to the user with the incident `mitigated` and the record checked; the next step is the root cause
 - Returning control with the question in the final message, every mitigation `proposed` (nobody to ask)
 
-The root cause is found with `ytstack:systematic-debugging`, the record as its input. There its own rule holds again: no fix before the cause is known. What closes the incident: `root_cause:` names the task that found the cause, or the person says it is not pursued (`root_cause: not pursued -- {reason}`); then `state: closed` and `closed: {time}`, "After" lists the follow-ups, and `ytstack-signals check` passes. Whoever finishes that task does it, on the person's word.
+The root cause is found with `ytstack:systematic-debugging`, the record as its input. There its own rule holds again: no fix before the cause is known. What closes the incident: `root_cause:` names the task that found the cause, or the person says it is not pursued (`root_cause: not pursued -- {reason}`); `lesson:` names at least one recorded lesson; then `state: closed` and `closed: {time}`, "After" lists the follow-ups, and `ytstack-signals check` passes. Whoever finishes that task does it, on the person's word.
 
-Do NOT run a mitigation script at any point. Do NOT invoke `ytstack:plan-task`, `ytstack:quick-task`, `ytstack:ship`, `ytstack:finish-lane` or `ytstack:signal-intake` from here. The ONLY skill you may invoke after this one is `ytstack:systematic-debugging`, once the incident is mitigated or the person asks for the cause.
+Do NOT run a mitigation script at any point. Do NOT invoke `ytstack:plan-task`, `ytstack:quick-task`, `ytstack:ship`, `ytstack:finish-lane` or `ytstack:signal-intake` from here. The ONLY skills you may invoke are `ytstack:lesson` in Step 10, and after it `ytstack:systematic-debugging`, once the incident is mitigated or the person asks for the cause.

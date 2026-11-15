@@ -3,7 +3,7 @@ name: coordinate
 description: "Coordinator mode for the session that owns a plan and delegates all of it, writing no product code itself. Use when many lanes are in flight, when a plan has dozens of work packages, when a session with open lanes continues after a compaction or a resume, or when the user says coordinate this, run the plan, you are the coordinator, keep the lanes moving, where does each lane stand. Not for one milestone with a handful of independent slices (spawn-milestone-team) and not for doing a task yourself (plan-task)."
 metadata:
   tier: task
-  version: 0.4.0
+  version: 0.5.0
 allowed-tools:
   - Bash
   - Read
@@ -27,7 +27,7 @@ After the first compaction you know a summary. In a long run a coordinator repor
 
 ## Anti-Pattern: "I'll add a rule so that this does not happen again"
 
-A mechanical mistake that is answered with one more sentence comes back, and the instruction file grows until nobody follows it: reviews keep finding violations of rules that are written down. What a machine can check becomes a check, and the sentence goes. Do not append rules to briefs or to `AGENTS.md` during the run; `ytstack:lane-retro` turns the mistakes of finished lanes into checks and pointers.
+A mechanical mistake that is answered with one more sentence comes back, and the instruction file grows until nobody follows it: reviews keep finding violations of rules that are written down. What a machine can check becomes a check, and the sentence goes. Do not append rules to briefs or to `AGENTS.md` during the run: every incident, also a slip of yours, goes through `ytstack:lesson`, which records its class and puts the lesson into a check first; `ytstack:lane-retro` samples finished lanes for what no incident showed.
 
 ## Checklist
 
@@ -39,7 +39,7 @@ You MUST create a TodoWrite task for each of these items. Items 4 to 13 are one 
 4. **Read host facts fresh** -- `ytstack-watch --once`, every fact with its read time
 5. **Delegate what is ready** -- claim, render the brief, dispatch, check the report
 6. **Finish reported lanes** -- `ytstack:finish-lane`, one lane at a time per pull request
-7. **Run the factory tools** -- the route before every merge (also your own), the PR watch or `ytstack-watch`, `ytstack-watch release` after every merge to production, signals, review lessons; each skipped only by its condition
+7. **Run the factory tools** -- the route before every merge (also your own), the PR watch or `ytstack-watch`, `ytstack-watch release` after every merge to production, signals, review lessons, the lesson of every incident (a red `main`, a slip); each skipped only by its condition
 8. **Queue and ask questions** -- look up, write the file, ask one, late
 9. **Record standing instructions** -- one file per instruction in `standing/` when they are given
 10. **Stop loops that do not converge** -- a diagnosis to the human instead of another dispatch
@@ -209,7 +209,7 @@ A lane named in the `blocks:` of an open or asked question is not ready, whateve
 
 **Step 6 -- Finish reported lanes.** A `reported` lane goes through `ytstack:finish-lane`: the review at a pinned head with the class its reviewer states, the route of the change, the gates read from the host, the merge at the reviewed commit or not at all. Who merges follows `merge_by` in `PREFERENCES.md`. With `risk`, the default, `finish-lane` merges a lane itself when `bin/ytstack-finish-lane route` printed `route: unattended` and the host's gates hold; every other lane stops at `ready` with its merge command and the reasons, and waits for a person. You state no class and you change no ceiling: the class is the reviewer's, the ceiling stands in the area file of the technical spec (`docs/ux/review-policy-format.md`). A change that requires lenses (`.ytstack/spec/REVIEW.md`) gets one more fresh reviewer per lens from `finish-lane`. A lens reviewer is a lane of kind `review` and never the lane's worker; a lens with visual evidence needs a session that can start the product and has a browser tool. One lane at a time per pull request. `finish-lane` writes the reviewed head and the round into the lane's row; a row that lacks them after a review is repaired before anything else (`ytstack-frontier set <lane> --head <sha> --round <n> --pr <number>`). Never merge around it. A cap on open pull requests, when the project or a standing instruction sets one, is a gate of `finish-lane`: a lane that waits for it stays where it is.
 
-**Step 7 -- Run the factory tools.** The plugin already ships what a coordinator under load starts to build by hand: a pull request babysitter, a review tiering, a release check. Use these tools and build none of your own. `ytstack:finish-lane` runs the route, the release watch and the escape check for the merges it makes (its Steps 9, 12 and 13); this step holds for everything else too: a merge you make yourself, a merge a person made, a release, a signal. A tool is skipped only for the reason in its row; the preamble prints the lines that decide it (`MERGE_BY`, `REVIEW_POLICY`, `OWN_REVIEWERS`, `PR_WATCH`, `RELEASE`, `SIGNALS`).
+**Step 7 -- Run the factory tools.** The plugin already ships what a coordinator under load starts to build by hand: a pull request babysitter, a review tiering, a release check. Use these tools and build none of your own. `ytstack:finish-lane` runs the route, the release watch and the escape check for the merges it makes (its Steps 9, 12 and 13), and the lesson of a blocked review or a red check of its lane (its Step 14); this step holds for everything else too: a merge you make yourself, a merge a person made, a release, a signal. A tool is skipped only for the reason in its row; the preamble prints the lines that decide it (`MERGE_BY`, `REVIEW_POLICY`, `OWN_REVIEWERS`, `PR_WATCH`, `RELEASE`, `SIGNALS`).
 
 | Tool | Command | When | Skipped when |
 |---|---|---|---|
@@ -218,6 +218,9 @@ A lane named in the `blocks:` of an open or asked question is not ready, whateve
 | Release watch | `ytstack-watch release --commit <merge commit>` in the background (`gh pr view <N> --json mergeCommit --jq .mergeCommit.oid`; after a squash it is not the reviewed head) | after every merge that goes to production, by anyone | `finish-lane` already watched that commit; `RELEASE: no` (one line in the next status: nobody watched the release) |
 | Signals | `ytstack:signal-intake`; for an outage `ytstack:incident` | the intake at a slice boundary, after a release receipt, and when the person asks; the incident when a receipt says `unhealthy` or `not arrived` and users are hurt, or the person reports production down | the intake when `SIGNALS: 0` or a schedule or another session already runs it; the incident never on a guess: what hurts no running user is a finding for the intake |
 | Review lessons | `ytstack:review-lessons` for the pull request | after a merge with a bot finding: the PR watch's merge notice names the pull request; without the PR watch, `ytstack-review-escapes --pr <N>` prints a line | `OWN_REVIEWERS: no`; `finish-lane` ran it for that merge (its Step 13) |
+| Lesson | `ytstack:lesson` with what happened, the area and "this session changes no code" | a red `main` (a check on the base branch failed: a PR watch notice, or `gh run list --branch <base> --limit 5` read after a merge and before a status), and every slip of a lane or of yours that you notice or the person points out (a foreign process killed, a lane without a watcher, a settled question asked again, a receipt that claimed too much) | never; `finish-lane` ran it for its own blocked review or red check (its Step 14) |
+
+**A red `main`.** A failed check on the base branch blocks every lane that merges after it. Read which check and since which commit (with its read time), dispatch the repair as a lane like any other (or name the lane that broke it, which gets it back), and invoke `ytstack:lesson` before the next dispatch: area `ci`, the check, the commit, the lane that merged it. You fix nothing yourself; a lesson that needs a check becomes a lesson lane.
 
 **The route, also when you merge yourself.** A merge you make outside `finish-lane` (a pull request outside the lanes, a project rule that the coordinator merges) reads the route for the reviewed head first and follows `finish-lane` Step 11: `MERGE_BY: risk` merges only after `route: unattended`; `coordinator` merges and names the route in the status; `human`, or a standing instruction that reserves the merge, leaves the merge to a person with the `reason:` lines. The merge itself is `ytstack-finish-lane -C <worktree> merge --pr <N> --at <reviewed head> --verdict-pattern '^Verdict: approved'`, never `gh pr merge` by hand. Exit 0 of the route means `unattended`; everything else, an error included, means a person.
 
@@ -265,4 +268,4 @@ This skill does not end by itself. It returns control to the user in exactly thr
 - A question waits for the human and nothing ready is independent of it.
 - It rotated (Step 12): the handoff path and the sentence that a fresh session continues from the files; until its listed workers reported, it only relays their reports.
 
-Do NOT invoke `ytstack:plan-task`, `ytstack:test-driven-development`, `ytstack:code-review` or `ytstack:ship` from this session: that work belongs to a worker or to `finish-lane`. The ONLY skills you may invoke are `ytstack:finish-lane`, `ytstack:handover-step`, `ytstack:reassess-roadmap`, `ytstack:handoff-session`, `ytstack:lane-retro`, and from Step 7 `ytstack:signal-intake`, `ytstack:incident` and `ytstack:review-lessons`.
+Do NOT invoke `ytstack:plan-task`, `ytstack:test-driven-development`, `ytstack:code-review` or `ytstack:ship` from this session: that work belongs to a worker or to `finish-lane`. The ONLY skills you may invoke are `ytstack:finish-lane`, `ytstack:handover-step`, `ytstack:reassess-roadmap`, `ytstack:handoff-session`, `ytstack:lane-retro`, and from Step 7 `ytstack:signal-intake`, `ytstack:incident`, `ytstack:review-lessons` and `ytstack:lesson`.

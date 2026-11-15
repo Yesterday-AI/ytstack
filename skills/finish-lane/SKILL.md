@@ -3,7 +3,7 @@ name: finish-lane
 description: "Takes a delegated lane from the worker's report to a pull request merged at the reviewed commit, with every gate read from the host. Use in the coordinating session when a lane reported and its work has to become a merged pull request, or when the user says finish the lane, land this lane, get this lane merged. Not for the session's own branch (finish-branch), not for a release (ship) and not for the worker of the lane."
 metadata:
   tier: task
-  version: 0.4.0
+  version: 0.5.0
 allowed-tools:
   - Bash
   - Read
@@ -46,7 +46,8 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 11. **Merge or hand over** -- `MERGE_BY: risk` with route `unattended`, or `coordinator`: `merge`; every other case: stop with the command and the reasons
 12. **Watch the release** (only after a merge, by anyone) -- `ytstack-watch release --commit <merge commit>`; the receipt goes into the report; `not arrived` and `unhealthy` go to the person at once
 13. **Escape check** (only after a merge this run made, and only if `OWN_REVIEWERS: yes`) -- invoke `ytstack:review-lessons` for the pull request
-14. **Report + return** -- one line per step, the lenses, the route, the read time of the gates, the release receipt, the escape check, what was not checked
+14. **Lesson** (only if this run saw a review request changes, a lens fail or a check fail) -- invoke `ytstack:lesson` once per such event, before the lane goes back
+15. **Report + return** -- one line per step, the lenses, the route, the read time of the gates, the release receipt, the escape check, the lessons, what was not checked
 
 ## Process Flow
 
@@ -63,6 +64,7 @@ digraph finish_lane {
     "Diagnosis to the human" [shape=doublecircle];
     "Review at the pinned head, post, record" [shape=box];
     "Required lenses, then the route" [shape=box];
+    "Lesson" [shape=box];
     "Gates hold?" [shape=diamond];
     "Who merges?" [shape=diamond];
     "Ready: a person merges, with the reasons" [shape=doublecircle];
@@ -76,11 +78,13 @@ digraph finish_lane {
     "Push, open PR, wait-head, body-check" -> "Third round?";
     "Third round?" -> "Diagnosis to the human" [label="yes"];
     "Third round?" -> "Review at the pinned head, post, record" [label="no"];
-    "Review at the pinned head, post, record" -> "Back to worker or user" [label="changes requested"];
+    "Review at the pinned head, post, record" -> "Lesson" [label="changes requested"];
     "Review at the pinned head, post, record" -> "Required lenses, then the route" [label="approved"];
-    "Required lenses, then the route" -> "Back to worker or user" [label="a lens failed"];
+    "Required lenses, then the route" -> "Lesson" [label="a lens failed"];
     "Required lenses, then the route" -> "Gates hold?" [label="otherwise"];
-    "Gates hold?" -> "Back to worker or user" [label="no"];
+    "Gates hold?" -> "Lesson" [label="a check failed"];
+    "Gates hold?" -> "Back to worker or user" [label="no, for another gate"];
+    "Lesson" -> "Back to worker or user";
     "Gates hold?" -> "Who merges?" [label="yes"];
     "Who merges?" -> "Ready: a person merges, with the reasons" [label="human; risk and route person; standing instruction"];
     "Who merges?" -> "Merged at the reviewed commit, release watched, escapes checked" [label="coordinator; risk and route unattended"];
@@ -290,7 +294,7 @@ The review on the host is the record the route reads first (`docs/ux/review-poli
 
 Then append the same line to the lane's plan in this checkout, when you may write there: the slice plan `{REF}-PLAN.md` for a slice lane, the task plan for a task lane, under `## Review` (add the heading on the first round). Never commit it on the lane's branch for the route's sake. A lane without a plan file, or a checkout you may not write in, keeps the record on the host only: say so in the report.
 
-`changes requested`: the findings go to the worker through whoever dispatches (same branch, same pull request). When the fix is reported, start again at Step 3; that is round 2. Do not read the route or the gates on a head with open findings.
+`changes requested`: first the lesson (Step 14), then the findings go to the worker through whoever dispatches (same branch, same pull request). When the fix is reported, start again at Step 3; that is round 2. Do not read the route or the gates on a head with open findings.
 
 ### Step 8: Dispatch the required lenses
 
@@ -325,7 +329,7 @@ Post the lens lines as one more review on the pull request (`gh pr review {N} --
 | Verdict | What happens |
 |---|---|
 | `pass` | Nothing more. |
-| `fail` | The lane goes back like `changes requested`: the findings go to the worker, the fix is reviewed as round 2 (Step 3), and the lens runs again on the new head when the fix touched a path under its `applies`. A lens that fails again goes to the human with the diagnosis of a third round. |
+| `fail` | The lane goes back like `changes requested`, after the lesson (Step 14): the findings go to the worker, the fix is reviewed as round 2 (Step 3), and the lens runs again on the new head when the fix touched a path under its `applies`. A lens that fails again goes to the human with the diagnosis of a third round. |
 | `not run` | Recorded as it is. It is never rewritten as `pass`, and the lens is not dispatched again in the hope of another answer; only after what it lacked exists (a "Run" section, a browser tool, the missing document). The route is `person`, and the person is told why. |
 
 ### Step 9: Read the route
@@ -355,7 +359,7 @@ All hold: `ytstack-frontier set {REF} --status ready --next "merge at {SHA}"`. O
 | Gate | It failed because | What happens |
 |---|---|---|
 | `head` | commits arrived after the review | Review the new commits before anything else: Step 5 with the new head, as the fix round. |
-| `checks` | a check is pending, failed, or there is none | Pending: read again later. Failed: back to the worker with the check's name. None: `--allow-no-checks` is a statement about the project, not a way through. |
+| `checks` | a check is pending, failed, or there is none | Pending: read again later. Failed: the lesson (Step 14), then back to the worker with the check's name. None: `--allow-no-checks` is a statement about the project, not a way through. |
 | `review` | changes are requested on this head, or the posted verdict is missing | Open findings go to the worker. A missing verdict means Step 7 did not happen on this head. |
 | `threads` | a review thread is unresolved | It is answered and resolved by whoever owns it: the worker for a finding in its code, the human for a question to them. You resolve no thread you did not open. |
 | `mergeable` | a conflict with the base, or the host has not decided | Conflict: the worker integrates the base; the head moves, so the fix round follows. Undecided: read again. |
@@ -426,7 +430,11 @@ Only after a merge you made in Step 11 of this run, and only when the preamble p
 
 Invoke `ytstack:review-lessons` with the pull request `{N}`. It reads the review-bot findings of the merged pull request, records the ones the project's own reviewers missed and writes a question when a class of them reached its threshold; it changes no rule file. Its report's first lines go into yours. If it stops at its gate, put its message into the report and go on: a missing escape check never holds up a lane.
 
-### Step 14: Report + return
+### Step 14: Lesson
+
+A review that requested changes, a lens that failed and a check that failed are incidents: something got this far that should not have. Each one gets its lesson before the lane goes back, also in round 2. Invoke `ytstack:lesson` once per event of this run and hand it: what got through (the blocking finding in one sentence, or the failed check's name), the lane `{REF}`, the pull request `{N}` and the commit `{SHA}`; the area `review` for a round or a lens, `ci` for a check; and that this session changes no code: a check the lesson needs becomes a lesson lane or goes into the fix brief, never an edit from here. A check that is only pending, and a gate that failed for the host's reasons (the head moved, a conflict, the cap on open pull requests), are no incident. Its `Recorded:` line goes into the report.
+
+### Step 15: Report + return
 
 > Lane {REF}, pull request #{N}
 > - leftovers: {committed <sha>, n files | none}
@@ -439,6 +447,7 @@ Invoke `ytstack:review-lessons` with the pull request `{N}`. It reads the review
 > - merge: {merged unattended at <sha>: class <class>, ceiling <ceiling>, lenses <lenses> | merged at <sha> (merge_by: coordinator, the route said <route>) | ready, a person merges: <command>; because: <reasons> | not ready: <gate>}
 > - release: {the five receipt lines | watching <merge commit> since <UTC> | not watched: <why> | nothing merged}
 > - escapes: {the first lines of the review-lessons report | no own reviewers | not merged by this run}
+> - lessons: {the `Recorded:` line per lesson | no review blocked, no lens or check failed}
 >
 > Not checked: {what this run did not read or run, and the reviewer's own `Not checked:` value}
 
@@ -455,4 +464,4 @@ The terminal state is one of:
 - Returning control with the lane back at the worker or the user: leftovers, findings, a failing gate, a third round; the row's next action says what it waits for
 - Exiting after Step 9 on a host other than GitHub, with the review's verdict, the lens verdicts and the route
 
-Do NOT invoke `ytstack:finish-branch`, `ytstack:ship`, `ytstack:code-review` or `ytstack:summarize-task`. The ONLY skill you may invoke is `ytstack:review-lessons`, in Step 13, after a merge of this run; then control returns to the session that called it (`ytstack:coordinate`, when it runs the plan).
+Do NOT invoke `ytstack:finish-branch`, `ytstack:ship`, `ytstack:code-review` or `ytstack:summarize-task`. The ONLY skills you may invoke are `ytstack:review-lessons`, in Step 13, after a merge of this run, and `ytstack:lesson`, in Step 14, after a review that requested changes, a failed lens or a failed check; then control returns to the session that called it (`ytstack:coordinate`, when it runs the plan).

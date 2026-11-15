@@ -3,9 +3,9 @@ milestone: M032
 slice: S02
 project: ytstack
 created: 2026-11-15T01:40:00Z
-status: in-progress
+status: done
 task_count: 2
-completed_tasks: 1
+completed_tasks: 2
 ---
 
 # M032-S02 -- Slice Plan
@@ -17,7 +17,7 @@ completed_tasks: 1
 ## Tasks
 
 - [x] T01 -- `skills/lesson/SKILL.md` (preamble with the open lessons and incidents, class line, route, record, put in place, one question for a proposal, check and report) and every listing that names skills: `using-ytstack`, `docs/concept.md`, `docs/codex.md`, `docs/kimi.md` (skill count), `evals/README.md`, the `skills` area file; the preamble case in `tests/skill-preambles.test.sh`; the eval case `evals/lesson/`.
-- [ ] T02 -- The four callers end with `ytstack:lesson`: `incident` (after mitigation, `--incident`; closing needs the lesson), `systematic-debugging` (wrapper text only, after the root cause), `finish-lane` (a review that requested changes, a lens that failed, a red check), `coordinate` (a red `main`). Terminal States allow it; `metadata.version` bumps; assertions in `tests/skill-preambles.test.sh`; the `skills` area file.
+- [x] T02 -- The four callers end with `ytstack:lesson`: `incident` (after mitigation, `--incident`; closing needs the lesson), `systematic-debugging` (wrapper text only, after the root cause), `finish-lane` (a review that requested changes, a lens that failed, a red check), `coordinate` (a red `main`). Terminal States allow it; `metadata.version` bumps; assertions in `tests/skill-preambles.test.sh`; the `skills` area file.
 
 ## Done when
 

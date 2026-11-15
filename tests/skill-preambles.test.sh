@@ -408,6 +408,29 @@ LESSONS_END"
   esac
 done
 
+# ---- the lesson step (M032, issue #53) -----------------------------------------
+# The four paths end with ytstack:lesson: they invoke it in their procedure and
+# their Terminal State allows it, so that no path can skip it.
+echo "# the lesson step in its callers"
+for s in incident systematic-debugging finish-lane coordinate; do
+  F="$ROOT/skills/$s/SKILL.md"
+  grep -qF 'invoke `ytstack:lesson`' "$F" && ok "$s: invokes ytstack:lesson" || bad "$s: invokes ytstack:lesson"
+  if [ "$s" = systematic-debugging ]; then
+    # a thin wrapper: the step lives in its invocation notes, it has no Terminal State
+    awk '/^## ytstack invocation notes/ { p = 1; next } /^## / { p = 0 } p' "$F" | grep -qF 'ytstack:lesson' \
+      && ok "$s: the invocation notes name the lesson step" || bad "$s: the invocation notes name the lesson step"
+  else
+    awk '/^## Terminal State/ { p = 1 } p' "$F" | grep -qF '`ytstack:lesson`' \
+      && ok "$s: the Terminal State allows ytstack:lesson" || bad "$s: the Terminal State allows ytstack:lesson"
+  fi
+done
+awk '/^### Step 10: Record the lesson/ { p = 1; next } /^### / { p = 0 } p' "$ROOT/skills/incident/SKILL.md" | grep -qF -- '--incident' \
+  && ok "incident: the lesson step passes the record for --incident" || bad "incident: the lesson step passes the record for --incident"
+awk '/^### Step 14: Lesson/ { p = 1; next } /^### / { p = 0 } p' "$ROOT/skills/finish-lane/SKILL.md" | grep -qF 'ytstack:lesson' \
+  && ok "finish-lane: Step 14 is the lesson" || bad "finish-lane: Step 14 is the lesson"
+awk '/^\*\*Step 7 --/ { p = 1 } /^\*\*Step 8 --/ { p = 0 } p' "$ROOT/skills/coordinate/SKILL.md" | grep -qF 'a red `main`' \
+  && ok "coordinate: Step 7 runs the lesson on a red main" || bad "coordinate: Step 7 runs the lesson on a red main"
+
 # ---- technical spec in the preambles (M022) ----------------------------------
 # One area `core` over f.txt and cr.txt (the file the code-review case committed
 # under the task ref). The spec is committed without the task ref, so a plan
