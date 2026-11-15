@@ -1275,3 +1275,18 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** The hooks act only with the coordinate marker and read local files only. A coordinate session gets the checklist instead of the minimal-code line. Codex and Kimi are not covered (no ytstack hook on their subagent tools; no session id in a Kimi shell).
 
 **Supersedes:** None. Extends "2026-11-15: Coordinate mode is a session marker ..." with three more hook parts.
+
+## 2026-11-15: A standing entry's command runs only when the entry is merged; pending means this machine's standing branches (review of PR #87)
+
+**Context:** The independent review of PR #87 found that `ytstack-standing list` read every `origin/standing/*` branch and ran the `check` and `until-check` of its entries: anyone who can push a branch got code execution in the coordinator's preamble. It also found that pending entries never reached the SessionStart injection or the briefs, and that an entry on an earlier day's unmerged branch could not be superseded.
+
+**Options considered:**
+- A) Run the commands of every entry the list shows, as before.
+- B) Run commands only for a working-tree entry whose file is the one on the default branch; read pending entries only from local `standing/*` branches and their upstreams, as text; start a new day's branch from the newest pending one.
+- C) Never run commands.
+
+**Chose:** B. Pending entries are shown (marked) in `list`, the SessionStart injection and the briefs, never executed (`[check not run: pending]`, `[check not run: not on <branch>]`). Outside a repository and in one without a commit the files are the user's own and run. A remote branch no local branch tracks is not read at all.
+
+**Reason:** "Merged" is the one state in which a person looked at the command (a change under `standing/` goes to a person). C would drop the compliance check of issue #74. Starting the new day from the pending branch keeps one pull request per day and lets `end`/`--supersedes` see what waits; the cost is that a day's pull request carries the earlier day's commits until that one merges.
+
+**Supersedes:** Narrows "2026-11-15: Standing entries end by `until` ...": the commands run only for merged entries.

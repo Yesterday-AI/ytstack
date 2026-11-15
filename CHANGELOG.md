@@ -46,6 +46,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `coordinate` 0.6.0: Step 9 records with `ytstack-standing add` and says
   that agent memory is no substitute; Step 3 acts on ended entries,
   conditions and failed checks.
+- `ytstack-standing list` runs an entry's `check` and `until-check` only when
+  the entry is merged on the default branch, never from a pending or a
+  remote-only branch; a timeout kills the command's whole process group.
+
+### Fixed
+
+- `coordinate` and `resume-session` (0.1.2) find the automatic handoff the
+  PreCompact hook wrote under `CLAUDE_PLUGIN_DATA`, which their shell does
+  not see (`yt_latest_handoff`).
+- The SessionStart injection near its cap shrinks the standing list before it
+  cuts the Next action, and keeps a Next action shorter than its omission
+  note.
 
 ## [0.11.0] - 2026-11-15
 
