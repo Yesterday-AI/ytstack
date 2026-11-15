@@ -97,7 +97,7 @@ rm -rf "$P/.ytstack/standing"
 
 sleep 1; prompt "Never merge on Fridays."
 ( cd "$P" || exit 2; git switch -q -c standing/x && mkdir -p .ytstack/standing \
-  && printf 'e\n' > ".ytstack/standing/$(date -u +%Y%m%dT%H%MZ)-no-fridays.md" && git add -A && git commit -qm entry && git switch -q main ) >/dev/null 2>&1
+  && printf 'e\n' > ".ytstack/standing/$(date -u +%Y%m%dT%H%MZ)-no-fridays.md" && git add -A && git commit -qm entry && git switch -q - ) >/dev/null 2>&1
 [ ! -d "$P/.ytstack/standing" ] && ok "fixture: entry only on the branch" || bad "fixture: entry only on the branch"
 stop; eq "entry on a local branch -> no block" "" "$OUT"
 
