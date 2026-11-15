@@ -130,6 +130,15 @@ run draft --kind bug; eq "draft: no title -> 64" 64 "$EC"
 run draft --kind bug --title "x" --out "$TMP/mine.md"; eq "draft: --out" "$TMP/mine.md" "$(printf '%s\n' "$OUT" | sed -n 's/^path: //p')"
 CLAUDECODE=1 run draft --kind bug --title "host detection" --out "$TMP/h.md"
 has "draft: host detected in Claude Code" "host claude-code" "$(cat "$TMP/h.md")"
+# Drafts are scrubbed before publication: never inside a git checkout (PR #67 review).
+git init -q "$TMP/repo" && mkdir -p "$TMP/repo/sub"
+run draft --kind bug --title "x" --out "$TMP/repo/sub/d.md"
+eq "draft: --out inside a git checkout -> 64" 64 "$EC"
+eq "draft: and nothing written there" "" "$(ls "$TMP/repo/sub")"
+OUT=$(cd "$TMP" && PATH="$FAKE:$PATH" HOME="$H" TMPDIR="$TMP/repo/sub" GH_LOG="$GH_LOG" bash "$BIN" draft --kind bug --title "tmpdir in repo" 2>&1); EC=$?
+D2=$(printf '%s\n' "$OUT" | sed -n 's/^path: //p')
+case "$D2" in /tmp/*) ok "draft: a TMPDIR inside a checkout falls back to /tmp" ;; *) bad "draft: a TMPDIR inside a checkout falls back to /tmp" "$OUT" ;; esac
+rm -f "$D2"
 
 echo "# check"
 good() {

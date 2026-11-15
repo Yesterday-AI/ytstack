@@ -18,7 +18,7 @@
 #        invalid value prints a `warning:` line. Exit 0; 64 usage.
 # draft  writes an issue body with TODO lines for what the agent has to fill,
 #        the ytstack version, the host and the OS, and prints `path:` and
-#        `title:`. Default path under $TMPDIR, never in the checkout. Exit 0;
+#        `title:`. Default path under $TMPDIR (/tmp when $TMPDIR lies in a git checkout); an --out inside a checkout exits 64. Exit 0;
 #        1 the file exists; 64 usage. Never calls gh.
 # check  the rules a machine can see before anything is posted, on every line
 #        of FILE and on the --title (the title that gets posted). Exit 0
@@ -38,6 +38,12 @@ if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
 usage() { sed -n '5,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+# in_checkout DIR: DIR (existing or not yet) lies inside a git work tree.
+in_checkout() {
+  local d="$1"
+  while [ -n "$d" ] && [ ! -d "$d" ]; do d=$(dirname "$d"); done
+  [ -n "$d" ] && git -C "$d" rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
 case "$CMD" in mode|draft|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 [ -d "$DIR" ] || { echo "ytstack-upstream: -C '$DIR' is not a directory" >&2; exit 64; }
 
@@ -84,7 +90,7 @@ host() {
 }
 
 cmd_draft() {
-  local kind="" title="" h="" out="" ver slug
+  local kind="" title="" h="" out="" ver slug dir
   while [ $# -gt 0 ]; do
     case "$1" in
       --kind) kind="${2:-}"; shift 2 || shift ;;
@@ -100,7 +106,12 @@ cmd_draft() {
   ver=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$HERE/.claude-plugin/plugin.json" 2>/dev/null | head -1)
   if [ -z "$out" ]; then
     slug=$(printf '%s' "$title" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-' | sed 's/--*/-/g; s/^-//; s/-$//' | cut -c1-40)
-    out="${TMPDIR:-/tmp}"; out="${out%/}/ytstack-upstream-$(date -u +%Y%m%dT%H%M%SZ)-${slug:-draft}.md"
+    dir="${TMPDIR:-/tmp}"
+    # A TMPDIR inside a git checkout would put the unscrubbed draft into it.
+    in_checkout "$dir" && dir=/tmp
+    out="${dir%/}/ytstack-upstream-$(date -u +%Y%m%dT%H%M%SZ)-${slug:-draft}.md"
+  elif in_checkout "$(dirname "$out")"; then
+    echo "ytstack-upstream: $out is inside a git checkout; drafts live outside it (default: \$TMPDIR)" >&2; return 64
   fi
   [ ! -e "$out" ] || { echo "ytstack-upstream: $out exists; pick another --out" >&2; return 1; }
   {
