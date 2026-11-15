@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# ytstack UserPromptSubmit hook: standing instructions in a coordinator session
+# (issue #72). Active only in coordinate mode: the coordinate preamble writes
+# the marker <session home>/<session id>/coordinate (yt_session_home in
+# hooks/lib/git-ctx.sh; DECISIONS 2026-11-15 "coordinate mode is a session
+# marker"). Without it the hook ends at once, without reading git.
+#
+# In coordinate mode, per human prompt:
+#   1. appends the epoch to <session dir>/prompts (the coordinate preamble
+#      counts the prompts since the newest standing entry);
+#   2. when the prompt reads like a standing instruction (always, never, from
+#      now on, until, while, prioritise, don't touch, remember; German: immer,
+#      nie, ab jetzt, bis, waehrend, priorisiere, fass ... nicht an, denk dran),
+#      appends it to <session dir>/standing-flags for hooks/stop and injects
+#      one line: record it under .ytstack/standing/ before the next dispatch.
+# A prompt that starts with "<" (a task notification, a system message) is no
+# human prompt and is skipped.
+#
+# Files and grep only; no command of a standing entry runs here. Fail open:
+# any problem ends silent with exit 0. Output: the UserPromptSubmit
+# additionalContext JSON; YTSTACK_HOOK_FORMAT=plain prints the text.
+
+set -uo pipefail
+trap '' PIPE
+
+. "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
+
+yt_read_stdin
+SID="${YT_SESSION_ID:-}"
+case "$SID" in ''|.|..|*[!A-Za-z0-9._-]*) exit 0 ;; esac
+SD="$(yt_session_home)/$SID"
+[ -f "$SD/coordinate" ] || exit 0
+
+JQ=$(yt_jq)
+if [ -n "$JQ" ]; then
+  PROMPT=$(printf '%s' "$YT_STDIN" | "$JQ" -r '.prompt | if type == "string" then . elif type == "array" then map(.text? // "") | join(" ") else "" end' 2>/dev/null) || exit 0
+elif [ -n "$(yt_python)" ]; then
+  PROMPT=$(printf '%s' "$YT_STDIN" | "$(yt_python)" -I -c '
+import json, sys
+try:
+    p = json.load(sys.stdin).get("prompt", "")
+except Exception:
+    p = ""
+if isinstance(p, list):
+    p = " ".join(str(i.get("text", "")) for i in p if isinstance(i, dict))
+print(p if isinstance(p, str) else "")
+' 2>/dev/null) || exit 0
+else
+  exit 0
+fi
+PROMPT="${PROMPT:0:4000}"
+case "${PROMPT#"${PROMPT%%[![:space:]]*}"}" in ''|'<'*) exit 0 ;; esac
+
+NOW=$(date +%s)
+printf '%s\n' "$NOW" >> "$SD/prompts" 2>/dev/null || exit 0
+
+# Word boundaries without \b (BSD and BusyBox grep differ): a non-letter or the
+# line edge on both sides. LC_ALL=C keeps the umlaut bytes out of [:alnum:].
+B='(^|[^[:alnum:]])'
+E='([^[:alnum:]]|$)'
+EN="always|never|from now on|going forward|from here on|until|while|whenever|as long as|prioriti[sz]e|prioriti[sz]ing|don'?t touch|do not touch|hands off|leave [^.!?]{1,60} alone|remember to|keep in mind|no more"
+DE="immer|nie|niemals|ab jetzt|ab sofort|von jetzt an|ab heute|k(ue|ü)nftig|in zukunft|bis|w(ae|ä)hrend|solange|sobald|priorisier[a-z]*|fass[^.!?]{1,60}nicht an|nicht anfassen|denk dran|denk daran|merk dir|grunds(ae|ä)tzlich"
+HIT=$(printf '%s' "$PROMPT" | tr '\n\r' '  ' | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C grep -Eo "$B($EN|$DE)$E" 2>/dev/null | head -1 | LC_ALL=C sed 's/^[^[:alnum:]]*//; s/[^[:alnum:]]*$//')
+[ -n "$HIT" ] || exit 0
+
+EXCERPT=$(printf '%s' "$PROMPT" | tr '\n\r\t' '   ' | cut -c1-100)
+printf '%s\t%s\t%s\t%s\n' "$NOW" "$(date -u +%Y%m%d%H%M)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$EXCERPT" >> "$SD/standing-flags" 2>/dev/null || exit 0
+
+ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+TEXT="ytstack: this prompt reads like a standing instruction (\"$HIT\"). If it holds beyond the task at hand, record it before the next dispatch, in your own words: bash \"$ROOT/bin/ytstack-standing\" add \"<the instruction>\" --scope \"<where it applies>\" (add --until <UTC> or --until-condition \"<sentence>\" when it ends). Agent memory is no substitute: a successor and other hosts read only .ytstack/standing/. If it is not one, go on."
+
+if [ "${YTSTACK_HOOK_FORMAT:-json}" = plain ]; then
+  printf '%s\n' "$TEXT"
+elif [ -n "$JQ" ]; then
+  printf '%s' "$TEXT" | "$JQ" -Rs '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: .}}' 2>/dev/null
+elif [ -n "$(yt_python)" ]; then
+  printf '%s' "$TEXT" | "$(yt_python)" -I -c 'import sys, json; print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": sys.stdin.read()}}))' 2>/dev/null
+fi
+exit 0
