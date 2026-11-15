@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-15T04:00:00Z
+last_updated: 2026-11-15T06:00:00Z
 current_milestone: none
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-11-15, 0.11.0):** Release of M031 (PR #66, `5654d39`), M032 and M033 (PR #67, `763aed9`). Both PRs got an independent adversarial review before merge (6 and 8 findings, all fixed with tests). Issues #53, #54, #55, #61 are covered; #57 was in 0.10.0.
 
 **Status (2026-11-15, M032 + M033):** M032 DONE (3/3 slices, 6 tasks: `kind: lesson` in the signals ledger, skill `ytstack:lesson` called by `incident`, `systematic-debugging`, `finish-lane`, `coordinate`; lesson lanes in the frontier, open lessons in `coordinate` 0.5.0, repeats in `retro`). M033 DONE (1/1 slice, 4 tasks: `upstream_feedback`, `bin/ytstack-upstream`, `docs/ux/upstream-feedback.md`, "Upstream" in `retro`/`lane-retro`, `lesson` routes ytstack lessons upstream). Both on `m032-m033` on top of M031 (PR #66). Not run: evals `lesson`, `upstream-suggest`, `upstream-file`, `fresh-bugfix` (description of `systematic-debugging` changed). Next: merge #66, then this PR, release.
 
