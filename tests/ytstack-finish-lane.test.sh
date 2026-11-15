@@ -21,8 +21,10 @@
 #               worker of the lane's row as the author: exit 0 for
 #               "unattended", 10 for "person"; a reviewer who is the worker, a
 #               lane without a row and a lane without a plan are "person"; no
-#               host is read; the evidence of a visual lens is read from the
-#               main checkout, also when the session works in a linked worktree
+#               host is read without --pr; the evidence of a visual lens is
+#               read from the main checkout, also when the session works in a
+#               linked worktree; with --pr the round comes from the review on
+#               the host, also for a lane without a plan
 #   usage       exit 64
 #
 # The host is a fake `gh` first in PATH that answers from fixture files and
@@ -70,6 +72,7 @@ case "${1:-} ${2:-}" in
   "pr create")   [ ! -f "$GH_FIX/create.fail" ] || { echo "fake gh: create failed" >&2; exit 1; }; cat "$GH_FIX/create.out" ;;
   "pr view")     [ ! -f "$GH_FIX/view.fail" ] || { echo "fake gh: view failed" >&2; exit 1; }; answer "$GH_FIX/view.json" ;;
   "api graphql") answer "$GH_FIX/graphql.json" ;;
+  "api repos/"*/pulls/*/reviews) answer "$GH_FIX/reviews.json" ;;
   "pr merge")
     [ ! -f "$GH_FIX/merge.fail" ] || { echo "fake gh: head commit does not match" >&2; exit 1; }
     [ -f "$GH_FIX/merge.queue" ] || { jq '.state = "MERGED"' "$GH_FIX/view.json" > "$GH_FIX/view.tmp" && mv "$GH_FIX/view.tmp" "$GH_FIX/view.json"; } ;;
@@ -460,6 +463,34 @@ quiet; run "$RT" route --lane M001-S01 --base "$RB" --head 0123456789abcdef
 eq "a head that is no commit of the repository: exit 65, not unattended" 65 "$EC"
 quiet; run "$TMP/plain-route" route --lane M001-S01 --base "$RB" --head "$RH"
 eq "-C to a missing directory: exit 64" 64 "$EC"
+
+# The round on the host (issue #54, context-mcp #1715): the coordinator may
+# not write the plan in this checkout, the review on the pull request carries
+# the round line instead.
+# hreview <reviewer>: the reviews of #7, one review on the lane's head
+hreview() {
+  jq -n --arg h "$RH" --arg line "- Round 1: ${RB:0:7}..${RH:0:7} -- approved; blocking: 0; follow-ups: 0; risk: low; invariants: none; by: $1" \
+    '[{id: 21, user: {login: "reviewer-bot"}, state: "COMMENTED", author_association: "OWNER", submitted_at: "2026-11-14T10:00:00Z",
+       commit_id: $h, body: ("Verdict: approved\nReviewed commit: " + $h + "\nRound: 1\n\n" + $line)}]' > "$GH_FIX/reviews.json"
+}
+proute() { quiet; run "$RT" route --lane M001-S01 --base "$RB" --head "$RH" --pr 7; }
+rm -f "$RT/.ytstack/M001-S01-PLAN.md"; hreview review-M001-S01; proute
+eq "no plan file, the round on the host review of the head: exit 0" 0 "$EC"
+eq "the first line names the pull request" "lane: M001-S01; author: impl-M001-S01; plan: none; pr: #7" "$(printf '%s\n' "$OUT" | sed -n 1p)"
+has "the route names the review it read" "route: unattended" "$OUT"
+has "and its source" "round: host review 21 by reviewer-bot on ${RH:0:7}" "$OUT"
+has "the reviews of #7 were read" "api repos/{owner}/{repo}/pulls/7/reviews" "$(calls)"
+hreview impl-M001-S01; proute
+eq "the host review names the lane's worker: exit 10" 10 "$EC"
+has "and says why" "reason: review -- the reviewer 'impl-M001-S01' is the author of the change" "$OUT"
+printf '[]\n' > "$GH_FIX/reviews.json"; proute
+eq "no review and no plan: exit 10" 10 "$EC"
+has "with the reason" "reason: review -- no review of pull request #7 carries a round line, and no plan was given" "$OUT"
+rplan review-M001-S01; proute
+eq "no review with a line, the plan has one: exit 0" 0 "$EC"
+has "the plan is named as the source" "round: plan" "$OUT"
+quiet; run "$RT" route --lane M001-S01 --base "$RB" --head "$RH" --pr seven
+eq "a pull request that is no number: exit 64" 64 "$EC"
 
 # A visual lens. The reviewer stored its images in the main checkout; the
 # coordinating session works in a linked worktree of the same repository.

@@ -1084,3 +1084,25 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - `bin/ytstack-check --standing [<project dir>]` validates the names, the frontmatter and that every `supersedes` names an earlier existing entry; the full run checks the plugin's own directory.
 
 **Supersedes:** None. Extends the 2026-11-13 coordinator-mode entry: `STANDING.md` is no longer the only place for standing instructions.
+
+---
+
+## 2026-11-15: The risk route reads the review round from the review on the host first; the plan is the fallback (M031-S02, issue #54)
+
+**Context:** `bin/ytstack-risk route` read the round line only from the plan file in the coordinating checkout. In context-mcp (#1715) agents may not write in the main checkout, and a ruleset counts only reviews on the current head. The round line had to be committed on the pull request's branch; that moved the head, the host no longer counted the review, and the plan in the main checkout still had no line. Every route ended `person`, which defeats `merge_by: risk`.
+
+**Options considered:**
+- A) Read the round from the review on the host: its `commit_id`, its author and the record line in its body.
+- B) Keep round lines outside the branch in a git notes ref.
+- C) Keep the plan as the only source and tell such projects to accept `person`.
+
+**Chose:** A, with the plan as the fallback per kind of record (round, each lens). `route --pr N` reads the pull request's reviews once. A review counts when it is submitted, not dismissed, and by an owner, member or collaborator (`author_association`). The newest record line on the host wins over the plan. The line must name the commit the host tied its review to; validity for the head is computed from that commit. A review in the state `CHANGES_REQUESTED`, a line naming another commit and a failed read route to a person.
+
+**Reason:** `finish-lane` already posted every review on the reviewed head, so the record was on the host and only the reader was missing. The host, not a text field, says which commit was reviewed. Notes refs (B) need a push of their own, are not fetched by default and would have needed a writer in every skill. The write-access filter keeps a stranger's review on a public pull request from approving a route.
+
+**How to apply:**
+- `finish-lane` and `code-review` put the round line, and the lens lines, at the end of the review body on the pull request; the plan gets the same line where the session may write, never through a commit on the lane's branch for the route's sake.
+- `finish-lane` routes with `--pr {N}`; on a host other than GitHub the plan stays the only record.
+- The reviewer's GitHub login is printed, not compared with the author: agents usually share one account. `by:` still tells reviewer from author.
+
+**Supersedes:** None. Extends the 2026-11-13 risk-gate entry (M025): the review records may live on the host.

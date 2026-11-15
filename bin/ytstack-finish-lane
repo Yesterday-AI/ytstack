@@ -13,7 +13,7 @@
 #                                  [--verdict-pattern ERE] [--allow-no-checks]
 #   ytstack-finish-lane merge      --pr N --at SHA [--method squash|merge|rebase]
 #                                  [--max-open N] [--verdict-pattern ERE] [--allow-no-checks]
-#   ytstack-finish-lane route      --lane REF --base SHA --head SHA
+#   ytstack-finish-lane route      --lane REF --base SHA --head SHA [--pr N]
 #
 # All commands take -C DIR first: the lane's worktree (default: $PWD). A
 # relative --body-file is read from where the command was started. For route
@@ -66,15 +66,17 @@
 # route       whether the lane may merge without a person. Runs
 #             `ytstack-risk route` (docs/ux/review-policy-format.md, "The
 #             route") for the change --base..--head, prints one line of what
-#             it read and then that script's lines. It reads no host and
-#             merges nothing. DIR is the checkout whose .ytstack/ holds
-#             LANES.md and the plan with the review records: the coordinating
-#             session's, not the lane's worktree. The author of the change is
-#             the first word of the lane's "Claimed by" cell; without a row
-#             the author is unknown and the route is "person". The plan is
-#             <REF>-PLAN.md; a lane without one has no review record:
-#             "route: person". The evidence directory of a visual lens is read
-#             from the main checkout of the repository.
+#             it read and then that script's lines. It merges nothing. DIR is
+#             the checkout whose .ytstack/ holds LANES.md and the plan with
+#             the review records: the coordinating session's, not the lane's
+#             worktree. The author of the change is the first word of the
+#             lane's "Claimed by" cell; without a row the author is unknown
+#             and the route is "person". The plan is <REF>-PLAN.md. With --pr
+#             the review records come from the pull request's reviews on the
+#             host first (the only host read of route), and a lane without a
+#             plan is routed from them; without --pr a lane without a plan has
+#             no review record: "route: person". The evidence directory of a
+#             visual lens is read from the main checkout of the repository.
 #
 # Exit codes: 0 done; 1 refused or a gate does not hold (the reason is
 # printed); 64 usage. route: 0 "route: unattended"; 10 "route: person"; 65 git
@@ -482,13 +484,14 @@ cmd_merge() {
 
 # ---- route ---------------------------------------------------------------------
 cmd_route() {
-  local lane="" base="" head="" author="" plan="" root
+  local lane="" base="" head="" pr="" author="" plan="" shown root
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || bad_usage "$1 needs a value"
     case "$1" in
       --lane) lane="$2" ;;
       --base) base="$2" ;;
       --head) head="$2" ;;
+      --pr) pr="$2"; is_int "$pr" || bad_usage "--pr is a pull request number" ;;
       *) bad_usage "route: unknown argument '$1'" ;;
     esac
     shift 2
@@ -509,9 +512,10 @@ cmd_route() {
   ' "$YT_DIR/LANES.md")
   [ "$author" != - ] || author=""
   plan=$(yt_find_artifacts "$YT_DIR" "$lane-PLAN.md" | head -1)
-  if [ -n "$plan" ]; then echo "lane: $lane; author: ${author:-unknown}; plan: ${plan#"$TOP"/}"
-  else echo "lane: $lane; author: ${author:-unknown}; plan: none"; fi
-  if [ -z "$plan" ]; then
+  shown=none; [ -z "$plan" ] || shown=${plan#"$TOP"/}
+  echo "lane: $lane; author: ${author:-unknown}; plan: $shown${pr:+; pr: #$pr}"
+  # Without the pull request the plan is the only record: none, no route.
+  if [ -z "$plan" ] && [ -z "$pr" ]; then
     echo "route: person"
     echo "reason: review -- lane $lane has no plan file ($lane-PLAN.md under $YT_DIR): there is no review record to read"
     exit 10
@@ -519,8 +523,12 @@ cmd_route() {
 
   # A relative evidence directory starts at the main checkout: a reviewer in a
   # worktree of its own stores its images there, where this call finds them.
+  # The reviews of the pull request are read there too (gh resolves the
+  # repository from that checkout's remote).
   root="${YT_MAIN_TOPLEVEL:-$TOP}"; [ -d "$root" ] || root="$TOP"
-  set -- -C "$root" route --plan "$plan" --base "$base" --head "$head"
+  set -- -C "$root" route --base "$base" --head "$head"
+  [ -z "$plan" ] || set -- "$@" --plan "$plan"
+  [ -z "$pr" ] || set -- "$@" --pr "$pr"
   [ -z "$author" ] || set -- "$@" --author "$author"
   bash "$SELF_DIR/ytstack-risk" "$@"
   exit $?

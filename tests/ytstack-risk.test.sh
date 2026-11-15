@@ -20,6 +20,13 @@
 #           head, and a class within the ceiling. Each condition fails on its
 #           own with one reason (exit 10). A round stays valid when only
 #           process records changed after it.
+#   host    route --pr reads the round and lens lines from the pull
+#           request's reviews (a stand-in gh, no network): the field case of
+#           a head-bound review gate routes unattended without a plan; the
+#           host wins over the plan, the plan counts when no review has a
+#           line; reviews without write access, pending and dismissed ones do
+#           not count; a change request, a line naming another commit than the
+#           host's, and a failed read route to a person.
 #   lenses  floor and route name the lenses whose applies match a changed
 #           path. route needs for each a newest lens line that says pass, is
 #           by somebody other than --author and is valid for the head (no
@@ -263,6 +270,7 @@ run "$R" floor --base base --head --all;     eq "a head that is an option, not a
 mkdir -p "$TMP/plain"
 run "$TMP/plain" floor --base a --head b;    eq "outside a repository: 65" 65 "$EC"
 run "$R" sideways;                           eq "an unknown command: usage" 64 "$EC"
+has "and prints the commands" "ytstack-risk [-C DIR] route [--plan FILE] [--pr N" "$OUT"
 run "$TMP/gone" check;                       eq "-C to a missing directory: usage" 64 "$EC"
 
 # ---- 6. check ------------------------------------------------------------------
@@ -516,6 +524,124 @@ OUT=$(bash "$BIN" manifest "$TMP/nowhere" 2>&1); EC=$?
 eq "manifest without the directory: exit 1" 1 "$EC"
 OUT=$(bash "$BIN" manifest 2>&1); EC=$?
 eq "manifest without an argument: usage" 64 "$EC"
+
+# ---- 9. route: the round from the host -----------------------------------------
+echo "# route: the round from the host"
+# The field case (issue #54, context-mcp #1715): agents may not write in the
+# main checkout and a ruleset counts only reviews on the current head. A round
+# line committed on the pull request's branch moves the head; the plan in the
+# main checkout has none. The review on the host carries the round instead.
+# A stand-in gh answers `gh api repos/.../pulls/N/reviews` from a JSON file
+# shaped like the GitHub reviews API and applies the script's --jq with jq.
+GH_FIX="$TMP/host"; FAKE="$TMP/fakebin"; mkdir -p "$GH_FIX" "$FAKE"
+cat > "$FAKE/gh" <<'GH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$GH_FIX/log"
+jqf=""; prev=""
+for a in "$@"; do [ "$prev" = "--jq" ] && jqf="$a"; prev="$a"; done
+case "${1:-} ${2:-}" in
+  "api repos/"*/pulls/*/reviews)
+    [ ! -f "$GH_FIX/reviews.fail" ] || { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
+    [ -f "$GH_FIX/reviews.json" ] || { echo "fake gh: no fixture" >&2; exit 1; }
+    if [ -n "$jqf" ]; then jq -r "$jqf" "$GH_FIX/reviews.json"; else cat "$GH_FIX/reviews.json"; fi ;;
+  *) echo "fake gh: unexpected call: $*" >&2; exit 1 ;;
+esac
+GH
+chmod +x "$FAKE/gh"
+command -v jq >/dev/null 2>&1 || bad "jq is there for the stand-in gh"
+hrt() { OUT=$(PATH="$FAKE:$PATH" GH_FIX="$GH_FIX" bash "$BIN" -C "$R" route --base "$FROM" --head "$H" "$@" 2>&1); EC=$?; }
+# reviews <review>...: the fixture, one review per argument as
+# "<id>|<commit>|<state>|<author_association>|<body>"; submitted in that order.
+reviews() {
+  local r n=0 id c st as body
+  printf '[' > "$GH_FIX/reviews.json"
+  for r in "$@"; do
+    IFS='|' read -r id c st as body <<EOF
+$r
+EOF
+    n=$((n + 1)); [ "$n" = 1 ] || printf ',' >> "$GH_FIX/reviews.json"
+    jq -n --argjson id "$id" --arg c "$c" --arg st "$st" --arg as "$as" --arg body "$(printf '%b' "$body")" --arg t "2026-11-14T10:0${n}:00Z" \
+      '{id: $id, node_id: "PRR_x", user: {login: "reviewer-bot", type: "User"}, body: $body, state: $st,
+        html_url: "https://github.com/acme/app/pull/7#pullrequestreview-\($id)", author_association: $as,
+        submitted_at: $t, commit_id: $c}' >> "$GH_FIX/reviews.json"
+  done
+  printf ']\n' >> "$GH_FIX/reviews.json"
+}
+# body <record line>...: what finish-lane posts, the record lines at the end
+body() { printf 'Verdict: approved\\nReviewed commit: %s\\nRound: 1\\n\\nNo findings.\\n' "$H"; for l in "$@"; do printf '\\n%s' "$l"; done; }
+
+change "$R" ordinary 'echo b >> src/auth/login.sh'
+rm -f "$P"; reviews "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD")")"
+hrt --pr 7 --author worker-1
+eq "the field case: no plan, the round on the host review of the head: exit 0" 0 "$EC"
+eq "and the whole output, with the review it read" "route: unattended
+class: low
+ceiling: low
+floor: low
+areas: auth
+lenses: none
+round: host review 11 by reviewer-bot on $(s7 "$H")" "$OUT"
+has "one read of the reviews of the pull request" "api repos/{owner}/{repo}/pulls/7/reviews --paginate" "$(cat "$GH_FIX/log")"
+hrt --pr 7 --repo acme/app --author worker-1
+has "--repo names the repository" "api repos/acme/app/pulls/7/reviews" "$(cat "$GH_FIX/log")"
+plan_with "$(round "changes requested; blocking: 1; follow-ups: 0; risk: low; invariants: none; by: review-1")"
+hrt --pr 7 --plan "$P" --author worker-1
+unattended "the host wins over an older line in the plan"
+reviews "11|$H|COMMENTED|OWNER|Looks fine, no record line."
+plan_with "$(round "$GOOD")"; hrt --pr 7 --plan "$P" --author worker-1
+unattended "no review carries a round line: the plan counts"
+eq "and the output says so" "round: plan" "$(line round)"
+rm -f "$P"; hrt --pr 7 --author worker-1
+only_reason "neither the host nor a plan has a round line" "reason: review -- no review of pull request #7 carries a round line, and no plan was given"
+eq "the source is none" "round: none" "$(line round)"
+reviews "11|$H|COMMENTED|NONE|$(body "$(round "$GOOD")")"; hrt --pr 7 --author worker-1
+only_reason "a review by somebody without write access does not count" "no review of pull request #7 carries a round line"
+reviews "11|$H|PENDING|OWNER|$(body "$(round "$GOOD")")" "12|$H|DISMISSED|MEMBER|$(body "$(round "$GOOD")")"; hrt --pr 7 --author worker-1
+only_reason "pending and dismissed reviews do not count" "no review of pull request #7 carries a round line"
+reviews "11|$H|COMMENTED|COLLABORATOR|$(body "$(round "$GOOD")")" "12|$H|COMMENTED|MEMBER|$(body "$(round "changes requested; blocking: 1; follow-ups: 0; risk: low; invariants: none; by: review-1")")"
+hrt --pr 7 --author worker-1
+only_reason "the newest review with a round line counts" "reason: review -- the newest round line says 'changes requested', not approved"
+reviews "11|$H|CHANGES_REQUESTED|OWNER|$(body "$(round "$GOOD")")"; hrt --pr 7 --author worker-1
+only_reason "a review that requests changes on the host" "reason: review -- host review 11 requests changes"
+reviews "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD" base)")"; hrt --pr 7 --author worker-1
+only_reason "a line that names another commit than the host's" "reason: review -- host review 11 names '$(s7 base)', the host tied it to $(s7 "$H"): which commit it reviewed is ambiguous"
+reviews "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD")")"; hrt --pr 7 --author review-1
+only_reason "the reviewer is the author, on the host too" "reason: review -- the reviewer 'review-1' is the author of the change"
+touch "$GH_FIX/reviews.fail"; plan_with "$(round "$GOOD")"; hrt --pr 7 --plan "$P" --author worker-1
+only_reason "a read that fails: person, also with a good plan" "reason: review -- the reviews of pull request #7 could not be read from the host: HTTP 502: Bad Gateway"
+rm -f "$GH_FIX/reviews.fail" "$P"
+
+# valid for a head: from the commit the host tied the review to
+REVIEWED=$H
+FROM=$REVIEWED
+change "$R" records-after 'echo x > .ytstack/M001-S01-T01-SUMMARY.md'
+FROM=base
+reviews "11|$REVIEWED|COMMENTED|OWNER|$(body "$(round "$GOOD" "$REVIEWED")")"; hrt --pr 7 --author worker-1
+unattended "a host review stays valid when only process records changed since"
+FROM=$REVIEWED
+change "$R" code-after 'echo x > src/auth/later.sh'
+FROM=base
+hrt --pr 7 --author worker-1
+only_reason "and is not valid after a file of the change" "reason: review -- the newest round reviewed $(s7 "$REVIEWED") and 1 path(s) changed since, first src/auth/later.sh"
+
+# lenses from the host
+change "$R" api 'mkdir -p src/billing/api && echo x > src/billing/api/a.sh'
+reviews "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD")")" "12|$H|COMMENTED|OWNER|$(body "$(lens api "pass; by: api-review; evidence: none")")"
+hrt --pr 7 --author worker-1
+unattended "a lens line on the host counts"
+reviews "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD")")"
+plan_with "$(lens api "pass; by: api-review; evidence: none")"; hrt --pr 7 --plan "$P" --author worker-1
+unattended "a lens line in the plan, when no review carries one"
+rm -f "$P"; hrt --pr 7 --author worker-1
+only_reason "a lens line nowhere" "reason: lens api -- no review of pull request #7 carries a line for this lens, and no plan was given"
+reviews "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD")" "$(lens api "pass; by: api-review; evidence: none" base)")"; hrt --pr 7 --author worker-1
+only_reason "a lens line that names another commit than the host's" "reason: lens api -- host review 11 names '$(s7 base)', the host tied it to $(s7 "$H")"
+
+# usage
+hrt --pr seven --author worker-1;                     eq "a pull request that is no number: usage" 64 "$EC"
+hrt --pr 7 --repo acme --author worker-1;             eq "a repository that is not owner/name: usage" 64 "$EC"
+hrt --author worker-1;                                eq "neither --plan nor --pr: usage" 64 "$EC"
+run "$R" floor --pr 7 --base base --head "$H";         eq "floor takes no --pr" 64 "$EC"
 
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
