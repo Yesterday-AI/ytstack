@@ -7,6 +7,7 @@
 #   ytstack-frontier [-C DIR] set <lane> [--status S] [--next TEXT] [--pr N] [--head SHA] [--round N] [--branch B] [--worktree W]
 #   ytstack-frontier [-C DIR] release <lane>
 #   ytstack-frontier [-C DIR] check [--minutes N]
+#   ytstack-frontier [-C DIR] owner --pr N
 #   ytstack-frontier [-C DIR] peer set <role> --repo R --address A [--contact UTC]
 #   ytstack-frontier [-C DIR] peer list
 #
@@ -46,6 +47,11 @@
 #            a ready lane of `list` that nobody claimed for --minutes since a
 #            check first saw it ready. First sights are kept outside the
 #            tree, under a lock: <state base>/repos/<repo key>/frontier-seen.
+# owner    the lane whose PR cell names pull request N (12 or #12), one line,
+#          with the clock of check: the holder, the status and the age of the
+#          last commit on its branch, or of the claim when that is newer:
+#            lane M004-S03 held by impl-S03 (running), last commit 52 min ago on ytstack/M004-S03
+#          The PR watch and ytstack-watch put it into their STALL lines.
 # peer     the sessions in other repositories this coordinator works with,
 #          one line each under "## Peers" in LANES.md:
 #            - <role> | <repository> | <address> | <last contact UTC>
@@ -63,6 +69,7 @@
 #   release  0; 1 the lane has no row
 #   check    0 "lanes ok" or "no lanes file"; 1 one line per problem; 2 the
 #            file is well-formed and some lanes are stale
+#   owner    0; 1 no lanes file or no row with that pull request
 #   peer     0
 #   64       usage, or a cell value with "|" or a newline
 
@@ -78,7 +85,7 @@ KINDS='implement|review|prepare'
 NL='
 '
 
-usage() { sed -n '5,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '5,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "ytstack-frontier: $*" >&2; exit 1; }
 # listed <value> <a|b|c>
 listed() { case "|$2|" in *"|$1|"*) return 0 ;; esac; return 1; }
@@ -93,7 +100,7 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD=list
 case "${1:-}" in
-  list|claim|set|release|check|peer) CMD=$1; shift ;;
+  list|claim|set|release|check|owner|peer) CMD=$1; shift ;;
   -h|--help|help) usage; exit 0 ;;
   ""|--*) ;;
   *) usage >&2; exit 64 ;;
@@ -202,6 +209,19 @@ new_table() {
 }
 # utc <epoch>: the UTC time to the minute (BSD date, then GNU and BusyBox)
 utc() { date -u -r "$1" +%Y-%m-%dT%H:%MZ 2>/dev/null || date -u -d "@$1" +%Y-%m-%dT%H:%MZ; }
+# claimed_at <"Claimed by" cell>: the epoch of its claim time, or nothing
+claimed_at() {
+  local t=${1##* }
+  case "$t" in *T[0-9][0-9]:[0-9][0-9]Z) t="${t%Z}:00Z" ;; esac
+  yt_epoch "$t"
+}
+# last_commit <branch>: the commit time of the branch's newest commit (the
+# local branch, else origin/<branch>), or nothing
+last_commit() {
+  [ "$1" != - ] && [ "$YT_IS_GIT" = yes ] || return 0
+  git -C "$YT_TOPLEVEL" log -1 --format=%ct "$1" -- 2>/dev/null \
+    || git -C "$YT_TOPLEVEL" log -1 --format=%ct "origin/$1" -- 2>/dev/null
+}
 
 # ---- list ------------------------------------------------------------------------
 # open_milestone: the highest milestone whose roadmap is still open.
@@ -523,8 +543,7 @@ stale() {
     if [ "$wt" != - ] && [ ! -d "$c" ]; then
       echo "stale: $lane: running, but its worktree $wt does not exist: the worker ended; read its branch and set the status"; continue
     fi
-    t=${by##* }; case "$t" in *T[0-9][0-9]:[0-9][0-9]Z) t="${t%Z}:00Z" ;; esac
-    since=$(yt_epoch "$t"); [ -n "$since" ] || continue
+    since=$(claimed_at "$by"); [ -n "$since" ] || continue
     if [ "$kind" != implement ]; then
       [ $((now - since)) -gt $((lim * REVIEW_FACTOR)) ] \
         && echo "stale: $lane: running $kind lane, no report for $(((now - since) / 60)) minutes (claimed $(utc "$since"))"
@@ -532,8 +551,7 @@ stale() {
     fi
     # A PR in the row: a fix round. It starts when a check first sees it.
     if [ "$pr" != - ]; then seen "fix:$lane:$rnd"; [ "$SEEN_AT" -le "$since" ] || since=$SEEN_AT; fi
-    c=""
-    [ "$br" = - ] || [ "$YT_IS_GIT" != yes ] || c=$(git -C "$YT_TOPLEVEL" log -1 --format=%ct "$br" -- 2>/dev/null)
+    c=$(last_commit "$br")
     [ -z "$c" ] || [ "$c" -le "$since" ] || since=$c
     [ $((now - since)) -gt "$lim" ] || continue
     if [ "$br" = - ]; then echo "stale: $lane: running, no branch in its row, claimed $(((now - since) / 60)) minutes ago"
@@ -550,6 +568,29 @@ EOF
     tmp=""
   fi
   [ "$locked" = no ] || rm -f "$f.lock"
+}
+
+# ---- owner -----------------------------------------------------------------------
+cmd_owner() {
+  local n row lane st by br since c now
+  [ $# -eq 2 ] && [ "$1" = --pr ] || { usage >&2; return 64; }
+  case "$2" in ''|*[!0-9]*) usage >&2; return 64 ;; esac
+  n=$((10#$2))
+  [ -n "$YT_DIR" ] && [ -f "$LANES" ] || return 1
+  row=$(lane_rows | awk -F'\t' -v n="$n" '$7 == n || $7 == "#" n { print; exit }')
+  [ -n "$row" ] || return 1
+  IFS='	' read -r lane _ st by br _ <<EOF
+$row
+EOF
+  if [ "$by" = - ]; then echo "lane $lane ($st), nobody holds it"; return 0; fi
+  now=$(date -u +%s); since=$(claimed_at "$by"); c=$(last_commit "$br")
+  printf 'lane %s held by %s (%s), ' "$lane" "${by% *}" "$st"
+  if [ -n "$c" ] && { [ -z "$since" ] || [ "$c" -gt "$since" ]; }; then
+    echo "last commit $(((now - c) / 60)) min ago on $br"
+  elif [ -z "$since" ]; then echo "no claim time in its row"
+  elif [ "$br" = - ]; then echo "claimed $(((now - since) / 60)) min ago, no branch in its row"
+  else echo "no commit on $br since its claim $(((now - since) / 60)) min ago"
+  fi
 }
 
 # ---- peers -----------------------------------------------------------------------
@@ -631,5 +672,6 @@ case "$CMD" in
   set)     cmd_set "$@" ;;
   release) cmd_release "$@" ;;
   check)   cmd_check "$@" ;;
-  peer)    cmd_peer "$@" ;;
+  owner)   cmd_owner "$@" ;;
+  peer)   cmd_peer "$@" ;;
 esac

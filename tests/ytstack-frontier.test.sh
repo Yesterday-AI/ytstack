@@ -19,6 +19,8 @@
 #            from its first sight), review and prepare rows after 3 x
 #            --minutes, and ready lanes nobody claimed for --minutes since
 #            check first saw them (state outside the tree, locked): exit 2
+#   owner    the lane whose row names the pull request, its holder and the
+#            age of its last commit or claim; exit 1 without such a row
 #   peer     set adds or updates one "## Peers" line per role and repository,
 #            list prints them; the lanes table is untouched
 #   refused  a value with "|" or a newline, and usage errors: exit 64
@@ -472,6 +474,25 @@ for i in 1 2 3 4 5 6; do bash "$BIN" -C "$R" check >/dev/null 2>&1 & done; wait
 eq "after six checks at once: the state file is whole" "fix:M004-S03:2" "$(cut -f1 "$SEEN")"
 eq "and no temporary or lock file is left" "frontier-seen" "$(ls "$(dirname "$SEEN")" | grep frontier | paste -sd' ' -)"
 run "$R" check --minutes x;                       eq "--minutes takes a number: exit 64" 64 "$EC"
+# owner --pr N: the lane that holds a pull request and its last sign of life (issue #91)
+run "$R" set M004-S02 --pr 21
+run "$R" owner --pr 21
+eq "owner: the lane with PR 21 in its row" 0 "$EC"
+like "its holder, status and the age of its last commit" "^lane M004-S02 held by w2 \(running\), last commit 1[01] min ago on work/s02\$" "$OUT"
+run "$R" owner --pr 13
+like "a lane without a branch: the claim" "^lane M004-S07 held by r7 \(running\), claimed 2[34][0-9] min ago, no branch in its row\$" "$OUT"
+run "$R" set M004-S08 --branch work/s01 --pr '#14'
+run "$R" owner --pr 14
+like "a PR cell written as #14; a claim newer than the last commit counts" "^lane M004-S08 held by p8 \(running\), no commit on work/s01 since its claim 6[01] min ago\$" "$OUT"
+run "$R" release M004-S08
+run "$R" owner --pr 14
+eq "a released lane: nobody holds it" "0 lane M004-S08 (dropped), nobody holds it" "$EC $OUT"
+run "$R" owner --pr 99
+eq "no row with that PR: exit 1, nothing printed" "1 " "$EC $OUT"
+run "$R" owner --pr x;                            eq "owner --pr takes a number: exit 64" 64 "$EC"
+run "$R" owner;                                   eq "owner without --pr: exit 64" 64 "$EC"
+mkdir -p "$TMP/bare"
+run "$TMP/bare" owner --pr 12;                    eq "owner without .ytstack: exit 1" "1 " "$EC $OUT"
 sed 's/| running | w1/| working | w1/' "$L" > "$L.x" && mv "$L.x" "$L"
 run "$R" check
 eq "a format problem: exit 1, liveness not read" "1" "$EC"
