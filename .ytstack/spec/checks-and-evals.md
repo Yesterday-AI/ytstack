@@ -31,7 +31,7 @@ sources:
   - docs/ux/signal-format.md
   - docs/ux/external-plans.md
   - docs/ux/upstream-feedback.md
-verified_at: baef27b
+verified_at: aa8c98b
 ---
 
 # checks-and-evals
@@ -56,7 +56,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 **`bin/ytstack-spec`: the technical spec of any project**
 
-- A bash script on git and awk. `lint` checks the format of `.ytstack/spec/`, `drift` lists areas whose `paths` changed after the description or one of its `sources` was last touched, `impact` checks a task plan's "Spec impact" against what the task changed (with `--base` and `--head` against that commit range only, renames with both paths, without the working tree: a lane's branch read from another checkout; a `TODO` in the section fails), `areas` names the area of a path. Rules and exit codes: `docs/ux/spec-format.md` and the comment at the top of the script.
+- A bash script on git and awk. `lint` checks the format of `.ytstack/spec/`, `drift` lists areas whose `paths` changed after the description or one of its `sources` was last touched, `impact` checks a task plan's "Spec impact" against what the task changed (with `--base` and `--head` against that commit range only, renames with both paths, without the working tree: a lane's branch read from another checkout; a `TODO` field of a skeleton fails, the word inside a filled line does not), `areas` names the area of a path. Rules and exit codes: `docs/ux/spec-format.md` and the comment at the top of the script.
 - `drift` is advisory and exits 0 unless `--exit-code` is given. It never reads `verified_at`; an area file that is new or edited in the working tree is skipped.
 - `lint` fails on an `auto_merge` outside `none`, `low` and `normal`, on a `REVIEW.md` that `SPEC.md` does not link, and on every line `bin/ytstack-risk check` prints. `REVIEW.md` is not an area file: `drift`, `impact` and `areas` do not read it.
 
@@ -86,7 +86,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 **`bin/ytstack-brief`: the brief of a dispatched worker and its report**
 
-- A bash script on awk. `render --task <ref>` or `--slice <ref>` prints a brief built from the plan files and `skills/spawn-milestone-team/brief-template.md`, and includes the body of `skills/minimal-code/SKILL.md` as the work contract, read at render time. It prints no brief when the plan, its `## Files` section, the template or the contract is missing (exit 1). A task of a slice plan with its own `## Files` (granularity slice) is briefed from the slice plan. Any other task without a plan whose slice plan lists it as open gets a plan-first brief (not for `--kind review`): its first deliverable is the task plan beside the slice plan, in the format of `plan-task` Step 9 (Files, What this does, Spec impact, Verification), committed alone, then the files that plan names; Scope lists the backticked paths of the task line as hints. A slice brief names the plan to write for each unplanned task. No brief tells the worker to plan it some other way.
+- A bash script on awk. `render --task <ref>` or `--slice <ref>` prints a brief built from the plan files and `skills/spawn-milestone-team/brief-template.md`, and includes the body of `skills/minimal-code/SKILL.md` as the work contract, read at render time. It prints no brief when the plan, its `## Files` section, the template or the contract is missing (exit 1). An open task of a slice plan with its own `## Files` (granularity slice) is briefed from the slice plan; a task it does not list open gets no brief. Any other task without a plan whose slice plan lists it as open gets a plan-first brief (not for `--kind review`): its first deliverable is the task plan beside the slice plan, in the format of `plan-task` Step 9 (Files, What this does, Spec impact, Verification), committed alone, then the files that plan names; Scope lists the backticked paths of the task line as hints. A slice brief names the plan to write for each unplanned task. No brief tells the worker to plan it some other way.
 - `render --kind implement|review|prepare` adds what the worker may do; a review brief pins the commit range it reviews (`--head`, optionally `--base`) and has no Git section. `render --lesson F###` builds the brief of the lesson lane `lesson-F###` from the lesson in `signals/` (outcome from its title, target and "Assessment"; scope and check from its "Files" and "Verification"; commit prefix the lane).
 - `check` validates a worker's report from a file or stdin: the labels of the template's "Report" section, each with a value, an exit code in every `Checks run:` line, one of the three `Status:` values and its consistency with `Blockers:`, and a spec delta under `Spec:` (`none -- <reason>`, or `<area>: <path>` per edited section, joined by `;`, backticks ignored, the path running to the closing `(<section>)` (spaces allowed); a bare `none` fails; run in a project with a spec, each path is the area file or one of its sources). It prints one line per problem and exits 1, or `report ok`. The brief's "Spec impact" section makes the edit a duty: a change that makes a sentence of a listed area file false edits that section in the same commits.
 
