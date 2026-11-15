@@ -16,7 +16,14 @@
 #             --asked-days days ago (default 7); answered ones never
 #   lanes     held rows of LANES.md claimed more than --lane-hours hours ago
 #             (default 24), also lanes that are no slice; a table that fails
-#             `ytstack-frontier check` is reported and not read
+#             `ytstack-frontier check` is reported and not read; its "stale:"
+#             lines are items too, once per lane
+#   --worktrees  linked worktrees and local branches with PR state (one
+#             `gh pr list`), age, uncommitted changes and the lane that holds
+#             them; the remove commands for merged or closed, clean, unheld
+#             ones with no open PR and nothing unpushed are printed and never
+#             run (exit 10), none without PR state; from a linked worktree
+#             that worktree is left out and LANES.md is the main checkout's
 #   runtime   the problems of `ytstack-runtime check`
 #   review policy  the problems of `ytstack-risk check` when the script exists
 #             beside ytstack-upkeep, a note when it does not
@@ -59,6 +66,8 @@ fi
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/ytupkeep.XXXXXX"); TMP=$(cd "$TMP" && pwd -P)
 trap 'rm -rf "$TMP"' EXIT
 STAMP='[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z'
+# ytstack-frontier check keeps out-of-tree state; never in the real data dir
+export CLAUDE_PLUGIN_DATA="$TMP/data"
 NOW=$(date -u +%s)
 
 UP="$BIN"
@@ -235,7 +244,14 @@ hasnt "a lane claimed an hour ago is not listed" "M004-S03" "$OUT"
 hasnt "a merged lane is not listed" "M004-S01" "$OUT"
 hasnt "a blocked lane is not held" "M004-S04" "$OUT"
 run "$D" --lane-hours 100
-eq "a higher limit: nothing needs a look" "0:0" "$EC:$(count lanes)"
+eq "a higher limit: only the stale running lane is left" "10:1" "$EC:$(count lanes)"
+like "as ytstack-frontier check names it" "^  - M004-S02: running, no branch in its row|^  - M004-S02: running, no commit on ytstack/M004-S02 for [0-9]+ minutes" "$OUT"
+lanes \
+  "| M004-S06 | implement | running | impl-e $(claim $((2 * HOUR))) | - | wt/gone | - | - | 0 | wait |" \
+  "| M004-S07 | implement | claimed | impl-f $(claim $((2 * HOUR))) | - | - | - | - | 0 | - |"
+run "$D"
+eq "a stale lane under the hour limit is listed (issue #84)" "10:1" "$EC:$(count lanes)"
+has "with the line of the check" "  - M004-S06: running, but its worktree wt/gone does not exist" "$OUT"
 lanes \
   "| M004-S02 | implement | running | impl-b $(claim $((30 * HOUR))) | ytstack/M004-S02 | - | - | - | 0 |" \
   "| M004-S03 | implement | sleeping | impl-c $(claim $((30 * HOUR))) | - | - | - | - | 0 | - |"
@@ -433,6 +449,68 @@ rm -f "$Y/spec/REVIEW.md"
 run "$D"
 eq "without own reviewers: no host call" "0|0" "$(count "review checks")|$(awk 'END { print NR }' "$GHLOG")"
 PATH=$OLDPATH
+
+# ---- 10b. --worktrees: the inventory and the commands, never run (issue #84) --------
+echo "# worktrees"
+project wtinv
+( cd "$D" && git init -q -b main && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false \
+  && git add -A && GIT_COMMITTER_DATE="$(ago $((3 * DAY)))" git commit -qm base \
+  && for b in one two three four five six seven eight; do git branch "feat/$b"; done \
+  && git worktree add -q "$D/.wt/one" feat/one && git worktree add -q "$D/.wt/two" feat/two && git worktree add -q "$D/.wt/six" feat/six ) >/dev/null 2>&1 || { echo "FATAL fixture"; exit 2; }
+BASE=$(git -C "$D" rev-parse HEAD)
+# feat/seven: one commit more than its merged pull request (unpushed work)
+( cd "$D" && git checkout -q feat/seven && GIT_COMMITTER_DATE="$(ago $((3 * DAY)))" git commit -q --allow-empty -m unpushed && git checkout -q main ) >/dev/null 2>&1
+echo dirty > "$D/.wt/two/new.txt"
+printf -- '---\nupdated: x\n---\n\n# Lanes\n\n| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |\n|---|---|---|---|---|---|---|---|---|---|\n| M004-S06 | implement | reported | w %s | feat/six | .wt/six | 9 | - | 0 | review |\n' "$(ago 600)" > "$Y/LANES.md"
+WTJSON="$TMP/wt.json"; export WTJSON
+printf '[{"number":5,"state":"MERGED","headRefName":"feat/one","headRefOid":"%s"},{"number":6,"state":"MERGED","headRefName":"feat/two","headRefOid":"%s"},
+ {"number":3,"state":"OPEN","headRefName":"feat/three","headRefOid":"%s"},{"number":7,"state":"CLOSED","headRefName":"feat/three","headRefOid":"%s"},
+ {"number":8,"state":"OPEN","headRefName":"feat/five","headRefOid":"%s"},{"number":9,"state":"MERGED","headRefName":"feat/six","headRefOid":"%s"},
+ {"number":10,"state":"MERGED","headRefName":"feat/seven","headRefOid":"%s"},{"number":11,"state":"CLOSED","headRefName":"feat/eight","headRefOid":"%s"}]' \
+  "$BASE" "$BASE" "$BASE" "$BASE" "$BASE" "$BASE" "$BASE" "$BASE" > "$WTJSON"
+cat > "$TMP/fakebin/gh" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >> "$GHLOG"
+[ -z "${GH_FAIL:-}" ] || { echo "HTTP 502: bad gateway" >&2; exit 1; }
+cat "$WTJSON"
+EOF
+chmod +x "$TMP/fakebin/gh"; : > "$GHLOG"
+PATH="$TMP/fakebin:$OLDPATH"
+BEFORE=$(cd "$D" && git worktree list --porcelain; git branch --list)
+run "$D" --worktrees
+eq "commands to print: exit 10" 10 "$EC"
+like "the first line: the checkout and the time of the read" "^ytstack upkeep --worktrees: $D, read $STAMP\$" "$(printf '%s\n' "$OUT" | sed -n 1p)"
+has "worktrees: 3" "worktrees: 3" "$OUT"
+like "a worktree with its branch, PR state and age" "^  - $D/\.wt/one: feat/one, PR #5 merged, last commit 3 days ago\$" "$OUT"
+like "uncommitted changes are named" "^  - $D/\.wt/two: feat/two, PR #6 merged, last commit 3 days ago, uncommitted changes\$" "$OUT"
+like "a branch a lane holds is named" "^  - $D/\.wt/six: feat/six, PR #9 merged, last commit 3 days ago, held by lane M004-S06 \(reported\)\$" "$OUT"
+has "branches without a worktree: 5" "branches: 5" "$OUT"
+like "an open PR of a branch wins over a newer closed one" "^  - feat/three: PR #3 open, last commit 3 days ago\$" "$OUT"
+like "a branch without a PR" "^  - feat/four: no pull request, last commit 3 days ago\$" "$OUT"
+like "an open PR" "^  - feat/five: PR #8 open, last commit 3 days ago\$" "$OUT"
+like "a branch ahead of its merged PR head" "^  - feat/seven: PR #10 merged, last commit 3 days ago, unpushed commits\$" "$OUT"
+like "a closed PR at the branch head" "^  - feat/eight: PR #11 closed, last commit 3 days ago\$" "$OUT"
+hasnt "the default branch is not listed" "  - main" "$OUT"
+eq "the commands, not run: merged or closed, no open PR, nothing unpushed, clean, not held" "commands (not run): 3
+  git -C '$D' worktree remove '$D/.wt/one'
+  git -C '$D' branch -D 'feat/one'
+  git -C '$D' branch -D 'feat/eight'" "$(printf '%s\n' "$OUT" | sed -n '/^commands (not run)/,$p')"
+eq "one gh call" "pr list --state all --limit 500 --json number,state,headRefName,headRefOid" "$(cat "$GHLOG")"
+eq "nothing was removed" "$BEFORE" "$(cd "$D" && git worktree list --porcelain; git branch --list)"
+# From a linked worktree: that worktree is left out, LANES.md comes from the main checkout
+run "$D/.wt/one" --worktrees
+hasnt "the current worktree is not listed" "$D/.wt/one:" "$OUT"
+hasnt "and no command removes it" "remove '$D/.wt/one'" "$OUT"
+has "the lane of the main checkout's LANES.md still holds feat/six" "held by lane M004-S06 (reported)" "$OUT"
+like "the first line names the main checkout" "^ytstack upkeep --worktrees: $D, read " "$(printf '%s\n' "$OUT" | sed -n 1p)"
+GH_FAIL=1 run "$D" --worktrees
+eq "gh fails: nothing to remove, exit 0" 0 "$EC"
+has "and the reason" "PR state not read: HTTP 502: bad gateway" "$OUT"
+hasnt "no command without the PR state" "branch -D" "$OUT"
+PATH=$OLDPATH
+project wtplain
+run "$D" --worktrees
+eq "--worktrees outside git: exit 1" 1 "$EC"
 
 # ---- 11. usage and errors ---------------------------------------------------------
 echo "# usage"

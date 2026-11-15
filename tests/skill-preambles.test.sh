@@ -339,12 +339,25 @@ newest entry: 20261114T1436Z-at-most-fifteen ("
       rm -rf "$TMP/xdg"
       # the factory tools (M031, issue #54): Step 7 skips by what the project switched on
       run_pre "$P" "$WT"
+      # issue #85: the bins of the running version, canonical, for "$YT_BIN/ytstack-<name>"
+      has "$s: YT_BIN is the canonical bin directory" "$OUT" "YT_BIN=$ROOT/bin
+"
       has "$s: bare fixture -> merge_by risk" "$OUT" "MERGE_BY: risk"
       has "$s: bare fixture -> no review policy" "$OUT" "REVIEW_POLICY: no"
       has "$s: bare fixture -> no own reviewers" "$OUT" "OWN_REVIEWERS: no"
       has "$s: bare fixture -> PR watch off" "$OUT" "PR_WATCH: off"
       has "$s: bare fixture -> no release section" "$OUT" "RELEASE: no"
       has "$s: bare fixture -> no signal sources" "$OUT" "SIGNALS: 0"
+      # peers in other repositories (issue #84): from LANES.md "## Peers"
+      has "$s: no peers" "$OUT" "PEERS_BEGIN
+no peers
+PEERS_END"
+      bash "$ROOT/bin/ytstack-frontier" -C "$WT" peer set prod --repo acme/cloud --address claude:abc --contact 2026-11-15T09:00Z >/dev/null 2>&1
+      run_pre "$P" "$WT"
+      has "$s: a peer is listed" "$OUT" "PEERS_BEGIN
+prod	acme/cloud	claude:abc	2026-11-15T09:00Z
+PEERS_END"
+      rm -f "$WT/.ytstack/LANES.md"
       # the open lessons (M032): counted in the status, a proposal for the daily question, a check for a lane
       has "$s: bare fixture -> no open lesson" "$OUT" "LESSONS: 0 open (0 proposals, 0 checks to build)"
       printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area ci --class flaky-order --title "Order" --target check:tests/order.sh >/dev/null
@@ -576,6 +589,91 @@ cp "$TMP/tp.spec.bak" "$WT/.ytstack/M999-S01-T01-PLAN.md"
 ( cd "$WT" && git rm -rq .ytstack/spec && git commit -qm "chore: remove fixture spec" ) >/dev/null 2>&1
 rm -f "$WT/.ytstack/spec/core.md"; rmdir "$WT/.ytstack/spec" 2>/dev/null
 
+# A milestone that lives in milestones/M041/ (issue #70): readers find its files
+# there and writers are pointed at the same directory, not at the flat layout.
+echo "# milestone in milestones/M041/"
+MV="$TMP/moved"; MD="$MV/.ytstack/milestones/M041"; mkdir -p "$MD"
+( cd "$MV" || exit 2
+  git init -q && git config user.email t@t.t && git config user.name t
+  printf 'project: fixture\nlast_updated: %s\ncurrent_milestone: M041\nactive_slice: S01\nactive_task: T01\n\n# State\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .ytstack/STATE.md
+  printf 'name: fixture\n' > .ytstack/PROJECT.md
+  printf -- '---\nmilestone: M040\nstatus: done\n---\n' > .ytstack/M040-ROADMAP.md
+  printf -- '---\nmilestone: M041\ncreated: 2026-11-01T00:00:00Z\n---\n# M041\n' > "$MD/M041-CONTEXT.md"
+  printf -- '---\nmilestone: M041\nstatus: in-progress\n---\n- [ ] S01 -- one\n- [ ] S02 -- (to be planned)\n' > "$MD/M041-ROADMAP.md"
+  printf -- '---\nmilestone: M041\nslice: S01\n---\n- [ ] T01 -- a\n- [ ] T02 -- b\n' > "$MD/M041-S01-PLAN.md"
+  printf -- '---\ntask: T01\n---\n## Files\n\n- Modify: a.ts\n\n## Verification\n\n```bash\ntrue\n```\n' > "$MD/M041-S01-T01-PLAN.md"
+  echo seed > f.txt; git add -A; git commit -qm "M041-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL moved fixture; exit 2; }
+pre plan-task "$MV"
+has "plan-task: moved -> slice plan found there"      "$OUT" "SLICE_PLAN: $MD/M041-S01-PLAN.md"
+has "plan-task: moved -> next task is T02 (T01 planned there)" "$OUT" "NEXT_TASK: T02"
+has "plan-task: moved -> new task plan goes there"   "$OUT" "ARTIFACT_DIR: $MD"
+pre summarize-task "$MV"
+has "summarize-task: moved -> task plan found there"  "$OUT" "PLAN_FILE: $MD/M041-S01-T01-PLAN.md"
+has "summarize-task: moved -> slice plan found there" "$OUT" "SLICE_PLAN: $MD/M041-S01-PLAN.md"
+has "summarize-task: moved -> summary goes there"     "$OUT" "ARTIFACT_DIR: $MD"
+pre slice-milestone "$MV"
+has "slice-milestone: moved -> roadmap found there"   "$OUT" "ROADMAP: $MD/M041-ROADMAP.md"
+has "slice-milestone: moved -> S02 still to plan"     "$OUT" "UNPLANNED_SLICES: S02"
+has "slice-milestone: moved -> slice plans go there"  "$OUT" "ARTIFACT_DIR: $MD"
+pre plan-milestone "$MV"
+has "plan-milestone: moved milestones count for the number" "$OUT" "NEXT_MILESTONE: M042"
+has "plan-milestone: a new milestone starts flat"     "$OUT" "ARTIFACT_DIR: $MV/.ytstack"
+pre reassess-roadmap "$MV"
+has "reassess-roadmap: moved -> artifact dir"         "$OUT" "ARTIFACT_DIR: $MD"
+has "reassess-roadmap: moved -> slices counted from the moved roadmap" "$OUT" "SLICES_TOTAL: 2"
+for s in test-driven-development verification-before-completion code-review; do
+  pre "$s" "$MV"; has "$s: moved -> task plan found there" "$OUT" "TASK_PLAN: $MD/M041-S01-T01-PLAN.md"
+done
+pre finish-branch "$MV";        has "finish-branch: moved -> both tasks open"  "$OUT" "OPEN_TASKS:  T01 T02"
+pre ship "$MV";                 has "ship: moved -> slice plan found there"    "$OUT" "SLICE_PLAN: $MD/M041-S01-PLAN.md"
+pre retro "$MV";                has "retro: moved -> tasks counted"            "$OUT" "PLAN_TASKS: 0/2 done"
+has "retro: moved -> retro goes there"                                          "$OUT" "RETRO_FILE: $MD/M041-RETRO.md"
+pre plan-ceo-review "$MV";      has "plan-ceo-review: moved -> milestone mode" "$OUT" "MODE: milestone"
+has "plan-ceo-review: moved -> review goes there"                               "$OUT" "REVIEW_FILE: $MD/M041-CEO-REVIEW.md"
+pre plan-eng-review "$MV";      has "plan-eng-review: moved -> review goes there" "$OUT" "REVIEW_FILE: $MD/M041-ENG-REVIEW.md"
+has "plan-eng-review: moved -> the roadmap is read"                             "$OUT" "MILESTONE_DOC: $MD/M041-ROADMAP.md"
+pre grill "$MV";                has "grill: moved -> CONTEXT there"            "$OUT" "DESIGN_TARGET: $MD/M041-CONTEXT.md"
+pre handoff-session "$MV";      has "handoff-session: moved -> artifact dir"   "$OUT" "ARTIFACT_DIR: $MD"
+pre spawn-milestone-team "$MV"; has "spawn-milestone-team: moved -> slice plan counted" "$OUT" "SLICE_COUNT: 1"
+[ ! -e "$MV/.ytstack/M041-S01-PLAN.md" ] && ok "moved: nothing written flat by the preambles" || bad "moved: nothing written flat by the preambles"
+
+# Split state (the consumer's in #70): the roadmap moved, some files of the same
+# milestone still flat. Readers that count or list must see both places.
+echo "# split: roadmap in milestones/M041/, stragglers flat"
+SP="$TMP/split"; SD="$SP/.ytstack/milestones/M041"; mkdir -p "$SD"
+( cd "$SP" || exit 2
+  git init -q && git config user.email t@t.t && git config user.name t
+  printf 'project: fixture\nlast_updated: %s\ncurrent_milestone: M041\nactive_slice: S02\nactive_task: none\n\n# State\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .ytstack/STATE.md
+  printf 'name: fixture\n' > .ytstack/PROJECT.md
+  printf -- '---\nmilestone: M041\nstatus: in-progress\n---\n- [ ] S01 -- one\n- [ ] S02 -- two\n' > "$SD/M041-ROADMAP.md"
+  printf -- '---\nslice: S01\n---\n- [x] T01 -- a\n- [ ] T02 -- b\n' > "$SD/M041-S01-PLAN.md"
+  printf -- '---\nclosed: 2026-11-01T00:00:00Z\n---\n' > "$SD/M041-S01-T01-SUMMARY.md"
+  printf -- '---\nslice: S02\n---\n- [x] T01 -- c\n' > .ytstack/M041-S02-PLAN.md
+  printf -- '---\nclosed: 2026-11-02T00:00:00Z\n---\n' > .ytstack/M041-S01-T02-SUMMARY.md
+  echo seed > f.txt; git add -A; git commit -qm "M041-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL split fixture; exit 2; }
+pre reassess-roadmap "$SP"
+has "split: reassess-roadmap finds the flat slice plan complete" "$OUT" "SLICE_COMPLETE: yes"
+has "split: reassess-roadmap counts the flat slice as closed by work" "$OUT" "SLICES_CLOSED_BY_WORK: 1"
+pre retro "$SP"
+has "split: retro counts both summaries"            "$OUT" "SUMMARIES: 2"
+has "split: retro counts the tasks of both slice plans" "$OUT" "PLAN_TASKS: 2/3 done"
+has "split: retro lists the flat summary"           "$OUT" "$SP/.ytstack/M041-S01-T02-SUMMARY.md"
+pre spawn-milestone-team "$SP"
+has "split: spawn-milestone-team counts both slice plans" "$OUT" "SLICE_COUNT: 2"
+
+# A milestone that lives in backlog/<PREFIX>/ (Codex review on PR #77).
+echo "# backlog: milestone in backlog/OLD/"
+BL="$TMP/backlog"; BD="$BL/.ytstack/backlog/OLD"; mkdir -p "$BD"
+( cd "$BL" || exit 2
+  git init -q && git config user.email t@t.t && git config user.name t
+  printf 'project: fixture\nlast_updated: %s\ncurrent_milestone: M030\nactive_slice: S01\nactive_task: none\n\n# State\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .ytstack/STATE.md
+  printf -- '---\nmilestone: M030\n---\n- [ ] S01 -- one\n' > "$BD/M030-ROADMAP.md"
+  printf -- '---\nslice: S01\n---\n- [ ] T01 -- a\n' > "$BD/M030-S01-PLAN.md"
+  echo seed > f.txt; git add -A; git commit -qm seed ) >/dev/null 2>&1 || { echo FATAL backlog fixture; exit 2; }
+pre plan-eng-review "$BL"
+has "backlog: plan-eng-review finds the slice plan -> milestone mode" "$OUT" "MODE: milestone"
+has "backlog: plan-eng-review review goes there" "$OUT" "REVIEW_FILE: $BD/M030-ENG-REVIEW.md"
+
 # Fallback path: CLAUDE_SKILL_DIR left unsubstituted (foreign host) -> still resolves project scope
 echo "# fallback without lib"
 P=$(extract summarize-task); sed "s|$ROOT/skills/summarize-task|/nonexistent-skill-dir|g" "$P" > "$TMP/pre-fallback.sh"
@@ -583,6 +681,13 @@ run_pre "$TMP/pre-fallback.sh" "$WT"
 [ "$EC" -eq 0 ] && ok "fallback: runs" || bad "fallback: runs" "exit $EC"
 has "fallback: HAS_YTSTACK yes" "$OUT" "HAS_YTSTACK: yes"
 has "fallback: IS_GIT yes in worktree" "$OUT" "IS_GIT: yes"
+has "fallback: ARTIFACT_DIR is the flat directory" "$OUT" "ARTIFACT_DIR: $WT/.ytstack"
+for s in plan-task reassess-roadmap slice-milestone; do
+  P=$(extract "$s"); sed "s|$ROOT/skills/$s|/nonexistent-skill-dir|g" "$P" > "$TMP/pre-fallback-$s.sh"
+  run_pre "$TMP/pre-fallback-$s.sh" "$WT"
+  [ "$EC" -eq 0 ] && ok "fallback: $s runs" || bad "fallback: $s runs" "exit $EC"
+  has "fallback: $s ARTIFACT_DIR is the flat directory" "$OUT" "ARTIFACT_DIR: $WT/.ytstack"
+done
 
 echo "# tree hygiene"
 [ -z "$(git -C "$MAIN" status --porcelain)" ] && ok "main checkout clean after all preambles" || bad "main checkout clean" "$(git -C "$MAIN" status --porcelain | head -3 | tr '\n' ' ')"

@@ -51,6 +51,12 @@ printf -- '---\nclosed: 2026-11-07T00:00:00Z\n---\n' > "$MAIN/.ytstack/M042-S03-
 OUT=$(fire "$MAIN"); eq "real summary -> silent" "" "$OUT"
 rm -f "$MAIN/.ytstack/M042-S03-T07-SUMMARY.md"
 
+echo "# summary in milestones/M042/ (#70)"
+mkdir -p "$MAIN/.ytstack/milestones/M042"
+printf -- '---\nclosed: 2026-11-07T00:00:00Z\n---\n' > "$MAIN/.ytstack/milestones/M042/M042-S03-T07-SUMMARY.md"
+OUT=$(fire "$MAIN"); eq "moved summary -> silent" "" "$OUT"
+rm -rf "$MAIN/.ytstack/milestones"
+
 echo "# guards"
 OUT=$(fire "$MAIN" ',"stop_hook_active":true'); eq "stop_hook_active -> silent" "" "$OUT"
 printf 'current_milestone: M042\nactive_slice: none\nactive_task: none\n' > "$MAIN/.ytstack/STATE.md"

@@ -34,6 +34,11 @@ def open_pulls(repo):
     return api(f'repos/{repo}/pulls?state=open&per_page=100', True)
 
 
+def login():
+    """The GitHub login gh is signed in as."""
+    return api('user')['login']
+
+
 def review_threads(repo, number):
     owner, name = repo.split('/')
     query = '''query($owner:String!,$name:String!,$number:Int!,$cursor:String){

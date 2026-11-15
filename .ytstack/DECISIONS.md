@@ -1219,6 +1219,93 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 
 **Supersedes:** None. Extends the roadmap state values in `docs/ux/skill-structure.md`.
 
+## 2026-11-15: PR watch bulk registration takes only your own ready PRs; bins are called through `YT_BIN` (issue #85)
+
+**Context:** A coordinator ran `ytstack-pr-watch register --all-open`. It registered every open PR of the repository, including another author's do-not-merge prototype, which was then injected as `action_required` 967 times; single status blocks reached 8.4k characters and 34 PRs, re-sent whole whenever one line changed; `status` printed 1,176 watches of every repository and session. The same coordinator called the bins by the versioned cache path it had seen (`.../ytstack/0.7.0/bin/ytstack-frontier`), kept doing so after an update, and one call failed with exit 127.
+
+**Options considered:**
+- Bulk registration: A) only PRs whose author is the `gh` login, drafts and do-not-merge labels skipped, `--author`, `--include-drafts`, `--include-labelled` to widen; B) keep "every open PR" and rely on `pause`; C) filter by branch bindings of the session.
+- Bins: D) print `YT_BIN=<bin of the running version>` in the `coordinate` preamble and at the end of the SessionStart context, and have the skill run bins as `"$YT_BIN/ytstack-<name>"`; E) a stable `~/.ytstack/bin` shim that points at the active version.
+
+**Chose:** A and D.
+
+**Reason:** A coordinator's lanes open their PRs under the same login, so the author is the cheapest fact that separates them from a colleague's, and one REST call (`gh api user`) gets it. B is what failed. C misses exactly the PRs `--all-open` exists for: those a session without hooks opened. `--author` adds to the login instead of replacing it, so widening never drops one's own PRs. For bins, D needs nothing outside the plugin and gives the coordinator one current value to copy instead of a path it remembers from an earlier context. E is a file in the user's home that some command must install and keep current across hosts and versions, and it would point at whatever version was active last, not at the one the session runs; ytstack never edits host settings or `PATH`, so a shim would still need a path to be called by.
+
+**How to apply:**
+- `register --pr N` registers one PR whatever its author or label; the filters apply to `--all-open` only, and every skipped PR is named with its reason.
+- A do-not-merge label is any label that, lowercased with `-`, `_`, `/`, `:` and `.` read as spaces, contains the words "do not merge" or `dnm`. Logins compare without case and without a `[bot]` suffix. When the login cannot be read, only an explicit `--author` list is used (with a warning); without one the command stops.
+- A rerun that skips a PR this session already watches pauses that watch and names it: the filter exists to stop such reports, and `resume` undoes it.
+- The status block lists changed lines, `- N unchanged`, and one last `closed` line for a PR of the previous block (a merge without a bot finding has no other report); a PR `action_required` without a head or status change for 24 hours (NULL `changed_at` counts as older) gets one `pause` suggestion per stretch, remembered apart from the block fingerprint so SessionStart does not repeat it. `status` shows the current session and repository (compared without case) unless `--all`.
+- The SessionStart line comes on every source but only where it still fits under the injection guard: this repository's injection sits within about 50 characters of it with a long Next action, and the excerpt matters more. The `coordinate` preamble is the source that always prints it. A session started before an update runs the old version's hooks, so after an update the line is renewed by reloading the skill (the version notice asks for that), not by the hook.
+- A skill that runs ytstack bins over a long session names them through `YT_BIN`; a short skill keeps `${CLAUDE_SKILL_DIR}/../../bin`, which the host substitutes when it loads the skill.
+
+**Supersedes:** None. Narrows `register --all-open` of "2026-11-14: PR watch ships inside ytstack as an optional, opt-in tool" (issue #54).
+
+## 2026-11-15: New artifacts follow the directory a milestone already lives in (issue #70)
+
+**Context:** Reading tolerated `milestones/`, `milestones/*/`, `backlog/` and `backlog/*/` since M018-S03, but every skill and hook wrote flat into `.ytstack/`. A consumer that moved 299 files of older milestones into `.ytstack/milestones/M###/` got the next plan or summary of such a milestone back at the top level, beside the moved ones.
+
+**Options considered:**
+- A) Keep writing flat and let `reconcile` move stragglers. Leaves the split after every task and needs a cleanup run per milestone.
+- B) Move a milestone's files into `milestones/M###/` as soon as ytstack writes one. Moves user-owned files, which only `reconcile` may do, and changes this repository's own layout.
+- C) Write where the milestone already lives: the directory that holds its roadmap, else any of its files, else flat.
+
+**Chose:** C.
+
+**Reason:** The person decided the layout by moving the files; ytstack follows it without moving anything. A milestone that lives flat, and every new milestone, stays flat, so nothing changes for projects that never moved files.
+
+**How to apply:**
+- One lookup in `hooks/lib/git-ctx.sh`: `yt_artifact_dir <yt_dir> <id>` for the directory, `yt_artifact_path <yt_dir> <file>` for one file (where it exists, else in that directory). No skill or hook builds a milestone path as `$YT_DIR/M###-...` any more.
+- Skills that write or read a milestone's files print `ARTIFACT_DIR` and fall back to `YT_DIR` when the library is not reachable.
+- A file of the milestone that already exists elsewhere (a summary that landed flat before this fix) is read and replaced where it is, not duplicated.
+- `bin/ytstack-risk` counts `M###-*` files in those directories as process records, like the flat ones.
+
+**Supersedes:** None. Narrows "Writing stays flat" of M018-S03 (`yt_find_artifacts`).
+
+## 2026-11-15: Progress per phase counts slices of each roadmap; the denominator log lives outside the tree (issue #81)
+
+**Context:** Issue #81: in a four-day coordinator run the human asked for "% per phase" 37 times and the coordinator drew 22 charts by hand. Rows were added to phases, their denominators grew and progress looked negative. The issue asked for a report per phase and a log of every denominator change with its cause, kept out of the repository.
+
+**Options considered:**
+- A) Rows are tasks (`M###-S##-PLAN.md` checkboxes).
+- B) Rows are the slices of each `M###-ROADMAP.md`, the unit a lane works on; done from the checkbox or a `merged` lane, in review from the lane status.
+- C) The log in `.ytstack/` (committed history).
+
+**Chose:** B, with the log under `<state base>/repos/<repo key>/phases/` (`snapshot`, `denominator.log`, the state base of `yt_state_base`). Each `--phases` run compares the slice ids per phase with the run before and appends one line per change (`first report`, `new phase`, `added S05`, `removed S04`, `phase left the report`). A `dropped` roadmap is left out.
+
+**Reason:** A coordinator dispatches and finishes slices, and `LANES.md` says which are in review; tasks have no lane status. The log records when a report saw a change, not a host fact or a plan state, and it changes on every report: committed, it would make every status a diff in the tree (the issue asked for it to stay out). Keying by the repository makes linked worktrees share one log.
+
+**How to apply:**
+- A status with progress uses `ytstack-status --phases`, never a count by hand (`coordinate` Step 11).
+- The change shown is the one since the previous `--phases` run; a second run without a change shows none.
+- Only the text report advances the snapshot and appends to the log; `--json` shows the same change and writes nothing, so drawing a chart never uses up the delta a status needs. Snapshot and log are written under a noclobber lock with a `mktemp` file (PR #90 review; refines the bullet above: "run" means text report).
+- A phase that joins or leaves is named on its own line, in the total and in the JSON (`joined`, `left`), also when the total stays equal. A `done` or `shipped-informally` milestone counts all its slices as done; a `backlog` roadmap is left out like a `dropped` one (PR #90 review).
+
+**Supersedes:** None.
+
+## 2026-11-15: Lane liveness is part of `ytstack-frontier check`, worktree cleanup only prints commands, peers are list lines in `LANES.md` (issue #84)
+
+**Context:** Issue #84: in a four-day coordinator run lanes finished and nobody took them over overnight, 97 worktrees piled up, and after a compaction the coordinator sent a production request to the wrong session of another repository. `ytstack-upkeep` flagged only lanes held for more than 24 hours.
+
+**Options considered:**
+- A) A new command for liveness; `check` stays a format check.
+- B) `check` reads a well-formed table for stalled lanes, one `stale:` line each, exit 2 (format problems keep exit 1 and skip the liveness read).
+- For "the worker reported": a report file the worker writes, or what the files already show.
+- For peers: a second Markdown table in `LANES.md`, or list lines.
+
+**Chose:** B with N = 60 minutes (`--minutes`). A running row counts as reported when its row carries a pull request or its worktree no longer exists; silent when its branch had no commit for N minutes, counted from the claim when that is newer. A ready lane is stale when nobody claimed it for N minutes since a check first saw it ready; that first sight is kept outside the tree in `<state base>/repos/<repo key>/frontier-ready`. `ytstack-upkeep --worktrees` prints the inventory and the `git worktree remove` / `git branch -D` commands for merged or closed, clean, unlocked, unheld ones and runs none. Peers are `- <role> | <repository> | <address> | <last contact UTC>` lines under `## Peers`, keyed by role and repository.
+
+**Reason:** The issue names `check`, and the coordinator already runs it at a rotation and upkeep on a schedule; a separate exit code keeps upkeep and every caller able to tell a broken table from a slow lane. Workers do not push and leave no report on disk, so a pull request in the row and a removed worktree are the local traces a report leaves; anything else would need the host. 60 minutes is longer than one task commit of a worker and much shorter than the overnight gap of the issue. The first sight of a ready lane changes with every check and is no plan state, so it stays out of the tree like the other volatile state. Printing commands instead of running them keeps a removal with a person (`rm -r` and branch deletion of parallel sessions are irreversible), and a locked worktree is a running session on Claude Code. Every existing reader of `LANES.md` (finish-lane, lane-retro, upkeep, the preambles) takes every line that starts with `|` as a lane row; list lines are invisible to all of them.
+
+**How to apply:**
+- A `stale:` line is a prompt to read the branch and set the row, or to dispatch; no script releases a lane by itself.
+- A message to a session of another repository goes to the address under `## Peers`, and `peer set` runs after each contact.
+- A new reader of `LANES.md` reads the lanes table only from lines that start with `|`.
+- A running row with a pull request is a fix round (`finish-lane`, `spawn-milestone-team`), not a report: it is checked for commits like any implement lane, counted from the first time a check sees that pull request and round in the row; a new round restarts the clock. The only "the worker ended" signal left is a worktree that no longer exists. A `review` or `prepare` lane commits nothing: it is stale after 3 x N minutes since its claim. First sights of ready lanes and fix rounds share `<state base>/repos/<repo key>/frontier-seen`, written under a noclobber lock with a `mktemp` file (PR #90 review; replaces "a pull request in its row" as a report signal and the file name `frontier-ready` above).
+- `--worktrees` prints no command for a branch with any open pull request, or whose local head is in neither the pull request head nor `origin/<branch>` (unpushed commits). It leaves out the worktree it runs in and reads `LANES.md` from the main checkout (PR #90 review).
+
+**Supersedes:** None. Extends "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)".
+
 ## 2026-11-15: Coordinate mode is a session marker the coordinate preamble writes; the standing hooks act only with it (issue #72)
 
 **Context:** A 12-hour coordinator run got seven standing instructions in one day and recorded none in `.ytstack/standing/`; it wrote them to its private memory. Issue #72 asks for a prompt hook that flags such instructions and a Stop check that holds the turn when they were not recorded, both only in coordinate mode. Nothing marked a session as a coordinator: `LANES.md` exists in every checkout of a project that ever coordinated, also in a worker's or a human's other session.

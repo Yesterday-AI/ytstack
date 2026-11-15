@@ -157,7 +157,8 @@ task_msg() {
   case "$t" in ""|none|all) return 0 ;; esac
   case "$s" in ""|none|all) return 0 ;; esac
   case "$m" in ""|none) return 0 ;; esac
-  summary="$ytd/$m-$s-$t-SUMMARY.md"
+  # The summary where the task's milestone lives (issue #70), flat or nested.
+  summary=$(yt_artifact_path "$ytd" "$m-$s-$t-SUMMARY.md")
   if [ ! -f "$summary" ]; then
     MSG="ytstack: $m-$s-$t is still the active task and has no summary. If the work is done, run /ytstack:summarize-task; if you are pausing, /ytstack:handoff-session keeps the thread."
   elif [ "$(sed -n 's/^closed: *//p' "$summary" | head -1)" = draft ]; then

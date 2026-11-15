@@ -373,6 +373,30 @@ eq "find: backlog subdirs"      1 "$(fa "$FA" 'item.md' | grep -c .)"
 eq "find: specific plan missing -> empty" "" "$(fa "$FA" 'M009-S01-T01-PLAN.md')"
 eq "find: missing dir -> empty" "" "$(fa "$TMP/nope" '*.md')"
 
+# ---- artifact write directory follows the milestone's directory (issue #70) ----
+echo "# artifact dir"
+AD="$TMP/ad/.ytstack"; mkdir -p "$AD/milestones/M001" "$AD/milestones/M002" "$AD/backlog/OPS" "$AD/milestones/M004"
+printf 'r\n' > "$AD/M003-ROADMAP.md"                           # flat milestone
+printf 'r\n' > "$AD/milestones/M001/M001-ROADMAP.md"           # moved milestone
+printf 'p\n' > "$AD/milestones/M001/M001-S01-T01-PLAN.md"
+printf 'p\n' > "$AD/M001-S01-T02-PLAN.md"                       # landed flat before the fix
+printf 's\n' > "$AD/milestones/M002/M002-S01-PLAN.md"          # moved, no roadmap
+printf 'b\n' > "$AD/backlog/OPS/OPS-001.md"                     # backlog prefix dir
+ad() { ( . "$LIB"; yt_artifact_dir "$1" "$2" ); }
+ap() { ( . "$LIB"; yt_artifact_path "$1" "$2" ); }
+eq "artifact dir: roadmap in milestones/M001 -> there"       "$AD/milestones/M001" "$(ad "$AD" M001)"
+eq "artifact dir: a task id counts by its milestone"         "$AD/milestones/M001" "$(ad "$AD" M001-S01-T03)"
+eq "artifact dir: no roadmap, a moved file -> its directory" "$AD/milestones/M002" "$(ad "$AD" M002-S02)"
+eq "artifact dir: flat milestone stays flat"                 "$AD" "$(ad "$AD" M003-S01)"
+eq "artifact dir: empty milestone dir does not count"        "$AD" "$(ad "$AD" M004)"
+eq "artifact dir: unknown milestone -> flat"                 "$AD" "$(ad "$AD" M009)"
+eq "artifact dir: backlog prefix -> backlog/OPS"             "$AD/backlog/OPS" "$(ad "$AD" OPS-002)"
+eq "artifact dir: missing yt dir -> printed as given"        "$TMP/nope" "$(ad "$TMP/nope" M001)"
+eq "artifact path: new file of a moved milestone"            "$AD/milestones/M001/M001-S01-T03-PLAN.md" "$(ap "$AD" M001-S01-T03-PLAN.md)"
+eq "artifact path: existing file in the milestone dir"       "$AD/milestones/M001/M001-S01-T01-PLAN.md" "$(ap "$AD" M001-S01-T01-PLAN.md)"
+eq "artifact path: existing file elsewhere is still found"   "$AD/M001-S01-T02-PLAN.md" "$(ap "$AD" M001-S01-T02-PLAN.md)"
+eq "artifact path: flat milestone -> flat"                   "$AD/M003-S01-PLAN.md" "$(ap "$AD" M003-S01-PLAN.md)"
+
 # ---- yt_standing: one file per standing instruction (issue #57) ----
 echo "# standing entries"
 ST="$TMP/st/.ytstack"; mkdir -p "$ST/standing"

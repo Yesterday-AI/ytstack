@@ -2,7 +2,7 @@
 name: test-driven-development
 metadata:
   tier: core
-  version: 0.1.1
+  version: 0.1.2
 description: "Test-first implementation of the current task through the vendored superpowers test-driven-development procedure, with the task plan's files and verification command injected. Use during task execution for any feature, bugfix or refactor, before writing implementation code. Not without a task plan (plan-task or quick-task first)."
 allowed-tools:
   - Bash
@@ -39,7 +39,8 @@ if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STATE.md" ]; then
   _S=$(sed -n 's/^active_slice: *//p' "$_YT_DIR/STATE.md" | head -1)
   _T=$(sed -n 's/^active_task: *//p' "$_YT_DIR/STATE.md" | head -1)
 fi
-_TASK_PLAN="$_YT_DIR/$_M-$_S-$_T-PLAN.md"
+# The plan lives with its milestone: flat or milestones/M###/ (issue #70)
+if command -v yt_artifact_path >/dev/null 2>&1; then _TASK_PLAN=$(yt_artifact_path "$_YT_DIR" "$_M-$_S-$_T-PLAN.md"); else _TASK_PLAN="$_YT_DIR/$_M-$_S-$_T-PLAN.md"; fi
 echo "HAS_YTSTACK: $([ -n "$_YT_DIR" ] && echo yes || echo no)"
 echo "ACTIVE_TASK: $_M-$_S-$_T"
 echo "TASK_PLAN: $_TASK_PLAN"

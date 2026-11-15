@@ -131,11 +131,12 @@ NEXT_ACTION=$(awk '/^## Next action/{flag=1; next} /^## /{flag=0} flag' "$STATE_
 # Lifecycle hints (M019-S03): a closed slice or milestone has a documented next step.
 LIFECYCLE_LINES=""
 if [ "${CURRENT_MILESTONE:-none}" != none ]; then
-  _rm="$YT_DIR/$CURRENT_MILESTONE-ROADMAP.md"
-  if [ -f "$_rm" ] && [ "$(sed -n 's/^status: *//p' "$_rm" | head -1)" = done ] && [ ! -f "$YT_DIR/$CURRENT_MILESTONE-RETRO.md" ]; then
+  _rm=$(yt_artifact_path "$YT_DIR" "$CURRENT_MILESTONE-ROADMAP.md")
+  _sp=$(yt_artifact_path "$YT_DIR" "$CURRENT_MILESTONE-${ACTIVE_SLICE:-none}-PLAN.md")
+  if [ -f "$_rm" ] && [ "$(sed -n 's/^status: *//p' "$_rm" | head -1)" = done ] && [ ! -f "$(yt_artifact_path "$YT_DIR" "$CURRENT_MILESTONE-RETRO.md")" ]; then
     LIFECYCLE_LINES="Milestone $CURRENT_MILESTONE is done and has no retro: ytstack:retro, then ytstack:document-release for the version, then ytstack:plan-milestone."
-  elif [ "${ACTIVE_SLICE:-none}" != none ] && [ -f "$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-PLAN.md" ] \
-       && [ "$(sed -n 's/^status: *//p' "$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-PLAN.md" | head -1)" = done ]; then
+  elif [ "${ACTIVE_SLICE:-none}" != none ] && [ -f "$_sp" ] \
+       && [ "$(sed -n 's/^status: *//p' "$_sp" | head -1)" = done ]; then
     LIFECYCLE_LINES="Slice $ACTIVE_SLICE is done: ytstack:reassess-roadmap first; then ytstack:finish-branch (merge / PR / keep) or ytstack:ship (release flow) for the branch."
   fi
 fi
@@ -401,6 +402,17 @@ $STATE_CONTEXT"
   if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ]; then
     echo "[ytstack session-start] injection is $(( ${#FULL_CONTEXT} - _HOST_LEN )) chars; Claude Code caps additionalContext at 10,000. Shorten skills/using-ytstack/SKILL.md." >&2
   fi
+fi
+
+# The running version's bin/ (issue #85), on every source: skills run bins as
+# "$YT_BIN/ytstack-<name>", not by a path from an earlier context. Only where it
+# still fits under the guard; it never costs the Next action (coordinate's
+# preamble prints it too).
+_YT_BIN_LINE="YT_BIN=$(cd "$PLUGIN_ROOT/bin" 2>/dev/null && pwd -P || printf '%s' "$PLUGIN_ROOT/bin")"
+if [ $(( ${#FULL_CONTEXT} - _HOST_LEN + ${#_YT_BIN_LINE} + 2 )) -le 9500 ]; then
+  FULL_CONTEXT="$FULL_CONTEXT
+
+$_YT_BIN_LINE"
 fi
 
 emit_json "$FULL_CONTEXT"

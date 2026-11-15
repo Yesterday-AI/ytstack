@@ -2,7 +2,7 @@
 name: finish-branch
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.1.1
 description: "Decides how a finished branch or worktree is integrated (merge locally, push + PR, keep) through the vendored superpowers finishing-a-development-branch procedure, with ytstack's branch, worktree and task-summary state injected. Use when the slice or milestone work on a branch is done and verified, or when the user says finish the branch, merge this, open the PR, wrap up the worktree. Not before verification-before-completion passed and not for closing a task (summarize-task)."
 allowed-tools:
   - Bash
@@ -40,9 +40,12 @@ if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STATE.md" ]; then
 fi
 # Slice summary state: every task in the slice plan needs a non-draft summary before a branch is "done".
 _OPEN_TASKS=""; _DRAFT_SUMMARIES=0
-if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/$_M-$_S-PLAN.md" ]; then
-  for t in $(grep -oE '^- \[.\] T[0-9][0-9] --' "$_YT_DIR/$_M-$_S-PLAN.md" | grep -oE 'T[0-9][0-9]'); do
-    f="$_YT_DIR/$_M-$_S-$t-SUMMARY.md"
+# Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
+_ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "${1}"; else printf '%s\n' "$_YT_DIR/${1}"; fi; }
+_SP=$(_ap "$_M-$_S-PLAN.md")
+if [ -n "$_YT_DIR" ] && [ -f "$_SP" ]; then
+  for t in $(grep -oE '^- \[.\] T[0-9][0-9] --' "$_SP" | grep -oE 'T[0-9][0-9]'); do
+    f=$(_ap "$_M-$_S-$t-SUMMARY.md")
     if [ ! -f "$f" ]; then _OPEN_TASKS="$_OPEN_TASKS $t"
     elif grep -q '^closed: draft' "$f"; then _OPEN_TASKS="$_OPEN_TASKS $t"; _DRAFT_SUMMARIES=$((_DRAFT_SUMMARIES+1)); fi
   done

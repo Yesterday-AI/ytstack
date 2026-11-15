@@ -7,7 +7,7 @@ paths:
   - NOTICE
   - hooks/lib/git-ctx.sh
   - bin/ytstack-gstack-diff
-verified_at: 6a4ffd2
+verified_at: db07481
 ---
 
 # dependencies

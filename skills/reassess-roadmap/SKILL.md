@@ -3,7 +3,7 @@ name: reassess-roadmap
 description: "Checks at a slice boundary whether the milestone roadmap still fits reality: deviations from the summaries, gates that only a person can close or that have lapsed, work that repeats without advancing, stale milestones to mark dropped or shipped-informally, slices to add, split, reorder or remove. Use after summarize-task closed the last task of a slice, or when the user says reassess, review the roadmap, does the plan still hold. Not mid-slice and not for task detail (plan-task)."
 metadata:
   tier: task
-  version: 0.3.0
+  version: 0.3.1
   triggers:
     - reassess roadmap
     - review milestone plan
@@ -76,8 +76,15 @@ if [ -f "$_YT_DIR/STATE.md" ]; then
   _TRACKER=${_TRACKER:-none}
 fi
 
+# Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
+if command -v yt_artifact_dir >/dev/null 2>&1; then _AD=$(yt_artifact_dir "$_YT_DIR" "$_CURRENT_MILESTONE"); else _AD="$_YT_DIR"; fi
+# One file wherever it is; all files of a glob in every layout, one per name (a
+# milestone moved after some of its files landed flat has files in both places).
+_ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "${1}"; else printf '%s\n' "$_YT_DIR/${1}"; fi; }
+_fa() { if command -v yt_find_artifacts >/dev/null 2>&1; then yt_find_artifacts "$_YT_DIR" "${1}"; else ls "$_YT_DIR"/${1} 2>/dev/null; fi | awk -F/ 'NF && !s[$NF]++'; }
+
 # Determine if the current slice is complete
-_SLICE_PLAN="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md"
+_SLICE_PLAN=$(_ap "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md")
 _SLICE_COMPLETE=no
 if [ -f "$_SLICE_PLAN" ]; then
   # Open TASK lines only: an open gate (`- [ ] G01 --`) does not keep a slice
@@ -89,7 +96,8 @@ fi
 
 # Stale milestones (M018): planned/in-progress roadmaps with no summaries and no file newer than 14 days
 _STALE_MILESTONES=""
-for _rm in "$_YT_DIR"/M[0-9][0-9][0-9]-ROADMAP.md; do
+if command -v yt_find_artifacts >/dev/null 2>&1; then _RMS=$(yt_find_artifacts "$_YT_DIR" 'M[0-9][0-9][0-9]-ROADMAP.md'); else _RMS=$(ls "$_YT_DIR"/M[0-9][0-9][0-9]-ROADMAP.md 2>/dev/null); fi
+while IFS= read -r _rm; do
   [ -f "$_rm" ] || continue
   _m=$(basename "$_rm" -ROADMAP.md)
   _st=$(sed -n 's/^status: *//p' "$_rm" | head -1)
@@ -99,15 +107,18 @@ for _rm in "$_YT_DIR"/M[0-9][0-9][0-9]-ROADMAP.md; do
   else
     [ -n "$(ls "$_YT_DIR"/$_m-*SUMMARY.md 2>/dev/null)" ] && continue
   fi
-  [ -n "$(find "$_YT_DIR" -maxdepth 1 -name "$_m-*.md" -mtime -14 2>/dev/null)" ] && continue
+  [ -n "$(find "$(dirname "$_rm")" -maxdepth 1 -name "$_m-*.md" -mtime -14 2>/dev/null)" ] && continue
   _STALE_MILESTONES="${_STALE_MILESTONES:+$_STALE_MILESTONES }$_m"
-done
+done <<_RMS_
+$_RMS
+_RMS_
 
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "ACTIVE_SLICE: $_ACTIVE_SLICE"
 echo "SLICE_COMPLETE: $_SLICE_COMPLETE"
+echo "ARTIFACT_DIR: $_AD"
 echo "STALE_MILESTONES: ${_STALE_MILESTONES:-none}"
 echo "TRACKER: $_TRACKER"
 # Technical spec (M022): areas whose code moved on without their description.
@@ -119,31 +130,38 @@ echo "SPEC_DRIFT_END"
 # and the two progress numbers (closed by work, accepted).
 _GATE_RE='^- \[ \] G[0-9]+ --'
 echo "OPEN_GATES_BEGIN"
-grep -Hn -E "$_GATE_RE" "$_YT_DIR"/"$_CURRENT_MILESTONE"-*PLAN.md 2>/dev/null | sed "s|^$_YT_DIR/||"
+_fa "$_CURRENT_MILESTONE-*PLAN.md" | sort | while IFS= read -r _p; do
+  grep -Hn -E "$_GATE_RE" "$_p" 2>/dev/null | sed "s|^$_YT_DIR/||"
+done
 echo "OPEN_GATES_END"
 echo "REVIEW_ROUNDS_BEGIN"
-for _p in "$_YT_DIR"/"$_CURRENT_MILESTONE-$_ACTIVE_SLICE"-T[0-9][0-9]-PLAN.md; do
+_fa "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-T[0-9][0-9]-PLAN.md" | sort | while IFS= read -r _p; do
   [ -f "$_p" ] || continue
   _r=$(grep -c -E '^- Round [0-9]+:' "$_p" 2>/dev/null); _r=${_r:-0}
   [ "$_r" -ge 3 ] && echo "$(basename "$_p" -PLAN.md): $_r review rounds"
 done
 echo "REVIEW_ROUNDS_END"
 _SL_TOTAL=0; _SL_WORK=0; _SL_ACC=0
-[ -f "$_YT_DIR/$_CURRENT_MILESTONE-ROADMAP.md" ] && _SL_TOTAL=$(grep -c -E '^- \[.\] S[0-9][0-9] --' "$_YT_DIR/$_CURRENT_MILESTONE-ROADMAP.md" 2>/dev/null)
-for _sp in "$_YT_DIR"/"$_CURRENT_MILESTONE"-S[0-9][0-9]-PLAN.md; do
+_RM=$(_ap "$_CURRENT_MILESTONE-ROADMAP.md")
+[ -f "$_RM" ] && _SL_TOTAL=$(grep -c -E '^- \[.\] S[0-9][0-9] --' "$_RM" 2>/dev/null)
+while IFS= read -r _sp; do
   [ -f "$_sp" ] || continue
   grep -q '^- \[ \] T[0-9]' "$_sp" && continue
   grep -q '^- \[[xX]\] T[0-9]' "$_sp" || continue
   _SL_WORK=$((_SL_WORK + 1))
   _s=$(basename "$_sp" -PLAN.md)
-  cat "$_sp" "$_YT_DIR"/"$_s"-T[0-9][0-9]-PLAN.md 2>/dev/null | grep -q -E "$_GATE_RE" || _SL_ACC=$((_SL_ACC + 1))
-done
+  { cat "$_sp"; _fa "$_s-T[0-9][0-9]-PLAN.md" | while IFS= read -r _tp; do cat "$_tp"; done; } 2>/dev/null | grep -E "$_GATE_RE" >/dev/null || _SL_ACC=$((_SL_ACC + 1))
+done <<_SPS_
+$(_fa "$_CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md")
+_SPS_
 echo "SLICES_TOTAL: ${_SL_TOTAL:-0}"
 echo "SLICES_CLOSED_BY_WORK: $_SL_WORK"
 echo "SLICES_ACCEPTED: $_SL_ACC"
 ```
 
 ## Procedure
+
+The current milestone's files named below (`{CURRENT_MILESTONE}-ROADMAP.md`, `-CONTEXT.md`, slice and task files) are read and edited in `{ARTIFACT_DIR}`: `.ytstack/` itself, or `milestones/M###/` when the milestone lives there.
 
 **Step 2 HARD-GATE.** If `SLICE_COMPLETE=no`: abort with "slice still has open tasks. Close them via `summarize-task` before reassessing."
 

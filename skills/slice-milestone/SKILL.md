@@ -3,7 +3,7 @@ name: slice-milestone
 description: "Breaks the current milestone into slices of one to seven tasks and writes M###-S##-PLAN.md per slice. Use after plan-milestone (and plan-ceo-review when it ran), or when the user says slice the milestone, plan the slices, break it down. Not for task-level detail (plan-task)."
 metadata:
   tier: core
-  version: 0.3.0
+  version: 0.3.1
   triggers:
     - slice milestone
     - plan slices
@@ -95,7 +95,9 @@ if [ -f "$_YT_DIR/STATE.md" ]; then
   _CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$_YT_DIR/STATE.md" | head -1)
 fi
 
-_ROADMAP="$_YT_DIR/$_CURRENT_MILESTONE-ROADMAP.md"
+# Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
+if command -v yt_artifact_dir >/dev/null 2>&1; then _ARTIFACT_DIR=$(yt_artifact_dir "$_YT_DIR" "$_CURRENT_MILESTONE"); else _ARTIFACT_DIR="$_YT_DIR"; fi
+_ROADMAP="$_ARTIFACT_DIR/$_CURRENT_MILESTONE-ROADMAP.md"
 _UNPLANNED_SLICES=""
 if [ -f "$_ROADMAP" ]; then
   _UNPLANNED_SLICES=$(grep -oE 'S[0-9][0-9] -- \(to be planned\)' "$_ROADMAP" | grep -oE 'S[0-9][0-9]' | tr '\n' ' ')
@@ -109,6 +111,7 @@ fi
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "ROADMAP: $_ROADMAP"
+echo "ARTIFACT_DIR: $_ARTIFACT_DIR"
 echo "UNPLANNED_SLICES: ${_UNPLANNED_SLICES:-none}"
 echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 ```
@@ -165,7 +168,7 @@ Remember as `_SLICE_TASKS` (preserve lines).
 
 Loop back to 3b.
 
-**3d -- Write `M###-S##-PLAN.md`.** Use Write tool:
+**3d -- Write `M###-S##-PLAN.md`.** Use Write tool. Path: `{ARTIFACT_DIR}/{CURRENT_MILESTONE}-{SLICE_ID}-PLAN.md`, beside the roadmap (`.ytstack/` itself, or `milestones/M###/` when the milestone lives there):
 
 ```markdown
 ---
