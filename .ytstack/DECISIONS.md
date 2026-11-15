@@ -1378,6 +1378,28 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 
 **Supersedes:** Narrows "2026-11-15: Standing entries end by `until` ...": the commands run only for merged entries.
 
+## 2026-11-15: Hooks read a stale checkout from origin, say a reminder once per session and pointer, and keep a coordinator on its path with hints, not denies (issues #82, #83)
+
+**Context:** In a four-day coordinator run the Stop hook sent the same "M034-S04-T05 has no summary" 1,645 times and nobody acted on it: the coordinator's `main` was 168 commits behind `origin/main`, so every hook read a stale `STATE.md`, a coordinator holds no task anyway, and SessionStart cut the Next action for the `using-ytstack` body (#82). The same run merged 509 pull requests with `gh pr merge` by hand, dispatched 603 agents without `isolation`, rotated 0 times across 23 compactions, ran no lesson for 57 red `main` reads, and closed 14 pull requests, some to fit under the open-PR cap and some to retrigger CI (#83).
+
+**Options considered:**
+- For the stale checkout: `git fetch` in the hook; local refs only and `STATE.md` read from `origin/<default>`; only a warning.
+- For the repetition: a block after N repeats; once per (session, pointer) plus a lint line for an old pointer.
+- For the budget: the Next action before the directive in the text; the `using-ytstack` body yields before the Next action.
+- For the coordinator path: PreToolUse denies on `gh pr merge` / `gh pr close`; advisory `additionalContext` lines in the existing coordinate-mode hooks; skill text only.
+- For a waiting pull request: a new `parked` lane status; keep `ready`.
+
+**Chose:** Local refs only: on the default branch behind `origin/<default>` both hooks read pointer and Next action from `git show origin/<default>:.ytstack/STATE.md` and say "N commit(s) behind" with `git merge --ff-only` (`yt_behind_origin`). The Stop reminder is said once per session and pointer (`stop-said` under the session home), never in coordinate mode, and a pointer whose `last_updated` is older than `YT_POINTER_STALE_DAYS` (3) days is lint W10 instead. In the SessionStart budget the Next action excerpt is no longer cut; the `using-ytstack` body yields after the other shrinkable blocks and before the standing lines, cut at a line with a pointer to its file. A manual handoff older than the automatic one is listed as older. In coordinate mode, advisory lines only: `hooks/pre-tool-use-agent` (now also on `Bash`) on an `Agent` without `isolation`, on `gh pr merge` and on `gh pr close`; `hooks/pre-compact` counts compactions beside the marker, SessionStart says "Compaction N of this coordinator: ... rotate now" and Stop repeats it once per compaction from the second; `hooks/post-tool-use-bash` notes `ytstack:lesson` for a failed run in `gh run list --branch <default>`. `coordinate` and `finish-lane` get a hard-gate sentence: never close, reopen to retrigger or delete the branch of a lane's pull request. `parked` is a held lane status for a pull request that waits open; the `open-prs` gate counts pull requests ready for review. Coordinate Step 5 starts every round with `ytstack-frontier check` and acts on each `stale:` line.
+
+**Reason:** A fetch in a hook is a network call under a 5-10 s budget and can hang; the stale checkout is visible from local refs, and the origin ref is what the person merged. A reminder nobody acts on after the first time is noise that trains the agent to ignore the hook; once per pointer keeps the signal, the lint keeps the old pointer visible at the next start without a loop. The Next action is what a session needs first; the directive's tail is a file read away. A deny would also stop a close or merge the person asked for, and the hooks cannot tell; a hint on the exact command makes the bypass visible (as #76 chose for briefs). `parked` keeps a waiting pull request distinguishable from a lane that is ready to merge, and drafts are no review load. The liveness check existed (#84) but ran only at rotation; the loop is where stalls happen.
+
+**How to apply:**
+- No hook fetches. `stop-said` is the only session-home file a non-coordinate session gets; everything else of #83 needs the coordinate marker.
+- Codex and Kimi: not covered by the hooks (Codex has ytstack `Bash` hooks only for the PR watch and none on its subagent tools; Kimi has no session id for the marker); the skill text carries the rules.
+- A new held status is added to `HELD` in `bin/ytstack-frontier`, to the held lists of `bin/ytstack-upkeep` and to the in-review count of `bin/ytstack-status`.
+
+**Supersedes:** None. Extends "2026-11-15: In coordinate mode the operating path is injected and checked by hooks that warn ..." with four more hints, and changes the SessionStart cap order of "2026-11-15: Standing entries end by `until` ..." (How to apply, third point): the Next action is no longer cut; the `using-ytstack` body yields before the standing lines, which stay the last block cut.
+
 ## 2026-11-15: The spec delta is the report's existing `Spec:` label, checked for its form (issue #75)
 
 **Context:** Lanes of a long coordinator run updated receipts and changelogs and never the area files their change made false. The brief listed the area files only as reading context, and the report's `Spec:` line accepted any text.
@@ -1527,3 +1549,19 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - `escalate:` narrows only the five; it cannot add new items. A project that wants more reserves it in the plan or a standing entry.
 
 **Supersedes:** None. Narrows "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files ...": `questions/` holds what a person decides by the list, not every open point.
+
+## 2026-11-15: The open-PR cap limits opening, never a merge; origin's STATE.md is read only when the checkout is strictly behind and unedited (review of PR #94)
+
+**Context:** The independent review of PR #94 found two flaws. With closing a lane's pull request forbidden, an `open-prs` gate on `merge` deadlocks: at the cap nothing merges, so the count never falls. And `yt_behind_origin` replaced a diverged or locally edited `STATE.md` with origin's copy, and gave an empty pointer in user scope.
+
+**Options considered:**
+- Cap: keep it a merge gate and exclude the PR being merged; or move it to opening and dispatching.
+- Behind: read origin's copy whenever behind; or only when it is safe.
+
+**Chose:** The cap counts pull requests ready for review and limits what is opened and dispatched, never a merge (merging lowers the count). `ytstack-finish-lane open-pr --max-open N` opens a draft at the cap and says so; `gates` and `merge` have no cap. The lane is `parked`; `gh pr ready <N>` under the cap, `gh pr ready <N> --undo` takes a parked one out of the count; nothing is closed. Origin's `STATE.md` is read only when HEAD is an ancestor of `origin/<default>`, the range changed `STATE.md` and the working tree's copy equals HEAD's; diverged or edited with an origin change gives "N ahead, M behind" and the local file, without `--ff-only`. Without origin's copy (user scope, untracked) the behind logic stays out entirely.
+
+**Reason:** A gate that only a forbidden action can open is a deadlock. Origin's copy is only a better truth than the local one when the local one is an unedited ancestor.
+
+**How to apply:** While the ready-for-review count is at the cap, the coordinator dispatches no new implement lane.
+
+**Supersedes:** Narrows "2026-11-15: Hooks read a stale checkout from origin ..." (the behind conditions; "the `open-prs` gate counts pull requests ready for review" becomes the cap on opening).

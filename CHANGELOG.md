@@ -91,6 +91,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hook warns when `LANES.md` lags the session's dispatches or the STATE
   pointer is behind, and holds the stop once when that came three sessions in
   a row.
+- **A coordinator stays on the path** (issue #83, Claude Code). In a
+  `coordinate` session the hooks add one line when an `Agent` dispatch has no
+  `isolation`, when a Bash command runs `gh pr merge` (use
+  `ytstack-finish-lane merge --at <reviewed head>`) or `gh pr close` (a cap
+  waits, CI reruns with `gh run rerun`), and when `gh run list --branch
+  <default>` shows a failed run (run `ytstack:lesson`). After a compaction the
+  SessionStart context says "Compaction N of this coordinator: ...
+  Step 12, rotate now"; from the second the Stop hook says it too. Hints,
+  never a deny.
+- **`parked` lane status**: `ytstack-frontier set <lane> --status parked`
+  holds a lane whose pull request waits open, for a cap or a person.
+- **A checkout behind origin is named** (issue #82): on the default branch
+  strictly behind `origin/<default>` (local refs, no fetch), when origin
+  changed `STATE.md` and the local one has no edit, SessionStart and Stop say
+  "N commit(s) behind" and read the pointer and Next action from origin's
+  `STATE.md`; a diverged or locally edited checkout keeps its own file and
+  SessionStart says "N ahead, M behind". STATE lint W10 names an active task whose `last_updated` is
+  more than three days old (`YT_POINTER_STALE_DAYS`).
 - **A checks inventory in `REVIEW.md`** (issue #75): a `## Checks` section
   lists the machine checks a reviewer can rely on, one line each
   (`<name> | file: <path> | guards: <what holds>`); `ytstack-risk check`
@@ -108,6 +126,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`skeletons [--write] [--slice]`, `pointer [--fix]`). `reconcile` 0.4.0.
 
 ### Changed
+
+- **The Stop reminder is said once** (issue #82): once per session and task
+  pointer, never in a `coordinate` session (a coordinator holds no task), and
+  not for a pointer W10 already names.
+- **The Next action is never cut from the SessionStart context** (issue #82):
+  near the 10,000-character cap the end of the `using-ytstack` body yields
+  instead, with a pointer to its file. A hand-written handoff older than the
+  newest automatic one is listed as older.
+- `coordinate` 0.7.2: a hard gate against closing, reopening to retrigger or
+  deleting the branch of a lane's pull request; Step 5 starts every round
+  with `ytstack-frontier check` and acts on each `stale:` line; Step 6: a cap
+  on open pull requests counts those ready for review and limits opening and
+  dispatching, never a merge; Step 12 names the compaction line. The
+  operating checklist has two more lines.
+- `finish-lane` 0.7.1: the same hard gate. The cap moved from `gates` and
+  `merge` to `ytstack-finish-lane open-pr --max-open`, which opens a draft at
+  the cap (drafts do not count); the lane is `parked` until `gh pr ready`.
+  `gates --max-open` is gone: a gate that only closing could open would
+  deadlock.
 
 - **PR watch stays on your own PRs and says less** (issue #85).
   `ytstack-pr-watch register --all-open` registers only open PRs you authored

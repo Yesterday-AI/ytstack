@@ -115,11 +115,68 @@ rm -f "$MAIN/.ytstack/PREFERENCES.md"
 run session-start "{\"session_id\":\"s1cut\",\"cwd\":$(jstr "$MAIN")}"
 CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
 has   "ss-main: long next action -> its start is kept"   "$CTX" "NEXTLINE0 xxx"
-has   "ss-main: long next action -> the cut is marked"   "$CTX" "(cut: rest in STATE.md)"
+# issue #82: the Next action comes before the using-ytstack body in the budget
+has   "ss-main: long next action -> kept whole"           "$CTX" "NEXTLINE4 xxx"
+lacks "ss-main: long next action -> not cut"              "$CTX" "(cut: rest in STATE.md)"
 lacks "ss-main: long next action -> not dropped"          "$CTX" "(omitted: see STATE.md"
+has   "ss-main: the using-ytstack body yields, with a pointer" "$CTX" "(cut for the 10,000-char cap: read the rest in $ROOT/skills/using-ytstack/SKILL.md)"
+has   "ss-main: and keeps its start"                      "$CTX" "# Using ytstack"
 lacks "ss-main: long next action -> YT_BIN yields first (issue #85)" "$CTX" "YT_BIN="
 if [ "${#CTX}" -le 9500 ]; then ok "ss-main: cut injection fits the guard (${#CTX})"; else bad "ss-main: cut injection fits the guard" "${#CTX}"; fi
 cp "$TMP/state.good" "$MAIN/.ytstack/STATE.md"
+
+# ---- 1c2. session-start: a manual handoff older than the automatic one (issue #82)
+cp "$MAIN/.ytstack/HANDOFF.md" "$TMP/handoff.good"
+printf -- '---\nkind: handoff\nevent: user-triggered\ntimestamp: 2020-01-01T00:00:00Z\n---\n# manual\n' > "$MAIN/.ytstack/HANDOFF.md"
+run session-start "{\"session_id\":\"s1ho\",\"cwd\":$(jstr "$MAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has   "ss-handoff: an older manual handoff is named older" "$CTX" "Older manual handoff: $MAIN/.ytstack/HANDOFF.md (event: user-triggered, 2020-01-01T00:00:00Z; older than the automatic one)"
+lacks "ss-handoff: and not as the current one" "$CTX" "
+Manual handoff:"
+printf -- '---\nkind: handoff\nevent: user-triggered\ntimestamp: 2099-01-01T00:00:00Z\n---\n# manual\n' > "$MAIN/.ytstack/HANDOFF.md"
+run session-start "{\"session_id\":\"s1ho2\",\"cwd\":$(jstr "$MAIN")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has   "ss-handoff: a newer manual handoff stays the manual handoff" "$CTX" "Manual handoff: $MAIN/.ytstack/HANDOFF.md"
+cp "$TMP/handoff.good" "$MAIN/.ytstack/HANDOFF.md"
+
+# ---- 1c3. session-start: a checkout behind origin reads STATE.md from origin (issue #82)
+BH="$TMP/behind"; BO="$TMP/behind-origin.git"; git init -q --bare "$BO"
+( mkdir -p "$BH/.ytstack" && cd "$BH" || exit 2; git init -q && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false
+  printf 'project: fixture\ncurrent_milestone: M001\nactive_slice: none\nactive_task: none\n\n## Next action\n\nOld plan.\n' > .ytstack/STATE.md
+  git add -A && git commit -qm seed && git branch -M main && git remote add origin "$BO" && git push -q -u origin main
+  printf 'project: fixture\ncurrent_milestone: M050\nactive_slice: S01\nactive_task: T02\n\n## Next action\n\nOrigin plan.\n' > .ytstack/STATE.md
+  git commit -qam next && git push -q origin main && git commit -q --allow-empty -m more && git push -q origin main
+  git checkout -q --detach HEAD~2 && git branch -q -f main HEAD && git checkout -q main ) >/dev/null 2>&1 || { echo FATAL behind fixture; exit 2; }
+run session-start "{\"session_id\":\"s1bh\",\"cwd\":$(jstr "$BH")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has   "ss-behind: says how far behind" "$CTX" "Checkout: 2 commit(s) behind origin/main (local refs, not fetched)"
+has   "ss-behind: the pointer from origin" "$CTX" "Current: M050 / S01 / T02"
+has   "ss-behind: the next action from origin" "$CTX" "Origin plan."
+lacks "ss-behind: not the stale local one" "$CTX" "Old plan."
+eq    "ss-behind: nothing written" "" "$(git -C "$BH" status --porcelain)"
+# PR #94 review: a local edit or a diverged checkout keeps the local STATE.md
+ssbh() { run session-start "{\"session_id\":\"$1\",\"cwd\":$(jstr "$BH")}"; CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null); }
+printf 'project: fixture\ncurrent_milestone: M070\nactive_slice: none\nactive_task: none\n\n## Next action\n\nUncommitted plan.\n' > "$BH/.ytstack/STATE.md"
+ssbh s1bh2
+has   "ss-behind: a local edit is read" "$CTX" "Uncommitted plan."
+lacks "ss-behind: not origin's" "$CTX" "Origin plan."
+has   "ss-behind: the line says origin changed it" "$CTX" "Checkout: 0 ahead, 2 behind origin/main (local refs, not fetched), and origin/main changed STATE.md"
+( cd "$BH" && git commit -qam "local plan" ) >/dev/null 2>&1
+ssbh s1bh3
+has   "ss-behind: diverged: the local file" "$CTX" "Uncommitted plan."
+has   "ss-behind: diverged: ahead and behind" "$CTX" "Checkout: 1 ahead, 2 behind origin/main"
+lacks "ss-behind: diverged: no --ff-only" "$CTX" "--ff-only"
+# origin moved without touching STATE.md: no line, the local file
+BU="$TMP/behind-unrel"; BUO="$TMP/behind-unrel.git"; git init -q --bare "$BUO"
+( mkdir -p "$BU/.ytstack" && cd "$BU" || exit 2; git init -q && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false
+  printf 'project: fixture\ncurrent_milestone: M001\nactive_slice: none\nactive_task: none\n\n## Next action\n\nOld plan.\n' > .ytstack/STATE.md
+  git add -A && git commit -qm seed && git branch -M main && git remote add origin "$BUO" && git push -q -u origin main
+  echo x > x && git add x && git commit -qm other && git push -q origin main && git checkout -q --detach HEAD~1 && git branch -q -f main HEAD && git checkout -q main
+  printf 'project: fixture\ncurrent_milestone: M060\nactive_slice: none\nactive_task: none\n\n## Next action\n\nNew local plan.\n' > .ytstack/STATE.md && git commit -qam advance ) >/dev/null 2>&1 || { echo FATAL unrel fixture; exit 2; }
+run session-start "{\"session_id\":\"s1bu\",\"cwd\":$(jstr "$BU")}"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+has   "ss-behind: origin did not touch STATE.md: the local plan" "$CTX" "New local plan."
+lacks "ss-behind: and no checkout line" "$CTX" "Checkout:"
 
 # ---- 1e2. session-start: standing entries in force, filtered by role (issue #74)
 SDIR="$MAIN/.ytstack/standing"; mkdir -p "$SDIR"

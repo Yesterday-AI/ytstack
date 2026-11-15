@@ -194,13 +194,13 @@ road "$P" M003 done "x S01" "- S02"
 road "$P" M004 active "x S01" "- S02" "- S03" "- S04"
 road "$P" M005 dropped "- S01"
 road "$P" M007 backlog "- S01" "- S02"
-printf -- '---\nupdated: 2026-11-15T10:00:00Z\n---\n\n# Lanes\n\n| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |\n|---|---|---|---|---|---|---|---|---|---|\n| M004-S02 | implement | merged | w 2026-11-15T08:00Z | - | - | 3 | abc1234 | 1 | - |\n| M004-S03 | implement | in-review | w 2026-11-15T09:00Z | - | - | 4 | - | 1 | - |\n' > "$P/.ytstack/LANES.md"
+printf -- '---\nupdated: 2026-11-15T10:00:00Z\n---\n\n# Lanes\n\n| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |\n|---|---|---|---|---|---|---|---|---|---|\n| M004-S02 | implement | merged | w 2026-11-15T08:00Z | - | - | 3 | abc1234 | 1 | - |\n| M004-S03 | implement | in-review | w 2026-11-15T09:00Z | - | - | 4 | - | 1 | - |\n| M004-S04 | implement | parked | w 2026-11-15T09:30Z | - | - | 5 | - | 1 | - |\n' > "$P/.ytstack/LANES.md"
 ph "$P"
 eq "--phases: exit 0" 0 "$EC"
 eq "one line per phase, dropped and backlog left out, done counts all, the total, the read line" \
 "M003${TAB}2/2 done (100%)${TAB}0 in review
-M004${TAB}2/4 done (50%)${TAB}1 in review
-total${TAB}4/6 done (66%)${TAB}1 in review" "$(printf '%s\n' "$OUT" | sed '$d')"
+M004${TAB}2/4 done (50%)${TAB}2 in review
+total${TAB}4/6 done (66%)${TAB}2 in review" "$(printf '%s\n' "$OUT" | sed '$d')"
 LOG=$(find "$TMP/data" -name denominator.log | head -1)
 like() { if printf '%s\n' "$3" | grep -E -- "$2" >/dev/null; then ok "$1"; else bad "$1" "no line matches /$2/ in: $3"; fi; }
 like "the last line: read time and the log" "^read [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z, log .*/repos/[0-9a-f]+/phases/denominator.log\$" "$OUT"

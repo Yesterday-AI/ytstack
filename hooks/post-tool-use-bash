@@ -30,6 +30,48 @@ trap '' PIPE
 
 yt_read_stdin
 
+# Coordinate mode (issue #83, the marker of the coordinate preamble): a
+# `gh run list --branch <default>` whose output shows a failed run is a red
+# main; one note per distinct set of failed runs: run ytstack:lesson. Only
+# the newest run of each workflow counts (gh lists newest first), in the
+# tab-separated output (status, conclusion, title, workflow, ...) or a JSON
+# array (conclusion, workflowName). With --repo/-R it must name origin.
+red_main() {
+  local sid="${YT_SESSION_ID:-}" sd br def out bad key jq_bin cmd
+  local re_list='(^|[;&|()[:space:]])gh[[:space:]]+run[[:space:]]+list([[:space:]]|$)'
+  local re_br='(--branch[=[:space:]]|-b[[:space:]]+)([A-Za-z0-9._/-]+)'
+  local re_repo='(--repo[=[:space:]]|-R[[:space:]]+)([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)' origin
+  case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  sd="$(yt_session_home)/$sid"
+  [ -f "$sd/coordinate" ] || return 0
+  cmd=$(printf '%s' "$YT_TOOL_CMD" | tr -d "\"'")
+  [[ "$cmd" =~ $re_list ]] || return 0
+  [[ "$cmd" =~ $re_br ]] || return 0
+  br="${BASH_REMATCH[2]}"
+  yt_git_ctx "${YT_CWD:-$PWD}"
+  def=$(yt_standing_default_ref "$YT_TOPLEVEL"); def="${def#refs/remotes/origin/}"; def="${def#refs/heads/}"
+  [ -n "$def" ] && [ "$br" = "$def" ] || return 0
+  # Another repository's main is not this one's: --repo/-R must name origin.
+  if [[ "$cmd" =~ $re_repo ]]; then
+    origin=$(git -C "$YT_TOPLEVEL" remote get-url origin 2>/dev/null | sed -E 's#\.git$##; s#.*[:/]([^/:]+/[^/]+)$#\1#' | tr '[:upper:]' '[:lower:]')
+    [ -n "$origin" ] && [ "$origin" = "$(printf '%s' "${BASH_REMATCH[2]}" | tr '[:upper:]' '[:lower:]')" ] || return 0
+  fi
+  jq_bin=$(yt_jq); [ -n "$jq_bin" ] || return 0
+  out=$(printf '%s' "$YT_STDIN" | "$jq_bin" -r '(.tool_response | objects | .stdout) // "" | tostring' 2>/dev/null)
+  # Only the newest run of each workflow counts (gh lists newest first).
+  case "$out" in
+    '['*) bad=$(printf '%s' "$out" | "$jq_bin" -c 'reduce .[] as $r ({}; ($r.workflowName // "") as $w | if has($w) then . else .[$w] = $r end) | .[] | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "startup_failure")' 2>/dev/null) ;;
+    *) bad=$(printf '%s\n' "$out" | awk -F '\t' 'NF >= 7 && !seen[$4]++ && $1 == "completed" && ($2 == "failure" || $2 == "timed_out" || $2 == "startup_failure")') ;;
+  esac
+  [ -n "$bad" ] || return 0
+  key=$(printf '%s' "$bad" | cksum | tr -d ' ')
+  grep -qxF -- "$key" "$sd/red-main-said" 2>/dev/null && return 0
+  printf '%s\n' "$key" >> "$sd/red-main-said" 2>/dev/null || return 0
+  printf '%s' "ytstack: gh run list shows a failed run on $def, the default branch. A red main blocks every lane that merges after it: invoke ytstack:lesson before the next dispatch (area ci, the check, the commit, the lane that merged it) and dispatch the repair as a lane (ytstack:coordinate Step 7, \"A red main\")." \
+    | "$jq_bin" -Rs '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: .}}' 2>/dev/null
+}
+red_main
+
 # Only successful calls (exit code absent or 0).
 case "${YT_TOOL_EXIT:-0}" in 0|"") ;; *) exit 0 ;; esac
 

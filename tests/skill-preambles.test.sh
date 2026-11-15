@@ -396,6 +396,19 @@ PEERS_END"
       rm -rf "$WT/.ytstack/signals"
       awk '/^\*\*Step 5 --/ { p = 1 } /^\*\*Step 6 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep_q -F -- '--lesson F###' \
         && ok "$s: Step 5 renders the brief of a lesson lane" || bad "$s: Step 5 renders the brief of a lesson lane"
+      # issue #83: every round starts with the liveness check; a cap waits, nothing is closed
+      awk '/^\*\*Step 5 --/ { p = 1 } /^\*\*Step 6 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" > "$TMP/step5.md"
+      for want in 'ytstack-frontier check' 'stale:' 'exit 2'; do
+        grep_q -F -- "$want" "$TMP/step5.md" && ok "$s: Step 5 runs $want" || bad "$s: Step 5 runs $want"
+      done
+      awk '/^\*\*Step 6 --/ { p = 1 } /^\*\*Step 7 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep_q -F -- '--status parked' \
+        && ok "$s: Step 6 parks a lane that waits for the cap" || bad "$s: Step 6 parks a lane that waits for the cap"
+      awk '/^<HARD-GATE>/ { p = 1 } /^<\/HARD-GATE>/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" > "$TMP/gate.md"
+      for want in 'close' 'gh run rerun' 'parked'; do
+        grep_q -F -- "$want" "$TMP/gate.md" && ok "$s: HARD-GATE names $want" || bad "$s: HARD-GATE names $want"
+      done
+      awk '/^\*\*Step 12 --/ { p = 1 } /^\*\*Step 13 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep_q -F 'Compaction N of this coordinator' \
+        && ok "$s: Step 12 names the compaction line" || bad "$s: Step 12 names the compaction line"
       awk '/^\*\*Step 8 --/ { p = 1 } /^\*\*Step 9 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep_q -F 'daily question' \
         && ok "$s: Step 8 asks a lesson proposal with the daily question" || bad "$s: Step 8 asks a lesson proposal with the daily question"
       awk '/^\*\*Step 11 --/ { p = 1 } /^\*\*Step 12 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep_q -F 'LESSONS' \
@@ -449,6 +462,12 @@ PY
         sed -n '1,40p' "$ROOT/bin/$tool" | grep_q -w -- "$sub" && ok "$s: $tool $sub is in its usage" || bad "$s: $tool $sub is in its usage"
       done < "$TMP/step7.cmds" ;;
     finish-lane)
+      # issue #83: never close or reopen a lane's pull request; the cap counts ready ones
+      awk '/^<HARD-GATE>/ { p = 1 } /^<\/HARD-GATE>/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" > "$TMP/gate.md"
+      for want in 'close' 'gh run rerun' 'parked'; do
+        grep_q -F -- "$want" "$TMP/gate.md" && ok "$s: HARD-GATE names $want" || bad "$s: HARD-GATE names $want"
+      done
+      grep_q -F 'ready for review' "$ROOT/skills/$s/SKILL.md" && ok "$s: the cap counts pull requests ready for review" || bad "$s: the cap counts pull requests ready for review"
       # who merges (M025): risk unless PREFERENCES says otherwise; a typo reads as human
       has "$s: no merge_by in PREFERENCES -> risk" "$OUT" "MERGE_BY: risk"
       printf 'merge_by: coordinater\n' > "$WT/.ytstack/PREFERENCES.md"

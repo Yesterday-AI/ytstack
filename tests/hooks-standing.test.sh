@@ -12,7 +12,8 @@
 #     - the next stop with the same flags -> no block (handled)
 #     - an entry in the working tree since the prompt -> no block
 #     - an entry only on a branch since the prompt -> no block
-#     - stop_hook_active -> silent; the task reminder still works beside a block
+#     - stop_hook_active -> silent; a block with an active task pointer comes
+#       without the task reminder (a coordinate session holds no task, #82)
 #
 # Run: /bin/bash tests/hooks-standing.test.sh   (exit 0 = all pass)
 
@@ -115,8 +116,8 @@ sleep 1; prompt "Never deploy without a watch."
 stop '{"stop_hook_active": true}'; eq "stop_hook_active -> silent" "" "$OUT"
 printf 'current_milestone: M042\nactive_slice: S03\nactive_task: T07\n' > "$P/.ytstack/STATE.md"
 stop
-eq "block and task reminder together: block" block "$(printf '%s' "$OUT" | "$JQ" -r '.decision // empty')"
-has "block and task reminder together: reminder" "$(printf '%s' "$OUT" | "$JQ" -r '.systemMessage // empty')" "M042-S03-T07"
+eq "block with an active task pointer: block" block "$(printf '%s' "$OUT" | "$JQ" -r '.decision // empty')"
+eq "a coordinate session holds no task: no task reminder (issue #82)" "" "$(printf '%s' "$OUT" | "$JQ" -r '.systemMessage // empty')"
 rm -f "$SD/coordinate"
 prompt "Never again."; stop
 hasnt "marker gone: no block" "$OUT" '"decision"'

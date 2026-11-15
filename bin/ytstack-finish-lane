@@ -6,13 +6,13 @@
 #   ytstack-finish-lane leftovers  [--scope PATH ...]
 #   ytstack-finish-lane commit     --message MSG [--scope PATH ...]
 #   ytstack-finish-lane push
-#   ytstack-finish-lane open-pr    --title T --body-file F [--base B]
+#   ytstack-finish-lane open-pr    --title T --body-file F [--base B] [--max-open N]
 #   ytstack-finish-lane wait-head  --pr N [--timeout SECONDS]
 #   ytstack-finish-lane body-check --pr N | --body-file F [--base B]
-#   ytstack-finish-lane gates      --pr N --reviewed-head SHA [--max-open N]
+#   ytstack-finish-lane gates      --pr N --reviewed-head SHA
 #                                  [--verdict-pattern ERE] [--allow-no-checks]
 #   ytstack-finish-lane merge      --pr N --at SHA [--method squash|merge|rebase]
-#                                  [--max-open N] [--verdict-pattern ERE] [--allow-no-checks]
+#                                  [--verdict-pattern ERE] [--allow-no-checks]
 #   ytstack-finish-lane route      --lane REF --base SHA --head SHA [--pr N] [--report F]
 #
 # All commands take -C DIR first: the lane's worktree (default: $PWD). A
@@ -38,6 +38,9 @@
 # push        the current branch to origin, with upstream. A rejected push
 #             stays rejected: the script has no way to overwrite the remote.
 # open-pr     opens the pull request for the current branch; prints its number.
+#             With --max-open N and N or more open pull requests ready for
+#             review (drafts do not count), it opens a draft and says so on
+#             stderr: the cap limits opening, never a merge.
 # wait-head   polls until the pull request's head on the host is the local
 #             tip (default 120 s). A review starts only after this passed.
 # body-check  backticked paths in the body (the pull request's, or a file's)
@@ -58,7 +61,6 @@
 #                          on the head must also match it (grep -E, per line)
 #               threads    no unresolved review thread
 #               mergeable  open and without a conflict
-#               open-prs   with --max-open: at most N open pull requests
 # merge       runs gates for --at SHA, merges only when all hold, pinned to
 #             that commit on the host's side, and reads the state back. No
 #             auto-merge, no administrator override. It does not read the
@@ -251,13 +253,14 @@ cmd_push() {
 }
 
 cmd_open_pr() {
-  local title="" body="" base="" out n
+  local title="" body="" base="" max="" out n count="" draft=no
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || bad_usage "$1 needs a value"
     case "$1" in
       --title) title="$2" ;;
       --body-file) body=$(abs "$2") ;;
       --base) base="$2" ;;
+      --max-open) max="$2"; is_int "$max" || bad_usage "--max-open is a number" ;;
       *) bad_usage "open-pr: unknown argument '$1'" ;;
     esac
     shift 2
@@ -265,11 +268,20 @@ cmd_open_pr() {
   [ -n "$title" ] && [ -n "$body" ] || bad_usage "open-pr needs --title and --body-file"
   [ -r "$body" ] && [ ! -d "$body" ] || bad_usage "cannot read body file '$body'"
   enter; need_gh; current_branch
+  # The cap (issue #83, PR #94 review) limits pull requests ready for review
+  # that are opened, never a merge: at the cap the new one opens as a draft.
+  if [ -n "$max" ]; then
+    count=$(gh pr list --state open --limit 1000 --json isDraft --jq '[.[] | select(.isDraft | not)] | length') \
+      && is_int "$count" || die "gh could not count the open pull requests for --max-open"
+    [ "$count" -lt "$max" ] || draft=yes
+  fi
   set -- pr create --title "$title" --body-file "$body" --head "$BRANCH"
   [ -z "$base" ] || set -- "$@" --base "$base"
+  [ "$draft" = no ] || set -- "$@" --draft
   out=$(gh "$@") || die "gh pr create failed for $BRANCH"
   n=$(printf '%s\n' "$out" | tail -1); n="${n##*/}"
   is_int "$n" || die "gh pr create did not end with a pull request URL: $out"
+  [ "$draft" = no ] || echo "draft: $count open for review, limit $max: opened as a draft; gh pr ready $n once the count is under the cap" >&2
   echo "$n"
 }
 
@@ -355,7 +367,7 @@ EOF
 }
 
 # ---- gates, merge --------------------------------------------------------------
-PR=""; SHA=""; MAX_OPEN=""; PATTERN=""; ALLOW_NONE=no; METHOD=squash; HOST_HEAD=""; GATES_HOLD=yes
+PR=""; SHA=""; PATTERN=""; ALLOW_NONE=no; METHOD=squash; HOST_HEAD=""; GATES_HOLD=yes
 
 # One answer per line, "key<TAB>value": the pull request with its checks and
 # the reviews on its head, read in one request so that they describe one commit.
@@ -380,9 +392,8 @@ VIEW_JQ='
 # shortcut: the first 100 review threads; more than that fails the gate instead
 # of being paged through.
 # shellcheck disable=SC2016
-THREADS_QUERY='query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequests(states: OPEN) { totalCount } pullRequest(number: $number) { reviewThreads(first: 100) { totalCount pageInfo { hasNextPage } nodes { isResolved } } } } }'
-THREADS_JQ='.data.repository | "open\t\(.pullRequests.totalCount)",
-  (.pullRequest.reviewThreads | "threads\t\([ .nodes[] | select(.isResolved | not) ] | length)\t\(.totalCount)\t\(.pageInfo.hasNextPage)")'
+THREADS_QUERY='query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $number) { reviewThreads(first: 100) { totalCount pageInfo { hasNextPage } nodes { isResolved } } } } }'
+THREADS_JQ='.data.repository | (.pullRequest.reviewThreads | "threads\t\([ .nodes[] | select(.isResolved | not) ] | length)\t\(.totalCount)\t\(.pageInfo.hasNextPage)")'
 
 gate() { # <ok|FAIL> <gate> <detail>
   if [ "$1" = ok ]; then printf 'ok   %s: %s\n' "$2" "$3"; else printf 'FAIL %s: %s\n' "$2" "$3"; GATES_HOLD=no; fi
@@ -397,7 +408,6 @@ gate_args() {
     case "$mode:$1" in
       *:--pr) PR="$2" ;;
       gates:--reviewed-head|merge:--at) SHA="$2" ;;
-      *:--max-open) MAX_OPEN="$2"; is_int "$MAX_OPEN" || bad_usage "--max-open is a number" ;;
       *:--verdict-pattern)
         PATTERN="$2"
         [ -n "$PATTERN" ] || bad_usage "--verdict-pattern is empty"
@@ -416,7 +426,7 @@ gate_args() {
 # read_gates: one read of the host, one line per gate, the time of the read.
 # Returns 0 when every gate holds; sets HOST_HEAD.
 read_gates() {
-  local v g t short checks n open state m reviews newest unresolved total more count
+  local v g t short checks n open state m reviews newest unresolved total more
   v=$(gh pr view "$PR" --json state,headRefOid,mergeable,statusCheckRollup,reviews --jq "$VIEW_JQ") \
     && g=$(gh api graphql -f query="$THREADS_QUERY" -F owner='{owner}' -F repo='{repo}' -F number="$PR" --jq "$THREADS_JQ")
   # shellcheck disable=SC2181
@@ -465,13 +475,6 @@ EOF
   elif [ "$m" = MERGEABLE ]; then gate ok mergeable "no conflict with the base"
   elif [ "$m" = CONFLICTING ]; then gate FAIL mergeable "conflict with the base"
   else gate FAIL mergeable "the host has not decided yet (${m:-no answer}); read again"
-  fi
-
-  if [ -n "$MAX_OPEN" ]; then
-    count=$(rows "$g" open)
-    if is_int "$count" && [ "$count" -le "$MAX_OPEN" ]; then gate ok open-prs "$count open, limit $MAX_OPEN"
-    else gate FAIL open-prs "${count:-unknown} open, limit $MAX_OPEN"
-    fi
   fi
 
   echo "read $t"

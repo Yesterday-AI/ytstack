@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ytstack PreCompact hook
 #
-# Fires before the host (Claude Code, or Codex via bin/ytstack-codex) compacts the conversation. Two jobs:
+# Fires before the host (Claude Code, or Codex via bin/ytstack-codex) compacts the conversation. Two jobs
+# (and in a coordinate session a third: count the compaction beside the marker):
 #
 #   1. Write an automatic handoff breadcrumb OUT OF TREE, per session and per
 #      worktree, and refresh the worktree's `latest-handoff` symlink.
@@ -22,6 +23,15 @@ trap '' PIPE
 . "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
 
 yt_read_stdin
+
+# A coordinate session (the marker the coordinate preamble writes) counts its
+# compactions beside the marker, wherever its cwd is: hooks/session-start and
+# hooks/stop say to rotate from them (issue #83, coordinate Step 12).
+case "${YT_SESSION_ID:-}" in ''|.|..|*[!A-Za-z0-9._-]*) ;; *)
+  _SD="$(yt_session_home)/$YT_SESSION_ID"
+  [ ! -f "$_SD/coordinate" ] || printf '%s\n' "$(date +%s)" >> "$_SD/compactions" 2>/dev/null ;;
+esac
+
 yt_git_ctx "${YT_CWD:-$PWD}"
 YT_DIR=$(yt_resolve_yt_dir)
 

@@ -263,7 +263,7 @@ run "$R" claim review-pr-12 --by rev-1 --kind review
 eq "a lane outside the milestone plan can be claimed" 0 "$EC"
 has "with its kind" "| review-pr-12 | review | claimed | rev-1 " "$(rowof "$R" review-pr-12)"
 
-for S in running reported in-review ready; do
+for S in running reported in-review ready parked; do
   run "$R" set M004-S02 --status "$S"
   run "$R" claim M004-S02 --by second-worker
   eq "status $S holds the lane" 1 "$EC"
@@ -324,7 +324,7 @@ run "$R" set M004-S02 --next "wait for the review"
 eq "one option changes one cell" "| M004-S02 | implement | reported | impl-M004-S02 2026-11-13T10:02Z | work/s02 | wt/s02 | 12 | d4e5f6a | 1 | wait for the review |" "$(rowof "$R" M004-S02)"
 run "$R" set M004-S02 --pr ""
 has "an empty value clears the cell" "| wt/s02 | - | d4e5f6a |" "$(rowof "$R" M004-S02)"
-for S in claimed running reported in-review ready merged blocked dropped; do
+for S in claimed running reported in-review ready parked merged blocked dropped; do
   run "$R" set M004-S02 --status "$S"
   eq "--status $S is accepted" "0 $S" "$EC $(rowof "$R" M004-S02 | awk -F' [|] ' '{ print $3 }')"
 done

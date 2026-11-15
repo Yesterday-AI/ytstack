@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ytstack PreToolUse hook on Agent and SendMessage (issue #76, part of #75):
+# ytstack PreToolUse hook on Agent, Task, SendMessage and Bash (issues #76, #83):
 # in a coordinate session (the marker of hooks/standing-prompt), a dispatch
 # whose prompt carries no rendered brief gets one line of additionalContext:
 # render it with ytstack-brief. It never blocks (no permissionDecision).
@@ -12,7 +12,13 @@
 # statusline-setup, any type naming search or explore) without a brief is
 # neither warned nor counted. Every other Agent call is a dispatch, appended
 # to <session dir>/dispatches (epoch per line) for the LANES.md staleness
-# check of hooks/stop.
+# check of hooks/stop. An Agent call that is no lookup and has no
+# `isolation` gets one more line: dispatch with isolation "worktree" (#83).
+#
+# Bash (issue #83): a `gh pr merge` by hand gets the ytstack-finish-lane merge
+# line, a `gh pr close` the line that a cap waits (parked) and CI reruns with
+# gh run rerun. Only a command counts (see gh_pr below); the words in quotes,
+# in a comment or in an echo do not.
 #
 # Files only. Fail open: any problem ends silent with exit 0.
 
@@ -27,14 +33,15 @@ case "$SID" in ''|.|..|*[!A-Za-z0-9._-]*) exit 0 ;; esac
 SD="$(yt_session_home)/$SID"
 [ -f "$SD/coordinate" ] || exit 0
 JQ=$(yt_jq); PY=$(yt_python)
-# field <name>: tool_name, text (prompt, message or content of tool_input) or
-# type (its subagent_type), through jq, else python3.
+# field <name>: tool_name, text (prompt, message or content of tool_input),
+# type (its subagent_type) or isolation, through jq, else python3.
 field() {
   if [ -n "$JQ" ]; then
     case "$1" in
       tool) printf '%s' "$YT_STDIN" | "$JQ" -r '.tool_name // ""' ;;
       text) printf '%s' "$YT_STDIN" | "$JQ" -r '(.tool_input // {}) | (.prompt // .message // .content // "") | if type == "string" then . else tostring end' ;;
       type) printf '%s' "$YT_STDIN" | "$JQ" -r '(.tool_input // {}) | (.subagent_type // "") | tostring' ;;
+      isolation) printf '%s' "$YT_STDIN" | "$JQ" -r '(.tool_input // {}) | (.isolation // "") | tostring' ;;
     esac
   elif [ -n "$PY" ]; then
     printf '%s' "$YT_STDIN" | "$PY" -I -c '
@@ -46,15 +53,55 @@ except Exception:
 ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
 if sys.argv[1] == "tool":
     v = d.get("tool_name", "")
-elif sys.argv[1] == "type":
-    v = ti.get("subagent_type", "")
+elif sys.argv[1] in ("type", "isolation"):
+    v = ti.get("subagent_type" if sys.argv[1] == "type" else "isolation", "")
 else:
     v = ti.get("prompt") or ti.get("message") or ti.get("content") or ""
 print(v if isinstance(v, str) else json.dumps(v), end="")' "$1"
   fi
 } 2>/dev/null
 [ -n "$JQ$PY" ] || exit 0
-TOOL=$(field tool); TEXT=$(field text); TYPE=$(field type)
+TOOL=$(field tool)
+ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+emit() { # emit <text>: the PreToolUse additionalContext, then exit 0
+  if [ -n "$JQ" ]; then
+    printf '%s' "$1" | "$JQ" -Rs '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: .}}' 2>/dev/null
+  else
+    printf '%s' "$1" | "$PY" -I -c 'import sys, json; print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": sys.stdin.read()}}))' 2>/dev/null
+  fi
+  exit 0
+}
+
+if [ "$TOOL" = Bash ]; then
+  # gh_pr: "merge" or "close" when a command (not quoted text, not a comment)
+  # runs gh pr merge|close: per line and per segment between ; & | ( ) && ||,
+  # after assignments, if/then/!/time, rtk/sudo/command/exec/nohup, env and
+  # xargs with their options, and gh's own -R/--repo.
+  GH_PR=$(printf '%s\n' "$YT_TOOL_CMD" | awk -v q="'" '
+    {
+      l = $0; gsub(q "[^" q "]*" q, " ", l); gsub(/"[^"]*"/, " ", l); sub(/(^|[ \t])#.*/, "", l)
+      n = split(l, seg, /[;&|()]/)
+      for (i = 1; i <= n; i++) {
+        m = split(seg[i], t, /[ \t]+/); j = 1
+        while (j <= m && t[j] == "") j++
+        while (j <= m && (t[j] ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || t[j] ~ /^(if|then|else|elif|do|while|until|!|time|rtk|sudo|command|exec|nohup)$/)) j++
+        if (t[j] == "env") { j++; while (j <= m && (t[j] ~ /=/ || t[j] ~ /^-/)) j++ }
+        if (t[j] == "xargs") { j++; while (j <= m && t[j] ~ /^-/) { if (t[j] ~ /^-[nPILsdE]$/) j++; j++ } }
+        if (t[j] != "gh") continue
+        j++
+        while (j <= m && t[j] ~ /^-/) { if (t[j] == "-R" || t[j] == "--repo") j++; j++ }
+        if (t[j] == "pr" && (t[j + 1] == "merge" || t[j + 1] == "close")) { print t[j + 1]; exit }
+      }
+    }' 2>/dev/null)
+  if [ "$GH_PR" = merge ]; then
+    emit "ytstack: in a coordinator session a merge goes through bash \"$ROOT/bin/ytstack-finish-lane\" -C <worktree> merge --pr <N> --at <reviewed head> --verdict-pattern '^Verdict: approved', after the route (ytstack:coordinate Step 6 and Step 7, ytstack:finish-lane Step 11). It reads the gates and merges at the reviewed commit only; gh pr merge by hand skips both."
+  elif [ "$GH_PR" = close ]; then
+    emit "ytstack: a coordinator never closes, reopens to retrigger or deletes the branch of a lane's pull request (HARD-GATE of ytstack:coordinate). A cap waits: bash \"$ROOT/bin/ytstack-frontier\" set <lane> --status parked --next \"wait for the cap\", the pull request stays open. A check reruns with gh run rerun <run id> --failed. Only the person closes open work; if the person asked to close this one, go on."
+  fi
+  exit 0
+fi
+
+TEXT=$(field text); TYPE=$(field type)
 BRIEF=no
 case "$TEXT" in "# Brief: "*|*"
 # Brief: "*) BRIEF=yes ;; esac
@@ -69,13 +116,12 @@ case "$TOOL" in
   SendMessage) [ "${#TEXT}" -gt 400 ] || exit 0 ;;
   *) exit 0 ;;
 esac
-[ "$BRIEF" = no ] || exit 0
-
-ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
-MSG="ytstack: this $TOOL prompt carries no rendered brief (no line \"# Brief: <ref> (<project>)\"). If it dispatches lane work, the path is: bash \"$ROOT/bin/ytstack-frontier\" claim <lane> --by <worker>, then bash \"$ROOT/bin/ytstack-brief\" render --task|--slice <ref> [--kind ...] as the prompt (ytstack:coordinate Step 5). A hand-written brief skips the scope, the verification, the spec areas and the standing instructions. A lookup that is no lane needs nothing."
-if [ -n "$JQ" ]; then
-  printf '%s' "$MSG" | "$JQ" -Rs '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: .}}' 2>/dev/null
-else
-  printf '%s' "$MSG" | "$PY" -I -c 'import sys, json; print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": sys.stdin.read()}}))' 2>/dev/null
+MSG=""
+[ "$BRIEF" = yes ] || MSG="ytstack: this $TOOL prompt carries no rendered brief (no line \"# Brief: <ref> (<project>)\"). If it dispatches lane work, the path is: bash \"$ROOT/bin/ytstack-frontier\" claim <lane> --by <worker>, then bash \"$ROOT/bin/ytstack-brief\" render --task|--slice <ref> [--kind ...] as the prompt (ytstack:coordinate Step 5). A hand-written brief skips the scope, the verification, the spec areas and the standing instructions. A lookup that is no lane needs nothing."
+# An Agent dispatch that is no lookup runs in a worktree of its own (#83).
+if [ "$TOOL" != SendMessage ] && [ "$LOOKUP" = no ] && [ -z "$(field isolation)" ]; then
+  MSG="${MSG:+$MSG
+}ytstack: dispatch lane work with isolation: \"worktree\" (ytstack:coordinate Step 5): without it the worker edits the checkout this session and the other lanes share."
 fi
+[ -z "$MSG" ] || emit "$MSG"
 exit 0

@@ -471,6 +471,8 @@ EOF
 #   W7 malformed `progress` block (one finding per problem)
 #   W8 STATE.md larger than YT_STATE_MAX_BYTES (it is a pointer, not a ledger)
 #   W9 earlier status paragraphs beside the current one (history)
+#   W10 an active task with last_updated older than YT_POINTER_STALE_DAYS
+#       (default 3) days: hooks/stop leaves such a pointer to this line
 # W8 and W9 are prompts for ytstack:reconcile; no skill stops on them.
 YT_STATE_MAX_BYTES=12000
 yt_state_lint() {
@@ -520,6 +522,14 @@ yt_state_lint() {
       _yt_warn "last_updated $lu is older than the newest commit touching .ytstack ($(git -C "$ytd" log -1 --format=%cI -- . 2>/dev/null))"
     fi
   fi
+  # W10 (issue #82): a task pointer that has not moved for days
+  local days="${YT_POINTER_STALE_DAYS:-3}"
+  case "$days" in ''|*[!0-9]*) days=3 ;; esac
+  case "$t" in T[0-9][0-9])
+    if [ -n "$lu_epoch" ] && [ $(( $(date +%s) - lu_epoch )) -gt $((days * 86400)) ]; then
+      _yt_warn "active task $m-$s-$t unchanged since last_updated $lu (more than $days days): close it (summarize-task), hand it off, or set active_task none"
+    fi ;;
+  esac
   # W6: current milestone done but a slice still active
   if [ "$m" != none ] && [ -f "$ytd/$m-ROADMAP.md" ] && [ "$s" != none ]; then
     if [ "$(sed -n 's/^status: *//p' "$ytd/$m-ROADMAP.md" | head -1)" = done ]; then
@@ -710,6 +720,39 @@ yt_standing_default_ref() {
   for r in $r refs/remotes/origin/main refs/remotes/origin/master refs/heads/main refs/heads/master; do
     git -C "$1" rev-parse -q --verify "$r" >/dev/null 2>&1 && { printf '%s' "$r"; return 0; }
   done
+  return 0
+}
+
+# yt_behind_origin <toplevel> <yt_dir> (issue #82): is the checkout on the
+# default branch and behind origin's copy of it? Local refs only, no fetch.
+# Only for a <yt_dir> inside the checkout whose STATE.md origin has; else
+# (user scope, an untracked STATE.md) everything stays 0 / "".
+#   YT_BEHIND_N, YT_AHEAD_N  commits HEAD..origin/<branch> and back
+#   YT_BEHIND_REF            origin/<branch>
+#   YT_BEHIND_CHANGED        yes when origin changed STATE.md since the
+#                            merge base, else no
+#   YT_BEHIND_STATE          origin's STATE.md, only when that is the one to
+#                            read: strictly behind (not diverged), origin
+#                            changed it, and the working tree's STATE.md is
+#                            HEAD's (no local edit)
+yt_behind_origin() {
+  local top="$1" ytd="${2:-}" r cur n a rel txt
+  YT_BEHIND_N=0; YT_AHEAD_N=0; YT_BEHIND_REF=""; YT_BEHIND_CHANGED=no; YT_BEHIND_STATE=""
+  case "$ytd" in "$top"/*) rel="${ytd#"$top"/}/STATE.md" ;; *) return 0 ;; esac
+  r=$(yt_standing_default_ref "$top")
+  case "$r" in refs/remotes/origin/*) ;; *) return 0 ;; esac
+  cur=$(git -C "$top" symbolic-ref -q --short HEAD 2>/dev/null)
+  [ -n "$cur" ] && [ "$cur" = "${r#refs/remotes/origin/}" ] || return 0
+  n=$(git -C "$top" rev-list --count "HEAD..$r" 2>/dev/null)
+  case "$n" in ''|0|*[!0-9]*) return 0 ;; esac
+  txt=$(git -C "$top" show "$r:$rel" 2>/dev/null)
+  [ -n "$txt" ] || return 0
+  a=$(git -C "$top" rev-list --count "$r..HEAD" 2>/dev/null); case "$a" in ''|*[!0-9]*) a=0 ;; esac
+  YT_BEHIND_N=$n; YT_AHEAD_N=$a; YT_BEHIND_REF="origin/$cur"
+  git -C "$top" diff --quiet "HEAD...$r" -- "$rel" 2>/dev/null || YT_BEHIND_CHANGED=yes
+  if [ "$a" -eq 0 ] && [ "$YT_BEHIND_CHANGED" = yes ] && git -C "$top" diff --quiet HEAD -- "$rel" 2>/dev/null; then
+    YT_BEHIND_STATE="$txt"
+  fi
   return 0
 }
 

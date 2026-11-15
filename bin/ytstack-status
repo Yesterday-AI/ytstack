@@ -28,8 +28,8 @@
 # review", tab separated, then one line per phase that left the report,
 # "total" and "read <UTC>, log <path>". Rows are the roadmap's slices; done
 # is a checked slice or a merged LANES.md row (every slice of a done or
-# shipped-informally milestone), in review a row in reported, in-review or
-# ready. A phase whose slices changed since the last text report says by how
+# shipped-informally milestone), in review a row in reported, in-review,
+# ready or parked. A phase whose slices changed since the last text report says by how
 # much and why (slices added, removed), a new phase says so, and the total
 # names both and the phases that joined or left, also when it stays equal.
 # Every change is appended to a log outside the tree,
@@ -72,7 +72,7 @@ phases() {
       /^- \[[ xX]\] S[0-9][0-9]( |$)/ {
         id = substr($0, 7, 3); s = lane[m "-" id]; t++; ids = ids (ids == "" ? "" : " ") id
         if (substr($0, 4, 1) != " " || s == "merged") d++
-        else if (s == "reported" || s == "in-review" || s == "ready") r++
+        else if (s == "reported" || s == "in-review" || s == "ready" || s == "parked") r++
       }
       # A closed milestone counts all its slices as done, ticked or not.
       END { if (st == "done" || st == "shipped-informally") { d = t; r = 0 }; printf "%s\t%s\t%d\t%d\t%d\t%s\n", m, st, d, r, t, ids }
