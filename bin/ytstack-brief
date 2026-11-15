@@ -21,6 +21,11 @@
 # else. Skeleton, fixed sentences and the report shape:
 # skills/spawn-milestone-team/brief-template.md.
 #
+# A task without a plan whose slice plan lists it as open (implement or
+# prepare): the brief makes the task plan the first deliverable, in the format
+# of skills/plan-task (Step 9), beside the slice plan, then the implementation
+# of what that plan names. A slice brief says the same per unplanned task.
+#
 # KIND says what the worker may do (docs/ux/coordinator-format.md, "Lane kinds"):
 #   implement  (default) change files inside the scope, commit with the prefix
 #   review     read only: review the range --base..--head, or the commit --head
@@ -42,7 +47,12 @@
 # check validates the eleven labels of the template's "Report" section: each
 # present at the start of a line and with a value, an exit code in every
 # "Checks run:" line, "Status:" one of complete, partial, blocked, and
-# consistent with "Blockers:" (blocked names one, complete has none). A report
+# consistent with "Blockers:" (blocked names one, complete has none), and
+# "Spec:" a spec delta: "none -- <reason>", or "<area>: <path>" per edited
+# section (a "(<section>)" may follow), several joined by ";", backticks
+# ignored; when DIR (default $PWD) has a technical spec, each path is the
+# area file or one of its sources. A task of a slice plan that has its own
+# "## Files" (granularity slice) is briefed from the slice plan. A report
 # that carries one of the four labels of a review (Risk, Severity, Reach,
 # Invariants touched) has to carry all four with a value, and "Risk:" is low,
 # normal or high. A report that carries "Lens:" or "Evidence:" has to carry
@@ -102,6 +112,40 @@ add() {
   x=$(section "$2" Verification);  B_VERIFICATION=$(para "$B_VERIFICATION" "$l${x:-$(snip no-verification)}")
   x=$(section "$2" "Spec impact"); B_SPEC_IMPACT=$(para "$B_SPEC_IMPACT" "$l${x:-$(snip no-spec-impact)}")
   x=$(section "$2" Gates);         [ -z "$x" ] || B_GATES=$(para "$B_GATES" "$l$x")
+}
+
+# fill <name> <plan to write>: the sentences of that name with the path of the
+# plan to write and the plan format filled in; a template without them ends
+# the render.
+fill() {
+  local s m='{{PLAN}}' f='{{PLAN_FORMAT}}' p
+  s=$(lens_snip "$1") || exit 1
+  p=$(rel "$2"); s=${s//"$m"/"$p"}
+  s=${s//"$f"/"$ROOT/skills/plan-task/SKILL.md"}
+  printf '%s' "$s"
+}
+
+# plan_first <slice plan> <task ref>: the brief of a task its slice plan lists
+# and no task plan describes (issue #76). Its first deliverable is the task
+# plan in the format of skills/plan-task (Step 9), then what that plan names.
+plan_first() {
+  local t=${2##*-} line to x
+  line=$(section "$1" Tasks | sed -n "s/^- \[ \] $t -- //p" | head -1)
+  [ -n "$line" ] || die "no plan for $2, and $(rel "$1") lists no open task $t"
+  to="$(dirname "$1")/$2-PLAN.md"
+  x=$(fill plan-first "$to") || exit 1
+  B_OUTCOME=$(para "$line" "${x//$NL/$NL$NL}")
+  B_FILES=$(fill plan-first-scope "$to") || exit 1
+  # The paths the task line names in backticks: a hint for the plan, and what
+  # the area lookup below reads (it takes the backticked tokens, so they keep
+  # their backticks here).
+  ALL_FILES=$(printf '%s\n' "$line" | grep -oE '`[^`]+`' | grep -E '[/.]' | sort -u)
+  if [ -n "$ALL_FILES" ]; then
+    x=$(lens_snip plan-first-hint) || exit 1
+    B_FILES=$(para "$B_FILES" "$x$NL$NL$(printf '%s\n' "$ALL_FILES" | sed 's/^/- /')")
+  fi
+  B_VERIFICATION=$(lens_snip plan-first-verification) || exit 1
+  B_SPEC_IMPACT=$(lens_snip plan-first-spec-impact) || exit 1
 }
 
 # ---- the lens of a review ------------------------------------------------------
@@ -232,6 +276,11 @@ cmd_render() {
     ref="lesson-$ref"
   else
     plan=$(find_plan "$ref")
+    # A task without a plan whose slice plan exists: the brief to plan it first.
+    # A review has nothing to review against without one.
+    if [ -z "$plan" ] && [ "$kind" = task ] && [ "$lane" != review ]; then
+      plan=$(find_plan "${ref%-T[0-9][0-9]}"); [ -z "$plan" ] || kind=unplanned
+    fi
     [ -n "$plan" ] || die "no plan for $ref: looked for ${YT_DIR:-$TOP/.ytstack}/$ref-PLAN.md"
   fi
 
@@ -250,6 +299,14 @@ cmd_render() {
   elif [ "$kind" = task ]; then
     B_OUTCOME=$(para "$(field "$plan" Summary)" "$(section "$plan" "What this does")")
     add "" "$plan"
+  elif [ "$kind" = unplanned ] && [ -n "$(section "$plan" Files)" ]; then
+    # granularity: slice -- the slice plan is the plan of each of its tasks
+    x=$(section "$plan" Tasks | sed -n "s/^- \[ \] ${ref##*-} -- //p" | head -1)
+    [ -n "$x" ] || die "no plan for $ref, and $(rel "$plan") lists no open task ${ref##*-}"
+    B_OUTCOME=$(para "$x" "$(para "$(field "$plan" Goal)" "$(section "$plan" "What this does")")")
+    add "" "$plan"
+  elif [ "$kind" = unplanned ]; then
+    plan_first "$plan" "$ref"
   else
     B_COMMIT_PREFIX="$ref-T##"
     B_OUTCOME=$(para "$(field "$plan" Goal)" "$(section "$plan" Tasks)")
@@ -264,7 +321,8 @@ cmd_render() {
       for t in $ids; do
         tp=$(find_plan "$ref-$t")
         if [ -n "$tp" ]; then add "$t" "$tp"; continue; fi
-        B_FILES=$(para "$B_FILES" "**$t** -- $(snip unplanned)")
+        x=$(fill unplanned "$(dirname "$plan")/$ref-$t-PLAN.md") || exit 1
+        B_FILES=$(para "$B_FILES" "**$t** -- $x")
         B_VERIFICATION=$(para "$B_VERIFICATION" "**$t** -- $(snip unplanned-part)")
         B_SPEC_IMPACT=$(para "$B_SPEC_IMPACT" "**$t** -- $(snip unplanned-part)")
       done
@@ -378,7 +436,8 @@ cmd_check() {
     [ -r "$1" ] && [ ! -d "$1" ] || { echo "ytstack-brief: cannot read report '$1'" >&2; return 64; }
     exec < "$1"
   fi
-  awk '
+  local out ec bad=0 a p f
+  out=$(awk '
     BEGIN {
       n = split("Task|Status|Outcome|Commits|Uncommitted|Checks run|Spec|Deviations|Blockers|Not checked|Next", L, "|")
       # What a review (four) and a lens (two) add after the eleven; read as
@@ -408,6 +467,21 @@ cmd_check() {
         else if (empty[i]) { print "empty: " L[i]; bad = 1 }
       }
       for (i = 1; i <= nc; i++) { print "Checks run: no exit code in \"" nocode[i] "\""; bad = 1 }
+      # The spec delta: "none -- <reason>", or one "<area>: <path>" entry per
+      # edited section, joined by ";".
+      sp = V["Spec"]
+      if (sp != "" && sp !~ /^[Nn]one -- [^ ]/) {
+        k = split(sp, E, ";"); fine = 1
+        for (i = 1; i <= k; i++) { e = E[i]; gsub(/`/, "", e); gsub(/^[ \t]+|[ \t]+$/, "", e); if (e !~ /^[a-z0-9][a-z0-9-]*: [^ <>|]+/) fine = 0 }
+        if (!fine) { print "Spec: \"" sp "\" is no spec delta: name each edited section as \"<area>: <file> (<section>)\", or write \"none -- <reason>\""; bad = 1 }
+        # Well formed: the caller checks the paths against the project spec.
+        else for (i = 1; i <= k; i++) {
+          e = E[i]; gsub(/`/, "", e); gsub(/^[ \t]+|[ \t]+$/, "", e)
+          # the path runs to the "(<section>)" at the end; it may hold spaces
+          p = substr(e, index(e, ": ") + 2); sub(/[ \t]*\([^()]*\)$/, "", p)
+          print "@entry " substr(e, 1, index(e, ": ") - 1) "\t" p
+        }
+      }
       s = V["Status"]; b = V["Blockers"]
       if (s != "" && s !~ /^(complete|partial|blocked)$/) { print "Status: \"" s "\" is not complete, partial or blocked"; bad = 1 }
       if (b != "") {
@@ -436,9 +510,31 @@ cmd_check() {
         if (e != "" && e != "none" && e !~ / \([0-9]+ images?\)$/) { print "Evidence: \"" e "\" is neither \"none\" nor \"<directory> (<n> images)\""; bad = 1 }
       }
       if (bad) exit 1
-      print "report ok"
     }
-  '
+  ')
+  ec=$?
+  printf '%s\n' "$out" | grep -v '^@entry ' | grep -v '^$'
+  [ "$ec" -eq 0 ] || return 1
+  # In a project with a technical spec, an edited section lies in the area
+  # file or in one of the sources it names.
+  if [ -d "$DIR" ]; then
+    . "$ROOT/hooks/lib/git-ctx.sh"
+    yt_git_ctx "$DIR"; yt_resolve_yt_dir >/dev/null; TOP="$YT_TOPLEVEL"
+    if [ -n "${YT_DIR:-}" ] && [ -f "$YT_DIR/spec/SPEC.md" ]; then
+      while IFS='	' read -r a p; do
+        [ -n "$a" ] || continue
+        f="$YT_DIR/spec/$a.md"
+        if [ ! -f "$f" ]; then echo "Spec: \"$a: $p\" names no area of this project ($(rel "$f") does not exist)"; bad=1; continue; fi
+        [ "$p" = "$(rel "$f")" ] && continue
+        yt_fm "$f" | awk -F'\t' -v p="$p" '$1 == "sources" && $2 == p { hit = 1 } END { exit !hit }' && continue
+        echo "Spec: \"$a: $p\" is neither $(rel "$f") nor one of its sources"; bad=1
+      done <<EOF
+$(printf '%s\n' "$out" | sed -n 's/^@entry //p')
+EOF
+    fi
+  fi
+  [ "$bad" -eq 0 ] || return 1
+  echo "report ok"
 }
 
 case "$CMD" in

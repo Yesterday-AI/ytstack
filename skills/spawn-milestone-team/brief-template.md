@@ -3,8 +3,15 @@
 <!-- What stands in for a part the plan does not have: -->
 <!-- no-verification: No verification command in the plan. Stop and report this as a blocker. -->
 <!-- no-spec-impact: not stated in the plan -->
-<!-- unplanned: not planned yet: run ytstack:plan-task first, or plan it yourself with exact files and a verification command before you write code -->
+<!-- unplanned: not planned yet: first write its plan `{{PLAN}}` in the format of `ytstack:plan-task` (Step 9 of `{{PLAN_FORMAT}}`: Files, What this does, Spec impact, Verification), commit it alone, then change the files it names -->
 <!-- unplanned-part: comes with its plan, see Scope -->
+<!-- A task without a plan, rendered with `--task` (implement or prepare): OUTCOME is the task line of the slice plan followed by the plan-first lines, FILES the plan-first-scope line and, when the task line names paths in backticks, the plan-first-hint line with those paths as a list. PLAN is the path of the plan to write, beside the slice plan; PLAN_FORMAT the path of skills/plan-task/SKILL.md. -->
+<!-- plan-first: This task has no plan yet. Your first deliverable is its plan: write `{{PLAN}}` in the format of `ytstack:plan-task` (Step 9 of `{{PLAN_FORMAT}}`): the frontmatter, `**Summary:**`, `## Files` with the exact paths, `## What this does`, `## Spec impact` (one line `- <area>: <section> -- <what changes>` per area the task changes, read from the area files under "Read for context", or `none -- <reason>`) and `## Verification` with one or two commands that run now. Then implement what the plan names, and nothing else. -->
+<!-- plan-first: The plan is part of the change: it goes into your first commit, alone, before any other file changes (a lane that commits nothing writes it first and lists it under `Uncommitted:`). Nobody else plans it for you; a task too big for one plan is a blocker, not two half plans. -->
+<!-- plan-first-scope: `{{PLAN}}` (the plan you write first), then the files that plan names under `## Files`. -->
+<!-- plan-first-hint: Named in the slice plan for this task: -->
+<!-- plan-first-verification: The command your plan names under `## Verification`. Run it before you report; a plan without one is a blocker. -->
+<!-- plan-first-spec-impact: What your plan names under `## Spec impact`. -->
 <!-- What the worker may do, per `--kind`: KIND is the kind-<kind> lines followed by the commit-<kind> line; COMMIT_RULE is the commit-<kind> line. RANGE is "the range `<base>..<head>`", without `--base` "the commit `<head>`". A review has no commit line and no Git section; its KIND ends with the round-review lines (the verdict and the class of the change, docs/ux/review-policy-format.md "Records"). -->
 <!-- kind-implement: Implement: change the files named under Scope and no others. -->
 <!-- commit-implement: Commit each task with the prefix `{{COMMIT_PREFIX}}:`. -->
@@ -72,6 +79,8 @@ The human gave these once and for all; they override the defaults of this brief.
 
 {{SPEC_IMPACT}}
 
+This is a duty, not background. When your change makes a sentence of an area file under "Read for context" false (behaviour, a contract, a guard, an error path, where it is implemented), edit that section in the same commits, or the source the area file names. The report's `Spec:` line names what you edited; an unchanged spec needs its reason there.
+
 ## Gates
 
 {{GATES}}
@@ -97,6 +106,7 @@ End with exactly this report: all eleven labels, in this order, each at the star
 - `Status:` is one of the three words and nothing else. `partial` and `blocked` are said there, never in a paragraph. `blocked` names what blocks under `Blockers:`; `complete` has `Blockers: none`.
 - One `Checks run:` line per check, with the raw exit code. No check ran: `Checks run: none -- <why>`.
 - `Uncommitted:` names every file you changed and did not commit.
+- `Spec:` is the spec delta: per section you edited `<area>: <file> (<section>)`, several joined by `;`, or `none -- <reason>` (restores the described behaviour, no behaviour or contract changes, not covered by an area). A bare `none` fails the check, and a change to behaviour, a contract or a guard without an edited section or a reason does not merge without a person.
 - Claim nothing that has no line here. What you did not run goes under `Not checked:`, not into `Outcome:`.
 
 ```
@@ -106,7 +116,7 @@ Outcome: <what holds now, one to three sentences, past tense>
 Commits: <git log --oneline <base>..HEAD, or "none">
 Uncommitted: <files changed and not committed, or "none">
 Checks run: <command> -- exit <n> at <short sha> in <environment>
-Spec: <area: file that changed | none -- reason>
+Spec: <area>: <file you edited> (<section>); ... | none -- <reason>
 Deviations: <or "none">
 Blockers: <or "none">
 Not checked: <what was not run or not looked at, and why; "nothing" only when that is true>

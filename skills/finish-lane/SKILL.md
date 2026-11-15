@@ -3,7 +3,7 @@ name: finish-lane
 description: "Takes a delegated lane from the worker's report to a pull request merged at the reviewed commit, with every gate read from the host. Use in the coordinating session when a lane reported and its work has to become a merged pull request, or when the user says finish the lane, land this lane, get this lane merged. Not for the session's own branch (finish-branch), not for a release (ship) and not for the worker of the lane."
 metadata:
   tier: task
-  version: 0.6.0
+  version: 0.7.0
 allowed-tools:
   - Bash
   - Read
@@ -41,7 +41,7 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 6. **Commission the review** -- a `review` lane pinned to that commit, in a fresh context; at most two rounds
 7. **Post the review, record head and round** -- on the pull request with the round line in its body, then `ytstack-frontier set`, then the same line in the lane's plan where you may write
 8. **Dispatch the required lenses** (only if `floor` names some) -- one fresh reviewer per lens with the lens brief, the lens lines posted as a review and in the lane's plan
-9. **Read the route** -- `route --pr`: `unattended`, or `person` with its reasons
+9. **Read the route** -- `route --pr --report`: `unattended`, or `person` with its reasons, the spec delta among them
 10. **Read the gates** -- `gates`; a failing gate is handled by what it is
 11. **Merge or hand over** -- `MERGE_BY: risk` with route `unattended`, or `coordinator`: `merge`; every other case: stop with the command and the reasons
 12. **Watch the release** (only after a merge, by anyone) -- `ytstack-watch release --commit <merge commit>`; the receipt goes into the report; `not arrived` and `unhealthy` go to the person at once
@@ -179,7 +179,7 @@ Read the standing instructions in full now, before anything is pushed: every fil
 
 ### Step 3: Read the report, commit leftovers
 
-Read the worker's report by its labels (`docs/ux/coordinator-format.md`, "The report"). A report that has not passed `bin/ytstack-brief check` yet is checked first. `Status:` other than `complete` is not finished work: the lane goes back to whoever dispatched it, with the `Blockers:` value.
+Read the worker's report by its labels (`docs/ux/coordinator-format.md`, "The report"). A report that has not passed `bin/ytstack-brief check` yet is checked first. `Status:` other than `complete` is not finished work: the lane goes back to whoever dispatched it, with the `Blockers:` value. Save the report as it came to a file outside the worktree, `{REPORT_FILE}`: Step 9 checks its `Spec:` line, the spec delta, against the diff.
 
 A `prepare` lane commits nothing by design, and any lane can leave files behind. If the lane's kind is `prepare` or `Uncommitted:` is not `none`:
 
@@ -337,10 +337,12 @@ Post the lens lines as one more review on the pull request (`gh pr review {N} --
 Whether a person has to look at this change is decided per change, from its risk (`docs/ux/review-policy-format.md`, "The route"). Run this in the checkout of this session, without `-C {WT}`: it reads `LANES.md` and the lane's plan here, and the reviews of the pull request on the host.
 
 ```bash
-"${CLAUDE_SKILL_DIR}/../../bin/ytstack-finish-lane" route --lane {REF} --base {BASE_SHA} --head {SHA} --pr {N}
+"${CLAUDE_SKILL_DIR}/../../bin/ytstack-finish-lane" route --lane {REF} --base {BASE_SHA} --head {SHA} --pr {N} --report {REPORT_FILE}
 ```
 
-On a host other than GitHub leave out `--pr`: the plan is then the only record. The first line says what it read: the lane, the worker of its row as the author, the plan, the pull request. Then come the lines of `bin/ytstack-risk route`: `route: unattended` or `route: person`, `class:`, `ceiling:`, `floor:`, `areas:`, `lenses:`, `round:` (where the round line came from: a review on the host, the plan, or none), and one `reason:` per condition that failed. Exit 0 means `unattended`. Everything else, an error included, means "not unattended". Keep the lines for the report.
+On a host other than GitHub leave out `--pr`: the plan is then the only record. The first line says what it read: the lane, the worker of its row as the author, the plan, the pull request. Then come the lines of `bin/ytstack-risk route`: `route: unattended` or `route: person`, `class:`, `ceiling:`, `floor:`, `areas:`, `lenses:`, `round:` (where the round line came from: a review on the host, the plan, or none), and one `reason:` per condition that failed. Last come the `spec:` lines of the spec delta. Exit 0 means `unattended`. Everything else, an error included, means "not unattended". Keep the lines for the report.
+
+**The spec delta.** With a technical spec, `route` checks itself that the spec moved with the change, also for a lane that never ran `summarize-task`: every plan of the lane that belongs to this range (changed in it, or with a commit of its task in it; a slice lane's task plans too) and states a `## Spec impact` is checked with `bin/ytstack-spec impact` on `{BASE_SHA}..{SHA}`. Then every area whose paths the diff touches, a moved file with both paths, needs its area file or one of its `sources` in the diff, a plan of the range that says `none -- <reason>` for the files of its commits, or `Spec: none -- <reason>` in the report. A path the report names as edited is the area file or a source of that area, and in the diff. Each gap is a `reason: spec -- ...` line and makes the route `person`. The repair is the worker's: edit the section the change made false, or state the reason in the report, and the fix round follows. You do not edit the area file and you do not write the reason for the worker. A `checks:` line says that the change edits CI while the project's checks inventory (`## Checks` in `REVIEW.md`) did not change: it goes to the person who merges, and back to the worker when the change adds a guard.
 
 `unattended` needs all of this: a floor from the diff that is not `person`; a newest round line that approves, is valid for `{SHA}`, states `risk` and `invariants: none`, and names a reviewer other than the lane's worker; a class within the ceiling (`auto_merge`) of every area the change touches; and for every required lens a newest line that says `pass`, comes from a reviewer other than the worker, is valid for `{SHA}` and, for a visual lens, names an evidence directory whose `MANIFEST` matches its images. A project that declared nothing gets `person` for every change, which is what `merge_by: human` does.
 
@@ -374,7 +376,7 @@ Who merges is the project's decision, not this session's. It is read from `MERGE
 | `risk` (the default) | `unattended` | You merge at `{SHA}`. The person gets one line in the report: what merged without them, at which class, under which ceiling, with which lenses. |
 | `risk` | `person`, or no answer | Stop. A person merges; they get the command and the `reason:` lines. |
 | `human` | any | Stop. A person merges; the route lines go along for information. |
-| `coordinator` | any | You merge at `{SHA}`. The route is printed in the report and not applied. |
+| `coordinator` | any | You merge at `{SHA}`. The route is printed in the report and not applied, except a `reason: spec` line: that lane goes back to the worker first. |
 
 A standing instruction that reserves the merge wins over every row: a person merges.
 
@@ -443,6 +445,7 @@ A review that requested changes, a lens that failed and a check that failed are 
 > - review: round {n}, {verdict}, at {SHA}; risk {the reviewer's class}, invariants {none | what it named}
 > - lenses: {per lens: verdict, reviewer, evidence directory | none required}
 > - route: {unattended | person}, class {class}, ceiling {ceiling}, round from {the `round:` value}; {the `reason:` lines, or "no reason"}
+> - spec: {the `spec:` lines of the route}
 > - gates: {the gate lines}, read {UTC time}
 > - merge: {merged unattended at <sha>: class <class>, ceiling <ceiling>, lenses <lenses> | merged at <sha> (merge_by: coordinator, the route said <route>) | ready, a person merges: <command>; because: <reasons> | not ready: <gate>}
 > - release: {the five receipt lines | watching <merge commit> since <UTC> | not watched: <why> | nothing merged}

@@ -77,6 +77,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "N commit(s) behind" and read the pointer and Next action from origin's
   `STATE.md`. STATE lint W10 names an active task whose `last_updated` is
   more than three days old (`YT_POINTER_STALE_DAYS`).
+- **A checks inventory in `REVIEW.md`** (issue #75): a `## Checks` section
+  lists the machine checks a reviewer can rely on, one line each
+  (`<name> | file: <path> | guards: <what holds>`); `ytstack-risk check`
+  validates it. A pull request that adds a guard adds its line there:
+  `code-review` 0.5.2 treats a guard without its line as a finding, and
+  `ytstack-finish-lane route` prints a `checks:` line when a change edits CI
+  and the inventory did not move.
+- **`reconcile` migrates a project that ran past `plan-task`** (issue #76):
+  two new classes, each asked once. Tasks of open slices without any task
+  plan get skeletons in `plan-task`'s format (Files from the task line or the
+  slice plan's `Own:` lines, Spec impact per area with `TODO` fields that
+  `ytstack-spec impact` rejects until filled, a `TODO` verification); a
+  `STATE.md` pointer on a closed or older milestone than the newest one in
+  progress is moved to it. The logic is the new `bin/ytstack-reconcile`
+  (`skeletons [--write] [--slice]`, `pointer [--fix]`). `reconcile` 0.4.0.
 
 ### Changed
 
@@ -92,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with `ytstack-frontier check` and acts on each `stale:` line; Step 6 parks
   a lane that waits for the cap; Step 12 names the compaction line. The
   operating checklist has two more lines.
-- `finish-lane` 0.6.0: the same hard gate; the `open-prs` gate of
+- `finish-lane` 0.7.0: the same hard gate; the `open-prs` gate of
   `ytstack-finish-lane` counts pull requests ready for review, drafts do not
   count, and a lane waiting for it is `parked`.
 
@@ -119,6 +134,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ytstack-standing list` runs an entry's `check` and `until-check` only when
   the entry is merged on the default branch, never from a pending or a
   remote-only branch; a timeout kills the command's whole process group.
+- **A worker's report carries a spec delta** (issue #75): the brief's
+  "Spec impact" section now says that a change which makes a sentence of an
+  area file false edits that section in the same commits, and the report's
+  `Spec:` line names the edited sections (`<area>: <file> (<section>)`) or
+  says `none -- <reason>`. `ytstack-brief check` fails a bare `none` and prose
+  without an area and a path. `spawn-milestone-team` 0.5.2 (brief template).
+- **A brief for an unplanned task plans it first** (issue #76): `ytstack-brief
+  render --task` on a task its slice plan lists without a task plan no longer
+  fails or says "plan it yourself"; the brief's first deliverable is the task
+  plan beside the slice plan, in `plan-task`'s format (Files, What this does,
+  Spec impact, Verification), committed alone, then the files it names. A
+  slice brief names the plan file to write per unplanned task. A task of a
+  slice plan with its own `## Files` (granularity slice) is briefed from that
+  slice plan instead.
+- **`finish-lane` checks the spec delta before a merge without you** (issue
+  #75): `ytstack-finish-lane route --report <file>` runs `ytstack-spec impact`
+  on the lane's commits for every plan of the range that states a "Spec
+  impact"; every area the diff touches (a moved file with both paths) needs
+  its area file or a source in the diff, a plan of the range that says
+  `none -- <reason>` for its own files, or `Spec: none -- <reason>` in the
+  worker's report. A path the report names must be the area file or one of
+  its sources (`ytstack-brief check` checks that too in a project with a
+  spec), and `impact` rejects a `TODO` placeholder. A gap prints
+  `reason: spec -- ...` and turns `unattended` into `person`, so a lane that
+  skipped `summarize-task` is still caught. `ytstack-spec impact` takes
+  `--head` to check a commit range that is not checked out. `finish-lane`
+  0.6.0.
 
 ### Fixed
 
