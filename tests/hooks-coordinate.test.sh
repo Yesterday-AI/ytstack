@@ -82,6 +82,10 @@ lookup semble-search; eq "a search agent: no warning" "" "$OUT"
 eq "lookups are not counted as dispatches" 3 "$(grep -c . "$SH/a1/dispatches")"
 lookup general-purpose; has "a general-purpose agent without a brief: warned" "$(ctx .hookSpecificOutput.additionalContext)" "no rendered brief"
 eq "and counted" 4 "$(grep -c . "$SH/a1/dispatches")"
+# without jq the hook reads and writes JSON through python3 (Codex finding on PR #87)
+OUT=$("$JQ" -n --arg c "$P" '{session_id: "a1", cwd: $c, hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: {prompt: "Implement it.", subagent_type: "general-purpose"}}' | YT_FORCE_NO_JQ=1 bash "$H/pre-tool-use-agent" 2>&1)
+has "no jq: still warned, through python3" "$(ctx .hookSpecificOutput.additionalContext)" "no rendered brief"
+eq "no jq: still counted" 5 "$(grep -c . "$SH/a1/dispatches")"
 
 echo "# session-start: operating checklist"
 WANT=$(awk '/<!-- operating-checklist:end -->/ { f = 0 } f { print } /<!-- operating-checklist:begin -->/ { f = 1 }' "$ROOT/docs/ux/coordinator-format.md")
