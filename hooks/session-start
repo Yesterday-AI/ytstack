@@ -400,6 +400,7 @@ if over; then
 
 $_NOTE"
   rebuild
+  _BODY_CUT=yes
 fi
 if over; then
   echo "[ytstack session-start] injection is $(( ${#FULL_CONTEXT} - _HOST_LEN )) chars; Claude Code caps additionalContext at 10,000. Shorten skills/using-ytstack/SKILL.md." >&2
@@ -407,10 +408,11 @@ fi
 
 # The running version's bin/ (issue #85), on every source: skills run bins as
 # "$YT_BIN/ytstack-<name>", not by a path from an earlier context. Only where it
-# still fits under the guard; it never costs the Next action (coordinate's
+# still fits under the guard and the using-ytstack body was not cut; it never
+# costs the Next action or the directive (coordinate's
 # preamble prints it too).
 _YT_BIN_LINE="YT_BIN=$(cd "$PLUGIN_ROOT/bin" 2>/dev/null && pwd -P || printf '%s' "$PLUGIN_ROOT/bin")"
-if [ $(( ${#FULL_CONTEXT} - _HOST_LEN + ${#_YT_BIN_LINE} + 2 )) -le 9500 ]; then
+if [ "${_BODY_CUT:-no}" = no ] && [ $(( ${#FULL_CONTEXT} - _HOST_LEN + ${#_YT_BIN_LINE} + 2 )) -le 9500 ]; then
   FULL_CONTEXT="$FULL_CONTEXT
 
 $_YT_BIN_LINE"
