@@ -248,7 +248,7 @@ The host ties a review to the commit it was submitted on (`commit_id` in the Git
 - The newest line counts, by the time its review was submitted. A line on the host wins over the plan; the plan's line counts only when no review carries one of that kind (the round, or the lens).
 - The line must name the commit the host tied its review to. A line that names another commit leaves open what was reviewed: `person`. Validity for the head is computed from the host's commit, with the rule above.
 - A review in the state `CHANGES_REQUESTED` does not approve, whatever its line says: `person`.
-- As on the host, a reviewer's newest review is the state that counts: when it requests changes, the change goes to a person, also when that review carries no record line and another reviewer's line approves. A later approving or commenting review of the same reviewer supersedes the request.
+- As on the host, a reviewer's newest review is the state that counts: when it requests changes, the change goes to a person, also when that review carries no record line and another reviewer's line approves. A later approving review of the same reviewer lifts the request; a comment-only review does not, as on GitHub.
 - A read that fails routes to a person: a newer review on the host may say what the plan does not.
 
 The round number still comes from the lane's `Round` cell (`LANES.md`) or from the plan; the host carries the record of each round, not the count.

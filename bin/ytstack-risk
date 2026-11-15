@@ -638,12 +638,15 @@ host_records() {
 }
 
 # requests_changes: "<review id> TAB <login>" for every reviewer whose newest
-# review requests changes, record line or not. As on the host, a reviewer's
-# newest review is the state that counts: a later approval or comment of the
-# same reviewer supersedes the request.
+# review requests changes, record line or not. As on the host, a later
+# approval of the same reviewer lifts the request; a comment-only review
+# does not (GitHub keeps the request until an approval or a dismissal).
 requests_changes() {
   awk -F'\t' '
-    $6 == "@review" { if (!($2 in st)) order[++n] = $2; st[$2] = $5; id[$2] = $3 }
+    $6 == "@review" {
+      if (!($2 in st)) { order[++n] = $2; st[$2] = $5; id[$2] = $3 }
+      else if ($5 != "COMMENTED") { st[$2] = $5; id[$2] = $3 }
+    }
     END { for (i = 1; i <= n; i++) if (st[order[i]] == "CHANGES_REQUESTED") print id[order[i]] "\t" order[i] }
   ' "$W/host"
 }

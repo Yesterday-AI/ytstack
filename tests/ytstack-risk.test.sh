@@ -622,7 +622,10 @@ hrt --pr 7 --author worker-1
 only_reason "an earlier review of another reviewer that still requests changes" "reason: review -- host review 10 by other-bot requests changes"
 reviews "10|$H|CHANGES_REQUESTED|OWNER|Please fix the login check first." "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD")")"
 hrt --pr 7 --author worker-1
-unattended "a later review of the same reviewer supersedes its request for changes"
+eq "a later comment of the same reviewer does not lift its request for changes" "route: person" "$(line route)"
+reviews "10|$H|CHANGES_REQUESTED|OWNER|Please fix the login check first." "11|$H|APPROVED|OWNER|$(body "$(round "$GOOD")")"
+hrt --pr 7 --author worker-1
+unattended "a later approval of the same reviewer lifts its request for changes"
 # author_association is wider than write access (a member of the organization,
 # a collaborator with read or triage): the reviewer of a record that is used
 # must be able to write (PR #66 review).
