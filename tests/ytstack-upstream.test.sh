@@ -168,5 +168,48 @@ mut "a Linux home path" '{ print } /^## Evidence/ { print "- ran /home/jane/acme
 good; printf 'Ran ~/work/x and /Users/Shared/x\n' >> "$TMP/good.md"
 run check "$TMP/good.md"; eq "check: ~/ and /Users/Shared pass" 0 "$EC"
 
+# addl <name> <line> <expected>: <line> under Evidence fails check and is named.
+# The line goes through the environment: awk -v would read its backslashes.
+addl() {
+  good; ADDL="$2" awk '{ print } /^## Evidence/ { print ENVIRON["ADDL"] }' "$TMP/good.md" > "$TMP/m.md"
+  run check "$TMP/m.md"
+  if [ "$EC" -eq 1 ]; then ok "check: $1 fails"; else bad "check: $1 fails" "exit $EC: $OUT"; fi
+  has "check: $1 is named" "$3" "$OUT"
+}
+# passl <name> <line>: <line> under Evidence keeps the draft ok.
+passl() {
+  good; ADDL="$2" awk '{ print } /^## Evidence/ { print ENVIRON["ADDL"] }' "$TMP/good.md" > "$TMP/m.md"
+  run check "$TMP/m.md"; eq "check: $1 passes" "0 draft ok" "$EC $(printf '%s\n' "$OUT" | sed -n 1p)"
+}
+HOMEP="a home directory path"
+addl "a macOS home path without a trailing slash" "- ran as /Users/jane" "$HOMEP"
+addl "a Linux home path before punctuation" "- the cache in /home/jane, then" "$HOMEP"
+addl "a Windows home path" '- ran C:\Users\jane\acme\x.exe' "$HOMEP"
+passl "a URL with /home/ in it" "- see https://example.com/home/intro"
+# Secrets of known shapes, built here so that no literal sits in this file.
+TOK="a token-looking string"
+R12=$(printf 'aB3%.0s' 1 2 3 4 5 6 7 8 9 10 11 12)
+addl "an AWS access key id" "- key AKIA$(printf 'IOSFODNN')7EXAMPLE was used" "$TOK"
+addl "an AWS secret key with slashes" "- secret wJalrXUtnFEMI/K7MDENG/$(printf 'bPxRfiCY')EXAMPLEKEY" "$TOK"
+addl "an aws_secret_access_key line" "- aws_secret_access_key = abc" "$TOK"
+addl "a GitHub token" "- GH_TOKEN=gh""p_$R12" "$TOK"
+addl "a fine-grained GitHub token" "- github""_pat_${R12}_$R12" "$TOK"
+addl "an API key with sk-" "- key sk""-proj-$R12" "$TOK"
+addl "a Slack token" "- xox""b-1234567890-$R12" "$TOK"
+addl "a PEM private key header" "- -----BEGIN RSA PRIV""ATE KEY-----" "$TOK"
+passl "a full commit SHA" "- fixed in 0123456789abcdef0123456789abcdef01234567"
+passl "a short commit SHA and a UUID" "- 9932ca7, run 123e4567-e89b-12d3-a456-426614174000"
+passl "a path without dots" "- src/components/UserProfile2/index/Section4Header"
+addl "a noreply address with a login" "- by 12345+jane@users.noreply.github.com" "an email address"
+
+echo "# check --title"
+good
+run check --title "PR watch misses skipped checks" "$TMP/good.md"; eq "check --title: a clean title passes" "0 draft ok" "$EC $OUT"
+run check --title "Reported by jane.doe@example.com" "$TMP/good.md"; eq "check --title: an email in the title fails" 1 "$EC"
+has "check --title: the title is named" "title: an email address" "$OUT"
+run check --title "Fails under /Users/jane" "$TMP/good.md"; has "check --title: a home path in the title" "title: a home directory path" "$OUT"
+run check "$TMP/good.md"; has "check without --title: says the title was not checked" "the title is not checked" "$OUT"
+run check --title "$TMP/good.md"; eq "check --title without a file: exit 64" 64 "$EC"
+
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

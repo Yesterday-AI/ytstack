@@ -43,8 +43,8 @@ ytstack-upstream mode                                   # mode: suggest | file |
 gh issue list --repo Yesterday-AI/ytstack --state all --search "<three to five words>" --limit 10
 ytstack-upstream draft --kind gap --title "<what, in a few words>"   # prints path: and title:
 # fill the draft with the Edit tool: every TODO line, the Searched: line
-ytstack-upstream check <path>                           # draft ok, or one line per problem
-gh issue create --repo Yesterday-AI/ytstack --title "<title>" --body-file <path>   # file mode
+ytstack-upstream check --title "<title>" <path>         # draft ok, or one line per problem
+gh issue create --repo Yesterday-AI/ytstack --title "<title>" --body-file <path>   # file mode, the checked title
 gh issue comment <n> --repo Yesterday-AI/ytstack --body-file <path>               # a match was found
 ```
 
@@ -54,7 +54,7 @@ In a skill, the script is `${CLAUDE_SKILL_DIR}/../../bin/ytstack-upstream`; else
 
 1. **Search first, comment instead of duplicating.** One `gh issue list --search` with the words of the observation, open and closed issues. A match that describes the same behaviour gets a comment with the new evidence; a closed match whose fix did not hold gets a comment that says so, with the version. The `Searched:` line records the query and the result. `check` fails without it.
 2. **One observation per issue, with evidence.** One behaviour, one issue. Evidence is what someone else can check: the ytstack version and host (the draft's footer), the commands with their output, counts ("7 pull requests, 41 `gh pr view` calls in one day"), not impressions. `check` fails on an empty "Evidence".
-3. **No personal or customer data, no secrets.** No names or email addresses of people, no customer or product names of the project, no tokens, no internal hostnames, no home directory paths (they name a person). Private repository names only when the person allowed it in this conversation. `check` fails on an email address, a token-looking string and a home directory path; the rest is the agent's reading. When in doubt, describe the shape ("a private monorepo with 40 packages") instead of the name.
+3. **No personal or customer data, no secrets.** No names or email addresses of people, no customer or product names of the project, no tokens, no internal hostnames, no home directory paths (they name a person). Private repository names only when the person allowed it in this conversation. `check` fails on an email address (a bare `noreply@` excepted; a `<id>+<login>@users.noreply.github.com` address names the person), a secret of a known shape (AWS key id and secret, GitHub, `sk-`, Slack, GitLab and npm tokens, a PEM private key) or a token-looking string (a commit SHA up to 40 hex digits is fine), and a home directory path (`/Users/<name>`, `/home/<name>`, `C:\Users\<name>`), in the body and in the `--title`; the title that is posted is the one that was checked. The rest is the agent's reading. When in doubt, describe the shape ("a private monorepo with 40 packages") instead of the name.
 4. **Tell the person the link in one line.** After posting: "Filed Yesterday-AI/ytstack#61: <title>" or "Commented on #54". Under `suggest`: the title, the draft path, the question. Nothing longer.
 5. **Without `gh` auth, `suggest`.** `mode` already says so. The draft is ready; the person files it or signs in.
 

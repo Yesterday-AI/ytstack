@@ -4,7 +4,7 @@
 #
 #   ytstack-upstream [-C DIR] mode
 #   ytstack-upstream draft --kind bug|gap|proposal|evidence --title TEXT [--host NAME] [--out FILE]
-#   ytstack-upstream check FILE
+#   ytstack-upstream check [--title TEXT] FILE
 #
 # mode   prints the effective setting of `upstream_feedback` for the project
 #        in DIR (default: $PWD): `mode:` suggest | file | off, `set:` the value
@@ -17,8 +17,10 @@
 #        the ytstack version, the host and the OS, and prints `path:` and
 #        `title:`. Default path under $TMPDIR, never in the checkout. Exit 0;
 #        1 the file exists; 64 usage. Never calls gh.
-# check  the rules a machine can see before anything is posted. Exit 0
-#        `draft ok`; 1 one line per problem (or a missing file); 64 usage.
+# check  the rules a machine can see before anything is posted, on every line
+#        of FILE and on the --title (the title that gets posted). Exit 0
+#        `draft ok` (and a `note:` without --title); 1 one line per problem
+#        (or a missing file); 64 usage.
 #
 # Nothing here posts. The agent posts with gh after check passed.
 
@@ -96,24 +98,83 @@ cmd_draft() {
 }
 
 cmd_check() {
-  local f="${1:-}"
+  local f="" title="" has_title=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --title) [ $# -ge 2 ] || { usage >&2; return 64; }; title=$2; has_title=1; shift 2 ;;
+      *) [ -z "$f" ] || { usage >&2; return 64; }; f=$1; shift ;;
+    esac
+  done
   [ -n "$f" ] || { usage >&2; return 64; }
   [ -f "$f" ] || { echo "ytstack-upstream: no file $f" >&2; return 1; }
-  awk '
+  YTUP_TITLE="$title" YTUP_HAS_TITLE="$has_title" awk '
     function problem(t) { bad++; print t }
-    # token(value): the rule of bin/ytstack-handover, unchanged. A run of 32 or
-    # more hex digits, or of 40 or more characters from [A-Za-z0-9+_=-] that
-    # mixes upper case, lower case and digits. Upgrade together with it.
-    function token(v,   i, c, run) {
+    function rep(c, n,   s) { s = ""; while (n-- > 0) s = s c; return s }
+    # tokenrun(run): a run of [A-Za-z0-9+/=_-] that looks like a secret. A
+    # commit SHA (hex of one case, up to 40 digits) is fine; longer hex is not.
+    # A run of 32 or more that mixes upper case, lower case and digits is,
+    # unless a part between / _ - is a lowercase word (a path, a slug).
+    function tokenrun(r,   n, k, S) {
+      if (length(r) < 32) return 0
+      if (r ~ /^[0-9a-f]+$/ || r ~ /^[0-9A-F]+$/) return length(r) > 40
+      if (r !~ /[A-Z]/ || r !~ /[a-z]/ || r !~ /[0-9]/) return 0
+      n = split(r, S, /[\/_-]/)
+      for (k = 1; k <= n; k++) if (S[k] ~ /^[a-z][a-z][a-z]+$/) return 0
+      return 1
+    }
+    # secret(v): a secret of a known shape, or a token-looking run. Stricter
+    # than the rule of bin/ytstack-handover: a draft is published.
+    function secret(v,   i, c, run) {
+      for (i = 1; i <= nshape; i++) if (v ~ SHAPE[i]) return 1
+      if (tolower(v) ~ /aws_secret_access_key[ \t"]*[=:]/) return 1
       v = v " "; run = ""
       for (i = 1; i <= length(v); i++) {
         c = substr(v, i, 1)
-        if (c ~ /[A-Za-z0-9+_=-]/) { run = run c; continue }
-        if (length(run) >= 32 && run !~ /[^0-9A-Fa-f]/) return 1
-        if (length(run) >= 40 && run ~ /[A-Z]/ && run ~ /[a-z]/ && run ~ /[0-9]/) return 1
+        if (c ~ /[A-Za-z0-9+\/=_-]/) { run = run c; continue }
+        if (tokenrun(run)) return 1
         run = ""
       }
       return 0
+    }
+    # homepath(v): /Users/<name> or /home/<name> (not after a host or ~),
+    # /Users/Shared excepted, or C:\Users\<name>.
+    function homepath(v,   rest, pre, name) {
+      rest = v
+      while (match(rest, /\/(Users|home)\/[A-Za-z0-9._-]+/)) {
+        pre = (RSTART > 1) ? substr(rest, RSTART - 1, 1) : ""
+        name = substr(rest, RSTART, RLENGTH); sub(/^\/(Users|home)\//, "", name)
+        if (pre !~ /[A-Za-z0-9._~-]/ && name != "Shared") return 1
+        rest = substr(rest, RSTART + RLENGTH)
+      }
+      return v ~ /[A-Za-z]:\\+Users\\+[A-Za-z0-9._-]/
+    }
+    # email(v): an address that names a person. Only a bare noreply@ or
+    # no-reply@ is none; <id>+<login>@users.noreply.github.com names the login.
+    function email(v,   addr) {
+      while (match(v, /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z][A-Za-z]+/)) {
+        addr = tolower(substr(v, RSTART, RLENGTH)); v = substr(v, RSTART + RLENGTH)
+        if (addr !~ /^no-?reply@/) return 1
+      }
+      return 0
+    }
+    # scan(v, at): the rules every line and the title follow.
+    function scan(v, at) {
+      if (email(v)) problem(at "an email address; leave people out, or ask the person")
+      if (secret(v)) problem(at "a token-looking string; never paste a secret")
+      if (homepath(v)) problem(at "a home directory path names a person; write ~/ or a relative path")
+    }
+    BEGIN {
+      # Known shapes (no {n}: not every awk has intervals). AWS key ids, GitHub,
+      # OpenAI/Anthropic style sk-, Slack, GitLab and npm tokens, PEM keys.
+      SHAPE[++nshape] = "(AKIA|ASIA)" rep("[0-9A-Z]", 16)
+      SHAPE[++nshape] = "gh[pousr]_" rep("[A-Za-z0-9]", 20)
+      SHAPE[++nshape] = "github_pat_" rep("[A-Za-z0-9_]", 20)
+      SHAPE[++nshape] = "(^|[^A-Za-z0-9])sk-" rep("[A-Za-z0-9_-]", 20)
+      SHAPE[++nshape] = "xox[abpors]-" rep("[A-Za-z0-9-]", 10)
+      SHAPE[++nshape] = "glpat-" rep("[A-Za-z0-9_-]", 20)
+      SHAPE[++nshape] = "npm_" rep("[A-Za-z0-9]", 30)
+      SHAPE[++nshape] = "-----BEGIN [A-Z ]*PRIVATE KEY-----"
+      if (ENVIRON["YTUP_HAS_TITLE"] != "") scan(ENVIRON["YTUP_TITLE"], "title: ")
     }
     { sub(/\r$/, ""); at = "line " NR ": " }
     /^## / { sec = substr($0, 4) }
@@ -121,20 +182,14 @@ cmd_check() {
     /^---/ { sec = "" }
     /TODO:/ { problem(at "still a TODO: write it, or delete the line") }
     /^Searched:/ { v = $0; sub(/^Searched:[ \t]*/, "", v); if (v != "" && v !~ /^TODO:/) searched = 1 }
-    {
-      line = $0
-      while (match(line, /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z][A-Za-z]+/)) {
-        addr = substr(line, RSTART, RLENGTH); line = substr(line, RSTART + RLENGTH)
-        if (addr !~ /noreply/) { problem(at "an email address; leave people out, or ask the person"); break }
-      }
-      if (token($0)) problem(at "a token-looking string; never paste a secret (a commit is written short)")
-      if ($0 ~ /\/(Users|home)\/[A-Za-z0-9._-]+\// && $0 !~ /\/Users\/Shared\//) problem(at "a home directory path names a person; write ~/ or a relative path")
-    }
+    { scan($0, at) }
     END {
       if (!evidence) problem("Evidence is empty: versions, commands, counts")
       if (!searched) problem("no Searched: line with the search for existing issues")
-      if (!bad) print "draft ok"
-      exit bad ? 1 : 0
+      if (bad) exit 1
+      print "draft ok"
+      if (ENVIRON["YTUP_HAS_TITLE"] == "") print "note: no --title: the title is not checked; pass the issue title with --title"
+      exit 0
     }' "$f"
 }
 

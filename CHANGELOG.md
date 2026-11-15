@@ -31,8 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bin/ytstack-upstream`: `mode` shows the setting in effect (`file` without a
   `gh` login falls back to `suggest`), `draft` writes an issue body with
   version and host, `check` blocks leftover placeholders, missing evidence, no
-  search for existing issues, email addresses, secrets and home-directory
-  paths. It never posts.
+  search for existing issues, email addresses (also a GitHub noreply address
+  with your login), secrets (AWS, GitHub, `sk-`, Slack, GitLab, npm, PEM keys
+  and token-looking strings; a commit SHA is fine) and home-directory paths
+  (`/Users/<name>`, `/home/<name>`, `C:\Users\<name>`), in the body and in the
+  title (`check --title`). It never posts.
 
 - **The risk route can trust the review on the pull request** (issue #54):
   `ytstack-risk route --pr N [--repo OWNER/NAME]` reads the review round and
