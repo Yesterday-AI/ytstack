@@ -28,7 +28,7 @@ sources:
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
   - docs/ux/external-plans.md
-verified_at: 8399866
+verified_at: 7ac1dfb
 ---
 
 # checks-and-evals
@@ -88,7 +88,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **The coordinator scripts** (formats and rules: `docs/ux/coordinator-format.md`; each has a suite of the same name under `tests/`)
 
 - `bin/ytstack-frontier`: `list` prints lane, state and detail per slice (done, claimed, blocked, ready); `claim` refuses a held lane and names the holder; `claim`, `set` and `release` change one row of `LANES.md` under a lock; `check` validates the file. The lock is the file `LANES.md.lock`, created by the shell under noclobber and not by `mkdir`, which is no lock on Ubuntu 26.04 (see `.ytstack/KNOWLEDGE.md`).
-- `bin/ytstack-plans` (`docs/ux/external-plans.md`): `scan` counts the work rows (task-list items, rows of tables with a status or checkbox column, nothing in a code fence) of `plans/`, `roadmap/` and their variants and prints one line per directory with `verdict=large` from 10 open rows and the answer recorded in `PREFERENCES.md`; exit 0 only for a large directory without an answer. `rows` prints `path:line`, state, id, section and title per row. It writes nothing; the mapping is the agent's (`reconcile`, `adopt-brownfield`).
+- `bin/ytstack-plans` (`docs/ux/external-plans.md`): `scan` counts the work rows (task-list items, rows of tables with a status or checkbox column, nothing in a code fence) of `plans/`, `roadmap/` and their variants and prints one line per directory with `verdict=large` from 10 open rows and the answer recorded in `PREFERENCES.md`; exit 0 only for a large directory without an answer. `rows` prints `path:line`, state, id, section and title per row; a relative PATH is read from where the command was started, else from the repository root, and the output names files relative to the root. It writes nothing; the mapping is the agent's (`reconcile`, `adopt-brownfield`).
 - `bin/ytstack-questions`: `new`, `list`, `next`, `ask` (once), `answer` (refused without text under "Answer"), `check`.
 - `bin/ytstack-finish-lane`: one step per call (`leftovers`, `commit`, `push`, `open-pr`, `wait-head`, `body-check`, `gates`, `merge`, `route`); every gate is read from GitHub through `gh` at the moment of the call, and `merge` passes the reviewed commit to the host so that a moved head cannot be merged. `route --lane <ref> [--pr <n>]` reads the lane's worker (the author) and plan from `LANES.md` and runs `bin/ytstack-risk route`; with `--pr` it passes the pull request on, and a lane without a plan file is routed from the host's reviews. `leftovers` and `commit` leave the evidence directory out. Its suite uses a stand-in for `gh` and a local bare remote.
 - `bin/ytstack-handover`: `new` copies `skills/handover-step/template.sh`; `check` is the static verification of a staged script (syntax, unchanged helper block, no raw command, a confirmation of its own before every mutation, no pipe into a shell). The helpers hold the same rule when the script runs: one yes carries one change.
