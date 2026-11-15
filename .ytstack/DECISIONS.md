@@ -1261,3 +1261,47 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - `bin/ytstack-risk` counts `M###-*` files in those directories as process records, like the flat ones.
 
 **Supersedes:** None. Narrows "Writing stays flat" of M018-S03 (`yt_find_artifacts`).
+
+## 2026-11-15: Progress per phase counts slices of each roadmap; the denominator log lives outside the tree (issue #81)
+
+**Context:** Issue #81: in a four-day coordinator run the human asked for "% per phase" 37 times and the coordinator drew 22 charts by hand. Rows were added to phases, their denominators grew and progress looked negative. The issue asked for a report per phase and a log of every denominator change with its cause, kept out of the repository.
+
+**Options considered:**
+- A) Rows are tasks (`M###-S##-PLAN.md` checkboxes).
+- B) Rows are the slices of each `M###-ROADMAP.md`, the unit a lane works on; done from the checkbox or a `merged` lane, in review from the lane status.
+- C) The log in `.ytstack/` (committed history).
+
+**Chose:** B, with the log under `<state base>/repos/<repo key>/phases/` (`snapshot`, `denominator.log`, the state base of `yt_state_base`). Each `--phases` run compares the slice ids per phase with the run before and appends one line per change (`first report`, `new phase`, `added S05`, `removed S04`, `phase left the report`). A `dropped` roadmap is left out.
+
+**Reason:** A coordinator dispatches and finishes slices, and `LANES.md` says which are in review; tasks have no lane status. The log records when a report saw a change, not a host fact or a plan state, and it changes on every report: committed, it would make every status a diff in the tree (the issue asked for it to stay out). Keying by the repository makes linked worktrees share one log.
+
+**How to apply:**
+- A status with progress uses `ytstack-status --phases`, never a count by hand (`coordinate` Step 11).
+- The change shown is the one since the previous `--phases` run; a second run without a change shows none.
+- Only the text report advances the snapshot and appends to the log; `--json` shows the same change and writes nothing, so drawing a chart never uses up the delta a status needs. Snapshot and log are written under a noclobber lock with a `mktemp` file (PR #90 review; refines the bullet above: "run" means text report).
+- A phase that joins or leaves is named on its own line, in the total and in the JSON (`joined`, `left`), also when the total stays equal. A `done` or `shipped-informally` milestone counts all its slices as done; a `backlog` roadmap is left out like a `dropped` one (PR #90 review).
+
+**Supersedes:** None.
+
+## 2026-11-15: Lane liveness is part of `ytstack-frontier check`, worktree cleanup only prints commands, peers are list lines in `LANES.md` (issue #84)
+
+**Context:** Issue #84: in a four-day coordinator run lanes finished and nobody took them over overnight, 97 worktrees piled up, and after a compaction the coordinator sent a production request to the wrong session of another repository. `ytstack-upkeep` flagged only lanes held for more than 24 hours.
+
+**Options considered:**
+- A) A new command for liveness; `check` stays a format check.
+- B) `check` reads a well-formed table for stalled lanes, one `stale:` line each, exit 2 (format problems keep exit 1 and skip the liveness read).
+- For "the worker reported": a report file the worker writes, or what the files already show.
+- For peers: a second Markdown table in `LANES.md`, or list lines.
+
+**Chose:** B with N = 60 minutes (`--minutes`). A running row counts as reported when its row carries a pull request or its worktree no longer exists; silent when its branch had no commit for N minutes, counted from the claim when that is newer. A ready lane is stale when nobody claimed it for N minutes since a check first saw it ready; that first sight is kept outside the tree in `<state base>/repos/<repo key>/frontier-ready`. `ytstack-upkeep --worktrees` prints the inventory and the `git worktree remove` / `git branch -D` commands for merged or closed, clean, unlocked, unheld ones and runs none. Peers are `- <role> | <repository> | <address> | <last contact UTC>` lines under `## Peers`, keyed by role and repository.
+
+**Reason:** The issue names `check`, and the coordinator already runs it at a rotation and upkeep on a schedule; a separate exit code keeps upkeep and every caller able to tell a broken table from a slow lane. Workers do not push and leave no report on disk, so a pull request in the row and a removed worktree are the local traces a report leaves; anything else would need the host. 60 minutes is longer than one task commit of a worker and much shorter than the overnight gap of the issue. The first sight of a ready lane changes with every check and is no plan state, so it stays out of the tree like the other volatile state. Printing commands instead of running them keeps a removal with a person (`rm -r` and branch deletion of parallel sessions are irreversible), and a locked worktree is a running session on Claude Code. Every existing reader of `LANES.md` (finish-lane, lane-retro, upkeep, the preambles) takes every line that starts with `|` as a lane row; list lines are invisible to all of them.
+
+**How to apply:**
+- A `stale:` line is a prompt to read the branch and set the row, or to dispatch; no script releases a lane by itself.
+- A message to a session of another repository goes to the address under `## Peers`, and `peer set` runs after each contact.
+- A new reader of `LANES.md` reads the lanes table only from lines that start with `|`.
+- A running row with a pull request is a fix round (`finish-lane`, `spawn-milestone-team`), not a report: it is checked for commits like any implement lane, counted from the first time a check sees that pull request and round in the row; a new round restarts the clock. The only "the worker ended" signal left is a worktree that no longer exists. A `review` or `prepare` lane commits nothing: it is stale after 3 x N minutes since its claim. First sights of ready lanes and fix rounds share `<state base>/repos/<repo key>/frontier-seen`, written under a noclobber lock with a `mktemp` file (PR #90 review; replaces "a pull request in its row" as a report signal and the file name `frontier-ready` above).
+- `--worktrees` prints no command for a branch with any open pull request, or whose local head is in neither the pull request head nor `origin/<branch>` (unpushed commits). It leaves out the worktree it runs in and reads `LANES.md` from the main checkout (PR #90 review).
+
+**Supersedes:** None. Extends "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)".

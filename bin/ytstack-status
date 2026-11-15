@@ -19,10 +19,169 @@
 # (the checkout's copy only when the slice plan does not exist there yet).
 # The task pointer is always the local one.
 # Local refs only: no network, no gh. See docs/statusline.md.
+#
+#   ytstack-status --phases [--json] [-C DIR]      (issue #81)
+#
+# Progress per phase for a status report or a chart, from the files of the
+# checkout of DIR (default: $PWD; no stdin): one line per milestone roadmap
+# that is not dropped or backlog, "<M###> <done>/<total> done (<n>%) <n> in
+# review", tab separated, then one line per phase that left the report,
+# "total" and "read <UTC>, log <path>". Rows are the roadmap's slices; done
+# is a checked slice or a merged LANES.md row (every slice of a done or
+# shipped-informally milestone), in review a row in reported, in-review or
+# ready. A phase whose slices changed since the last text report says by how
+# much and why (slices added, removed), a new phase says so, and the total
+# names both and the phases that joined or left, also when it stays equal.
+# Every change is appended to a log outside the tree,
+# <state base>/repos/<repo key>/phases/denominator.log (yt_state_base), so a
+# grown denominator is never read as lost progress. Only the text report
+# advances the snapshot and the log, under a lock; --json prints the same
+# change as one object and writes nothing, so a chart never uses it up.
+# Exit 0; 1 no .ytstack or no roadmap; 64 usage.
 
 set -uo pipefail
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hooks/lib/git-ctx.sh"
+
+# ---- --phases ------------------------------------------------------------------
+phases() {
+  local dir="$PWD" json="" f m st rows ph now snap log tmp n
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --json) json=1; shift ;;
+      -C) [ $# -ge 2 ] && [ -d "$2" ] || { echo "ytstack-status: -C needs a directory" >&2; return 64; }; dir=$2; shift 2 ;;
+      *) echo "usage: ytstack-status --phases [--json] [-C DIR]" >&2; return 64 ;;
+    esac
+  done
+  yt_git_ctx "$dir"; yt_resolve_yt_dir >/dev/null
+  [ -n "$YT_DIR" ] || { echo "ytstack-status: no .ytstack directory for $dir" >&2; return 1; }
+  # "<M###> <status> <done> <review> <total> <slice ids>" per roadmap, tab separated
+  rows=$(yt_find_artifacts "$YT_DIR" 'M[0-9][0-9][0-9]-ROADMAP.md' | sort | while IFS= read -r f; do
+    m=$(basename "$f" -ROADMAP.md)
+    st=$(sed -n 's/^status:[ ]*\([A-Za-z-]*\).*/\1/p' "$f" | head -1)
+    # (no `case` here: bash 3.2 misparses its ")" inside $( ))
+    [ "$st" != dropped ] && [ "$st" != backlog ] || continue
+    awk -v m="$m" -v st="${st:--}" -v lanes="$YT_DIR/LANES.md" '
+      BEGIN {
+        # the first table of LANES.md: lane -> status
+        while ((getline x < lanes) > 0) {
+          if (x !~ /^\|/) { if (n) break; continue }
+          if (++n > 2) { split(x, c, "|"); l = c[2]; s = c[4]; gsub(/^[ \t]+|[ \t]+$/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", s); lane[l] = s }
+        }
+      }
+      /^- \[[ xX]\] S[0-9][0-9]( |$)/ {
+        id = substr($0, 7, 3); s = lane[m "-" id]; t++; ids = ids (ids == "" ? "" : " ") id
+        if (substr($0, 4, 1) != " " || s == "merged") d++
+        else if (s == "reported" || s == "in-review" || s == "ready") r++
+      }
+      # A closed milestone counts all its slices as done, ticked or not.
+      END { if (st == "done" || st == "shipped-informally") { d = t; r = 0 }; printf "%s\t%s\t%d\t%d\t%d\t%s\n", m, st, d, r, t, ids }
+    ' "$f"
+  done)
+  [ -n "$rows" ] || { echo "ytstack-status: no milestone roadmap in $YT_DIR" >&2; return 1; }
+
+  # The last text report's slice ids per phase, and the log, outside the tree.
+  # Only a text report advances them, under a lock (noclobber, not mkdir:
+  # .ytstack/KNOWLEDGE.md); --json reads them and changes nothing.
+  ph="$(yt_state_base)/repos/${YT_REPO_KEY:-unknown}/phases"
+  snap="$ph/snapshot"; log="$ph/denominator.log"; tmp=""
+  now=$(date -u +%Y-%m-%dT%H:%MZ)
+  if [ -n "$json" ]; then
+    [ -d "$ph" ] || log="none (no text report yet)"
+  elif mkdir -p "$ph" 2>/dev/null; then
+    n=0
+    until ( set -o noclobber; : > "$ph/lock" ) 2>/dev/null; do
+      n=$((n + 1)); [ "$n" -le 50 ] || { echo "ytstack-status: $ph/lock exists: another report is writing. Remove the file if none is." >&2; return 1; }
+      sleep 0.1 2>/dev/null || sleep 1
+    done
+    PH_LOCK="$ph/lock"; trap 'rm -f "$PH_LOCK" ${PH_TMP:+"$PH_TMP"}' EXIT
+    tmp=$(mktemp "$snap.XXXXXX") || return 1
+    PH_TMP=$tmp
+  else
+    log="none (cannot write $ph)"
+  fi
+  printf '%s\n' "$rows" | awk -F'\t' -v now="$now" -v json="$json" -v snap="$snap" -v logf="$log" -v tmp="$tmp" '
+    BEGIN {
+      while ((getline x < snap) > 0) {
+        split(x, a, "\t"); old[a[1]] = a[2]; had[a[1]] = 1; oldn[a[1]] = (a[2] == "" ? 0 : split(a[2], y, " ")); any = 1
+      }
+    }
+    function pct(d, t) { return t ? int(d * 100 / t) : 0 }
+    function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
+    function jlist(s,   a, n, i, o) { n = split(s, a, " "); o = ""; for (i = 1; i <= n; i++) o = o (i > 1 ? "," : "") "\"" a[i] "\""; return "[" o "]" }
+    # diff old new: sets ADD and DEL (space separated ids)
+    function diff(o, w,   a, b, n, i, seen) {
+      ADD = ""; DEL = ""; split("", seen)
+      n = split(o, a, " "); for (i = 1; i <= n; i++) seen[a[i]] = 1
+      n = split(w, b, " "); for (i = 1; i <= n; i++) if (!(b[i] in seen)) ADD = ADD (ADD == "" ? "" : " ") b[i]; else delete seen[b[i]]
+      for (i = 1; i <= split(o, a, " "); i++) if (a[i] in seen) DEL = DEL (DEL == "" ? "" : " ") a[i]
+    }
+    function cause(   c) {
+      c = ""
+      if (ADD != "") { c = ADD; gsub(/ /, ", ", c); c = "added " c }
+      if (DEL != "") { d = DEL; gsub(/ /, ", ", d); c = c (c == "" ? "" : "; ") "removed " d }
+      return c
+    }
+    {
+      m = $1; n++; P[n] = m; S[m] = $2; D[m] = $3; R[m] = $4; T[m] = $5; I[m] = $6
+      td += $3; tr += $4; tt += $5; cur[m] = 1
+      if (!(m in had)) {
+        L = L now "\t" m "\t-\t" $5 "\t" (any ? "new phase" : "first report") "\n"
+        if (any) { J[m] = 1; joined = joined (joined == "" ? "" : " ") m }
+        next
+      }
+      tb += oldn[m]
+      if (old[m] != $6) {
+        diff(old[m], $6); c = cause()
+        if (c != "") { C[m] = c; B[m] = oldn[m]; L = L now "\t" m "\t" oldn[m] "\t" $5 "\t" c "\n" }
+      }
+    }
+    END {
+      # phases that left, in phase order
+      nl = 0
+      for (m in had) if (!(m in cur)) { G[++nl] = m }
+      for (i = 1; i <= nl; i++) for (k = i + 1; k <= nl; k++) if (G[k] < G[i]) { x = G[i]; G[i] = G[k]; G[k] = x }
+      for (i = 1; i <= nl; i++) { m = G[i]; L = L now "\t" m "\t" oldn[m] "\t-\tphase left the report\n"; tb += oldn[m]; left = left (left == "" ? "" : " ") m }
+      tchg = any && (tb != tt || joined != "" || left != "")
+      if (tmp != "") {
+        printf "%s", L >> logf
+        for (i = 1; i <= n; i++) printf "%s\t%s\n", P[i], I[P[i]] > tmp
+        close(tmp)
+      }
+      if (json) {
+        printf "{\"read\":\"%s\",\"log\":\"%s\",\"phases\":[", now, esc(logf)
+        for (i = 1; i <= n; i++) {
+          m = P[i]
+          printf "%s{\"phase\":\"%s\",\"status\":\"%s\",\"done\":%d,\"in_review\":%d,\"total\":%d,\"percent\":%d,\"change\":", (i > 1 ? "," : ""), m, S[m], D[m], R[m], T[m], pct(D[m], T[m])
+          if (m in J) printf "{\"before\":0,\"added\":%s,\"removed\":[],\"joined\":true}}", jlist(I[m])
+          else if (m in C) { diff(old[m], I[m]); printf "{\"before\":%d,\"added\":%s,\"removed\":%s,\"joined\":false}}", B[m], jlist(ADD), jlist(DEL) }
+          else printf "null}"
+        }
+        printf "],\"left\":["
+        for (i = 1; i <= nl; i++) printf "%s{\"phase\":\"%s\",\"before\":%d}", (i > 1 ? "," : ""), G[i], oldn[G[i]]
+        printf "],\"total\":{\"done\":%d,\"in_review\":%d,\"total\":%d,\"percent\":%d,\"change\":", td, tr, tt, pct(td, tt)
+        if (tchg) printf "{\"before\":%d,\"joined\":%s,\"left\":%s}}}\n", tb, jlist(joined), jlist(left)
+        else printf "null}}\n"
+        exit
+      }
+      for (i = 1; i <= n; i++) {
+        m = P[i]
+        printf "%s\t%d/%d done (%d%%)\t%d in review%s\n", m, D[m], T[m], pct(D[m], T[m]), R[m], (m in J ? "\tnew since the last report" : (m in C ? "\ttotal " B[m] " -> " T[m] " since the last report: " C[m] : ""))
+      }
+      for (i = 1; i <= nl; i++) printf "%s\tleft the report since the last report (was %d rows)\n", G[i], oldn[G[i]]
+      s = ""
+      if (tchg) {
+        s = "\ttotal " tb " -> " tt " since the last report"
+        if (joined != "") { x = joined; gsub(/ /, ", ", x); s = s "; joined " x }
+        if (left != "") { x = left; gsub(/ /, ", ", x); s = s "; left " x }
+      }
+      printf "total\t%d/%d done (%d%%)\t%d in review%s\n", td, tt, pct(td, tt), tr, s
+      printf "read %s, log %s\n", now, logf
+    }
+  ' || return 1
+  if [ -n "$tmp" ]; then mv "$tmp" "$snap" || return 1; PH_TMP=""; rm -f "$PH_LOCK"; fi
+}
+if [ "${1:-}" = --phases ]; then shift; phases "$@"; exit $?; fi
 
 COLOR=yes
 [ -z "${NO_COLOR:-}" ] || COLOR=no

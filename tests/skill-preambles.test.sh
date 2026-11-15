@@ -321,6 +321,16 @@ STANDING_ENTRIES_END"
       has "$s: bare fixture -> PR watch off" "$OUT" "PR_WATCH: off"
       has "$s: bare fixture -> no release section" "$OUT" "RELEASE: no"
       has "$s: bare fixture -> no signal sources" "$OUT" "SIGNALS: 0"
+      # peers in other repositories (issue #84): from LANES.md "## Peers"
+      has "$s: no peers" "$OUT" "PEERS_BEGIN
+no peers
+PEERS_END"
+      bash "$ROOT/bin/ytstack-frontier" -C "$WT" peer set prod --repo acme/cloud --address claude:abc --contact 2026-11-15T09:00Z >/dev/null 2>&1
+      run_pre "$P" "$WT"
+      has "$s: a peer is listed" "$OUT" "PEERS_BEGIN
+prod	acme/cloud	claude:abc	2026-11-15T09:00Z
+PEERS_END"
+      rm -f "$WT/.ytstack/LANES.md"
       # the open lessons (M032): counted in the status, a proposal for the daily question, a check for a lane
       has "$s: bare fixture -> no open lesson" "$OUT" "LESSONS: 0 open (0 proposals, 0 checks to build)"
       printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area ci --class flaky-order --title "Order" --target check:tests/order.sh >/dev/null

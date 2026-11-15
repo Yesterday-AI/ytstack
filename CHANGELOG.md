@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Progress per phase** (issue #81): `ytstack-status --phases [--json]`
+  prints done, in review and total per milestone and in total. When a total
+  changed since the last report, the line says by how much and why (slices
+  added or removed), and every change goes to a log outside the repository,
+  so a grown total no longer reads as negative progress. Phases that join or
+  leave are named, a done milestone counts all its slices, a backlog one is
+  left out. `coordinate` Step 11 points at it; the JSON is what a chart is
+  drawn from, and it does not use up the change: only the text report does.
+- **Lanes that stall are named** (issue #84): `ytstack-frontier check`
+  prints a `stale:` line (exit 2) for a running lane whose worktree is gone
+  or whose branch had no commit for 60 minutes (`--minutes`; a fix round
+  counts from its start), a review or prepare lane running three times as
+  long without a report, and a ready lane nobody claimed for 60 minutes. `ytstack-upkeep` lists them under `lanes`.
+- **Worktree cleanup** (issue #84): `ytstack-upkeep --worktrees` lists the
+  worktrees and branches with their pull request state, age and uncommitted
+  changes, and prints the `git worktree remove` / `git branch -D` commands
+  for the merged or closed ones. It runs none of them.
+- **Peers** (issue #84): sessions in other repositories go into a
+  `## Peers` section of `LANES.md` (`ytstack-frontier peer set` / `peer
+  list`); `coordinate` prints them in its preamble and its Rotation block,
+  so a compaction no longer loses which session is which.
+
 ### Changed
 
 - **PR watch stays on your own PRs and says less** (issue #85).

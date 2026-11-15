@@ -3,7 +3,7 @@ name: coordinate
 description: "Coordinator mode for the session that owns a plan and delegates all of it, writing no product code itself. Use when many lanes are in flight, when a plan has dozens of work packages, when a session with open lanes continues after a compaction or a resume, or when the user says coordinate this, run the plan, you are the coordinator, keep the lanes moving, where does each lane stand. Not for one milestone with a handful of independent slices (spawn-milestone-team) and not for doing a task yourself (plan-task)."
 metadata:
   tier: task
-  version: 0.5.1
+  version: 0.6.1
 allowed-tools:
   - Bash
   - Read
@@ -162,6 +162,13 @@ else
 fi
 echo "FRONTIER_END"
 
+# Sessions in other repositories (LANES.md "## Peers"): write only to these addresses, `ytstack-frontier peer set` after each contact.
+echo "PEERS_BEGIN"
+_PEERS=""
+[ -n "$_YT_DIR" ] && [ -f "$_FRONTIER" ] && _PEERS=$(bash "$_FRONTIER" peer list 2>/dev/null)
+echo "${_PEERS:-no peers}"
+echo "PEERS_END"
+
 echo "QUESTIONS_BEGIN"
 _QN=0
 for _f in "$_YT_DIR"/questions/Q[0-9]*.md; do
@@ -259,12 +266,12 @@ An `asked` question is never asked again: name it as waiting since its time. Whe
 
 **Step 10 -- Stop loops that do not converge.** A lane gets the rounds `ytstack:code-review` allows ("Bounded review": round 1 complete, round 2 the fix, no third). A lane that failed verification twice, or that would need a third review, is not dispatched again: `ytstack-frontier set <lane> --status blocked --next "Q### with the human"`, and a question file with the diagnosis (the plan never decided the point, two rules conflict, or each fix moved the problem).
 
-**Step 11 -- Report status.** Only when something changed that the human acts on (a question, a blocker, a finished plan, a lane that waits for his merge), or at a boundary he set in a standing instruction. No interim reports that work is running. A lane that merged without a person is no reason for a status of its own: the next status that is due names it in one line, with its class and the ceiling it merged under. A status is two to four full sentences with pointers (files, commits, pull request numbers). When the plan has gates it carries two numbers side by side, closed by work and accepted, as `ytstack:reassess-roadmap` counts them. When `LESSONS` counts open lessons, the status names them in one line as the preamble prints them (`lessons: 3 open (1 proposals, 2 checks to build)`), with the class of each one that counts 2 or more. Every host fact in it comes from a read made for this status and carries `read <UTC>`. When the human asks where the lanes stand, answer per lane instead: the status and the next action of its row as written, then the open and asked questions with what they block.
+**Step 11 -- Report status.** Only when something changed that the human acts on (a question, a blocker, a finished plan, a lane that waits for his merge), or at a boundary he set in a standing instruction. No interim reports that work is running. A lane that merged without a person is no reason for a status of its own: the next status that is due names it in one line, with its class and the ceiling it merged under. A status is two to four full sentences with pointers (files, commits, pull request numbers). When the plan has gates it carries two numbers side by side, closed by work and accepted, as `ytstack:reassess-roadmap` counts them. Progress per phase comes from `ytstack-status --phases` (`--json` for a chart), never from a count by hand: it names every change of a total since the last report with its cause, so a grown total is not read as lost progress. When `LESSONS` counts open lessons, the status names them in one line as the preamble prints them (`lessons: 3 open (1 proposals, 2 checks to build)`), with the class of each one that counts 2 or more. Every host fact in it comes from a read made for this status and carries `read <UTC>`. When the human asks where the lanes stand, answer per lane instead: the status and the next action of its row as written, then the open and asked questions with what they block.
 
 **Step 12 -- Rotate.** When the session has been compacted once (a summary stands where the conversation was, or `HANDOFF_AUTO` is from this session), or its context is large by the host's indicator, rotate now. Do not wait for a quiet moment, for workers to report or for checks to finish: under load there is none, and a second compaction costs more than a rotation. It is one step, done in this order without dispatching anything in between:
 
 1. Bring the rows' next actions up to date, run `ytstack-frontier check` and `ytstack-questions check`, and make sure the standing instructions hold every instruction given so far.
-2. Write `$_YT_DIR/HANDOFF.md` yourself in the format of `ytstack:handoff-session` (its Step 7), without its questions: the answers are in the files, and the handoff points at them. Its "In-flight work" carries the "Rotation" block of `docs/ux/coordinator-format.md`: `PR watch session:` with this session's id as the PR watch stores it (`echo "${CODEX_THREAD_ID:-claude:$CLAUDE_CODE_SESSION_ID}"`; `none` when `PR_WATCH` is `off`), `Background watches:` with the command of every `ytstack-watch` that runs in this session, and under `Running workers:` one line per worker that has not reported: lane, name, address (what the host gave you to reach it: the agent's id or name in Claude Code, another host's process id and log file), worktree, branch, dispatch time. Its "Next action": start `ytstack:coordinate` in a fresh session; its Step 3 runs `ytstack-pr-watch handover --from <PR watch session>`.
+2. Write `$_YT_DIR/HANDOFF.md` yourself in the format of `ytstack:handoff-session` (its Step 7), without its questions: the answers are in the files, and the handoff points at them. Its "In-flight work" carries the "Rotation" block of `docs/ux/coordinator-format.md`: `PR watch session:` with this session's id as the PR watch stores it (`echo "${CODEX_THREAD_ID:-claude:$CLAUDE_CODE_SESSION_ID}"`; `none` when `PR_WATCH` is `off`), `Background watches:` with the command of every `ytstack-watch` that runs in this session, and under `Running workers:` one line per worker that has not reported: lane, name, address (what the host gave you to reach it: the agent's id or name in Claude Code, another host's process id and log file), worktree, branch, dispatch time, and under `Peers:` the lines between `PEERS_BEGIN` and `PEERS_END` (`ytstack-frontier peer list`), so the successor writes to the right session of another repository. Its "Next action": start `ytstack:coordinate` in a fresh session; its Step 3 runs `ytstack-pr-watch handover --from <PR watch session>`.
 3. Tell the user in one line: start a fresh session with `ytstack:coordinate`, and leave this one open until the workers listed in the handoff have reported (a closed session ends its background workers on most hosts).
 4. From then on this session is a relay and nothing else. When one of its workers reports: `ytstack-brief check`, `ytstack-frontier set <lane> --status reported --next "<the report's Next line>"`, and append the report's labelled lines with the UTC time under `## Reports after the rotation` at the end of `HANDOFF.md`. It dispatches nothing, merges nothing, asks nothing and acts on no watch line or PR watch notice; the PR watch delivers to the successor after the handover anyway. When the last listed worker has reported, it says so in one line: the session can be closed.
 
