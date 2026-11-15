@@ -46,7 +46,9 @@
 #         With --pr N the records come from the host first: one `gh api` read
 #         of the pull request's reviews (repository: --repo, or what gh
 #         resolves from the checkout). A review counts when it is submitted,
-#         not dismissed and by an owner, member or collaborator; its body
+#         not dismissed and by an owner, member or collaborator who can
+#         write (one more `gh api` read of the permission per reviewer whose
+#         line is used: admin, maintain or write); its body
 #         lines "- Round N: ..." and "- Lens <name>: ..." are records, newest
 #         review last. The newest such line counts; the plan only when no
 #         review has one (--plan is then optional). A host line must name the
@@ -682,6 +684,29 @@ EOF
   [ -z "$REC" ] || REC_FROM=plan
 }
 
+# host_trust <subject>: the reviewer of the picked host record can write to
+# the repository. author_association is wider: MEMBER is any member of the
+# organization, COLLABORATOR includes read and triage. One read per reviewer
+# (cached in $W/perm); a read that fails routes to a person.
+host_trust() {
+  local repo="$REPO" p err
+  [ -n "$repo" ] || repo='{owner}/{repo}'
+  p=$(awk -F'\t' -v l="$REC_LOGIN" '$1 == l { print $2; exit }' "$W/perm" 2>/dev/null)
+  if [ -z "$p" ]; then
+    if p=$(cd "$TOP" && gh api "repos/$repo/collaborators/$REC_LOGIN/permission" --jq .permission 2> "$W/perm.err"); then
+      p=${p:-none}
+    else
+      err=$(grep . "$W/perm.err" | head -1); p="!${err:-gh failed without a message}"
+    fi
+    printf '%s\t%s\n' "$REC_LOGIN" "$p" >> "$W/perm"
+  fi
+  case "$p" in
+    admin|maintain|write) ;;
+    "!"*) note route "$1" "host review $REC_ID by $REC_LOGIN: the permission of $REC_LOGIN could not be read: ${p#!}" ;;
+    *) note route "$1" "host review $REC_ID by $REC_LOGIN: $REC_LOGIN has '$p' access to the repository, not write" ;;
+  esac
+}
+
 # host_check <subject> <commit the line names>: a record from the host is
 # taken for the commit the host tied the review to. A line that names another
 # one leaves open what was reviewed; a review that requests changes on the
@@ -689,6 +714,7 @@ EOF
 host_check() {
   [ "$REC_FROM" = host ] || return 0
   [ "$REC_STATE" != CHANGES_REQUESTED ] || note route "$1" "host review $REC_ID requests changes"
+  host_trust "$1"
   case "$REC_COMMIT" in
     "$2"*) [ "${#2}" -ge 7 ] && return 0 ;;
   esac

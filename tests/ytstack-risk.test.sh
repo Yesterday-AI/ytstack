@@ -544,6 +544,13 @@ case "${1:-} ${2:-}" in
     [ ! -f "$GH_FIX/reviews.fail" ] || { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
     [ -f "$GH_FIX/reviews.json" ] || { echo "fake gh: no fixture" >&2; exit 1; }
     if [ -n "$jqf" ]; then jq -r "$jqf" "$GH_FIX/reviews.json"; else cat "$GH_FIX/reviews.json"; fi ;;
+  "api repos/"*/collaborators/*/permission)
+    # The permission of a login: $GH_FIX/perm-<login> (default write);
+    # $GH_FIX/perm.fail makes the read fail.
+    [ ! -f "$GH_FIX/perm.fail" ] || { echo "HTTP 403: Resource not accessible" >&2; exit 1; }
+    login=${2%/permission}; login=${login##*/}
+    p=write; [ ! -f "$GH_FIX/perm-$login" ] || p=$(cat "$GH_FIX/perm-$login")
+    if [ -n "$jqf" ]; then jq -nr --arg p "$p" "{permission: \$p, role_name: \$p} | $jqf"; else printf '{"permission":"%s"}\n' "$p"; fi ;;
   *) echo "fake gh: unexpected call: $*" >&2; exit 1 ;;
 esac
 GH
@@ -616,6 +623,20 @@ only_reason "an earlier review of another reviewer that still requests changes" 
 reviews "10|$H|CHANGES_REQUESTED|OWNER|Please fix the login check first." "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD")")"
 hrt --pr 7 --author worker-1
 unattended "a later review of the same reviewer supersedes its request for changes"
+# author_association is wider than write access (a member of the organization,
+# a collaborator with read or triage): the reviewer of a record that is used
+# must be able to write (PR #66 review).
+reviews "11|$H|COMMENTED|MEMBER|$(body "$(round "$GOOD")")"
+: > "$GH_FIX/log"; hrt --pr 7 --author worker-1
+unattended "a reviewer with write access"
+eq "one read of the reviewer's permission" 1 "$(grep -c '^api repos/{owner}/{repo}/collaborators/reviewer-bot/permission' "$GH_FIX/log")"
+echo read > "$GH_FIX/perm-reviewer-bot"; hrt --pr 7 --author worker-1
+only_reason "a member with read access only" "reason: review -- host review 11 by reviewer-bot: reviewer-bot has 'read' access to the repository, not write"
+echo maintain > "$GH_FIX/perm-reviewer-bot"; hrt --pr 7 --author worker-1
+unattended "a reviewer who maintains the repository"
+rm -f "$GH_FIX/perm-reviewer-bot"; touch "$GH_FIX/perm.fail"; hrt --pr 7 --author worker-1
+only_reason "a permission read that fails" "reason: review -- host review 11 by reviewer-bot: the permission of reviewer-bot could not be read: HTTP 403: Resource not accessible"
+rm -f "$GH_FIX/perm.fail"
 reviews "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD" base)")"; hrt --pr 7 --author worker-1
 only_reason "a line that names another commit than the host's" "reason: review -- host review 11 names '$(s7 base)', the host tied it to $(s7 "$H"): which commit it reviewed is ambiguous"
 reviews "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD")")"; hrt --pr 7 --author review-1

@@ -244,6 +244,7 @@ Round: 1
 The host ties a review to the commit it was submitted on (`commit_id` in the GitHub reviews API) and names its author. `route --pr <n>` reads the reviews of the pull request once and takes the record lines from their bodies:
 
 - A review counts when it is submitted (not pending), not dismissed, and by somebody with write access (`author_association` `OWNER`, `MEMBER` or `COLLABORATOR`). Anybody can comment on a public pull request; their lines do not count.
+- `author_association` is wider than write access: `MEMBER` is any member of the organization, `COLLABORATOR` includes read and triage. For the review whose line is used, `route` reads the reviewer's permission once more (`gh api repos/<repo>/collaborators/<login>/permission`) and needs `admin`, `maintain` or `write`; any other permission, and a read that fails, routes to a person.
 - The newest line counts, by the time its review was submitted. A line on the host wins over the plan; the plan's line counts only when no review carries one of that kind (the round, or the lens).
 - The line must name the commit the host tied its review to. A line that names another commit leaves open what was reviewed: `person`. Validity for the head is computed from the host's commit, with the rule above.
 - A review in the state `CHANGES_REQUESTED` does not approve, whatever its line says: `person`.

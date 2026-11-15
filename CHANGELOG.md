@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lens lines from the reviews on the pull request, which the host ties to their
   commit. A repository whose rules count only reviews on the current head can
   now route `unattended` without committing a round line that moves the head.
-  Only reviews by owners, members and collaborators count; a change request
+  Only reviews by owners, members and collaborators with write access count
+  (the reviewer's permission is read once); a change request
   that is its reviewer's newest review (with or without a record line), a
   line naming another commit or a failed read sends the change to a person.
   `ytstack-finish-lane route --pr N` passes the pull request on and also routes
