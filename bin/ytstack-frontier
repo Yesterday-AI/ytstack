@@ -36,13 +36,16 @@
 #          values, a claim time on every held lane, and four cells in every
 #          line under "## Peers". A well-formed file is then read for lanes
 #          that stall (issue #84), one "stale: <lane>: ..." line each:
-#            a running row whose worker reported (a PR in its row, or its
-#            worktree no longer exists), or whose branch had no commit for
-#            --minutes (default 60; counted from the claim when that is newer,
-#            or when the row has no branch);
+#            a running row whose worktree no longer exists (the worker ended);
+#            an implement row whose branch had no commit for --minutes
+#            (default 60), counted from the claim when that is newer, or from
+#            the start of its fix round when the row carries a PR (the round
+#            starts when a check first sees the PR and round in the row);
+#            a review or prepare row (they commit nothing) running for 3 x
+#            --minutes since its claim;
 #            a ready lane of `list` that nobody claimed for --minutes since a
-#            check first saw it ready. That first sight is kept outside the
-#            tree: <state base>/repos/<repo key>/frontier-ready (yt_state_base).
+#            check first saw it ready. First sights are kept outside the
+#            tree, under a lock: <state base>/repos/<repo key>/frontier-seen.
 # peer     the sessions in other repositories this coordinator works with,
 #          one line each under "## Peers" in LANES.md:
 #            - <role> | <repository> | <address> | <last contact UTC>
@@ -452,6 +455,7 @@ cmd_check() {
         p("line " NR ": peer line is not \"- <role> | <repository> | <address> | <last contact UTC>\"")
       next
     }
+    peers && /^\|/ { p("line " NR ": under ## Peers a peer is a list line \"- <role> | <repository> | <address> | <last contact UTC>\", not a table row"); next }
     !/^\|/ { next }
     ++n == 1 {
       h = $0; gsub(/[ \t]*\|[ \t]*/, "|", h)
@@ -482,21 +486,52 @@ cmd_check() {
 }
 
 # stale <minutes>: one "stale:" line per lane that stalls (see the header).
+# First sights live in <state base>/repos/<key>/frontier-seen, one
+# "<key>\t<epoch>" line each: "ready:<lane>" and "fix:<lane>:<round>".
+REVIEW_FACTOR=3  # a review or prepare lane commits nothing: it gets 3 x N
 stale() {
-  local lim=$(($1 * 60)) now top lane st by br wt pr t since c f ready seen keep=""
+  local lim=$(($1 * 60)) now top lane kind st by br wt pr rnd t since c f tmp ready keep="" n=0
   now=$(date -u +%s)
   top=${YT_MAIN_TOPLEVEL:-$YT_TOPLEVEL}
-  while IFS='	' read -r lane _ st by br wt pr _; do
-    [ "$st" = running ] || continue
-    if [ "$pr" != - ]; then
-      echo "stale: $lane: running, but PR $pr is in its row: the worker reported; set the status"; continue
+  f="$(yt_state_base)/repos/${YT_REPO_KEY:-unknown}/frontier-seen"
+  ready=$(cmd_list --ready 2>/dev/null) || ready=""
+  # One check at a time reads and rewrites the file (noclobber, not mkdir:
+  # .ytstack/KNOWLEDGE.md); without the directory or the lock no first sight
+  # is kept, and every lane counts from now.
+  SEEN=""; tmp=""; locked=no
+  if mkdir -p "${f%/*}" 2>/dev/null; then
+    until ( set -o noclobber; : > "$f.lock" ) 2>/dev/null; do
+      n=$((n + 1)); [ "$n" -le 50 ] || break
+      sleep 0.1 2>/dev/null || sleep 1
+    done
+    if [ "$n" -le 50 ]; then
+      locked=yes; SEEN_LOCK="$f.lock"
+      trap 'rm -f "$SEEN_LOCK"' EXIT
+      SEEN=$(cat "$f" 2>/dev/null)
+      tmp=$(mktemp "$f.XXXXXX" 2>/dev/null) || tmp=""
     fi
-    case "$wt" in /*) f=$wt ;; *) f="$top/$wt" ;; esac
-    if [ "$wt" != - ] && [ ! -d "$f" ]; then
+  fi
+  # seen <key>: SEEN_AT, the first sight of key; kept for the next file
+  seen() {
+    SEEN_AT=$(printf '%s\n' "$SEEN" | awk -F'\t' -v k="$1" '$1 == k { print $2; exit }')
+    case "$SEEN_AT" in ''|*[!0-9]*) SEEN_AT=$now ;; esac
+    keep="$keep$1	$SEEN_AT$NL"
+  }
+  while IFS='	' read -r lane kind st by br wt pr _ rnd _; do
+    [ "$st" = running ] || continue
+    case "$wt" in /*) c=$wt ;; *) c="$top/$wt" ;; esac
+    if [ "$wt" != - ] && [ ! -d "$c" ]; then
       echo "stale: $lane: running, but its worktree $wt does not exist: the worker ended; read its branch and set the status"; continue
     fi
     t=${by##* }; case "$t" in *T[0-9][0-9]:[0-9][0-9]Z) t="${t%Z}:00Z" ;; esac
     since=$(yt_epoch "$t"); [ -n "$since" ] || continue
+    if [ "$kind" != implement ]; then
+      [ $((now - since)) -gt $((lim * REVIEW_FACTOR)) ] \
+        && echo "stale: $lane: running $kind lane, no report for $(((now - since) / 60)) minutes (claimed $(utc "$since"))"
+      continue
+    fi
+    # A PR in the row: a fix round. It starts when a check first sees it.
+    if [ "$pr" != - ]; then seen "fix:$lane:$rnd"; [ "$SEEN_AT" -le "$since" ] || since=$SEEN_AT; fi
     c=""
     [ "$br" = - ] || [ "$YT_IS_GIT" != yes ] || c=$(git -C "$YT_TOPLEVEL" log -1 --format=%ct "$br" -- 2>/dev/null)
     [ -z "$c" ] || [ "$c" -le "$since" ] || since=$c
@@ -506,18 +541,15 @@ stale() {
   done <<EOF
 $(lane_rows)
 EOF
-  # Ready lanes: the first time a check saw each one ready, outside the tree.
-  ready=$(cmd_list --ready 2>/dev/null) || ready=""
-  f="$(yt_state_base)/repos/${YT_REPO_KEY:-unknown}/frontier-ready"
-  [ -n "$ready" ] || [ -f "$f" ] || return 0
-  mkdir -p "${f%/*}" 2>/dev/null || return 0
   for lane in $ready; do
-    seen=$(awk -F'\t' -v l="$lane" '$1 == l { print $2; exit }' "$f" 2>/dev/null)
-    case "$seen" in ''|*[!0-9]*) seen=$now ;; esac
-    keep="$keep$lane	$seen$NL"
-    [ $((now - seen)) -le "$lim" ] || echo "stale: $lane: ready, nobody claimed it for $(((now - seen) / 60)) minutes (first seen $(utc "$seen"))"
+    seen "ready:$lane"; c=$SEEN_AT
+    [ $((now - c)) -le "$lim" ] || echo "stale: $lane: ready, nobody claimed it for $(((now - c) / 60)) minutes (first seen $(utc "$c"))"
   done
-  printf '%s' "$keep" > "$f.tmp" 2>/dev/null && mv "$f.tmp" "$f"
+  if [ -n "$tmp" ]; then
+    { printf '%s' "$keep" > "$tmp" && mv "$tmp" "$f"; } 2>/dev/null || rm -f "$tmp"
+    tmp=""
+  fi
+  [ "$locked" = no ] || rm -f "$f.lock"
 }
 
 # ---- peers -----------------------------------------------------------------------

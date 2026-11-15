@@ -84,12 +84,12 @@ A claim is written before the work is dispatched: `ytstack-frontier claim <lane>
 
 ```
 stale: M004-S02: running, no commit on ytstack/M004-S02 for 95 minutes (since 2026-11-15T08:40Z)
-stale: M004-S03: running, but PR 12 is in its row: the worker reported; set the status
 stale: M004-S05: running, but its worktree .claude/worktrees/m004-s05 does not exist: the worker ended; read its branch and set the status
+stale: review-pr-43: running review lane, no report for 200 minutes (claimed 2026-11-15T06:00Z)
 stale: M004-S06: ready, nobody claimed it for 70 minutes (first seen 2026-11-15T09:00Z)
 ```
 
-A `running` row is stale when its worker reported (a pull request in its row, or its worktree no longer exists) or when its branch had no commit for N minutes (default 60), counted from the claim when that is newer or the row names no branch. A `ready` lane of the frontier is stale when nobody claimed it for N minutes since a check first saw it ready; that first sight is kept outside the tree (`<state base>/repos/<repo key>/frontier-ready`, the base of `yt_state_base`). `bin/ytstack-upkeep` lists these lines under `lanes`. A stale line is a prompt to read the lane's branch and set its row, or to dispatch the ready lane; it never releases a lane by itself.
+A `running` row is stale when its worktree no longer exists (the worker ended) or, for an `implement` lane, when its branch had no commit for N minutes (default 60), counted from the claim when that is newer or the row names no branch. A running row with a pull request in it is a fix round (`finish-lane`), not a report: its clock starts when a check first sees that pull request and round in the row, and a new round starts it again. A `review` or `prepare` lane commits nothing; it is stale after 3 x N minutes since its claim without a report. A `ready` lane of the frontier is stale when nobody claimed it for N minutes since a check first saw it ready. First sights are kept outside the tree, one writer at a time (`<state base>/repos/<repo key>/frontier-seen`, the base of `yt_state_base`). `bin/ytstack-upkeep` lists these lines under `lanes`. A stale line is a prompt to read the lane's branch and set its row, or to dispatch the ready lane; it never releases a lane by itself.
 
 ### Lesson lanes
 
@@ -251,9 +251,9 @@ The old session stays open as a relay until every listed worker has reported. Pe
 
 ## Checked mechanically
 
-- `bin/ytstack-frontier check`: `LANES.md` has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time, every line under `## Peers` has four cells and a UTC time; then the lanes that stall ("Lanes that stall", exit 2).
-- `bin/ytstack-upkeep --worktrees`: the linked worktrees and local branches with the state of their newest pull request, the age of the last commit, uncommitted changes and the lane that holds them, and the `git worktree remove` / `git branch -D` commands for the merged or closed, clean, unlocked and unheld ones. It prints the commands and runs none.
-- `bin/ytstack-status --phases [--json]`: done, in review and total per milestone and in total, with each change of a total since the last report and its cause (`docs/statusline.md`, "Progress per phase").
+- `bin/ytstack-frontier check`: `LANES.md` has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time, every line under `## Peers` is a list line with four cells and a UTC time (a table row there is named as one); then the lanes that stall ("Lanes that stall", exit 2).
+- `bin/ytstack-upkeep --worktrees`: the linked worktrees (not the main one, not the one it runs in) and local branches with the state of their pull request (an open one first, else the newest), the age of the last commit, uncommitted changes, unpushed commits and the lane of the main checkout's `LANES.md` that holds them, and the `git worktree remove` / `git branch -D` commands for those whose pull request is merged or closed, with no open one, nothing unpushed, clean, unlocked and unheld. It prints the commands and runs none.
+- `bin/ytstack-status --phases [--json]`: done, in review and total per milestone and in total, with each change since the last text report, its cause and the phases that joined or left (`docs/statusline.md`, "Progress per phase").
 - `bin/ytstack-questions check`: ids are unique and match the file name, `state` holds a listed value, `asked` and `answered` are set exactly when the state says so, an answered file has text under `## Answer`.
 - `bin/ytstack-brief check`: the report labels, the three `Status:` values and their consistency with `Blockers:`.
 - `bin/ytstack-handover check`: the staged script of a human-only step (see `skills/handover-step/SKILL.md`).

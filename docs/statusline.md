@@ -57,16 +57,17 @@ Only local refs are read. The script makes no network calls and does not use `gh
 
 ## Progress per phase
 
-`ytstack-status --phases [--json] [-C DIR]` is for a status report or a chart, not for the status line. It reads the files of the checkout (no stdin, no default-branch lookup) and prints one line per milestone roadmap that is not `dropped`, the total and the time of the read:
+`ytstack-status --phases [--json] [-C DIR]` is for a status report or a chart, not for the status line. It reads the files of the checkout (no stdin, no default-branch lookup) and prints one line per milestone roadmap that is not `dropped` or `backlog`, one line per phase that left the report, the total and the time of the read:
 
 ```
 M004	2/5 done (40%)	1 in review	total 4 -> 5 since the last report: added S05, S06; removed S04
-M006	0/1 done (0%)	0 in review
-total	2/6 done (33%)	1 in review	total 5 -> 6 since the last report
+M006	0/1 done (0%)	0 in review	new since the last report
+M003	left the report since the last report (was 2 rows)
+total	2/6 done (33%)	1 in review	total 6 -> 6 since the last report; joined M006; left M003
 read 2026-11-15T10:42Z, log ~/.local/state/ytstack/repos/<key>/phases/denominator.log
 ```
 
-A row is a slice of the roadmap. It is done when its checkbox is ticked or its `LANES.md` row is `merged`, in review when its row is `reported`, `in-review` or `ready`. Each run compares the slices per phase with the run before and names what changed the total. A grown total is then read as new work, not as lost progress. Every change is appended to `denominator.log` (UTC time, phase, total before, total after, cause: `first report`, `new phase`, `added S05`, `removed S04`, `phase left the report`) under the state base of `hooks/lib/git-ctx.sh` (`CLAUDE_PLUGIN_DATA`, `PLUGIN_DATA`, `$XDG_STATE_HOME/ytstack` or `~/.local/state/ytstack`), keyed by the repository, never in the tree. `--json` prints the same as one object (`read`, `log`, `phases[]` with `phase`, `status`, `done`, `in_review`, `total`, `percent`, `change` with `before`, `added`, `removed` or `null`, and `total`), from which a chart is drawn. Exit 1 without `.ytstack/` or without a roadmap.
+A row is a slice of the roadmap. It is done when its checkbox is ticked or its `LANES.md` row is `merged`; every slice of a `done` or `shipped-informally` milestone counts as done. A row is in review when its lane is `reported`, `in-review` or `ready`. Each text report compares the slices per phase with the text report before and names what changed the total, and which phases joined or left, also when the total stays the same. A grown total is then read as new work, not as lost progress. Only the text report moves that baseline, under a lock; `--json` shows the same change and writes nothing, so drawing a chart does not use it up. Every change is appended to `denominator.log` (UTC time, phase, total before, total after, cause: `first report`, `new phase`, `added S05`, `removed S04`, `phase left the report`) under the state base of `hooks/lib/git-ctx.sh` (`CLAUDE_PLUGIN_DATA`, `PLUGIN_DATA`, `$XDG_STATE_HOME/ytstack` or `~/.local/state/ytstack`), keyed by the repository, never in the tree. `--json` prints the same as one object (`read`, `log`, `phases[]` with `phase`, `status`, `done`, `in_review`, `total`, `percent`, `change` with `before`, `added`, `removed`, `joined` or `null`, `left[]` with `phase` and `before`, and `total` whose `change` carries `before`, `joined[]` and `left[]`), from which a chart is drawn. Exit 1 without `.ytstack/` or without a roadmap.
 
 ## Integration in Claude Code
 

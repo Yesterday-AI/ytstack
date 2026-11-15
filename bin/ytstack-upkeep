@@ -39,12 +39,14 @@
 #
 # --worktrees prints, instead of the report, the linked worktrees and the
 # local branches without one (not the default branch) of DIR's repository
-# (issue #84): branch, pull request state (the newest pull request of the
-# branch, from one `gh pr list --state all`), age of the last commit,
-# uncommitted changes, and the lane of LANES.md that holds the branch. Then
-# "commands (not run): N" and the `git worktree remove` / `git branch -D`
-# commands for every one whose pull request is merged or closed, that has no
-# uncommitted changes, is not locked and no held lane names. It runs none of
+# (issue #84), leaving out the main worktree and the one DIR is in: branch,
+# pull request state (an open pull request of the branch if there is one,
+# else the newest, from one `gh pr list --state all`), age of the last
+# commit, uncommitted changes, unpushed commits (the local head is in
+# neither the PR head nor origin/<branch>), and the lane of the main
+# checkout's LANES.md that holds the branch. Then "commands (not run): N" and
+# the `git worktree remove` / `git branch -D` commands for every one whose
+# pull request is merged or closed, with none of the above. It runs none of
 # them. Without the PR state (no gh or jq, a failed read) it prints none.
 # Exit 10 when it printed a command, 0 otherwise, 1 outside a git repository.
 #
@@ -140,39 +142,56 @@ since() {
   if [ "$s" -lt $((2 * 86400)) ]; then echo "$((s / 3600)) hours ago"; else echo "$((s / 86400)) days ago"; fi
 }
 worktrees() {
-  local top=${YT_MAIN_TOPLEVEL:-$YT_TOPLEVEL} def prs="" note="" held="" path br lock wl="" bl="" cmds="" n=0 used=" " ct extra
+  local top=${YT_MAIN_TOPLEVEL:-$YT_TOPLEVEL} def prs="" note="" held="" path br lock wl="" bl="" cmds="" n=0 used=" " ct extra lanes
   [ "$YT_IS_GIT" = yes ] || die "$DIR is not a git repository"
   def=$(git -C "$top" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null); def=${def#origin/}
   [ -n "$def" ] || def=$(git -C "$top" symbolic-ref --quiet --short HEAD 2>/dev/null)
-  # The newest pull request per head branch: "<branch> <state> <number>"
+  # One pull request per head branch: an open one if there is any, else the
+  # newest. "<branch> <state> <number> <head sha>"
   if ! command -v gh >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
     note="PR state not read: gh or jq is not available"
-  elif ! prs=$(cd "$top" && gh pr list --state all --limit 500 --json number,state,headRefName 2>&1); then
+  elif ! prs=$(cd "$top" && gh pr list --state all --limit 500 --json number,state,headRefName,headRefOid 2>&1); then
     note="PR state not read: $(printf '%s\n' "$prs" | sed -n 1p)"; prs=""
   else
-    prs=$(printf '%s' "$prs" | jq -r 'group_by(.headRefName) | .[] | max_by(.number) | "\(.headRefName)\t\(.state | ascii_downcase)\t\(.number)"' 2>/dev/null) \
+    prs=$(printf '%s' "$prs" | jq -r 'group_by(.headRefName) | .[]
+      | ((map(select(.state == "OPEN")) | max_by(.number)) // max_by(.number))
+      | "\(.headRefName)\t\(.state | ascii_downcase)\t\(.number)\t\(.headRefOid // "")"' 2>/dev/null) \
       || { note="PR state not read: gh gave no JSON"; prs=""; }
   fi
-  # Branches a held lane names: "<branch> <lane> (<status>)"
-  [ -z "$YT_DIR" ] || [ ! -f "$YT_DIR/LANES.md" ] || held=$(awk -v tab="$TAB" '
+  # Branches a held lane names: "<branch> <lane> (<status>)", from the
+  # LANES.md of the main checkout (a linked worktree carries a stale copy).
+  lanes="$top/.ytstack/LANES.md"; [ -f "$lanes" ] || lanes="$YT_DIR/LANES.md"
+  [ ! -f "$lanes" ] || held=$(awk -v tab="$TAB" '
     /^\|/ && ++n > 2 {
       split($0, c, "|"); for (i = 2; i <= 6; i++) gsub(/^[ \t]+|[ \t]+$/, "", c[i])
       if (c[4] ~ /^(claimed|running|reported|in-review|ready)$/ && c[6] != "-" && c[6] != "") print c[6] tab c[2] " (" c[4] ")"
-    }' "$YT_DIR/LANES.md")
-  # info <branch>: PR, held lane; sets ok=yes when the branch may go
+    }' "$lanes")
+  # info <branch> <age> <extra>: INFO, and ok=yes when the branch may go: its
+  # pull request is merged or closed, none is open, no lane holds it, and its
+  # local head is contained in the PR head or in origin/<branch>.
   info() {
-    local p l
-    p=$(printf '%s\n' "$prs" | awk -F'\t' -v b="$1" '$1 == b { print "PR #" $3 " " $2; exit }')
+    local p l sha oid x="$3"
+    p=$(printf '%s\n' "$prs" | awk -F'\t' -v b="$1" '$1 == b { print "PR #" $3 " " $2 "\t" $4; exit }')
+    oid=${p#*"$TAB"}; p=${p%%"$TAB"*}
     l=$(printf '%s\n' "$held" | awk -F'\t' -v b="$1" '$1 == b { print $2; exit }')
     ok=no
-    case "$p" in *" merged"|*" closed") [ -n "$l" ] || ok=yes ;; esac
+    case "$p" in *" merged"|*" closed")
+      sha=$(git -C "$top" rev-parse --verify --quiet "refs/heads/$1" 2>/dev/null)
+      if [ -n "$sha" ] && { { [ -n "$oid" ] && git -C "$top" merge-base --is-ancestor "$sha" "$oid" 2>/dev/null; } \
+           || git -C "$top" merge-base --is-ancestor "$sha" "refs/remotes/origin/$1" 2>/dev/null; }; then
+        [ -n "$l" ] || ok=yes
+      else
+        x="${x:+$x, }unpushed commits"
+      fi ;;
+    esac
     [ -n "$note" ] && p="PR state not read" || p=${p:-no pull request}
-    INFO="$p${2:+, last commit $2}${3:+, $3}${l:+, held by lane $l}"
+    INFO="$p${2:+, last commit $2}${x:+, $x}${l:+, held by lane $l}"
   }
   while IFS="$TAB" read -r path br lock; do
     [ -n "$path" ] || continue
-    n=$((n + 1)); [ "$n" -gt 1 ] || { used="$used$br "; continue; }  # the main worktree
-    used="$used$br "; extra=""
+    n=$((n + 1)); used="$used$br "; extra=""; ct=""
+    # the main worktree and the one this runs in are not offered
+    [ "$n" -gt 1 ] && [ "$(yt_canon "$path")" != "$YT_TOPLEVEL" ] || continue
     if [ ! -d "$path" ]; then extra="missing"
     else
       ct=$(git -C "$path" log -1 --format=%ct HEAD 2>/dev/null)

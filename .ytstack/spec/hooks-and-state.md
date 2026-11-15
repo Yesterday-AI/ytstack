@@ -103,7 +103,7 @@ Kimi's native `sessionStart.skill` supplies the static directive. `bin/ytstack-k
 
 See `docs/statusline.md`. It was read against `bin/ytstack-status` at `verified_at` and matches.
 
-`ytstack-status --phases [--json]` (issue #81) prints done, in review and total per milestone roadmap that is not dropped, and the total, from the checkout's files. It keeps the slice ids of the last run and a log of every change of a total with its cause under `<base>/repos/<repo key>/phases/` (`snapshot`, `denominator.log`), outside the tree; a run that cannot create that directory prints `log none` and writes nothing.
+`ytstack-status --phases [--json]` (issue #81) prints done, in review and total per milestone roadmap that is not dropped or backlog (a done or shipped-informally one counts all its slices), the phases that joined or left, and the total, from the checkout's files. A text report keeps the slice ids and a log of every change with its cause under `<base>/repos/<repo key>/phases/` (`snapshot`, `denominator.log`), outside the tree, under a noclobber lock with a `mktemp` file; `--json` reads them and writes nothing; a run that cannot create that directory prints `log none` and writes nothing.
 
 ## Interfaces and contracts
 

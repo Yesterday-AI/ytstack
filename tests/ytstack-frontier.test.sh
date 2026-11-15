@@ -14,10 +14,11 @@
 #            byte-identical, "updated:" is rewritten
 #   release  "Claimed by" becomes "-", status "dropped" unless "merged"
 #   check    a well-formed file passes; each defect is named, exit 1; with a
-#            well-formed file, "stale:" lines for running rows whose worker
-#            reported (PR in the row, worktree gone) or whose branch had no
-#            commit for --minutes, and for ready lanes nobody claimed for
-#            --minutes since check first saw them (state outside the tree): exit 2
+#            well-formed file, "stale:" lines for running rows whose worktree
+#            is gone or whose branch had no commit for --minutes (a fix round
+#            from its first sight), review and prepare rows after 3 x
+#            --minutes, and ready lanes nobody claimed for --minutes since
+#            check first saw them (state outside the tree, locked): exit 2
 #   peer     set adds or updates one "## Peers" line per role and repository,
 #            list prints them; the lanes table is untouched
 #   refused  a value with "|" or a newline, and usage errors: exit 64
@@ -414,47 +415,62 @@ utc() {
   date -u -r "$e" +"$f" 2>/dev/null || date -u -d "@$e" +"$f"
 }
 R=$(new_repo live M004); L="$R/.ytstack/LANES.md"
-roadmap "$R" M004 in-progress "- S01" "- S02" "- S03" "- S04" "- S05" "- S06"
-for s in S01 S02 S03 S04 S05 S06; do plan "$R" "M004-$s" none; done
+roadmap "$R" M004 in-progress "- S01" "- S02" "- S03" "- S04" "- S05" "- S06" "- S07" "- S08"
+for s in S01 S02 S03 S04 S05 S06 S07 S08; do plan "$R" "M004-$s" none; done
 ( cd "$R" && git add -A && GIT_COMMITTER_DATE="$(utc 30000 s)" GIT_AUTHOR_DATE="$(utc 30000 s)" git commit -qm base ) >/dev/null 2>&1
-# S01: silent for two hours; S02: a commit ten minutes ago; S03: a pull request
-# in the row; S04: its worktree is gone; S05 is claimed, not running; S06 ready
-git -C "$R" branch work/s01; git -C "$R" branch work/s02
+# S01: silent for two hours; S02: a commit ten minutes ago; S03: a fix round
+# (a PR in the row, round 1), its last commit three hours old; S04: its
+# worktree is gone; S05 is claimed, not running; S06 ready; S07: a review lane
+# running four hours; S08: a prepare lane running one hour
+git -C "$R" branch work/s01; git -C "$R" branch work/s02; git -C "$R" branch work/s03
 ( cd "$R" && git checkout -q work/s01 && GIT_COMMITTER_DATE="$(utc 7200 s)" git commit -q --allow-empty -m one \
-  && git checkout -q work/s02 && GIT_COMMITTER_DATE="$(utc 600 s)" git commit -q --allow-empty -m two && git checkout -q main ) >/dev/null 2>&1
+  && git checkout -q work/s02 && GIT_COMMITTER_DATE="$(utc 600 s)" git commit -q --allow-empty -m two \
+  && git checkout -q work/s03 && GIT_COMMITTER_DATE="$(utc 10800 s)" git commit -q --allow-empty -m three && git checkout -q main ) >/dev/null 2>&1
 mkdir -p "$R/wt/s01" "$R/wt/s02" "$R/wt/s03"
 { printf -- '---\nupdated: 2026-11-15T10:00:00Z\n---\n\n# Lanes\n\n'
   echo '| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |'
   echo '|---|---|---|---|---|---|---|---|---|---|'
   echo "| M004-S01 | implement | running | w1 $(utc 10800) | work/s01 | wt/s01 | - | - | 0 | wait |"
   echo "| M004-S02 | implement | running | w2 $(utc 10800) | work/s02 | wt/s02 | - | - | 0 | wait |"
-  echo "| M004-S03 | implement | running | w3 $(utc 600) | - | wt/s03 | 12 | - | 0 | wait |"
+  echo "| M004-S03 | implement | running | w3 $(utc 10800) | work/s03 | wt/s03 | 12 | abc1234 | 1 | wait for the fix report |"
   echo "| M004-S04 | implement | running | w4 $(utc 600) | - | wt/gone | - | - | 0 | wait |"
   echo "| M004-S05 | implement | claimed | w5 $(utc 10800) | - | - | - | - | 0 | - |"
+  echo "| M004-S07 | review | running | r7 $(utc 14400) | - | - | 13 | - | 1 | wait for the verdict |"
+  echo "| M004-S08 | prepare | running | p8 $(utc 3600) | - | - | - | - | 0 | wait |"
 } > "$L"
 run "$R" check
 eq "liveness findings: exit 2" 2 "$EC"
 like "silent for two hours: no commit on its branch" "^stale: M004-S01: running, no commit on work/s01 for 1[12][0-9] minutes \(since [0-9T:-]+Z\)\$" "$OUT"
 hasnt "a commit ten minutes ago keeps a lane alive" "M004-S02" "$OUT"
-has "a pull request in the row: the worker reported" "stale: M004-S03: running, but PR 12 is in its row: the worker reported; set the status" "$OUT"
+hasnt "a fix round (a PR in the row) is no report, and its round starts when check first sees it" "M004-S03" "$OUT"
 has "its worktree is gone: the worker ended" "stale: M004-S04: running, but its worktree wt/gone does not exist" "$OUT"
 hasnt "a claimed lane is not looked at" "M004-S05" "$OUT"
 hasnt "a ready lane seen for the first time is not flagged" "M004-S06" "$OUT"
+like "a review lane commits nothing: time only, three times the limit" "^stale: M004-S07: running review lane, no report for 2[34][0-9] minutes \(claimed [0-9T:-]+Z\)\$" "$OUT"
+hasnt "a prepare lane under three times the limit is not flagged" "M004-S08" "$OUT"
 hasnt "no format problem" "line " "$OUT"
 run "$R" check --minutes 180
 hasnt "--minutes moves the limit" "M004-S01" "$OUT"
-READY=$(find "$CLAUDE_PLUGIN_DATA" -name frontier-ready -exec grep -l '^M004-S06	' {} + | head -1)
-case "$READY" in "$CLAUDE_PLUGIN_DATA/repos/"*) ok "the first sight of a ready lane is kept outside the tree" ;; *) bad "ready state location" "$READY" ;; esac
-eq "one line for the ready lane" "M004-S06" "$(cut -f1 "$READY")"
-printf 'M004-S06\t%s\n' "$((NOW - 7200))" > "$READY"
+SEEN=$(find "$CLAUDE_PLUGIN_DATA" -name frontier-seen -exec grep -l '^ready:M004-S06	' {} + | head -1)
+case "$SEEN" in "$CLAUDE_PLUGIN_DATA/repos/"*) ok "first sights are kept outside the tree" ;; *) bad "seen state location" "$SEEN" ;; esac
+eq "one line for the ready lane, one for the fix round" "fix:M004-S03:1 ready:M004-S06" "$(cut -f1 "$SEEN" | sort | paste -sd' ' -)"
+printf 'ready:M004-S06\t%s\nfix:M004-S03:1\t%s\n' "$((NOW - 7200))" "$((NOW - 7200))" > "$SEEN"
 run "$R" check
 like "a ready lane nobody claimed for two hours" "^stale: M004-S06: ready, nobody claimed it for 1[12][0-9] minutes \(first seen [0-9T:-]+Z\)\$" "$OUT"
+like "a fix round without a commit since it started" "^stale: M004-S03: running, no commit on work/s03 for 1[12][0-9] minutes \(since [0-9T:-]+Z\)\$" "$OUT"
+run "$R" set M004-S03 --round 2
+run "$R" check
+hasnt "a new round starts the clock again" "M004-S03" "$OUT"
 run "$R" claim M004-S06 --by w6
 run "$R" check
 hasnt "claimed: no longer flagged" "M004-S06" "$OUT"
-eq "and forgotten" "" "$(cut -f1 "$READY")"
+eq "and forgotten" "fix:M004-S03:2" "$(cut -f1 "$SEEN")"
 git -C "$R" status --porcelain --untracked-files=all > "$TMP/st"
-hasnt "check writes nothing into the tree" "frontier-ready" "$(cat "$TMP/st")"
+hasnt "check writes nothing into the tree" "frontier-seen" "$(cat "$TMP/st")"
+# Concurrent checks: no lost or torn state file, no temporary file left
+for i in 1 2 3 4 5 6; do bash "$BIN" -C "$R" check >/dev/null 2>&1 & done; wait
+eq "after six checks at once: the state file is whole" "fix:M004-S03:2" "$(cut -f1 "$SEEN")"
+eq "and no temporary or lock file is left" "frontier-seen" "$(ls "$(dirname "$SEEN")" | grep frontier | paste -sd' ' -)"
 run "$R" check --minutes x;                       eq "--minutes takes a number: exit 64" 64 "$EC"
 sed 's/| running | w1/| working | w1/' "$L" > "$L.x" && mv "$L.x" "$L"
 run "$R" check
@@ -487,6 +503,9 @@ eq "check passes with peers" "0 lanes ok" "$EC $OUT"
 printf '%s\n' '- broken | line' >> "$L"
 run "$R" check
 has "a peer line without four cells is named" "peer line" "$OUT"
+printf '%s\n' '| prod | a/b | x | 2026-11-15T09:00Z |' >> "$L"
+run "$R" check
+has "a table row under ## Peers points at the peer format" "under ## Peers a peer is a list line" "$OUT"
 run "$R" peer set prod --repo "a|b" --address x;  eq "a | in a peer value: exit 64" 64 "$EC"
 run "$R" peer set prod --address x;               eq "peer set without --repo: exit 64" 64 "$EC"
 run "$R" peer set prod --repo r --address x --contact soon; eq "a contact that is no UTC time: exit 64" 64 "$EC"

@@ -1235,6 +1235,8 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:**
 - A status with progress uses `ytstack-status --phases`, never a count by hand (`coordinate` Step 11).
 - The change shown is the one since the previous `--phases` run; a second run without a change shows none.
+- Only the text report advances the snapshot and appends to the log; `--json` shows the same change and writes nothing, so drawing a chart never uses up the delta a status needs. Snapshot and log are written under a noclobber lock with a `mktemp` file (PR #90 review; refines the bullet above: "run" means text report).
+- A phase that joins or leaves is named on its own line, in the total and in the JSON (`joined`, `left`), also when the total stays equal. A `done` or `shipped-informally` milestone counts all its slices as done; a `backlog` roadmap is left out like a `dropped` one (PR #90 review).
 
 **Supersedes:** None.
 
@@ -1256,5 +1258,7 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - A `stale:` line is a prompt to read the branch and set the row, or to dispatch; no script releases a lane by itself.
 - A message to a session of another repository goes to the address under `## Peers`, and `peer set` runs after each contact.
 - A new reader of `LANES.md` reads the lanes table only from lines that start with `|`.
+- A running row with a pull request is a fix round (`finish-lane`, `spawn-milestone-team`), not a report: it is checked for commits like any implement lane, counted from the first time a check sees that pull request and round in the row; a new round restarts the clock. The only "the worker ended" signal left is a worktree that no longer exists. A `review` or `prepare` lane commits nothing: it is stale after 3 x N minutes since its claim. First sights of ready lanes and fix rounds share `<state base>/repos/<repo key>/frontier-seen`, written under a noclobber lock with a `mktemp` file (PR #90 review; replaces "a pull request in its row" as a report signal and the file name `frontier-ready` above).
+- `--worktrees` prints no command for a branch with any open pull request, or whose local head is in neither the pull request head nor `origin/<branch>` (unpushed commits). It leaves out the worktree it runs in and reads `LANES.md` from the main checkout (PR #90 review).
 
 **Supersedes:** None. Extends "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)".

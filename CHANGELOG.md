@@ -13,13 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prints done, in review and total per milestone and in total. When a total
   changed since the last report, the line says by how much and why (slices
   added or removed), and every change goes to a log outside the repository,
-  so a grown total no longer reads as negative progress. `coordinate` Step 11
-  points at it; the JSON is what a chart is drawn from.
+  so a grown total no longer reads as negative progress. Phases that join or
+  leave are named, a done milestone counts all its slices, a backlog one is
+  left out. `coordinate` Step 11 points at it; the JSON is what a chart is
+  drawn from, and it does not use up the change: only the text report does.
 - **Lanes that stall are named** (issue #84): `ytstack-frontier check`
-  prints a `stale:` line (exit 2) for a running lane whose worker reported
-  (a pull request in its row, its worktree gone) or whose branch had no
-  commit for 60 minutes (`--minutes`), and for a ready lane nobody claimed
-  for that long. `ytstack-upkeep` lists them under `lanes`.
+  prints a `stale:` line (exit 2) for a running lane whose worktree is gone
+  or whose branch had no commit for 60 minutes (`--minutes`; a fix round
+  counts from its start), a review or prepare lane running three times as
+  long without a report, and a ready lane nobody claimed for 60 minutes. `ytstack-upkeep` lists them under `lanes`.
 - **Worktree cleanup** (issue #84): `ytstack-upkeep --worktrees` lists the
   worktrees and branches with their pull request state, age and uncommitted
   changes, and prints the `git worktree remove` / `git branch -D` commands

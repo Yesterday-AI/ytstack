@@ -189,13 +189,15 @@ road() {
 # ph <dir> [args]: OUT and EC of --phases, run from elsewhere
 ph() { local d="$1"; shift; OUT=$(cd "$ELSEWHERE" && bash "$BIN" --phases -C "$d" "$@" </dev/null 2>&1); EC=$?; }
 P=$(new_repo phases); state "$P" M004 none none
-road "$P" M003 done "x S01" "x S02"
+# M003 is done with a checkbox left open: a done milestone counts every slice
+road "$P" M003 done "x S01" "- S02"
 road "$P" M004 active "x S01" "- S02" "- S03" "- S04"
 road "$P" M005 dropped "- S01"
+road "$P" M007 backlog "- S01" "- S02"
 printf -- '---\nupdated: 2026-11-15T10:00:00Z\n---\n\n# Lanes\n\n| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |\n|---|---|---|---|---|---|---|---|---|---|\n| M004-S02 | implement | merged | w 2026-11-15T08:00Z | - | - | 3 | abc1234 | 1 | - |\n| M004-S03 | implement | in-review | w 2026-11-15T09:00Z | - | - | 4 | - | 1 | - |\n' > "$P/.ytstack/LANES.md"
 ph "$P"
 eq "--phases: exit 0" 0 "$EC"
-eq "one line per phase, a dropped one left out, the total, the read line" \
+eq "one line per phase, dropped and backlog left out, done counts all, the total, the read line" \
 "M003${TAB}2/2 done (100%)${TAB}0 in review
 M004${TAB}2/4 done (50%)${TAB}1 in review
 total${TAB}4/6 done (66%)${TAB}1 in review" "$(printf '%s\n' "$OUT" | sed '$d')"
@@ -215,19 +217,47 @@ ph "$P"
 hasnt() { case "$3" in *"$2"*) bad "$1" "unexpected '$2' in: $3" ;; *) ok "$1" ;; esac; }
 hasnt "no change: no change shown" "since the last report" "$OUT"
 eq "and nothing logged" 3 "$(awk 'END { print NR }' "$LOG")"
-road "$P" M006 planned "- S01"; road "$P" M003 dropped "x S01" "x S02"
+# Same total (7): M006 joins with 2 slices, M003 (2) leaves as dropped
+road "$P" M006 planned "- S01" "- S02"; road "$P" M003 dropped "x S01" "x S02"
 ph "$P"
-eq "a new phase and a dropped one are logged" "M006 - 1 new phase|M003 2 - phase left the report" "$(awk -F'\t' 'NR > 3 { printf "%s%s %s %s %s", (NR > 4 ? "|" : ""), $2, $3, $4, $5 }' "$LOG")"
+eq "a new phase and a dropped one are logged" "M006 - 2 new phase|M003 2 - phase left the report" "$(awk -F'\t' 'NR > 3 { printf "%s%s %s %s %s", (NR > 4 ? "|" : ""), $2, $3, $4, $5 }' "$LOG")"
+eq "the new phase is named on its line" "M006${TAB}0/2 done (0%)${TAB}0 in review${TAB}new since the last report" "$(printf '%s\n' "$OUT" | grep '^M006')"
+eq "the phase that left has a line" "M003${TAB}left the report since the last report (was 2 rows)" "$(printf '%s\n' "$OUT" | grep '^M003')"
+eq "the total names both, also when it stays equal" "total${TAB}2/7 done (28%)${TAB}1 in review${TAB}total 7 -> 7 since the last report; joined M006; left M003" "$(printf '%s\n' "$OUT" | grep '^total')"
+road "$P" M006 backlog "- S01" "- S02"
+ph "$P"
+eq "a phase parked on the backlog leaves the report" "M006${TAB}left the report since the last report (was 2 rows)" "$(printf '%s\n' "$OUT" | grep '^M006')"
+road "$P" M006 planned "- S01" "- S02"
+ph "$P"
 if command -v jq >/dev/null 2>&1; then
   road "$P" M004 active "x S01" "- S02" "- S03" "- S05" "- S06" "- S07"
+  road "$P" M008 planned "- S01"
   ph "$P" --json
   eq "--json: exit 0" 0 "$EC"
-  eq "--json: phases, counts and the change" "M004 active 2 1 6 33 5 S07|M006 planned 0 0 1 0 null|2 1 7 28 6" \
-    "$(printf '%s' "$OUT" | jq -r '(.phases[] | "\(.phase) \(.status) \(.done) \(.in_review) \(.total) \(.percent) \(if .change then "\(.change.before) \(.change.added | join(","))" else "null" end)"), "\(.total.done) \(.total.in_review) \(.total.total) \(.total.percent // "null") \(.total.change.before)"' | paste -sd'|' -)"
+  J='(.phases[] | "\(.phase) \(.status) \(.done) \(.in_review) \(.total) \(.percent) \(if .change then "\(.change.before) \(.change.added | join(",")) \(.change.joined)" else "null" end)"), "\(.total.done) \(.total.in_review) \(.total.total) \(.total.percent // "null") \(.total.change.before) \(.total.change.joined | join(","))"'
+  WANT="M004 active 2 1 6 33 5 S07 false|M006 planned 0 0 2 0 null|M008 planned 0 0 1 0 0 S01 true|2 1 9 22 7 M008"
+  eq "--json: phases, counts, the change and a joined phase" "$WANT" "$(printf '%s' "$OUT" | jq -r "$J" | paste -sd'|' -)"
   case "$(printf '%s' "$OUT" | jq -r '.read + " " + .log')" in 20*" $LOG") ok "--json: read time and log path" ;; *) bad "--json: read and log" "$OUT" ;; esac
+  LINES=$(awk 'END { print NR }' "$LOG")
+  ph "$P" --json
+  eq "--json does not use up the change: a second --json shows it again" "$WANT" "$(printf '%s' "$OUT" | jq -r "$J" | paste -sd'|' -)"
+  eq "and logs nothing" "$LINES" "$(awk 'END { print NR }' "$LOG")"
+  road "$P" M006 dropped "- S01" "- S02"
+  ph "$P" --json
+  eq "--json: a phase that left" "M006 2" "$(printf '%s' "$OUT" | jq -r '.left[] | "\(.phase) \(.before)"')"
+  road "$P" M006 planned "- S01" "- S02"
+  ph "$P"
+  ph "$P" --json
+  eq "after a text report the change is used up" "null" "$(printf '%s' "$OUT" | jq -r '.total.change')"
 else
   ok "--json: skipped, no jq"
 fi
+# Concurrent text reports: the log gets each change once, no temporary or lock file stays
+road "$P" M004 active "x S01" "- S02" "- S03" "- S05" "- S06" "- S07" "- S09"
+B4=$(awk 'END { print NR }' "$LOG")
+for i in 1 2 3 4 5 6; do ( cd "$ELSEWHERE" && bash "$BIN" --phases -C "$P" >/dev/null 2>&1 ) & done; wait
+eq "six reports at once log the change once" "$((B4 + 1))" "$(awk 'END { print NR }' "$LOG")"
+eq "and leave only the snapshot and the log" "denominator.log snapshot" "$(ls "$(dirname "$LOG")" | paste -sd' ' -)"
 N2=$(new_repo noroad); state "$N2" none none none
 ph "$N2"
 eq "no roadmap: exit 1" 1 "$EC"
