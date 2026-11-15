@@ -22,7 +22,7 @@ are part of the host guide.
 - `gh`, logged in, for `ship`, `document-release` and the pull request steps of `finish-lane`. GitHub is the only pull request host the pipeline supports.
 - For `visual-review` only: a browser tool in the session that renders a page and returns a screenshot (a Playwright-style browser server or command line, or the host's built-in browser). `curl` or a web fetch does not count. Without one the visual lens records `not run`.
 
-  Upgrading from ytstack 0.5 or older with gstack installed only for ytstack: gstack's `./setup` registered about 60 skills in `~/.claude/skills/` (folders with a `.gstack-owned` marker) plus `~/.claude/skills/gstack`. ytstack no longer uses them; remove them with gstack's own `~/.claude/skills/gstack/bin/gstack-uninstall --keep-state` (read its `--help` first: it also removes gstack installs for other agents).
+  Upgrading from ytstack 0.5 or older with gstack installed only for ytstack: gstack's `./setup` registered about 60 skills in `~/.claude/skills/` (folders with a `.gstack-owned` marker) plus `~/.claude/skills/gstack`. ytstack no longer uses them; remove them with gstack's own `~/.claude/skills/gstack/bin/gstack-uninstall --keep-state` (read its `--help` first: it also removes gstack installs for other agents). Everything else an upgrade needs: "Upgrading from 0.x" below.
 
 ### Local dev (recommended for first try)
 
@@ -513,6 +513,28 @@ When a session starts (or after `/clear`, not on resume or compaction), the Sess
 `bin/ytstack-upkeep` lists the same lines in its last section, `factory tools`; they never count as findings.
 
 In Claude Code a second notice comes with a prompt, once per installed version: `ytstack X installed, this session loaded A: reload the skills you use`, followed by the CHANGELOG entry titles in between. The plugin was updated while the session ran, and the skill text the session already loaded is the old one. Invoke the skills you use again; restart the session when the new version brings hooks (a running session keeps the hooks it started with). Codex and Kimi sessions get no version notice.
+
+## Upgrading from 0.x
+
+After every update:
+
+1. Update the catalog and the plugin: `claude plugin marketplace update yesterday-public-plugins && claude plugin update ytstack` (or `ytstack@ytstack` with the self-marketplace).
+2. Restart the running Claude Code, Codex and Kimi sessions. A session keeps the skill text and the hooks it started with. A Claude Code session on a release that has the version notice says so itself ("What the session start tells you" above).
+3. The PR watch worker needs nothing: its launcher runs the engine of the version Claude Code has installed.
+4. Run `bin/ytstack-upkeep` once in each project. Its last section, `factory tools`, names what is still off.
+
+Then, by the version you come from (newest first; coming from an older one, do every block down to yours):
+
+- **From 0.10.x** (the release after 0.10.0): nothing to migrate. A coordinator that rotates hands its PR watches to the successor with `bin/ytstack-pr-watch handover --from claude:<old session id>`. `finish-lane` and `code-review` now post the review record lines in the review body on the pull request, and `ytstack-risk route --pr <n>` reads them from there, so a repository where agents may not write in the main checkout can route `unattended`. A plan under `plans/` shows up in `bin/ytstack-plans scan`; `reconcile` offers to map it (step 5 above).
+- **From 0.9.x:** standing instructions can live as one file each in `.ytstack/standing/` (0.10.0). `STANDING.md` keeps working; nothing to move. After the first entry: `bin/ytstack-check --standing`.
+- **From 0.9.0 or 0.9.1:** a Claude Code session that registered with its bare id had its PR watch notices stored for a Codex thread and never saw them. Run one `register` in that session (a coordinator: `register --repo OWNER/REPO --all-open`, without `--session`); it moves those watches and their notices (0.9.2).
+- **From 0.9.0 or older:** a session that ran when the PR watch was switched on registered nothing. Restart it; the coordinator then runs `register --repo OWNER/REPO --all-open` once (0.9.1).
+- **From 0.8.x or older:** review lessons are new (0.9.0). A project with review roles of its own adds `## Own reviewers` to `REVIEW.md` (step 1); `bin/ytstack-upkeep` then lists merged pull requests without an escape check.
+- **From 0.8.0 or 0.8.1 with `gh` from asdf or mise:** run `bin/ytstack-pr-watch install-worker --yes` again; the old worker may carry a shim that cannot run under launchd (0.8.2).
+- **From 0.7.x:** the PR watch is new and off (0.8.0). Switch it on with step 2. If you ran the watcher as a local tool before: `bin/ytstack-pr-watch migrate --from <old install>` (prints the plan; `--yes` copies), then "Migrating from a local install" in [`docs/pr-watch.md`](docs/pr-watch.md) for the rest.
+- **From 0.6 or older:** projects have no technical spec yet (0.7.0). Say "write the technical spec": `adopt-brownfield` writes `.ytstack/spec/` and touches no other artifact. Then steps 1 and 3. `merge_by: risk` became the default, but without an `auto_merge` field in an area every merge still goes to you. Older task plans without `## Spec impact` close fine: `summarize-task` works the impact out at closure.
+- **From 0.5 or older:** gstack is no longer used. If it was installed only for ytstack, remove its skills with `~/.claude/skills/gstack/bin/gstack-uninstall --keep-state` (see Prerequisites; read its `--help` first).
+- **From 0.3 or older:** add the `## Ceremony` block to `.ytstack/PREFERENCES.md` ("Dialing ceremony up or down"), or keep the defaults (task, loop, on, on, team off). Leftover `~/.ytstack/.*-prompted` files can be deleted; nothing reads them.
 
 ## Reading the state
 
