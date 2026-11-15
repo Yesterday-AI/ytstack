@@ -171,8 +171,11 @@ printf 'main red twice\n' | bash "$SIG" -C "$R" lesson new --area ci --class fla
 printf 'a receipt ticked early\n' | bash "$SIG" -C "$R" lesson new --area evidence --class receipt-early --title "Receipt before the run" --target proposal:Q003 >/dev/null
 printf 'missing gotcha\n' | bash "$SIG" -C "$R" lesson new --area process --class env-gotcha --title "A gotcha" --target knowledge:.ytstack/KNOWLEDGE.md >/dev/null
 run "$R" list
-eq "without a milestone the lesson lanes are listed; one without a plan is blocked" "0 lesson-F001${TAB}blocked${TAB}unplanned: the lesson has no ## Files or no ## Verification" "$EC $OUT"
+eq "without a milestone the lesson lanes are listed; one without a plan is blocked" "0 lesson-F001${TAB}blocked${TAB}unplanned: the lesson has no ## Files or no ## Verification with content" "$EC $OUT"
 F1=$(ls "$R"/.ytstack/signals/F001-*.md)
+printf '\n## Files\n\n## Verification\n\n' >> "$F1"
+run "$R" list
+eq "empty ## Files and ## Verification are no plan (ytstack-brief would refuse the brief)" "0 lesson-F001${TAB}blocked${TAB}unplanned: the lesson has no ## Files or no ## Verification with content" "$EC $OUT"
 printf '\n## Files\n\n- Create: `tests/order.test.sh`\n\n## Verification\n\n    bash tests/order.test.sh\n' >> "$F1"
 run "$R" list
 eq "a lesson with a check target and its plan is ready; proposals and knowledge entries are no lanes" "lesson-F001${TAB}ready${TAB}lesson:ci:flaky-order" "$OUT"

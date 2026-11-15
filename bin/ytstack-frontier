@@ -61,6 +61,8 @@ usage() { sed -n '5,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "ytstack-frontier: $*" >&2; exit 1; }
 # listed <value> <a|b|c>
 listed() { case "|$2|" in *"|$1|"*) return 0 ;; esac; return 1; }
+# has_body FILE NAME: the "## NAME" section exists and holds a non-blank line.
+has_body() { awk -v h="## $2" '$0 == h || index($0, h " ") == 1 { f = 1; next } /^## / { f = 0 } f && NF { n = 1 } END { exit !n }' "$1"; }
 # cell <value>: refuse what would break the table
 cell() {
   case "$1" in *"|"*|*"$NL"*) echo "ytstack-frontier: a cell value must not contain '|' or a newline" >&2; exit 64 ;; esac
@@ -277,8 +279,9 @@ EOF
     if [ "$R_STATUS" = merged ]; then state="done"; detail="merged, the lesson is not set fixed yet"
     elif listed "$R_STATUS" "$HELD"; then state=claimed; detail=$R_BY
     elif [ "$R_STATUS" = blocked ]; then state=blocked; detail="lane: $R_NEXT"
-    elif ! grep -q '^## Files' "$file" || ! grep -q '^## Verification' "$file"; then
-      state=blocked; detail="unplanned: the lesson has no ## Files or no ## Verification"
+    elif ! has_body "$file" Files || ! has_body "$file" Verification; then
+      # Empty sections count as missing: ytstack-brief refuses a brief without a scope.
+      state=blocked; detail="unplanned: the lesson has no ## Files or no ## Verification with content"
     else
       open=""
       while read -r b qid; do
