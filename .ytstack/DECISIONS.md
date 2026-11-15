@@ -1219,6 +1219,165 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 
 **Supersedes:** None. Extends the roadmap state values in `docs/ux/skill-structure.md`.
 
+## 2026-11-15: PR watch bulk registration takes only your own ready PRs; bins are called through `YT_BIN` (issue #85)
+
+**Context:** A coordinator ran `ytstack-pr-watch register --all-open`. It registered every open PR of the repository, including another author's do-not-merge prototype, which was then injected as `action_required` 967 times; single status blocks reached 8.4k characters and 34 PRs, re-sent whole whenever one line changed; `status` printed 1,176 watches of every repository and session. The same coordinator called the bins by the versioned cache path it had seen (`.../ytstack/0.7.0/bin/ytstack-frontier`), kept doing so after an update, and one call failed with exit 127.
+
+**Options considered:**
+- Bulk registration: A) only PRs whose author is the `gh` login, drafts and do-not-merge labels skipped, `--author`, `--include-drafts`, `--include-labelled` to widen; B) keep "every open PR" and rely on `pause`; C) filter by branch bindings of the session.
+- Bins: D) print `YT_BIN=<bin of the running version>` in the `coordinate` preamble and at the end of the SessionStart context, and have the skill run bins as `"$YT_BIN/ytstack-<name>"`; E) a stable `~/.ytstack/bin` shim that points at the active version.
+
+**Chose:** A and D.
+
+**Reason:** A coordinator's lanes open their PRs under the same login, so the author is the cheapest fact that separates them from a colleague's, and one REST call (`gh api user`) gets it. B is what failed. C misses exactly the PRs `--all-open` exists for: those a session without hooks opened. `--author` adds to the login instead of replacing it, so widening never drops one's own PRs. For bins, D needs nothing outside the plugin and gives the coordinator one current value to copy instead of a path it remembers from an earlier context. E is a file in the user's home that some command must install and keep current across hosts and versions, and it would point at whatever version was active last, not at the one the session runs; ytstack never edits host settings or `PATH`, so a shim would still need a path to be called by.
+
+**How to apply:**
+- `register --pr N` registers one PR whatever its author or label; the filters apply to `--all-open` only, and every skipped PR is named with its reason.
+- A do-not-merge label is any label that, lowercased with `-`, `_`, `/`, `:` and `.` read as spaces, contains the words "do not merge" or `dnm`. Logins compare without case and without a `[bot]` suffix. When the login cannot be read, only an explicit `--author` list is used (with a warning); without one the command stops.
+- A rerun that skips a PR this session already watches pauses that watch and names it: the filter exists to stop such reports, and `resume` undoes it.
+- The status block lists changed lines, `- N unchanged`, and one last `closed` line for a PR of the previous block (a merge without a bot finding has no other report); a PR `action_required` without a head or status change for 24 hours (NULL `changed_at` counts as older) gets one `pause` suggestion per stretch, remembered apart from the block fingerprint so SessionStart does not repeat it. `status` shows the current session and repository (compared without case) unless `--all`.
+- The SessionStart line comes on every source but only where it still fits under the injection guard: this repository's injection sits within about 50 characters of it with a long Next action, and the excerpt matters more. The `coordinate` preamble is the source that always prints it. A session started before an update runs the old version's hooks, so after an update the line is renewed by reloading the skill (the version notice asks for that), not by the hook.
+- A skill that runs ytstack bins over a long session names them through `YT_BIN`; a short skill keeps `${CLAUDE_SKILL_DIR}/../../bin`, which the host substitutes when it loads the skill.
+
+**Supersedes:** None. Narrows `register --all-open` of "2026-11-14: PR watch ships inside ytstack as an optional, opt-in tool" (issue #54).
+
+## 2026-11-15: New artifacts follow the directory a milestone already lives in (issue #70)
+
+**Context:** Reading tolerated `milestones/`, `milestones/*/`, `backlog/` and `backlog/*/` since M018-S03, but every skill and hook wrote flat into `.ytstack/`. A consumer that moved 299 files of older milestones into `.ytstack/milestones/M###/` got the next plan or summary of such a milestone back at the top level, beside the moved ones.
+
+**Options considered:**
+- A) Keep writing flat and let `reconcile` move stragglers. Leaves the split after every task and needs a cleanup run per milestone.
+- B) Move a milestone's files into `milestones/M###/` as soon as ytstack writes one. Moves user-owned files, which only `reconcile` may do, and changes this repository's own layout.
+- C) Write where the milestone already lives: the directory that holds its roadmap, else any of its files, else flat.
+
+**Chose:** C.
+
+**Reason:** The person decided the layout by moving the files; ytstack follows it without moving anything. A milestone that lives flat, and every new milestone, stays flat, so nothing changes for projects that never moved files.
+
+**How to apply:**
+- One lookup in `hooks/lib/git-ctx.sh`: `yt_artifact_dir <yt_dir> <id>` for the directory, `yt_artifact_path <yt_dir> <file>` for one file (where it exists, else in that directory). No skill or hook builds a milestone path as `$YT_DIR/M###-...` any more.
+- Skills that write or read a milestone's files print `ARTIFACT_DIR` and fall back to `YT_DIR` when the library is not reachable.
+- A file of the milestone that already exists elsewhere (a summary that landed flat before this fix) is read and replaced where it is, not duplicated.
+- `bin/ytstack-risk` counts `M###-*` files in those directories as process records, like the flat ones.
+
+**Supersedes:** None. Narrows "Writing stays flat" of M018-S03 (`yt_find_artifacts`).
+
+## 2026-11-15: Progress per phase counts slices of each roadmap; the denominator log lives outside the tree (issue #81)
+
+**Context:** Issue #81: in a four-day coordinator run the human asked for "% per phase" 37 times and the coordinator drew 22 charts by hand. Rows were added to phases, their denominators grew and progress looked negative. The issue asked for a report per phase and a log of every denominator change with its cause, kept out of the repository.
+
+**Options considered:**
+- A) Rows are tasks (`M###-S##-PLAN.md` checkboxes).
+- B) Rows are the slices of each `M###-ROADMAP.md`, the unit a lane works on; done from the checkbox or a `merged` lane, in review from the lane status.
+- C) The log in `.ytstack/` (committed history).
+
+**Chose:** B, with the log under `<state base>/repos/<repo key>/phases/` (`snapshot`, `denominator.log`, the state base of `yt_state_base`). Each `--phases` run compares the slice ids per phase with the run before and appends one line per change (`first report`, `new phase`, `added S05`, `removed S04`, `phase left the report`). A `dropped` roadmap is left out.
+
+**Reason:** A coordinator dispatches and finishes slices, and `LANES.md` says which are in review; tasks have no lane status. The log records when a report saw a change, not a host fact or a plan state, and it changes on every report: committed, it would make every status a diff in the tree (the issue asked for it to stay out). Keying by the repository makes linked worktrees share one log.
+
+**How to apply:**
+- A status with progress uses `ytstack-status --phases`, never a count by hand (`coordinate` Step 11).
+- The change shown is the one since the previous `--phases` run; a second run without a change shows none.
+- Only the text report advances the snapshot and appends to the log; `--json` shows the same change and writes nothing, so drawing a chart never uses up the delta a status needs. Snapshot and log are written under a noclobber lock with a `mktemp` file (PR #90 review; refines the bullet above: "run" means text report).
+- A phase that joins or leaves is named on its own line, in the total and in the JSON (`joined`, `left`), also when the total stays equal. A `done` or `shipped-informally` milestone counts all its slices as done; a `backlog` roadmap is left out like a `dropped` one (PR #90 review).
+
+**Supersedes:** None.
+
+## 2026-11-15: Lane liveness is part of `ytstack-frontier check`, worktree cleanup only prints commands, peers are list lines in `LANES.md` (issue #84)
+
+**Context:** Issue #84: in a four-day coordinator run lanes finished and nobody took them over overnight, 97 worktrees piled up, and after a compaction the coordinator sent a production request to the wrong session of another repository. `ytstack-upkeep` flagged only lanes held for more than 24 hours.
+
+**Options considered:**
+- A) A new command for liveness; `check` stays a format check.
+- B) `check` reads a well-formed table for stalled lanes, one `stale:` line each, exit 2 (format problems keep exit 1 and skip the liveness read).
+- For "the worker reported": a report file the worker writes, or what the files already show.
+- For peers: a second Markdown table in `LANES.md`, or list lines.
+
+**Chose:** B with N = 60 minutes (`--minutes`). A running row counts as reported when its row carries a pull request or its worktree no longer exists; silent when its branch had no commit for N minutes, counted from the claim when that is newer. A ready lane is stale when nobody claimed it for N minutes since a check first saw it ready; that first sight is kept outside the tree in `<state base>/repos/<repo key>/frontier-ready`. `ytstack-upkeep --worktrees` prints the inventory and the `git worktree remove` / `git branch -D` commands for merged or closed, clean, unlocked, unheld ones and runs none. Peers are `- <role> | <repository> | <address> | <last contact UTC>` lines under `## Peers`, keyed by role and repository.
+
+**Reason:** The issue names `check`, and the coordinator already runs it at a rotation and upkeep on a schedule; a separate exit code keeps upkeep and every caller able to tell a broken table from a slow lane. Workers do not push and leave no report on disk, so a pull request in the row and a removed worktree are the local traces a report leaves; anything else would need the host. 60 minutes is longer than one task commit of a worker and much shorter than the overnight gap of the issue. The first sight of a ready lane changes with every check and is no plan state, so it stays out of the tree like the other volatile state. Printing commands instead of running them keeps a removal with a person (`rm -r` and branch deletion of parallel sessions are irreversible), and a locked worktree is a running session on Claude Code. Every existing reader of `LANES.md` (finish-lane, lane-retro, upkeep, the preambles) takes every line that starts with `|` as a lane row; list lines are invisible to all of them.
+
+**How to apply:**
+- A `stale:` line is a prompt to read the branch and set the row, or to dispatch; no script releases a lane by itself.
+- A message to a session of another repository goes to the address under `## Peers`, and `peer set` runs after each contact.
+- A new reader of `LANES.md` reads the lanes table only from lines that start with `|`.
+- A running row with a pull request is a fix round (`finish-lane`, `spawn-milestone-team`), not a report: it is checked for commits like any implement lane, counted from the first time a check sees that pull request and round in the row; a new round restarts the clock. The only "the worker ended" signal left is a worktree that no longer exists. A `review` or `prepare` lane commits nothing: it is stale after 3 x N minutes since its claim. First sights of ready lanes and fix rounds share `<state base>/repos/<repo key>/frontier-seen`, written under a noclobber lock with a `mktemp` file (PR #90 review; replaces "a pull request in its row" as a report signal and the file name `frontier-ready` above).
+- `--worktrees` prints no command for a branch with any open pull request, or whose local head is in neither the pull request head nor `origin/<branch>` (unpushed commits). It leaves out the worktree it runs in and reads `LANES.md` from the main checkout (PR #90 review).
+
+**Supersedes:** None. Extends "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)".
+
+## 2026-11-15: Coordinate mode is a session marker the coordinate preamble writes; the standing hooks act only with it (issue #72)
+
+**Context:** A 12-hour coordinator run got seven standing instructions in one day and recorded none in `.ytstack/standing/`; it wrote them to its private memory. Issue #72 asks for a prompt hook that flags such instructions and a Stop check that holds the turn when they were not recorded, both only in coordinate mode. Nothing marked a session as a coordinator: `LANES.md` exists in every checkout of a project that ever coordinated, also in a worker's or a human's other session.
+
+**Options considered:**
+- A) `LANES.md` (or `standing/`) in the resolved `.ytstack` means coordinate mode.
+- B) The `coordinate` preamble writes a marker per session out of tree; the hooks act only with it.
+- C) Parse the transcript for a `ytstack:coordinate` invocation.
+
+**Chose:** B. The marker is `<session home>/<session id>/coordinate` with the resolved `.ytstack` on its first line. `<session home>` is `${XDG_STATE_HOME:-~/.local/state}/ytstack/sessions` (`yt_session_home`), not `yt_state_base`: Claude Code exports `CLAUDE_PLUGIN_DATA` to hooks only, so a skill preamble in the Bash tool and a hook would resolve two different directories. The session id in the preamble is `CLAUDE_CODE_SESSION_ID`, the hook payload's `session_id` in the hooks.
+
+**Reason:** A marker is written exactly by the session that runs the skill and survives compactions and worktree moves (keyed by the session only, like `plugin-version`). A would flag prompts of every session in the project. C is slow, host-specific and undocumented.
+
+**How to apply:**
+- `hooks/standing-prompt` (UserPromptSubmit) and the standing part of `hooks/stop` end at once without the marker; they read files and local git only, never the network and never a command of an entry.
+- The prompt counter (`prompts`) and the flags (`standing-flags`) live beside the marker; `hooks/stop` writes `standing-stop`, so the same flagged prompts block once.
+- Claude Code only. Codex registers no ytstack UserPromptSubmit hook and a Kimi shell has no session id; both keep the skill's Step 9 and the preamble's prompt-gap line without the hooks.
+
+**Supersedes:** None. Narrows "2026-11-15: SessionStart stays read-only ...": session state a skill writes goes under the session home, not under `yt_state_base`.
+
+## 2026-11-15: Standing entries end by `until`, `until-condition` or `until-check` and are closed by an entry of `kind: end`; their commands run only in `ytstack-standing list` (issues #73, #74)
+
+**Context:** Many standing instructions are temporary ("until the load test ends", "while the v2 plan runs"). They could only be written as prose and ended when someone remembered. Issue #74 adds a compliance self-check (`check:`), a SessionStart injection of the active entries and the entries in lane briefs. Both kinds of command come from a file in the repository.
+
+**Options considered:**
+- A) `until` only; conditions stay prose.
+- B) `until`, `until-condition` and `until-check` (a command, exit 0 = ended), plus `check` (non-zero = not kept); an ended entry is closed by a new entry.
+- C) As B, but an ended entry is edited or deleted.
+
+**Chose:** B. `until-check` may stand alone: the command is then the condition; with `until-condition` the sentence says for people what it checks. The closing entry has `kind: end` and `supersedes: <entry>` and is no instruction itself; `ytstack-standing end` writes it. The commands run only in `ytstack-standing list`, which the `coordinate` preamble calls: `bash -c` in the checkout's toplevel, stdin closed, `YTSTACK_STANDING_TIMEOUT` seconds each (default 5), at most ten per call; a timeout counts as not ended and as a failed check. No hook runs them; `session-start` and the readers apply only a passed `until`. Roles in the scope (coordinator, lane, reviewer as whole words) filter the injection and the briefs; a scope naming no role is for everyone.
+
+**Reason:** Append-only stays (C would lose why and when an instruction ended). A hook runs on every prompt or session start under a seconds budget; a repository command there would slow every session and run before a person looked at it. In the coordinate preamble the session is already working in the repository, and a change under `standing/` goes to a person (`bin/ytstack-risk floor`).
+
+**How to apply:**
+- `bin/ytstack-check --standing` validates the keys: `until` a real ISO UTC time after `given`, the three others one line, `kind` only `end`, an `end` names its entry.
+- `bin/ytstack-standing add` writes by default in its own worktree on `standing/<YYYYMMDD>`, commits, pushes and opens or updates one pull request per UTC day (`ytstack-pr-watch create` when the PR watch is on); `--here` and user scope write in place.
+- The SessionStart injection keeps at most six lines and is the last block cut for the 10,000-character cap, after the Next action, the factory tools and the minimal-code line.
+
+**Supersedes:** None. Extends "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/` ..." with optional keys and a closing entry.
+
+## 2026-11-15: In coordinate mode the operating path is injected and checked by hooks that warn; a lint repeated in three sessions blocks once (issue #76)
+
+**Context:** A 12-hour coordinator run used almost none of ytstack's tooling: hand-written briefs, a `LANES.md` stale for a day, instructions in private memory, no release watch, a STATE pointer two milestones behind with a lint nobody acted on. Every rule was in the skill text; nothing on the path failed when it was skipped. Issue #75's correction names the same bypass of `ytstack-brief render`.
+
+**Options considered:**
+- A) More skill text.
+- B) In coordinate mode (the session marker): an ordered operating checklist injected at SessionStart and printed by the preamble; a PreToolUse hook on `Agent`, `Task`, `SendMessage` that warns on a prompt without a rendered brief; a Stop check for `LANES.md` and the STATE pointer that warns, and blocks once when the same finding came in N sessions in a row.
+- C) As B, but the PreToolUse hook denies a dispatch without a brief.
+
+**Chose:** B with N = 3 (`YT_LINT_STREAK_N`). The checklist lives once, between markers in `docs/ux/coordinator-format.md`; the hook and the preamble read it from there and a test compares them. The marker of a rendered brief is its first line `# Brief: <ref> (<project>)`, which `ytstack-brief render` already prints; no new line was added. `LANES.md` counts as stale when it changed more than five minutes before the newest dispatch or report of the session (a claim comes just before its dispatch). The counter is per repository out of tree (`<state base>/repos/<repo key>/coordinate-lints`); a session counts once, a clean stop resets it.
+
+**Reason:** A checklist that arrives with every compaction is read when the skill text is not. A deny (C) would also hit a research or lookup agent, which needs no brief; a warning on the path is enough to make the bypass visible. Blocking at once on a lint would stop a session for a pointer the human may want to keep for a day; three sessions in a row is a pattern, not a moment.
+
+**How to apply:** The hooks act only with the coordinate marker and read local files only. A coordinate session gets the checklist instead of the minimal-code line. Codex and Kimi are not covered (no ytstack hook on their subagent tools; no session id in a Kimi shell).
+
+**Supersedes:** None. Extends "2026-11-15: Coordinate mode is a session marker ..." with three more hook parts.
+
+## 2026-11-15: A standing entry's command runs only when the entry is merged; pending means this machine's standing branches (review of PR #87)
+
+**Context:** The independent review of PR #87 found that `ytstack-standing list` read every `origin/standing/*` branch and ran the `check` and `until-check` of its entries: anyone who can push a branch got code execution in the coordinator's preamble. It also found that pending entries never reached the SessionStart injection or the briefs, and that an entry on an earlier day's unmerged branch could not be superseded.
+
+**Options considered:**
+- A) Run the commands of every entry the list shows, as before.
+- B) Run commands only for a working-tree entry whose file is the one on the default branch; read pending entries only from local `standing/*` branches and their upstreams, as text; start a new day's branch from the newest pending one.
+- C) Never run commands.
+
+**Chose:** B. Pending entries are shown (marked) in `list`, the SessionStart injection and the briefs, never executed (`[check not run: pending]`, `[check not run: not on <branch>]`). Outside a repository and in one without a commit the files are the user's own and run. A remote branch no local branch tracks is not read at all.
+
+**Reason:** "Merged" is the one state in which a person looked at the command (a change under `standing/` goes to a person). C would drop the compliance check of issue #74. Starting the new day from the pending branch keeps one pull request per day and lets `end`/`--supersedes` see what waits; the cost is that a day's pull request carries the earlier day's commits until that one merges.
+
+**Supersedes:** Narrows "2026-11-15: Standing entries end by `until` ...": the commands run only for merged entries.
+
 ## 2026-11-15: The spec delta is the report's existing `Spec:` label, checked for its form (issue #75)
 
 **Context:** Lanes of a long coordinator run updated receipts and changelogs and never the area files their change made false. The brief listed the area files only as reading context, and the report's `Spec:` line accepted any text.

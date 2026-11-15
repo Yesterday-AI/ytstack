@@ -131,11 +131,12 @@ NEXT_ACTION=$(awk '/^## Next action/{flag=1; next} /^## /{flag=0} flag' "$STATE_
 # Lifecycle hints (M019-S03): a closed slice or milestone has a documented next step.
 LIFECYCLE_LINES=""
 if [ "${CURRENT_MILESTONE:-none}" != none ]; then
-  _rm="$YT_DIR/$CURRENT_MILESTONE-ROADMAP.md"
-  if [ -f "$_rm" ] && [ "$(sed -n 's/^status: *//p' "$_rm" | head -1)" = done ] && [ ! -f "$YT_DIR/$CURRENT_MILESTONE-RETRO.md" ]; then
+  _rm=$(yt_artifact_path "$YT_DIR" "$CURRENT_MILESTONE-ROADMAP.md")
+  _sp=$(yt_artifact_path "$YT_DIR" "$CURRENT_MILESTONE-${ACTIVE_SLICE:-none}-PLAN.md")
+  if [ -f "$_rm" ] && [ "$(sed -n 's/^status: *//p' "$_rm" | head -1)" = done ] && [ ! -f "$(yt_artifact_path "$YT_DIR" "$CURRENT_MILESTONE-RETRO.md")" ]; then
     LIFECYCLE_LINES="Milestone $CURRENT_MILESTONE is done and has no retro: ytstack:retro, then ytstack:document-release for the version, then ytstack:plan-milestone."
-  elif [ "${ACTIVE_SLICE:-none}" != none ] && [ -f "$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-PLAN.md" ] \
-       && [ "$(sed -n 's/^status: *//p' "$YT_DIR/$CURRENT_MILESTONE-$ACTIVE_SLICE-PLAN.md" | head -1)" = done ]; then
+  elif [ "${ACTIVE_SLICE:-none}" != none ] && [ -f "$_sp" ] \
+       && [ "$(sed -n 's/^status: *//p' "$_sp" | head -1)" = done ]; then
     LIFECYCLE_LINES="Slice $ACTIVE_SLICE is done: ytstack:reassess-roadmap first; then ytstack:finish-branch (merge / PR / keep) or ytstack:ship (release flow) for the branch."
   fi
 fi
@@ -195,6 +196,36 @@ if [ -L "$LATEST_LINK" ] && [ -f "$LATEST_LINK" ]; then
 }Latest automatic handoff: $A_TARGET${A_TS:+ ($A_TS)}"
 fi
 
+# Standing instructions (issue #74): the active entries of standing/, files
+# only (no until-check or check runs here; a passed `until` is applied), for
+# the session's role: coordinator when the coordinate preamble left its
+# session marker, else lane. At most 6 lines; the rest is a pointer. Pending
+# entries count too, also before the checkout has a standing/ directory.
+STANDING_LINES=""; STANDING_N=0
+_ROLE=lane
+case "${YT_SESSION_ID:-}" in ''|.|..|*[!A-Za-z0-9._-]*) ;; *) [ ! -f "$(yt_session_home)/$YT_SESSION_ID/coordinate" ] || _ROLE=coordinator ;; esac
+_ALL=$(yt_standing_lines "$YT_DIR" "$_ROLE")
+_SL=""
+if [ -n "$_ALL" ]; then
+  _SL=$(yt_standing_lines "$YT_DIR" "$_ROLE" 6 | cut -c1-150)
+  STANDING_N=$(printf '%s\n' "$_ALL" | grep -c .)
+  _SH="Standing instructions in force (role: $_ROLE; they override defaults; full text in standing/, of a pending one in bin/ytstack-standing list):"
+  STANDING_LINES="$_SH
+$_SL"
+fi
+[ ! -f "$YT_DIR/STANDING.md" ] || STANDING_LINES="${STANDING_LINES:+$STANDING_LINES
+}Also read $YT_DIR/STANDING.md."
+
+# Coordinate mode (issue #76): the operating checklist, read from its one
+# place (docs/ux/coordinator-format.md, between the operating-checklist
+# markers). A coordinator writes no product code, so the minimal-code line
+# gives way to it.
+CHECKLIST_LINES=""
+if [ "$_ROLE" = coordinator ]; then
+  CHECKLIST_LINES=$(awk '/<!-- operating-checklist:end -->/ { f = 0 } f { print } /<!-- operating-checklist:begin -->/ { f = 1 }' "$PLUGIN_ROOT/docs/ux/coordinator-format.md" 2>/dev/null)
+  [ -z "$CHECKLIST_LINES" ] || MINIMAL_CODE_LINES=""
+fi
+
 # Technical spec (M022): name the entry point when the project has one.
 SPEC_HINT=""
 [ ! -f "$YT_DIR/spec/SPEC.md" ] || SPEC_HINT=" spec/SPEC.md for what applies now,"
@@ -224,6 +255,16 @@ Recent tasks: $RECENT_SUMMARIES"
 
 Milestones in progress: $IN_PROGRESS (more than one -- check the STATE pointer; run ytstack:reassess-roadmap to close or drop the stale one)"
   fi
+  if [ -n "$CHECKLIST_LINES" ]; then
+    ctx="$ctx
+
+$CHECKLIST_LINES"
+  fi
+  if [ -n "$STANDING_LINES" ]; then
+    ctx="$ctx
+
+$STANDING_LINES"
+  fi
   if [ -n "$HANDOFF_LINES" ]; then
     ctx="$ctx
 
@@ -251,9 +292,10 @@ $FACTORY_LINES"
   fi
   ctx="$ctx
 
-The files in $YT_DIR are the source of truth for this project's state. Read STATE.md for the full dashboard,${SPEC_HINT} DECISIONS.md for locked architectural choices, KNOWLEDGE.md for patterns and gotchas, ROADMAP.md for the task list. Do not rely on prior-conversation context for these facts."
+$CLOSING_LINE"
   printf '%s' "$ctx"
 }
+CLOSING_LINE="The files in $YT_DIR are the source of truth for this project's state. Read STATE.md for the full dashboard,${SPEC_HINT} DECISIONS.md for locked architectural choices, KNOWLEDGE.md for patterns and gotchas, ROADMAP.md for the task list. Do not rely on prior-conversation context for these facts."
 
 STATE_CONTEXT=$(build_state_context "$NEXT_ACTION")
 FULL_CONTEXT="$DIRECTIVE
@@ -268,6 +310,19 @@ $STATE_CONTEXT"
 # non-Claude adapter prepends (YTSTACK_HOST_CONTEXT, e.g. codex/adapter.md)
 # is not counted; that host's own limit lives in its hooks config.
 _HOST="${YTSTACK_HOST_CONTEXT:-}"; _HOST_LEN=${#_HOST}
+_NEXT_SHORT="$NEXT_ACTION"
+# First the standing lines shrink to the three newest at 100 characters: the
+# next action outranks a long list (the rest is a pointer line away).
+if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ] && [ -n "${_SL:-}" ]; then
+  STANDING_LINES="$_SH
+$(yt_standing_lines "$YT_DIR" "$_ROLE" 3 | cut -c1-100)"
+  STATE_CONTEXT=$(build_state_context "$NEXT_ACTION")
+  FULL_CONTEXT="$DIRECTIVE
+
+---
+
+$STATE_CONTEXT"
+fi
 if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ]; then
   # Cut the excerpt to what still fits instead of dropping it: the next action
   # is the one line a session needs most. Below 200 characters it says nothing
@@ -276,6 +331,9 @@ if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ]; then
   _KEEP=$(( ${#NEXT_ACTION} - _OVER - 40 ))
   if [ "$_KEEP" -ge 200 ]; then
     _NEXT_SHORT="${NEXT_ACTION:0:$_KEEP} ... (cut: rest in STATE.md)"
+  elif [ "${#NEXT_ACTION}" -le 70 ]; then
+    # Shorter than the omission note itself: dropping it would cost space.
+    _NEXT_SHORT="$NEXT_ACTION"
   else
     _NEXT_SHORT="(omitted: see STATE.md -- injection near the 10,000-char cap)"
   fi
@@ -296,9 +354,65 @@ $STATE_CONTEXT"
 
 $STATE_CONTEXT"
   fi
+  # Third: the minimal-code line shrinks to its pointer; fourth: the standing
+  # lines shrink to one pointer line (they outrank both: issue #74).
+  if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ] && [ -n "$MINIMAL_CODE_LINES" ]; then
+    MINIMAL_CODE_LINES="Minimal-code guard is on: load ytstack:minimal-code before writing code."
+    STATE_CONTEXT=$(build_state_context "$_NEXT_SHORT")
+    FULL_CONTEXT="$DIRECTIVE
+
+---
+
+$STATE_CONTEXT"
+  fi
+  # Then the closing line keeps only its point (the files are the truth).
+  if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ]; then
+    CLOSING_LINE="The files in $YT_DIR are the source of truth (STATE.md,${SPEC_HINT} DECISIONS.md, KNOWLEDGE.md), not the conversation."
+    STATE_CONTEXT=$(build_state_context "$_NEXT_SHORT")
+    FULL_CONTEXT="$DIRECTIVE
+
+---
+
+$STATE_CONTEXT"
+  fi
+  # The next action was left out before the later blocks shrank: give it back
+  # the room they freed.
+  case "$_NEXT_SHORT" in "(omitted:"*)
+    _KEEP=$(( 9500 - (${#FULL_CONTEXT} - _HOST_LEN - ${#_NEXT_SHORT}) - 40 ))
+    if [ "$_KEEP" -ge 200 ] && [ "$_KEEP" -lt "${#NEXT_ACTION}" ]; then
+      _NEXT_SHORT="${NEXT_ACTION:0:$_KEEP} ... (cut: rest in STATE.md)"
+      STATE_CONTEXT=$(build_state_context "$_NEXT_SHORT")
+      FULL_CONTEXT="$DIRECTIVE
+
+---
+
+$STATE_CONTEXT"
+    fi ;;
+  esac
+  # Last the standing lines shrink to a pointer.
+  if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ] && [ -n "$STANDING_LINES" ]; then
+    STANDING_LINES="Standing instructions: $STANDING_N in force for role $_ROLE (cut for the cap): bin/ytstack-standing list, before you act."
+    STATE_CONTEXT=$(build_state_context "$_NEXT_SHORT")
+    FULL_CONTEXT="$DIRECTIVE
+
+---
+
+$STATE_CONTEXT"
+  fi
   if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ]; then
     echo "[ytstack session-start] injection is $(( ${#FULL_CONTEXT} - _HOST_LEN )) chars; Claude Code caps additionalContext at 10,000. Shorten skills/using-ytstack/SKILL.md." >&2
   fi
+fi
+
+# The running version's bin/ (issue #85), on every source: skills run bins as
+# "$YT_BIN/ytstack-<name>", not by a path from an earlier context. Only where it
+# still fits under the guard; it never costs the Next action (coordinate's
+# preamble prints it too).
+_YT_BIN_LINE="YT_BIN=$(cd "$PLUGIN_ROOT/bin" 2>/dev/null && pwd -P || printf '%s' "$PLUGIN_ROOT/bin")"
+if [ $(( ${#FULL_CONTEXT} - _HOST_LEN + ${#_YT_BIN_LINE} + 2 )) -le 9500 ]; then
+  FULL_CONTEXT="$FULL_CONTEXT
+
+$_YT_BIN_LINE"
 fi
 
 emit_json "$FULL_CONTEXT"

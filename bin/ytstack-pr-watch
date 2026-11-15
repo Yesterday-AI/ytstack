@@ -7,7 +7,9 @@
 #   ytstack-pr-watch uninstall-worker [--yes]         remove the worker, keep state
 #   ytstack-pr-watch migrate --from DIR [--yes]       copy the state of an existing local install
 #   ytstack-pr-watch handover --from SESSION [--to SESSION]   hand a session's watches to its successor
-#   ytstack-pr-watch status | register | create | inspect | pause | resume | tick | hook
+#   ytstack-pr-watch status [--all]                   this session and repository, or everything
+#   ytstack-pr-watch register --repo R --all-open     your open PRs (--author, --include-drafts, --include-labelled)
+#   ytstack-pr-watch register | create | inspect | pause | resume | tick | hook
 #
 # Without --yes the setup commands print their plan and write nothing.
 # State: ${YTSTACK_PR_WATCH_HOME:-~/.ytstack/pr-watch}/state. Needs python3 (3.9+) and gh.

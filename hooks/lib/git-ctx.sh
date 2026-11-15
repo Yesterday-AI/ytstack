@@ -623,7 +623,7 @@ yt_brownfield_signals() {
 # line, from the flat layout and the layouts consumers already use:
 #   <yt_dir>/<glob>  milestones/<glob>  milestones/*/<glob>  decisions/<glob>
 #   backlog/<glob>   backlog/*/<glob>   quick/<glob>
-# Writing stays flat; only reading tolerates the alternatives.
+# Writing follows the directory a milestone already lives in: yt_artifact_dir.
 yt_find_artifacts() {
   local ytd="$1" pat="$2" d
   [ -d "$ytd" ] || return 0
@@ -640,40 +640,227 @@ yt_find_artifacts() {
   return 0
 }
 
-# ---- standing instructions, one file per entry (issue #57) --------------------
+# yt_artifact_dir <yt_dir> <id> -> the directory the artifacts of <id> live in
+# and new ones go to (issue #70). <id> is an artifact id or its prefix
+# (M005, M005-S02, M005-S02-T01, a backlog prefix); only the part before the
+# first `-` counts. First the directory holding <prefix>-ROADMAP.md, then the
+# one holding any <prefix>-* file, searched in <yt_dir>, milestones/,
+# milestones/*/, backlog/, backlog/*/ (flat first); else <yt_dir>. Nothing is
+# moved: a milestone that lives flat stays flat.
+yt_artifact_dir() {
+  local ytd="$1" p="${2%%-*}" d f
+  [ -n "$ytd" ] && [ -n "$p" ] && [ -d "$ytd" ] || { printf '%s\n' "$ytd"; return 0; }
+  for f in "$p-ROADMAP.md" "$p-*"; do
+    for d in "$ytd" "$ytd"/milestones "$ytd"/milestones/* "$ytd"/backlog "$ytd"/backlog/*; do
+      [ -d "$d" ] || continue
+      # shellcheck disable=SC2086  # $f is a glob on purpose
+      set -- "$d"/$f
+      [ -e "$1" ] && { printf '%s\n' "$d"; return 0; }
+    done
+  done
+  printf '%s\n' "$ytd"
+  return 0
+}
+
+# yt_artifact_path <yt_dir> <file name> -> where that artifact is read from
+# and written to: the file in yt_artifact_dir if it is there, else the newest
+# one yt_find_artifacts finds, else <yt_artifact_dir>/<file name> (new file).
+yt_artifact_path() {
+  local ytd="$1" name="$2" d hit
+  d=$(yt_artifact_dir "$ytd" "$name")
+  [ -e "$d/$name" ] && { printf '%s\n' "$d/$name"; return 0; }
+  hit=$(yt_find_artifacts "$ytd" "$name" | head -1)
+  printf '%s\n' "${hit:-$d/$name}"
+  return 0
+}
+
+# ---- standing instructions, one file per entry (issues #57, #72, #73, #74) ------
 # yt_standing <yt_dir> -> the standing entries in force, newest first, one per
 # line: <file name> TAB <given> TAB <scope>. Entries live in
 # <yt_dir>/standing/<YYYYMMDDTHHMMZ>-<slug>.md (docs/ux/coordinator-format.md);
 # the time in the name orders them (missing seconds count as 00). An entry that another entry names in `supersedes`
-# is skipped. Prints nothing when the directory does not exist; STANDING.md
-# is read by the caller as before.
+# is skipped, so is an entry whose `until` has passed and an entry of
+# `kind: end` (it only closes another one). Prints nothing when the directory
+# does not exist; STANDING.md is read by the caller as before.
 yt_standing() {
-  local sd="$1/standing" names
-  [ -n "$1" ] && [ -d "$sd" ] || return 0
-  names=$(ls "$sd" 2>/dev/null | grep -E '^[0-9]{8}T[0-9]{4}([0-9]{2})?Z-[A-Za-z0-9._-]+\.md$')
-  [ -n "$names" ] || return 0
-  # shellcheck disable=SC2086  # the names match the pattern above: no spaces
-  ( cd "$sd" && awk -v q="'" '
+  yt_standing_fields "$1" | awk -F '\t' '$9 == "active" { print $1 "\t" $2 "\t" ($3 == "-" ? "" : $3) }'
+  return 0
+}
+
+# yt_standing_default_ref <toplevel> -> the ref of the default branch:
+# origin/HEAD, else origin/main, origin/master, main, master ("" when none).
+yt_standing_default_ref() {
+  local r
+  r=$(git -C "$1" symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null)
+  for r in $r refs/remotes/origin/main refs/remotes/origin/master refs/heads/main refs/heads/master; do
+    git -C "$1" rev-parse -q --verify "$r" >/dev/null 2>&1 && { printf '%s' "$r"; return 0; }
+  done
+  return 0
+}
+
+# yt_standing_pending <yt_dir> -> "<branch> TAB <path>" per entry that is
+# pending: on a local branch standing/* or the upstream it tracks (written by
+# this machine's ytstack-standing add), not in the working tree and not on the
+# default branch. A remote branch no local branch tracks is never read.
+yt_standing_pending() {
+  local ytd="$1" top rel base ref up r p b seen=" "
+  top=$(git -C "$ytd" rev-parse --show-toplevel 2>/dev/null) || return 0
+  top=$(yt_canon "$top"); ytd=$(yt_canon "$ytd")
+  case "$ytd" in "$top"/*) rel="${ytd#"$top"/}" ;; *) return 0 ;; esac
+  base=$(yt_standing_default_ref "$top")
+  git -C "$top" for-each-ref --format='%(refname) %(upstream)' refs/heads/standing 2>/dev/null | while read -r ref up; do
+    for r in $ref $up; do
+      for p in $(git -C "$top" ls-tree --name-only "$r" -- "$rel/standing/" 2>/dev/null); do
+        b=${p##*/}
+        printf '%s\n' "$b" | grep -Eq '^[0-9]{8}T[0-9]{4}([0-9]{2})?Z-[A-Za-z0-9._-]+\.md$' || continue
+        [ ! -f "$ytd/standing/$b" ] || continue
+        [ -z "$base" ] || ! git -C "$top" cat-file -e "$base:$p" 2>/dev/null || continue
+        case "$seen" in *" $b "*) continue ;; esac
+        seen="$seen$b "
+        printf '%s\t%s\n' "${r#refs/*/}" "$p"
+      done
+    done
+  done
+  return 0
+}
+
+# yt_standing_fields <yt_dir> [<now as YYYYMMDDHHMMSS, UTC>] [pending] -> every
+# entry no other entry supersedes and not of kind end, newest first, TAB
+# separated:
+#   name given scope until until-condition until-check check summary state source body
+# (body: the whole body on one line)
+# An empty value is "-". summary is the first sentence of the body (at most 160
+# characters). state is "expired" when `until` is at or before now, else
+# "active". source is "-" for the working tree; with "pending" as third
+# argument the entries of yt_standing_pending are read too (text only, through
+# git show) with source "pending:<branch>". No command of an entry runs here
+# (bin/ytstack-standing list runs until-check and check, never a pending one).
+yt_standing_fields() {
+  local ytd="$1" sd="$1/standing" now="${2:-}" f b br p
+  [ -n "$ytd" ] || return 0
+  [ -d "$sd" ] || [ "${3:-}" = pending ] || return 0
+  [ -n "$now" ] || now=$(date -u +%Y%m%d%H%M%S)
+  {
+    for f in "$sd"/*.md; do
+      [ -f "$f" ] || continue
+      b=${f##*/}
+      printf '%s\n' "$b" | grep -Eq '^[0-9]{8}T[0-9]{4}([0-9]{2})?Z-[A-Za-z0-9._-]+\.md$' || continue
+      printf '@@ytstack-entry@@%s\t-\n' "$b"; cat "$f"; printf '\n'
+    done
+    if [ "${3:-}" = pending ]; then
+      yt_standing_pending "$ytd" | while IFS="$(printf '\t')" read -r br p; do
+        printf '@@ytstack-entry@@%s\tpending:%s\n' "${p##*/}" "$br"
+        git -C "$ytd" show "$br:$p" 2>/dev/null; printf '\n'
+      done
+    fi
+  } | awk -v q="'" '
     function clean(v,  f) {
-      gsub(/^[ \t]+|[ \t]+$/, "", v)
+      gsub(/\t/, " ", v); gsub(/^[ \t]+|[ \t]+$/, "", v)
       f = substr(v, 1, 1)
       if (length(v) >= 2 && (f == q || f == "\"") && substr(v, length(v)) == f) v = substr(v, 2, length(v) - 2)
       return v
     }
+    function d(v) { return v == "" ? "-" : v }
+    function val(key) { return clean(substr($0, length(key) + 2)) }
     # Sort key YYYYMMDDHHMMSS: a name without seconds counts as :00, so that
     # 20261114T1225Z sorts before 20261114T122530Z.
-    function out(  k) { k = substr(fn, 1, 8) substr(fn, 10, 4) (substr(fn, 14, 1) == "Z" ? "00" : substr(fn, 14, 2)); print k "\t" fn "\t" g "\t" s "\t" u }
-    FNR == 1 { if (fn != "") out(); fn = FILENAME; infm = ($0 == "---"); g = ""; s = ""; u = ""; next }
+    function out(  k) {
+      k = substr(fn, 1, 8) substr(fn, 10, 4) (substr(fn, 14, 1) == "Z" ? "00" : substr(fn, 14, 2))
+      print k "\t" fn "\t" d(g) "\t" d(s) "\t" d(u) "\t" d(un) "\t" d(uc) "\t" d(uk) "\t" d(ck) "\t" d(kd) "\t" d(sm) "\t" src "\t" d(bd)
+    }
+    /^@@ytstack-entry@@/ { if (fn != "") out(); fn = substr($0, 18); src = fn; sub(/\t.*/, "", fn); sub(/^[^\t]*\t/, "", src); first = 1; infm = 0; g = s = u = un = uc = uk = ck = kd = sm = bd = ""; next }
+    first { first = 0; if ($0 == "---") { infm = 1; next } }
     infm && /^---[ \t]*$/ { infm = 0; next }
-    infm && /^given:/      { g = clean(substr($0, 7)) }
-    infm && /^scope:/      { s = clean(substr($0, 7)) }
-    infm && /^supersedes:/ { u = clean(substr($0, 12)); sub(/\.md$/, "", u) }
+    infm && /^given:/           { g = val("given") }
+    infm && /^scope:/           { s = val("scope") }
+    infm && /^supersedes:/      { u = val("supersedes"); sub(/\.md$/, "", u) }
+    infm && /^until:/           { un = val("until") }
+    infm && /^until-condition:/ { uc = val("until-condition") }
+    infm && /^until-check:/     { uk = val("until-check") }
+    infm && /^check:/           { ck = val("check") }
+    infm && /^kind:/            { kd = val("kind") }
+    !infm && NF && !/^---[ \t]*$/ { t = $0; gsub(/\t/, " ", t); bd = (bd == "" ? t : bd " " t) }
+    !infm && sm == "" && NF {
+      sm = $0; gsub(/\t/, " ", sm); sub(/^[ ]*([-*#>]+[ ]+)?/, "", sm)
+      if (match(sm, /[.!?]( |$)/)) sm = substr(sm, 1, RSTART)
+      if (length(sm) > 160) sm = substr(sm, 1, 157) "..."
+    }
     END { if (fn != "") out() }
-  ' $names ) | sort -r | awk -F '\t' '
-    { n[NR] = $2; l[NR] = $2 "\t" $3 "\t" $4; if ($5 != "" && $5 != "none" && $5 != "None" && $5 != "-") sup[$5] = 1 }
-    END { for (i = 1; i <= NR; i++) { b = n[i]; sub(/\.md$/, "", b); if (!(b in sup)) print l[i] } }
+  ' | sort -r | awk -F '\t' -v now="$now" '
+    function key(t) { gsub(/[^0-9]/, "", t); return length(t) == 12 ? t "00" : t }
+    { r[NR] = $0; n[NR] = $2; if ($5 != "-" && $5 != "none" && $5 != "None") sup[$5] = 1 }
+    END {
+      for (i = 1; i <= NR; i++) {
+        split(r[i], f, "\t"); b = n[i]; sub(/\.md$/, "", b)
+        if ((b in sup) || f[10] == "end") continue
+        st = (f[6] != "-" && length(key(f[6])) == 14 && key(f[6]) <= now) ? "expired" : "active"
+        print f[2] "\t" f[3] "\t" f[4] "\t" f[6] "\t" f[7] "\t" f[8] "\t" f[9] "\t" f[11] "\t" st "\t" f[12] "\t" f[13]
+      }
+    }
   '
   return 0
+}
+
+# yt_standing_lines <yt_dir> <role> [<max lines>] [full] -> the active entries
+# that apply to <role> as "- <name> (<scope>): <summary>" (with "full": the
+# whole body, for briefs, where a pending file is not on disk), newest first, pending
+# ones (yt_standing_pending) included and marked " [pending:<branch>]"; past
+# <max lines> one line "- ... <n> more: bin/ytstack-standing list". Roles
+# (docs/ux/coordinator-format.md, "Scope and roles"): coordinator gets every
+# entry; lane and reviewer get the entries whose scope names their role or no
+# role at all. Role words in the scope: coordinator(s); lane(s), worker(s),
+# implementer(s); reviewer(s), review(s).
+yt_standing_lines() {
+  yt_standing_fields "$1" "" pending | awk -F '\t' -v role="${2:-coordinator}" -v max="${3:-0}" -v full="${4:-}" '
+    function roles(s,  t, r) {
+      t = " " tolower(s) " "; gsub(/[^a-z]+/, " ", t); r = ""
+      if (t ~ / (coordinator|coordinators)( |$)/) r = r "c"
+      if (t ~ / (lane|lanes|worker|workers|implementer|implementers)( |$)/) r = r "l"
+      if (t ~ / (reviewer|reviewers|review|reviews)( |$)/) r = r "r"
+      return r
+    }
+    $9 != "active" { next }
+    { rs = roles($3) }
+    role != "coordinator" && rs != "" && index(rs, substr(role, 1, 1)) == 0 { next }
+    { n++; if (max > 0 && n > max) { more++; next }
+      b = $1; sub(/\.md$/, "", b)
+      t = (full == "full" && $11 != "-") ? $11 : $8
+      print "- " b " (" $3 "): " (t == "-" ? "(no text)" : t) ($10 ~ /^pending:/ ? " [" $10 "]" : "") }
+    END { if (more) print "- ... " more " more: bin/ytstack-standing list" }
+  '
+  return 0
+}
+
+# yt_session_home -> the directory of per-session state that a hook and the
+# Bash tool of the same session both find: ${XDG_STATE_HOME:-~/.local/state}/
+# ytstack/sessions. Not yt_state_base: Claude Code sets CLAUDE_PLUGIN_DATA for
+# hooks only, never for commands of the Bash tool. Files under
+# <home>/<session id>/: `coordinate` (written by the coordinate preamble: the
+# YT_DIR on line 1, YT_REPO_KEY on line 2), `prompts` (hooks/standing-prompt: one epoch per human
+# prompt), `standing-flags` (epoch TAB YYYYMMDDHHMM TAB ISO TAB excerpt per
+# prompt that looks like a standing instruction), `standing-stop` (hooks/stop:
+# the epoch up to which flags were handled).
+#
+# yt_latest_handoff -> the target of the newest `latest-handoff` link of this
+# worktree (call yt_git_ctx first), across every base a hook may have written
+# it to: CLAUDE_PLUGIN_DATA and PLUGIN_DATA when set, each
+# ${CLAUDE_CONFIG_DIR:-~/.claude}/plugins/data/ytstack* (the hooks'
+# CLAUDE_PLUGIN_DATA, which the Bash tool does not see) and the XDG base. ""
+# when there is none. For skill preambles; hooks use yt_state_base.
+yt_latest_handoff() {
+  local b l tgt t best="" bt=-1
+  for b in "${CLAUDE_PLUGIN_DATA:-}" "${PLUGIN_DATA:-}" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/data/ytstack* "${XDG_STATE_HOME:-$HOME/.local/state}/ytstack"; do
+    [ -n "$b" ] && [ -d "$b" ] || continue
+    l="$b/repos/${YT_REPO_KEY:-none}/worktrees/${YT_WT_KEY:-none}/latest-handoff"
+    [ -L "$l" ] && [ -f "$l" ] || continue
+    tgt=$(readlink "$l"); t=$(yt_mtime "$tgt"); case "$t" in ''|*[!0-9]*) t=0 ;; esac
+    if [ "$t" -gt "$bt" ]; then bt=$t; best=$tgt; fi
+  done
+  printf '%s' "$best"
+}
+
+yt_session_home() {
+  printf '%s' "${XDG_STATE_HOME:-$HOME/.local/state}/ytstack/sessions"
 }
 
 # ---- factory tools that are off (M031-S03, issues #54 and #61) -----------------

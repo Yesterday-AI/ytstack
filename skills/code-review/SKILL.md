@@ -2,7 +2,7 @@
 name: code-review
 metadata:
   tier: task
-  version: 0.5.1
+  version: 0.5.2
 description: "Reviews the active task's commits with a fresh-context reviewer subagent and handles the feedback with technical rigor, through the vendored superpowers requesting-code-review and receiving-code-review procedures, with the task plan and commit range injected. Use after a task's commits exist and before summarize-task, before a merge or PR, or when the user says review this, code review, check my changes. Not for reviewing a plan (plan-eng-review) and not without commits for the task."
 allowed-tools:
   - Bash
@@ -40,7 +40,8 @@ if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STATE.md" ]; then
   _S=$(sed -n 's/^active_slice: *//p' "$_YT_DIR/STATE.md" | head -1)
   _T=$(sed -n 's/^active_task: *//p' "$_YT_DIR/STATE.md" | head -1)
 fi
-_TASK_PLAN="$_YT_DIR/$_M-$_S-$_T-PLAN.md"
+# The plan lives with its milestone: flat or milestones/M###/ (issue #70)
+if command -v yt_artifact_path >/dev/null 2>&1; then _TASK_PLAN=$(yt_artifact_path "$_YT_DIR" "$_M-$_S-$_T-PLAN.md"); else _TASK_PLAN="$_YT_DIR/$_M-$_S-$_T-PLAN.md"; fi
 # Commits of the active task (same discovery as summarize-task: task-ref pattern, branch fallback).
 _COMMITS=""; _COMMITS_SOURCE=none; _BASE_SHA=""; _HEAD_SHA=$(git rev-parse HEAD 2>/dev/null || echo none)
 if [ "$_IS_GIT" = yes ] && [ "$_T" != none ] && command -v yt_task_commits >/dev/null 2>&1; then

@@ -211,6 +211,7 @@ has "Git: one prefix per task" 'prefix `M001-S01-T##:`' "$(part Git)"
 # first deliverable is the task plan, then the implementation.
 run "$R" render --task M001-S01-T02 --branch ytstack/M001-S01
 eq "an unplanned task of a planned slice renders" 0 "$EC"
+eq "plan first: the brief marker is the first line (hooks/pre-tool-use-agent)" "# Brief: M001-S01-T02 (acme)" "$(printf '%s\n' "$OUT" | head -1)"
 O=$(part Outcome)
 has "plan first: the task line" "reject an expired token" "$O"
 has "plan first: the plan is the first deliverable" 'Your first deliverable is its plan: write `.ytstack/M001-S01-T02-PLAN.md`' "$O"
@@ -239,6 +240,7 @@ has "and its own files are the scope" '- Create: `tests/login.test.sh`' "$(part 
 # review #88 item 9: a task of such a slice is not asked for a task plan
 run "$R" render --task M002-S01-T01
 eq "granularity slice: a task of a slice plan with its own Files renders" 0 "$EC"
+eq "granularity slice: the brief marker is the first line" "# Brief: M002-S01-T01 (acme)" "$(printf '%s\n' "$OUT" | head -1)"
 hasnt "granularity slice: no task plan is demanded" "first deliverable" "$OUT"
 has "granularity slice: the slice plan's files are the scope" '- Create: `tests/login.test.sh`' "$(part Scope)"
 has "granularity slice: the slice plan's verification" "bash tests/login.test.sh" "$(part Verification)"
@@ -310,6 +312,29 @@ G=$(part Git)
 has "prepare with --branch: the checkout stays" "git checkout -B work main" "$G"
 has "prepare with --branch: the commit sentence is replaced" "Commit nothing. Do not merge or push." "$G"
 hasnt "prepare: no commit prefix anywhere" "Commit each task" "$OUT"
+
+# ---- 3b. standing instructions in the brief (issue #74) ------------------------
+echo "# render: standing instructions"
+SDIR="$R/.ytstack/standing"; mkdir -p "$SDIR"
+printf -- '---\ngiven: 2026-11-01T10:00:00Z\nscope: every lane\nsupersedes:\n---\n\nRun the full suite before the report.\n' > "$SDIR/20261101T1000Z-full-suite.md"
+printf -- '---\ngiven: 2026-11-01T11:00:00Z\nscope: the coordinator\nsupersedes:\n---\n\nTrack lanes in LANES.md.\n' > "$SDIR/20261101T1100Z-lanes.md"
+printf -- '---\ngiven: 2026-11-01T12:00:00Z\nscope: every reviewer\nsupersedes:\n---\n\nName the reviewed commit.\n' > "$SDIR/20261101T1200Z-commit.md"
+printf -- '---\ngiven: 2026-11-01T13:00:00Z\nscope: this project\nsupersedes:\n---\n\nEnglish in code and commits.\n' > "$SDIR/20261101T1300Z-english.md"
+run "$R" render --task M001-S01-T01
+eq "with entries: a Standing instructions section after Read for context" "Outcome,Kind,Scope,Read for context,Standing instructions,Verification,Spec impact,Work contract,Report," \
+  "$(printf '%s\n' "$OUT" | sed -n 's/^## //p' | tr '\n' ',')"
+SI=$(part "Standing instructions")
+has "implement: the lane entry" "- 20261101T1000Z-full-suite (every lane): Run the full suite before the report." "$SI"
+has "implement: the entry naming no role" "20261101T1300Z-english (this project)" "$SI"
+hasnt "implement: no coordinator entry" "20261101T1100Z-lanes" "$SI"
+hasnt "implement: no reviewer entry" "20261101T1200Z-commit" "$SI"
+run "$R" render --task M001-S01-T01 --kind review --head abc1234
+SI=$(part "Standing instructions")
+has "review: the reviewer entry" "20261101T1200Z-commit (every reviewer)" "$SI"
+hasnt "review: no lane entry" "20261101T1000Z-full-suite" "$SI"
+rm -rf "$SDIR"
+run "$R" render --task M001-S01-T01
+hasnt "no entries: no section" "## Standing instructions" "$OUT"
 
 # ---- 4. render --lens ---------------------------------------------------------
 echo "# render --lens"

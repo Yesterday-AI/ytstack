@@ -3,7 +3,7 @@ name: spawn-milestone-team
 description: "Dispatches the current milestone's slices to parallel workers: by default one worktree-isolated implementer subagent per slice plus a fresh verifier per slice, orchestrated from the main session which never edits source; with PREFERENCES team on, a Claude Code Agent Team instead. Use after slice-milestone and plan-eng-review when the slices are independent, or when the user says spawn the team, run the slices in parallel, dispatch the milestone. Not for a single slice or sequential work (plan-task)."
 metadata:
   tier: task
-  version: 0.5.1
+  version: 0.5.2
   triggers:
     - spawn team
     - dispatch milestone
@@ -73,23 +73,32 @@ _CURRENT_MILESTONE=none
 [ -f "$_YT_DIR/STATE.md" ] && _CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$_YT_DIR/STATE.md" | head -1)
 
 _SLICE_PLANS=""
+# Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
+if command -v yt_artifact_dir >/dev/null 2>&1; then _AD=$(yt_artifact_dir "$_YT_DIR" "$_CURRENT_MILESTONE"); else _AD="$_YT_DIR"; fi
+# Every file of a glob in every layout, one per name (files that landed flat
+# before the milestone moved count too).
+_fa() { if command -v yt_find_artifacts >/dev/null 2>&1; then yt_find_artifacts "$_YT_DIR" "${1}"; else ls "$_YT_DIR"/${1} 2>/dev/null; fi | awk -F/ 'NF && !s[$NF]++' | sort; }
 if [ "$_CURRENT_MILESTONE" != none ] && [ -d "$_YT_DIR" ]; then
-  _SLICE_PLANS=$(ls "$_YT_DIR"/$_CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md 2>/dev/null)
+  _SLICE_PLANS=$(_fa "$_CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md")
 fi
+echo "ARTIFACT_DIR: $_AD"
 _SLICE_COUNT=$(printf '%s' "$_SLICE_PLANS" | grep -c . 2>/dev/null); _SLICE_COUNT=${_SLICE_COUNT:-0}
 
 # Open slices (status not done) and file overlap between their task plans / Files sections.
 _OPEN_SLICES=""; _OVERLAP=""
-for p in $_SLICE_PLANS; do
+while IFS= read -r p; do
+  [ -f "$p" ] || continue
   s=$(printf '%s' "$p" | sed -E 's/.*-(S[0-9][0-9])-PLAN\.md$/\1/')
   [ "$(sed -n 's/^status: *//p' "$p" | head -1)" = done ] && continue
   _OPEN_SLICES="$_OPEN_SLICES $s"
-done
+done <<_SPS_
+$_SLICE_PLANS
+_SPS_
 if [ -n "$_OPEN_SLICES" ]; then
   _TMPF=$(mktemp "${TMPDIR:-/tmp}/ytspawn.XXXXXX")
   for s in $_OPEN_SLICES; do
     # file-like tokens: backticked `path.ext`, "Create/Modify/Delete: path", or bare dir/file.ext in the slice + task plans
-    cat "$_YT_DIR"/$_CURRENT_MILESTONE-$s-PLAN.md "$_YT_DIR"/$_CURRENT_MILESTONE-$s-T[0-9][0-9]-PLAN.md 2>/dev/null \
+    _fa "$_CURRENT_MILESTONE-$s*PLAN.md" | while IFS= read -r p; do cat "$p"; done 2>/dev/null \
       | grep -oE '(`[^` ]+\.[A-Za-z0-9]+`|(Create|Modify|Delete): *[A-Za-z0-9_./-]+\.[A-Za-z0-9]+|[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+\.[A-Za-z0-9]+)' \
       | sed -E 's/^(Create|Modify|Delete): *//' | tr -d '`' | sort -u | sed "s/^/$s /"
   done > "$_TMPF"
@@ -278,7 +287,7 @@ Agent(
   isolation: "worktree",
   name: "verify-{CURRENT_MILESTONE}-S##",
   description: "Verify slice S## on its branch",
-  prompt: "Branch ytstack/{CURRENT_MILESTONE}-S##. Run `git checkout ytstack/{CURRENT_MILESTONE}-S##` in your worktree, then for every .ytstack/{CURRENT_MILESTONE}-S##-T##-PLAN.md run its Verification command from a cold context, as often as its Runs line says, and compare with the T##-SUMMARY.md claims (no summary: with the worker's report below). Report pass / pass-with-caveats / fail per task with the raw output and the commit you ran on. Do not edit anything. Worker's report: <the worker's report lines>"
+  prompt: "Branch ytstack/{CURRENT_MILESTONE}-S##. Run `git checkout ytstack/{CURRENT_MILESTONE}-S##` in your worktree, then for every {CURRENT_MILESTONE}-S##-T##-PLAN.md in the milestone's directory under .ytstack/ (the same place relative to the checkout as {ARTIFACT_DIR}) run its Verification command from a cold context, as often as its Runs line says, and compare with the T##-SUMMARY.md claims (no summary: with the worker's report below). Report pass / pass-with-caveats / fail per task with the raw output and the commit you ran on. Do not edit anything. Worker's report: <the worker's report lines>"
 )
 ```
 

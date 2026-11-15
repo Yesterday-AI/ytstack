@@ -412,11 +412,25 @@ print_reasons() {
 # is_record <path>: a process record of the work itself. Exempt from the
 # coverage rule and from the size count; every other rule applies to it.
 is_record() {
+  local name="${1##*/}" rest
   case "$1" in
     .ytstack/STATE.md|.ytstack/LANES.md|.ytstack/KNOWLEDGE.md|.ytstack/ROADMAP.md) return 0 ;;
     .ytstack/quick/*|.ytstack/questions/*|"$EVIDENCE"/*) return 0 ;;
-    .ytstack/M[0-9][0-9][0-9]-*-PLAN.md|.ytstack/M[0-9][0-9][0-9]-*-SUMMARY.md) return 0 ;;
-    .ytstack/M[0-9][0-9][0-9]-CONTEXT.md|.ytstack/M[0-9][0-9][0-9]-ROADMAP.md|.ytstack/M[0-9][0-9][0-9]-SUMMARY.md) return 0 ;;
+  esac
+  # A milestone's files, judged by name: directly in .ytstack/, or in the
+  # directory a milestone lives in (issue #70): milestones/ or backlog/ and at
+  # most one directory below them. `*` in a case pattern also matches `/`, so
+  # the depth is checked on the path itself.
+  case "$1" in
+    .ytstack/"$name") ;;
+    .ytstack/milestones/*|.ytstack/backlog/*)
+      rest="${1#.ytstack/*/}"
+      case "$rest" in */*/*) return 1 ;; esac ;;
+    *) return 1 ;;
+  esac
+  case "$name" in
+    M[0-9][0-9][0-9]-*-PLAN.md|M[0-9][0-9][0-9]-*-SUMMARY.md) return 0 ;;
+    M[0-9][0-9][0-9]-CONTEXT.md|M[0-9][0-9][0-9]-ROADMAP.md|M[0-9][0-9][0-9]-SUMMARY.md) return 0 ;;
   esac
   return 1
 }

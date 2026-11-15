@@ -3,7 +3,7 @@ name: coordinate
 description: "Coordinator mode for the session that owns a plan and delegates all of it, writing no product code itself. Use when many lanes are in flight, when a plan has dozens of work packages, when a session with open lanes continues after a compaction or a resume, or when the user says coordinate this, run the plan, you are the coordinator, keep the lanes moving, where does each lane stand. Not for one milestone with a handful of independent slices (spawn-milestone-team) and not for doing a task yourself (plan-task)."
 metadata:
   tier: task
-  version: 0.5.0
+  version: 0.6.2
 allowed-tools:
   - Bash
   - Read
@@ -41,7 +41,7 @@ You MUST create a TodoWrite task for each of these items. Items 4 to 13 are one 
 6. **Finish reported lanes** -- `ytstack:finish-lane`, one lane at a time per pull request
 7. **Run the factory tools** -- the route before every merge (also your own), the PR watch or `ytstack-watch`, `ytstack-watch release` after every merge to production, signals, review lessons, the lesson of every incident (a red `main`, a slip); each skipped only by its condition
 8. **Queue and ask questions** -- look up, write the file, ask one, late
-9. **Record standing instructions** -- one file per instruction in `standing/` when they are given
+9. **Record standing instructions** -- `ytstack-standing add` when they are given, before the next dispatch; never only in agent memory
 10. **Stop loops that do not converge** -- a diagnosis to the human instead of another dispatch
 11. **Report status** -- only on a change the human acts on, or at a boundary he set
 12. **Rotate** -- after one compaction or with a large context, in one step while lanes run: files current, handoff with the PR watch session, the watches and the workers' addresses, fresh session; this one stays open only as a relay
@@ -108,7 +108,8 @@ _PR_HOST=none
 [ -n "$(git remote 2>/dev/null | head -1)" ] && command -v gh >/dev/null 2>&1 && _PR_HOST=gh
 echo "PR_HOST: $_PR_HOST"
 # Factory tools (M031): what the project switched on; Step 7 skips a tool by these lines.
-_BIN="${CLAUDE_SKILL_DIR}/../../bin"
+_BIN=$(cd "${CLAUDE_SKILL_DIR}/../../bin" 2>/dev/null && pwd -P || echo "${CLAUDE_SKILL_DIR}/../../bin")
+echo "YT_BIN=$_BIN"
 _MERGE_BY=human
 command -v yt_prefs >/dev/null 2>&1 && { yt_prefs "$_YT_DIR" >/dev/null; _MERGE_BY="$YT_PREF_MERGE_BY"; }
 echo "MERGE_BY: $_MERGE_BY"
@@ -137,10 +138,29 @@ echo "LESSONS_BEGIN"
 [ -z "$_LS" ] || printf '%s\n' "$_LS" | head -30
 echo "LESSONS_END"
 echo "STANDING: $([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STANDING.md" ] && echo yes || echo no)"
-# One file per standing instruction (.ytstack/standing/): the ones in force, newest first.
+# The operating checklist (issue #76): one place, docs/ux/coordinator-format.md.
+echo "OPERATING_CHECKLIST_BEGIN"
+awk '/<!-- operating-checklist:end -->/ { f = 0 } f { print } /<!-- operating-checklist:begin -->/ { f = 1 }' "${CLAUDE_SKILL_DIR}/../../docs/ux/coordinator-format.md" 2>/dev/null \
+  | grep . || echo "read the Operating checklist in docs/ux/coordinator-format.md of the plugin"
+echo "OPERATING_CHECKLIST_END"
+# Coordinate mode (issue #72): the session marker hooks/standing-prompt, hooks/pre-tool-use-agent and hooks/stop act on.
+_SID="${CLAUDE_CODE_SESSION_ID:-}"
+case "$_SID" in
+  ''|*[!A-Za-z0-9._-]*) echo "COORDINATE_MARKER: none (no session id on this host: the standing hooks stay off)" ;;
+  *) if [ -n "$_YT_DIR" ] && command -v yt_session_home >/dev/null 2>&1 && mkdir -p "$(yt_session_home)/$_SID" 2>/dev/null \
+        && printf '%s\n%s\n' "$_YT_DIR" "$_PROJECT_KEY" > "$(yt_session_home)/$_SID/coordinate" 2>/dev/null; then
+       echo "COORDINATE_MARKER: written"
+     else
+       echo "COORDINATE_MARKER: not written (the standing hooks stay off)"
+     fi ;;
+esac
+# One file per standing instruction (.ytstack/standing/): the newest entry's age and the
+# human prompts since, the active ones, then ended, conditions to check and failed checks.
 echo "STANDING_ENTRIES_BEGIN"
-if [ -n "$_YT_DIR" ] && [ -d "$_YT_DIR/standing" ]; then
-  command -v yt_standing >/dev/null 2>&1 && yt_standing "$_YT_DIR" || echo "list $_YT_DIR/standing/ yourself: newest first, skip superseded"
+if [ -n "$_YT_DIR" ] && [ -f "$_BIN/ytstack-standing" ]; then
+  bash "$_BIN/ytstack-standing" -C "$_PROJECT_DIR" list 2>&1 | head -80
+elif [ -n "$_YT_DIR" ] && [ -d "$_YT_DIR/standing" ]; then
+  command -v yt_standing >/dev/null 2>&1 && yt_standing "$_YT_DIR" || echo "list $_YT_DIR/standing/ yourself: newest first, skip superseded and ended"
 else
   echo "no standing directory"
 fi
@@ -161,6 +181,13 @@ else
 fi
 echo "FRONTIER_END"
 
+# Sessions in other repositories (LANES.md "## Peers"): write only to these addresses, `ytstack-frontier peer set` after each contact.
+echo "PEERS_BEGIN"
+_PEERS=""
+[ -n "$_YT_DIR" ] && [ -f "$_FRONTIER" ] && _PEERS=$(bash "$_FRONTIER" peer list 2>/dev/null)
+echo "${_PEERS:-no peers}"
+echo "PEERS_END"
+
 echo "QUESTIONS_BEGIN"
 _QN=0
 for _f in "$_YT_DIR"/questions/Q[0-9]*.md; do
@@ -177,11 +204,10 @@ echo "QUESTIONS_END"
 _MANUAL_TS=none
 [ -f "$_YT_DIR/HANDOFF.md" ] && _MANUAL_TS=$(sed -n 's/^timestamp: *//p' "$_YT_DIR/HANDOFF.md" | head -1)
 _AUTO=none; _AUTO_TS=none
-if command -v yt_state_base >/dev/null 2>&1 && [ -n "${YT_REPO_KEY:-}" ]; then
-  _LINK="$(yt_state_base)/repos/$YT_REPO_KEY/worktrees/${YT_WT_KEY:-}/latest-handoff"
-  if [ -L "$_LINK" ] && [ -f "$_LINK" ]; then
-    _AUTO=$(readlink "$_LINK"); _AUTO_TS=$(sed -n 's/^timestamp: *//p' "$_AUTO" 2>/dev/null | head -1)
-  fi
+# yt_latest_handoff also looks where the hook wrote it (CLAUDE_PLUGIN_DATA is not set in this shell).
+if command -v yt_latest_handoff >/dev/null 2>&1 && [ -n "${YT_REPO_KEY:-}" ]; then
+  _AUTO=$(yt_latest_handoff)
+  if [ -n "$_AUTO" ]; then _AUTO_TS=$(sed -n 's/^timestamp: *//p' "$_AUTO" 2>/dev/null | head -1); else _AUTO=none; fi
 fi
 echo "HANDOFF_MANUAL: ${_MANUAL_TS:-none}"
 echo "HANDOFF_AUTO: ${_AUTO_TS:-none} ($_AUTO)"
@@ -189,11 +215,11 @@ echo "HANDOFF_AUTO: ${_AUTO_TS:-none} ($_AUTO)"
 
 ## Procedure
 
-The scripts live in `${CLAUDE_SKILL_DIR}/../../bin/`; the commands below are written without that path. The work contract (`ytstack:minimal-code`) holds for orchestration as it does for code: no review round, verifier or check that the plan does not name, and evidence for the same commit in the same environment stands.
+The scripts live in the directory the preamble prints as `YT_BIN=<dir>` (also in the SessionStart context); the commands below are written without that path. Run each as `"$YT_BIN/ytstack-<name>"` with the newest printed value set in the same command (`YT_BIN=<dir>; "$YT_BIN/ytstack-frontier" list`): a shell variable does not survive a tool call, and a versioned path from before an update or a compaction can name a removed version. The work contract (`ytstack:minimal-code`) holds for orchestration as it does for code: no review round, verifier or check that the plan does not name, and evidence for the same commit in the same environment stands.
 
 **Step 2 -- HARD-GATE.** `HAS_YTSTACK: no`: stop, "run `ytstack:init-project` or `ytstack:adopt-brownfield` first". `SLICE_PLANS: 0` and `no lanes`: stop, "nothing to coordinate; run `ytstack:slice-milestone`". One milestone with a handful of independent slices and no lane yet: `ytstack:spawn-milestone-team` does that with less ceremony; say so and stop unless the user asked for coordinator mode.
 
-**Step 3 -- Start from files.** At the first start, after every compaction and after every resume, before anything else: read the standing instructions in full (every file listed between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END`, newest first, and `STANDING.md` when `STANDING: yes`; an entry that another entry supersedes is not listed and no longer holds), the rows between `LANES_BEGIN` and `LANES_END`, the frontier, every file listed between `QUESTIONS_BEGIN` and `QUESTIONS_END`, and the newer of the two handoffs. Do not rebuild who holds what from a conversation summary. Where a summary and a file disagree, the file is the claim, and Step 4 checks it against the host before anybody acts on it. A `running` row whose worker no longer exists in this session is not dispatched again blindly: read its branch (`git log <base>..<branch>`), then `ytstack-frontier release <lane>` and claim it for a new worker that continues on that branch, or write a question.
+**Step 3 -- Start from files.** At the first start, after every compaction and after every resume, before anything else: read the standing instructions in full (every entry listed as active between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END`, newest first, its file in `standing/`, and `STANDING.md` when `STANDING: yes`; an entry that another entry supersedes, or that ended, is not listed as active and no longer holds). Then act on the rest of that block: an entry under `ended` gets its closing entry now (`ytstack-standing end <entry> --reason "<what ended it>"`), an entry under `condition to check now` is checked against the host now and closed the same way when it is met, a line under `check failed` is an instruction you are not keeping: fix that first. Its first line counts the human prompts since the newest entry: more than a few after a compaction means instructions may be missing, so read the conversation summary for instructions and record them (Step 9) before you dispatch. Then the rows between `LANES_BEGIN` and `LANES_END`, the frontier, every file listed between `QUESTIONS_BEGIN` and `QUESTIONS_END`, and the newer of the two handoffs. Do not rebuild who holds what from a conversation summary. Where a summary and a file disagree, the file is the claim, and Step 4 checks it against the host before anybody acts on it. A `running` row whose worker no longer exists in this session is not dispatched again blindly: read its branch (`git log <base>..<branch>`), then `ytstack-frontier release <lane>` and claim it for a new worker that continues on that branch, or write a question.
 
 When the newer handoff carries a "Rotation" block (Step 12 of the session before, `docs/ux/coordinator-format.md`), this session is its successor. Before Step 4: `ytstack-pr-watch handover --from <the PR watch session it names>` (skip with `PR watch session: none`; check that the output names the moved pull requests), start the background watches it lists again, and leave the rows of its running workers alone: those workers report to the old session, which stays open as a relay and appends each report under "Reports after the rotation" in `HANDOFF.md` and sets the row to `reported`. Read the handoff again when such a row turns `reported`, and send a worker a message at its address only where the host lets this session reach it. Only when the person says the old session is closed before a worker reported does the rule above for a lost worker apply.
 
@@ -205,7 +231,7 @@ ytstack-watch --pr <the numbers of the PR column> --once
 
 One line per pull request (state, head, checks, newest review and its commit, mergeable or conflict) ending in `read <UTC>`. That stamp travels with the fact wherever it is used. A deployed build is read with the command `RUNTIME.md` names, with its time. None of this is written into `.ytstack/` as current: `LANES.md` records what you did (dispatched, reviewed commit X) and identifiers (a branch, a number). `PR_HOST: none`: there is no host to read. Say that the picture rests on the files and on local git, and state nothing about pull requests.
 
-**Step 5 -- Delegate what is ready.** Product code, reviews and research run in fresh-context workers. For each lane that `ytstack-frontier list --ready` prints:
+**Step 5 -- Delegate what is ready.** Product code, reviews and research run in fresh-context workers. The order is the one of the operating checklist the preamble prints between `OPERATING_CHECKLIST_BEGIN` and `OPERATING_CHECKLIST_END`; in this session `hooks/pre-tool-use-agent` says so when an `Agent` prompt is no rendered brief, and the Stop hook says when `LANES.md` lags the dispatches and reports or the `STATE.md` pointer is behind, and holds the stop once when that came three sessions in a row. For each lane that `ytstack-frontier list --ready` prints:
 
 1. `ytstack-frontier claim <lane> --by <worker> --kind <implement|review|prepare> --branch <branch>`. Claim before dispatch. A refused claim names the holder: do not dispatch.
 2. `ytstack-brief render --slice <lane> --kind <kind> --branch <branch> --base <base>` (`--task` for a task lane, `--lesson F###` for a lesson lane `lesson-F###`, `--head <sha>` for a review lane). The output is the worker's prompt, with the work contract and the report shape. Never write a brief by hand.
@@ -233,7 +259,7 @@ A lane named in the `blocks:` of an open or asked question is not ready, whateve
 
 **The route, also when you merge yourself.** A merge you make outside `finish-lane` (a pull request outside the lanes, a project rule that the coordinator merges) reads the route for the reviewed head first and follows `finish-lane` Step 11: `MERGE_BY: risk` merges only after `route: unattended`; `coordinator` merges and names the route in the status; `human`, or a standing instruction that reserves the merge, leaves the merge to a person with the `reason:` lines. The merge itself is `ytstack-finish-lane -C <worktree> merge --pr <N> --at <reviewed head> --verdict-pattern '^Verdict: approved'`, never `gh pr merge` by hand. Exit 0 of the route means `unattended`; everything else, an error included, means a person.
 
-**Watching pull requests.** Polling happens outside the model. The PR watch counts as on only when `pr_watch=on` is set in `~/.ytstack/config` (`docs/pr-watch.md`) and the worker runs (`PR_WATCH: on, heartbeat <n> s ago`, under 600). The flag alone enables only the hooks; without a fresh heartbeat nothing polls. With the PR watch on, the worker reports red checks, unresolved bot threads, conflicts and merges to this session with the next prompt, also for pull requests the lanes' subagents opened. The `register` call defaults to this session; check that its output says `registered to claude:<id>` in Claude Code. Only the coordinator runs it; a session that works in the same repository outside this coordination keeps its own PRs (`register --pr N`), and `--all-open` skips the ones another session owns. Without the PR watch, start `ytstack-watch` as a background process; on a host with a monitor tool, through that tool, so that each new line reaches you as an event. It prints a line only when a head moved, the checks changed, a review arrived, mergeability changed or a pull request closed, and it ends when all are merged or closed; start it again with the new list when a pull request opens. Act on a line or a notice: red checks go back to the lane's worker with the name of the check; a review on a commit that is not the head is no review of the head. Never read status in a loop from the conversation, with or without a sleep. The single read of Step 4 before an action is not polling.
+**Watching pull requests.** Polling happens outside the model. The PR watch counts as on only when `pr_watch=on` is set in `~/.ytstack/config` (`docs/pr-watch.md`) and the worker runs (`PR_WATCH: on, heartbeat <n> s ago`, under 600). The flag alone enables only the hooks; without a fresh heartbeat nothing polls. With the PR watch on, the worker reports red checks, unresolved bot threads, conflicts and merges to this session with the next prompt, also for pull requests the lanes' subagents opened. The `register` call defaults to this session; check that its output says `registered to claude:<id>` in Claude Code. `--all-open` takes only open pull requests by your GitHub login (the lanes' workers open them under it) and skips drafts, a `do-not-merge` label and the ones another session owns, each by name; `--author <login>[,<login>]`, `--include-drafts` and `--include-labelled` widen it only where this coordination owns such a pull request. Only the coordinator runs it; a session that works in the same repository outside this coordination keeps its own PRs (`register --pr N`). Without the PR watch, start `ytstack-watch` as a background process; on a host with a monitor tool, through that tool, so that each new line reaches you as an event. It prints a line only when a head moved, the checks changed, a review arrived, mergeability changed or a pull request closed, and it ends when all are merged or closed; start it again with the new list when a pull request opens. Act on a line or a notice: red checks go back to the lane's worker with the name of the check; a review on a commit that is not the head is no review of the head. Never read status in a loop from the conversation, with or without a sleep. The single read of Step 4 before an action is not polling.
 
 **After a merge.** A pull request that merged, also when a person merged it: set its lane to `merged`, then the release watch and the review lessons of the table. A merged lesson lane also closes its lesson: `ytstack-signals set F### --state fixed` once this checkout has the merged check (the script refuses while the file is missing). The receipt goes into the next status; `not arrived` or `unhealthy` is a status at once. You deploy nothing and roll nothing back: a countermeasure on the target is a step for the human (`ytstack:handover-step`).
 
@@ -254,16 +280,18 @@ A lane named in the `blocks:` of an open or asked question is not ready, whateve
 
 An `asked` question is never asked again: name it as waiting since its time. When the human answers, write what he said under `## Answer`, run `ytstack-questions answer <id>`, and add a `DECISIONS.md` entry when it decides something that lasts. Never record an answer the human did not give, and never take a verdict a plan reserves for a person. At a slice boundary the open gates go out together through `ytstack:reassess-roadmap` (its Step 3b). A step only the human may perform (a secret, a production switch, a merge he reserved) goes through `ytstack:handover-step` as one staged script. `YTSTACK_NON_INTERACTIVE: true`: ask nothing; the files stay `open` and are listed in the status under "Waiting on a person".
 
-**Step 9 -- Record standing instructions.** When the human gives an instruction that holds beyond the task at hand (when to report, what never to merge, what not to touch), write it down at once, before the next dispatch, as a new file `$_YT_DIR/standing/<YYYYMMDDTHHMMZ>-<slug>.md` (`YT_DIR` from the preamble: `.ytstack/` in the repository, or `~/.ytstack/projects/<key>/` in user scope; UTC now): frontmatter `given` (the same time, ISO), `scope` (where it applies) and `supersedes` (empty), and the instruction in your own words as its body (`docs/ux/coordinator-format.md`). Never a quotation. An instruction that replaces an older one is a new file whose `supersedes` names the older file without `.md`; the older file is not edited and nothing is deleted. Then run `ytstack-check --standing` and fix what it prints. One file per instruction keeps two pull requests that each add one from touching the same line. `STANDING.md` is not edited per entry; only a project that has `STANDING.md` and no `standing/` directory yet keeps its form: append `- <UTC> -- <the instruction>. Scope: <where it applies>` and strike a replaced line (`~~...~~ Superseded <UTC>: ...`).
+**Step 9 -- Record standing instructions.** When the human gives an instruction that holds beyond the task at hand (when to report, what never to merge, what not to touch, a priority, an approval that covers later cases), record it at once, before the next dispatch, with one command: `ytstack-standing add "<the instruction in your own words>" --scope "<where it applies>"` (the script is `bin/ytstack-standing` of the plugin, beside `ytstack-frontier`). Add `--supersedes <entry>` when it replaces an older entry, `--until <ISO UTC>` when it ends at a time, `--until-condition "<sentence>"` when it ends with an event, `--until-check "<command>"` when that event can be checked by a command that exits 0 once it happened, and `--check "<command>"` when keeping it can be checked (a command that fails while the instruction is not kept, such as a `LANES.md` older than the last lane change). Name the role in the scope when it applies to one (`the coordinator`, `every lane`, `every reviewer`; `docs/ux/coordinator-format.md`, "Scope and roles"): the SessionStart injection and the lane briefs filter by it. The command writes the entry in a worktree of its own outside the checkout, commits it and opens or updates the one standing pull request of the UTC day; `--here` writes into the resolved `.ytstack/standing/` only, for user scope (always) or a project where you may write in the checkout. It runs `ytstack-check --standing` itself. When `hooks/standing-prompt` says a prompt reads like a standing instruction, decide: record it, or go on when it is not one. The Stop hook blocks once when such prompts got no entry. An instruction that ended is closed with `ytstack-standing end <entry> --reason "<what ended it>"`; nothing is edited or deleted.
+
+Agent-private memory (a memory file, a note in your own context) is no substitute: a successor session, another host and the human read only the repository. An instruction that lives only in your memory is lost at the next rotation. Never a quotation; the body is the instruction in your own words. One file per instruction keeps two pull requests that each add one from touching the same line. `STANDING.md` is not edited per entry; only a project that has `STANDING.md` and no `standing/` directory yet keeps its form: append `- <UTC> -- <the instruction>. Scope: <where it applies>` and strike a replaced line (`~~...~~ Superseded <UTC>: ...`).
 
 **Step 10 -- Stop loops that do not converge.** A lane gets the rounds `ytstack:code-review` allows ("Bounded review": round 1 complete, round 2 the fix, no third). A lane that failed verification twice, or that would need a third review, is not dispatched again: `ytstack-frontier set <lane> --status blocked --next "Q### with the human"`, and a question file with the diagnosis (the plan never decided the point, two rules conflict, or each fix moved the problem).
 
-**Step 11 -- Report status.** Only when something changed that the human acts on (a question, a blocker, a finished plan, a lane that waits for his merge), or at a boundary he set in a standing instruction. No interim reports that work is running. A lane that merged without a person is no reason for a status of its own: the next status that is due names it in one line, with its class and the ceiling it merged under. A status is two to four full sentences with pointers (files, commits, pull request numbers). When the plan has gates it carries two numbers side by side, closed by work and accepted, as `ytstack:reassess-roadmap` counts them. When `LESSONS` counts open lessons, the status names them in one line as the preamble prints them (`lessons: 3 open (1 proposals, 2 checks to build)`), with the class of each one that counts 2 or more. Every host fact in it comes from a read made for this status and carries `read <UTC>`. When the human asks where the lanes stand, answer per lane instead: the status and the next action of its row as written, then the open and asked questions with what they block.
+**Step 11 -- Report status.** Only when something changed that the human acts on (a question, a blocker, a finished plan, a lane that waits for his merge), or at a boundary he set in a standing instruction. No interim reports that work is running. A lane that merged without a person is no reason for a status of its own: the next status that is due names it in one line, with its class and the ceiling it merged under. A status is two to four full sentences with pointers (files, commits, pull request numbers). When the plan has gates it carries two numbers side by side, closed by work and accepted, as `ytstack:reassess-roadmap` counts them. Progress per phase comes from `ytstack-status --phases` (`--json` for a chart), never from a count by hand: it names every change of a total since the last report with its cause, so a grown total is not read as lost progress. When `LESSONS` counts open lessons, the status names them in one line as the preamble prints them (`lessons: 3 open (1 proposals, 2 checks to build)`), with the class of each one that counts 2 or more. Every host fact in it comes from a read made for this status and carries `read <UTC>`. When the human asks where the lanes stand, answer per lane instead: the status and the next action of its row as written, then the open and asked questions with what they block.
 
 **Step 12 -- Rotate.** When the session has been compacted once (a summary stands where the conversation was, or `HANDOFF_AUTO` is from this session), or its context is large by the host's indicator, rotate now. Do not wait for a quiet moment, for workers to report or for checks to finish: under load there is none, and a second compaction costs more than a rotation. It is one step, done in this order without dispatching anything in between:
 
 1. Bring the rows' next actions up to date, run `ytstack-frontier check` and `ytstack-questions check`, and make sure the standing instructions hold every instruction given so far.
-2. Write `$_YT_DIR/HANDOFF.md` yourself in the format of `ytstack:handoff-session` (its Step 7), without its questions: the answers are in the files, and the handoff points at them. Its "In-flight work" carries the "Rotation" block of `docs/ux/coordinator-format.md`: `PR watch session:` with this session's id as the PR watch stores it (`echo "${CODEX_THREAD_ID:-claude:$CLAUDE_CODE_SESSION_ID}"`; `none` when `PR_WATCH` is `off`), `Background watches:` with the command of every `ytstack-watch` that runs in this session, and under `Running workers:` one line per worker that has not reported: lane, name, address (what the host gave you to reach it: the agent's id or name in Claude Code, another host's process id and log file), worktree, branch, dispatch time. Its "Next action": start `ytstack:coordinate` in a fresh session; its Step 3 runs `ytstack-pr-watch handover --from <PR watch session>`.
+2. Write `$_YT_DIR/HANDOFF.md` yourself in the format of `ytstack:handoff-session` (its Step 7), without its questions: the answers are in the files, and the handoff points at them. Its "In-flight work" carries the "Rotation" block of `docs/ux/coordinator-format.md`: `PR watch session:` with this session's id as the PR watch stores it (`echo "${CODEX_THREAD_ID:-claude:$CLAUDE_CODE_SESSION_ID}"`; `none` when `PR_WATCH` is `off`), `Background watches:` with the command of every `ytstack-watch` that runs in this session, and under `Running workers:` one line per worker that has not reported: lane, name, address (what the host gave you to reach it: the agent's id or name in Claude Code, another host's process id and log file), worktree, branch, dispatch time, and under `Peers:` the lines between `PEERS_BEGIN` and `PEERS_END` (`ytstack-frontier peer list`), so the successor writes to the right session of another repository. Its "Next action": start `ytstack:coordinate` in a fresh session; its Step 3 runs `ytstack-pr-watch handover --from <PR watch session>`.
 3. Tell the user in one line: start a fresh session with `ytstack:coordinate`, and leave this one open until the workers listed in the handoff have reported (a closed session ends its background workers on most hosts).
 4. From then on this session is a relay and nothing else. When one of its workers reports: `ytstack-brief check`, `ytstack-frontier set <lane> --status reported --next "<the report's Next line>"`, and append the report's labelled lines with the UTC time under `## Reports after the rotation` at the end of `HANDOFF.md`. It dispatches nothing, merges nothing, asks nothing and acts on no watch line or PR watch notice; the PR watch delivers to the successor after the handover anyway. When the last listed worker has reported, it says so in one line: the session can be closed.
 

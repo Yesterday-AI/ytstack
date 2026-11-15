@@ -3,7 +3,7 @@ name: plan-milestone
 description: "Defines the next milestone (goal, exit criteria, size) and writes M###-CONTEXT.md and M###-ROADMAP.md. Use after init-project or adopt-brownfield, after a milestone closed, or when the user says plan the next milestone, new milestone, define the milestone. Not for slicing (slice-milestone) and not for unvalidated greenfield ideas (office-hours first)."
 metadata:
   tier: core
-  version: 0.1.0
+  version: 0.1.1
   triggers:
     - plan milestone
     - start new milestone
@@ -88,11 +88,18 @@ _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 # Next milestone number
 _NEXT_MILESTONE="M001"
 if [ -n "$_YT_DIR" ]; then
-  _MAX=$(ls "$_YT_DIR"/M[0-9][0-9][0-9]-*.md 2>/dev/null | sed -E 's/.*M([0-9]{3})-.*/\1/' | sort -u | tail -1)
+  # Count moved milestones too (milestones/M###/, backlog/<dir>/; issue #70)
+  if command -v yt_find_artifacts >/dev/null 2>&1; then
+    _MAX=$(yt_find_artifacts "$_YT_DIR" 'M[0-9][0-9][0-9]-*.md' | sed -E 's|.*/M([0-9]{3})-[^/]*$|\1|' | sort -u | tail -1)
+  else
+    _MAX=$(ls "$_YT_DIR"/M[0-9][0-9][0-9]-*.md 2>/dev/null | sed -E 's/.*M([0-9]{3})-.*/\1/' | sort -u | tail -1)
+  fi
   if [ -n "$_MAX" ]; then
     _NEXT_MILESTONE=$(printf "M%03d" $((10#$_MAX + 1)))
   fi
 fi
+# New files go flat unless files of this milestone already live in a subdirectory
+if command -v yt_artifact_dir >/dev/null 2>&1; then _ARTIFACT_DIR=$(yt_artifact_dir "$_YT_DIR" "$_NEXT_MILESTONE"); else _ARTIFACT_DIR="$_YT_DIR"; fi
 
 # Project-level frontmatter
 _PROJECT_NAME=""
@@ -118,6 +125,7 @@ echo "YT_DIR: $_YT_DIR"
 echo "YT_SCOPE: $_YT_SCOPE"
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "NEXT_MILESTONE: $_NEXT_MILESTONE"
+echo "ARTIFACT_DIR: $_ARTIFACT_DIR"
 echo "TRACKER: $_TRACKER"
 echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 ```
@@ -181,7 +189,7 @@ Remember as `_SIZE` (value: `S`, `M`, or `L`).
 
 ### Step 6: Write `M###-CONTEXT.md`
 
-Use Write tool. Path: `{YT_DIR}/{NEXT_MILESTONE}-CONTEXT.md`.
+Use Write tool. Path: `{ARTIFACT_DIR}/{NEXT_MILESTONE}-CONTEXT.md`.
 
 ```markdown
 ---
@@ -216,7 +224,7 @@ size: {SIZE}
 
 ### Step 7: Write `M###-ROADMAP.md`
 
-Use Write tool. Path: `{YT_DIR}/{NEXT_MILESTONE}-ROADMAP.md`.
+Use Write tool. Path: `{ARTIFACT_DIR}/{NEXT_MILESTONE}-ROADMAP.md`.
 
 Slice-count based on size: S=1, M=2-3, L=4-5. For v0.1, always seed the lower bound (S=1, M=2, L=4). User can add more during `slice-milestone`.
 
@@ -293,8 +301,8 @@ Report:
 > - Slices: {SLICE_COUNT} placeholder(s) in `{NEXT_MILESTONE}-ROADMAP.md`
 >
 > Files created:
-> - `{YT_DIR}/{NEXT_MILESTONE}-CONTEXT.md` -- Q/A locked
-> - `{YT_DIR}/{NEXT_MILESTONE}-ROADMAP.md` -- slice skeleton
+> - `{ARTIFACT_DIR}/{NEXT_MILESTONE}-CONTEXT.md` -- Q/A locked
+> - `{ARTIFACT_DIR}/{NEXT_MILESTONE}-ROADMAP.md` -- slice skeleton
 >
 > STATE.md updated: `current_milestone` = {NEXT_MILESTONE}.
 >

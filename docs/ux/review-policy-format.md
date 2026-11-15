@@ -46,7 +46,7 @@ There is one `reason:` line per path and rule that raised the floor. A rule name
 
 The built-in lists cannot be shortened by the project, only extended. `REVIEW.md` is itself under "Always a person", so the policy cannot be relaxed on the route it governs.
 
-**Process records** are exempt from the coverage rule and do not count towards the size. They are, under `.ytstack/`: the files `M###-CONTEXT.md`, `M###-ROADMAP.md`, `M###-...-PLAN.md` and `M###-...-SUMMARY.md`, `STATE.md`, `LANES.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `quick/` and `questions/`; and the evidence directory (`evidence_dir`, when it is a path inside the repository). Every other rule applies to them.
+**Process records** are exempt from the coverage rule and do not count towards the size. They are, under `.ytstack/`: the files `M###-CONTEXT.md`, `M###-ROADMAP.md`, `M###-...-PLAN.md` and `M###-...-SUMMARY.md` (also inside `milestones/` and `backlog/` and one directory below them, where a milestone lives once its files were moved), `STATE.md`, `LANES.md`, `KNOWLEDGE.md`, `ROADMAP.md`, `quick/` and `questions/`; and the evidence directory (`evidence_dir`, when it is a path inside the repository). Every other rule applies to them.
 
 **Where the policy is read.** The script reads the policy at the base commit, never from the working tree: the `paths` and `auto_merge` of the area files, `REVIEW.md` and `evidence_dir`. A change to one of them is itself `person`, so the base and the head agree whenever the floor is not `person`, and an edit that is not committed changes nothing. A `REVIEW.md` that does not parse at the base sends every change to a person. A repository without area files has no covered path: the floor is `person` with one reason for all paths.
 

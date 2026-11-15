@@ -7,14 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Progress per phase** (issue #81): `ytstack-status --phases [--json]`
+  prints done, in review and total per milestone and in total. When a total
+  changed since the last report, the line says by how much and why (slices
+  added or removed), and every change goes to a log outside the repository,
+  so a grown total no longer reads as negative progress. Phases that join or
+  leave are named, a done milestone counts all its slices, a backlog one is
+  left out. `coordinate` Step 11 points at it; the JSON is what a chart is
+  drawn from, and it does not use up the change: only the text report does.
+- **Lanes that stall are named** (issue #84): `ytstack-frontier check`
+  prints a `stale:` line (exit 2) for a running lane whose worktree is gone
+  or whose branch had no commit for 60 minutes (`--minutes`; a fix round
+  counts from its start), a review or prepare lane running three times as
+  long without a report, and a ready lane nobody claimed for 60 minutes. `ytstack-upkeep` lists them under `lanes`.
+- **Worktree cleanup** (issue #84): `ytstack-upkeep --worktrees` lists the
+  worktrees and branches with their pull request state, age and uncommitted
+  changes, and prints the `git worktree remove` / `git branch -D` commands
+  for the merged or closed ones. It runs none of them.
+- **Peers** (issue #84): sessions in other repositories go into a
+  `## Peers` section of `LANES.md` (`ytstack-frontier peer set` / `peer
+  list`); `coordinate` prints them in its preamble and its Rotation block,
+  so a compaction no longer loses which session is which.
+- **Standing instructions are recorded under load** (issue #72): in a
+  `coordinate` session the new prompt hook `hooks/standing-prompt` flags a
+  prompt that reads like a standing instruction ("always", "never", "from now
+  on", "until", "priorisiere", "fass ... nicht an", ...) and says to record it
+  before the next dispatch; the Stop hook holds the turn once when flagged
+  prompts got no entry. Coordinate mode is a session marker the `coordinate`
+  preamble writes. Claude Code only.
+- **`bin/ytstack-standing`**: `add` records an entry in one command, in its
+  own worktree with a commit and one standing pull request per UTC day (or in
+  place with `--here`); `end` closes one; `list` prints the active entries,
+  the ended ones, the conditions to check and the failed checks. The
+  `coordinate` preamble prints it, with the newest entry's age and the human
+  prompts since.
+- **Temporary and conditional entries** (issue #73): optional `until`,
+  `until-condition` and `until-check`; an ended entry is closed by an entry of
+  `kind: end`. `ytstack-check --standing` validates the new keys.
+- **Standing entries reach every context** (issue #74): `hooks/session-start`
+  injects the active entries for the session's role (also after a
+  compaction), `ytstack-brief render` puts the ones for lanes or reviewers
+  into the brief, and an optional `check:` command shows a broken instruction
+  in the `coordinate` preamble. Commands of an entry run only there, bounded
+  by a timeout.
+- **Coordinate mode keeps the operating path** (issue #76, part of #75): a
+  short ordered checklist (claim, render, dispatch; check, set; standing
+  entry; release watch) is injected at session start and after a compaction
+  and printed by the `coordinate` preamble, from one place in
+  `docs/ux/coordinator-format.md`. The new `hooks/pre-tool-use-agent` warns
+  when an `Agent` or long `SendMessage` prompt is no rendered brief. The Stop
+  hook warns when `LANES.md` lags the session's dispatches or the STATE
+  pointer is behind, and holds the stop once when that came three sessions in
+  a row.
+- **A checks inventory in `REVIEW.md`** (issue #75): a `## Checks` section
+  lists the machine checks a reviewer can rely on, one line each
+  (`<name> | file: <path> | guards: <what holds>`); `ytstack-risk check`
+  validates it. A pull request that adds a guard adds its line there:
+  `code-review` 0.5.2 treats a guard without its line as a finding, and
+  `ytstack-finish-lane route` prints a `checks:` line when a change edits CI
+  and the inventory did not move.
+- **`reconcile` migrates a project that ran past `plan-task`** (issue #76):
+  two new classes, each asked once. Tasks of open slices without any task
+  plan get skeletons in `plan-task`'s format (Files from the task line or the
+  slice plan's `Own:` lines, Spec impact per area with `TODO` fields that
+  `ytstack-spec impact` rejects until filled, a `TODO` verification); a
+  `STATE.md` pointer on a closed or older milestone than the newest one in
+  progress is moved to it. The logic is the new `bin/ytstack-reconcile`
+  (`skeletons [--write] [--slice]`, `pointer [--fix]`). `reconcile` 0.4.0.
+
 ### Changed
 
+- **PR watch stays on your own PRs and says less** (issue #85).
+  `ytstack-pr-watch register --all-open` registers only open PRs you authored
+  (the `gh` login) and skips drafts and do-not-merge labels, each named with
+  the reason; `--author <login>[,<login>]`, `--include-drafts` and
+  `--include-labelled` widen it; a rerun pauses a watch of yours that the
+  filter now skips. The status block on each prompt lists only the PR lines
+  that changed plus "N unchanged", a PR that closed gets one last
+  `closed (merged)` / `closed` line, and a PR stuck in `action_required` for
+  24 hours gets one line suggesting `pause`.
+  `ytstack-pr-watch status` shows the current session and repository;
+  `--all` shows everything.
+- **Bins through `YT_BIN`** (issue #85): the `coordinate` preamble
+  (`coordinate` 0.5.1) and the SessionStart context (where it fits under the
+  injection cap) print `YT_BIN=<bin of the running version>`, and
+  `coordinate` runs its bins as
+  `"$YT_BIN/ytstack-<name>"`, so a long session no longer calls a removed
+  version's path after an update.
+- `coordinate` 0.6.2: Step 9 records with `ytstack-standing add` and says
+  that agent memory is no substitute; Step 3 acts on ended entries,
+  conditions and failed checks.
+- `ytstack-standing list` runs an entry's `check` and `until-check` only when
+  the entry is merged on the default branch, never from a pending or a
+  remote-only branch; a timeout kills the command's whole process group.
 - **A worker's report carries a spec delta** (issue #75): the brief's
   "Spec impact" section now says that a change which makes a sentence of an
   area file false edits that section in the same commits, and the report's
   `Spec:` line names the edited sections (`<area>: <file> (<section>)`) or
   says `none -- <reason>`. `ytstack-brief check` fails a bare `none` and prose
-  without an area and a path. `spawn-milestone-team` 0.5.1 (brief template).
+  without an area and a path. `spawn-milestone-team` 0.5.2 (brief template).
 - **A brief for an unplanned task plans it first** (issue #76): `ytstack-brief
   render --task` on a task its slice plan lists without a task plan no longer
   fails or says "plan it yourself"; the brief's first deliverable is the task
@@ -37,23 +130,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--head` to check a commit range that is not checked out. `finish-lane`
   0.6.0.
 
-### Added
+### Fixed
 
-- **A checks inventory in `REVIEW.md`** (issue #75): a `## Checks` section
-  lists the machine checks a reviewer can rely on, one line each
-  (`<name> | file: <path> | guards: <what holds>`); `ytstack-risk check`
-  validates it. A pull request that adds a guard adds its line there:
-  `code-review` 0.5.1 treats a guard without its line as a finding, and
-  `ytstack-finish-lane route` prints a `checks:` line when a change edits CI
-  and the inventory did not move.
-- **`reconcile` migrates a project that ran past `plan-task`** (issue #76):
-  two new classes, each asked once. Tasks of open slices without any task
-  plan get skeletons in `plan-task`'s format (Files from the task line or the
-  slice plan's `Own:` lines, Spec impact per area with `TODO` fields that
-  `ytstack-spec impact` rejects until filled, a `TODO` verification); a
-  `STATE.md` pointer on a closed or older milestone than the newest one in
-  progress is moved to it. The logic is the new `bin/ytstack-reconcile`
-  (`skeletons [--write] [--slice]`, `pointer [--fix]`). `reconcile` 0.4.0.
+- **New artifacts follow the directory their milestone lives in** (issue #70):
+  when a milestone's roadmap or files already sit in
+  `.ytstack/milestones/M###/` (or a `backlog/<PREFIX>/` directory), new plans,
+  summaries, reviews and retros of that milestone are written there instead of
+  flat into `.ytstack/`. The lib functions `yt_artifact_dir` and
+  `yt_artifact_path` decide; skills print `ARTIFACT_DIR`. Flat stays the
+  default and nothing is moved. Readers that built flat paths (plan-task,
+  summarize-task, slice-milestone, reassess-roadmap, retro, the review and
+  execution skills, finish-branch, ship, spawn-milestone-team, grill,
+  handoff-session, and the stop, pre-tool-use-edit, session-start,
+  task-created, teammate-idle hooks) now find those files there too.
+  `plan-milestone` counts moved milestones when it numbers the next one, and
+  `ytstack-risk` counts their files as process records (at most one directory
+  below `milestones/` or `backlog/`). Readers that count or list a milestone's
+  files (reassess-roadmap, retro, spawn-milestone-team, task-created,
+  teammate-idle) also see files of that milestone that landed flat before it
+  moved.
+- `teammate-idle` no longer fails on a slice plan without an open task (`grep
+  -c ... || echo 0` produced `0` twice and broke the sum).
+- `coordinate` and `resume-session` (0.1.2) find the automatic handoff the
+  PreCompact hook wrote under `CLAUDE_PLUGIN_DATA`, which their shell does
+  not see (`yt_latest_handoff`).
+- The SessionStart injection near its cap shrinks the standing list before it
+  cuts the Next action, and keeps a Next action shorter than its omission
+  note.
 
 ## [0.11.0] - 2026-11-15
 

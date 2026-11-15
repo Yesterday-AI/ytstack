@@ -65,6 +65,8 @@ class Claude(unittest.TestCase):
         self.assertIn('o/r#7: ready (head head2', text)
         s['closed'] = True
         self.watch(s)
+        # Its last line says it closed (PR #89 review), then it drops out.
+        self.assertIn('o/r#7: closed', self.prompt()['hookSpecificOutput']['additionalContext'])
         self.assertEqual(self.prompt(), {})
 
     def test_qualify_is_idempotent(self):

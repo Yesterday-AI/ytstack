@@ -3,7 +3,7 @@ name: resume-session
 description: "Rebuilds working context at the start of a session from STATE.md, handoffs and the latest summaries into a where-we-are briefing. Use when a session starts in a project with .ytstack/, or when the user says resume, where were we, pick up where I left off. Not for writing a handoff (handoff-session) and not for repos without .ytstack/ (init-project or adopt-brownfield)."
 metadata:
   tier: core
-  version: 0.1.1
+  version: 0.1.2
   triggers:
     - resume session
     - where were we
@@ -58,11 +58,13 @@ if [ "$_HAS_HANDOFF" = yes ]; then
 fi
 # Automatic handoff (written out of tree by the pre-compact hook, per worktree; M016)
 _LATEST_AUTO_HANDOFF=none; _AUTO_HANDOFF_TS=none
-if command -v yt_state_base >/dev/null 2>&1 && [ -n "${YT_REPO_KEY:-}" ]; then
-  _LATEST_LINK="$(yt_state_base)/repos/$YT_REPO_KEY/worktrees/$YT_WT_KEY/latest-handoff"
-  if [ -L "$_LATEST_LINK" ] && [ -f "$_LATEST_LINK" ]; then
-    _LATEST_AUTO_HANDOFF=$(readlink "$_LATEST_LINK")
+# yt_latest_handoff also looks where the hook wrote it (CLAUDE_PLUGIN_DATA is not set in this shell).
+if command -v yt_latest_handoff >/dev/null 2>&1 && [ -n "${YT_REPO_KEY:-}" ]; then
+  _LATEST_AUTO_HANDOFF=$(yt_latest_handoff)
+  if [ -n "$_LATEST_AUTO_HANDOFF" ]; then
     _AUTO_HANDOFF_TS=$(sed -n 's/^timestamp: *//p' "$_LATEST_AUTO_HANDOFF" 2>/dev/null | head -1)
+  else
+    _LATEST_AUTO_HANDOFF=none
   fi
 fi
 
