@@ -8,9 +8,12 @@
 # In coordinate mode, per human prompt:
 #   1. appends the epoch to <session dir>/prompts (the coordinate preamble
 #      counts the prompts since the newest standing entry);
-#   2. when the prompt reads like a standing instruction (always, never, from
-#      now on, until, while, prioritise, don't touch, remember; German: immer,
-#      nie, ab jetzt, bis, waehrend, priorisiere, fass ... nicht an, denk dran),
+#   2. when the prompt reads like a standing instruction (instruction phrases:
+#      from now on, going forward, until further notice, don't touch,
+#      prioritise, an imperative "always/never <verb>" at a clause start;
+#      German: ab jetzt, ab sofort, von nun an, bis auf weiteres, solange ...
+#      nicht, grundsaetzlich, immer wenn, nie wieder, denk dran, merk dir,
+#      priorisiere, fass ... nicht an; a prompt that is only a question is not),
 #      appends it to <session dir>/standing-flags for hooks/stop and injects
 #      one line: record it under .ytstack/standing/ before the next dispatch.
 # A prompt that starts with "<" (a task notification, a system message) is no
@@ -60,13 +63,28 @@ esac
 NOW=$(date +%s)
 printf '%s\n' "$NOW" >> "$SD/prompts" 2>/dev/null || exit 0
 
+# Instruction phrases, not single words: "bis", "nie", "immer", "while",
+# "until" and "never" alone occur in ordinary questions ("bis wann?", "never
+# mind", "ist das immer noch rot?"). "always"/"never" count only as an
+# imperative at the start of a clause ("Never merge on Fridays."). A prompt
+# that is one question and nothing else is never flagged.
 # Word boundaries without \b (BSD and BusyBox grep differ): a non-letter or the
 # line edge on both sides. LC_ALL=C keeps the umlaut bytes out of [:alnum:].
 B='(^|[^[:alnum:]])'
 E='([^[:alnum:]]|$)'
-EN="always|never|from now on|going forward|from here on|until|while|whenever|as long as|prioriti[sz]e|prioriti[sz]ing|don'?t touch|do not touch|hands off|leave [^.!?]{1,60} alone|remember to|keep in mind|no more"
-DE="immer|nie|niemals|ab jetzt|ab sofort|von jetzt an|ab heute|k(ue|ü)nftig|in zukunft|bis|w(ae|ä)hrend|solange|sobald|priorisier[a-z]*|fass[^.!?]{1,60}nicht an|nicht anfassen|denk dran|denk daran|merk dir|grunds(ae|ä)tzlich"
-HIT=$(printf '%s' "$PROMPT" | tr '\n\r' '  ' | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C grep -Eo "$B($EN|$DE)$E" 2>/dev/null | head -1 | LC_ALL=C sed 's/^[^[:alnum:]]*//; s/[^[:alnum:]]*$//')
+EN="from now on|going forward|from here on|until further notice|don'?t touch|do not touch|hands off|prioriti[sz]e|leave [^.!?]{1,60} alone|remember to|keep in mind|no more [a-z]+ until"
+DE="ab jetzt|ab sofort|von nun an|von jetzt an|ab heute|bis auf weiteres|solange [^.!?]{1,60} nicht|grunds(ae|ä)tzlich|immer wenn|nie wieder|nie mehr|niemals|denk dran|denk daran|merk dir|priorisier[a-z]*|fass [^.!?]{1,60} nicht an|nicht anfassen|k(ue|ü)nftig|in zukunft"
+# always/never + a verb at the start of the prompt or of a clause (after . ! ? ; : or a dash), not "never mind".
+IMP='(^|[.!?;:]|--| - )[[:space:]]*(please[[:space:]]+)?(always|never)[[:space:]]+[a-z]+'
+LOW=$(printf '%s' "$PROMPT" | tr '\n\r' '  ' | LC_ALL=C tr '[:upper:]' '[:lower:]')
+TRIM=$(printf '%s' "$LOW" | sed 's/[[:space:]]*$//')
+case "$TRIM" in
+  *'?') case "${TRIM%?}" in *[.!?]*) ;; *) exit 0 ;; esac ;;
+esac
+HIT=$(printf '%s' "$LOW" | LC_ALL=C grep -Eo "$B($EN|$DE)$E" 2>/dev/null | head -1 | LC_ALL=C sed 's/^[^[:alnum:]]*//; s/[^[:alnum:]]*$//')
+if [ -z "$HIT" ]; then
+  HIT=$(printf '%s' "$LOW" | LC_ALL=C grep -Eo "$IMP" 2>/dev/null | grep -v 'never mind' | head -1 | LC_ALL=C sed 's/^[^[:alnum:]]*//')
+fi
 [ -n "$HIT" ] || exit 0
 
 EXCERPT=$(printf '%s' "$PROMPT" | tr '\n\r\t' '   ' | cut -c1-100)

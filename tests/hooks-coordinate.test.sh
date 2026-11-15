@@ -76,6 +76,12 @@ tool a1 SendMessage "$LONG"
 has "long SendMessage without a brief: warned" "$(ctx .hookSpecificOutput.additionalContext)" "SendMessage prompt carries no rendered brief"
 tool a1 Bash "ls"
 eq "another tool: silent" "" "$OUT"
+lookup() { OUT=$("$JQ" -n --arg t "$1" --arg c "$P" '{session_id: "a1", cwd: $c, hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: {prompt: "Where is X defined?", subagent_type: $t}}' | bash "$H/pre-tool-use-agent" 2>&1); }
+lookup Explore; eq "an Explore lookup: no warning" "" "$OUT"
+lookup semble-search; eq "a search agent: no warning" "" "$OUT"
+eq "lookups are not counted as dispatches" 3 "$(grep -c . "$SH/a1/dispatches")"
+lookup general-purpose; has "a general-purpose agent without a brief: warned" "$(ctx .hookSpecificOutput.additionalContext)" "no rendered brief"
+eq "and counted" 4 "$(grep -c . "$SH/a1/dispatches")"
 
 echo "# session-start: operating checklist"
 WANT=$(awk '/<!-- operating-checklist:end -->/ { f = 0 } f { print } /<!-- operating-checklist:begin -->/ { f = 1 }' "$ROOT/docs/ux/coordinator-format.md")
@@ -112,7 +118,21 @@ has "the block names the streak" "$(ctx .reason)" "3 sessions in a row"
 stop s4; eq "the block comes once per session" "" "$(ctx .decision)"
 rm -f "$P/.ytstack/M003-ROADMAP.md"
 marker s5; stop s5; eq "cleared: silent" "" "$OUT"
-eq "cleared: the streak is 0" 0 "$(awk -F '\t' '$1 == "state" { print $2 }' "$XDG_STATE_HOME"/ytstack/repos/*/coordinate-lints)"
+printf -- '---\nmilestone: M003\n---\n' > "$P/.ytstack/M003-ROADMAP.md"
+marker s6; stop s6
+eq "a clean session broke the row: the next one counts 1" 1 "$(awk -F '\t' '$1 == "state" { print $2 }' "$XDG_STATE_HOME"/ytstack/repos/*/coordinate-lints)"
+eq "and does not block" "" "$(ctx .decision)"
+rm -f "$P/.ytstack/M003-ROADMAP.md"
+
+echo "# stop: the first stop of a session comes before its first dispatch (a status question)"
+rm -rf "$XDG_STATE_HOME/ytstack/repos"
+touch -t 202001010000 "$P/.ytstack/LANES.md"
+for s in q1 q2 q3; do
+  marker "$s"; stop "$s"
+  [ "$s" != q1 ] || eq "q1: the first stop, no dispatch yet: silent" "" "$OUT"
+  date +%s >> "$SH/$s/dispatches"; stop "$s"
+done
+eq "the third such session blocks" block "$(ctx .decision)"
 eq "nothing written into the project" "?? .ytstack/LANES.md" "$(git -C "$P" status --porcelain)"
 
 echo
