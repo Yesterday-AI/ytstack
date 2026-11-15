@@ -76,12 +76,13 @@ standing_block
 # milestone on disk (yt_state_lint W2). Each is said once per session as a
 # systemMessage. A finding present in YT_LINT_STREAK_N sessions in a row (default
 # 3; counter <state base>/repos/<repo key>/coordinate-lints, kind TAB count TAB
-# last session TAB counted) blocks the stop once in that session. A session
+# last session TAB counted TAB the counted session ids) blocks the stop once in
+# that session; overlapping sessions count once each. A session
 # counts once when the finding was there at any of its stops, also when its
 # first stop came before its first dispatch.
 LINT_MSG=""
 coordinate_lints() {
-  local sid="${YT_SESSION_ID:-}" sd ytd key last lm kind present n s seen streak need tmp text
+  local sid="${YT_SESSION_ID:-}" sd ytd key last lm kind present n s seen ids streak need tmp text
   case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) return 0 ;; esac
   sd="$(yt_session_home)/$sid"
   [ -f "$sd/coordinate" ] || return 0
@@ -113,17 +114,23 @@ coordinate_lints() {
     # Per kind: n sessions in a row ending with session s; seen = s counted.
     # A session counts once when the finding was there at any of its stops;
     # a session that ended without it breaks the row (seen at the next one).
-    n=$(awk -F '\t' -v k="$kind" '$1 == k { print $2 }' "$streak" 2>/dev/null); case "$n" in ''|*[!0-9]*) n=0 ;; esac
+    # ids: the sessions counted in the current row, so that overlapping
+    # sessions (A, B, A) are counted once each.
     s=$(awk -F '\t' -v k="$kind" '$1 == k { print $3 }' "$streak" 2>/dev/null)
     seen=$(awk -F '\t' -v k="$kind" '$1 == k { print $4 }' "$streak" 2>/dev/null)
+    ids=$(awk -F '\t' -v k="$kind" '$1 == k { print $5 }' "$streak" 2>/dev/null); [ "$ids" != - ] || ids=""
     if [ "$s" != "$sid" ]; then
-      [ "$seen" = 1 ] || n=0
-      seen=0
+      [ "$seen" = 1 ] || ids=""
+      case ",$ids," in *",$sid,"*) seen=1 ;; *) seen=0 ;; esac
     fi
-    if [ "$present" = yes ] && [ "$seen" != 1 ]; then n=$((n + 1)); seen=1; fi
+    if [ "$present" = yes ]; then
+      case ",$ids," in *",$sid,"*) ;; *) ids="${ids:+$ids,}$sid" ;; esac
+      seen=1
+    fi
+    n=$(printf '%s' "$ids" | tr ',' '\n' | grep -c .)
     [ "$present" = yes ] || rm -f "$sd/lint-warned-$kind" 2>/dev/null
     tmp="$streak.$$"
-    { awk -F '\t' -v k="$kind" '$1 != k' "$streak" 2>/dev/null; printf '%s\t%s\t%s\t%s\n' "$kind" "$n" "$sid" "$seen"; } > "$tmp" 2>/dev/null && mv -f "$tmp" "$streak" 2>/dev/null
+    { awk -F '\t' -v k="$kind" '$1 != k' "$streak" 2>/dev/null; printf '%s\t%s\t%s\t%s\t%s\n' "$kind" "$n" "$sid" "$seen" "${ids:--}"; } > "$tmp" 2>/dev/null && mv -f "$tmp" "$streak" 2>/dev/null
     [ "$present" = yes ] || continue
     if [ "$n" -ge "$need" ] && [ ! -e "$sd/lint-blocked-$kind" ]; then
       : > "$sd/lint-blocked-$kind" 2>/dev/null

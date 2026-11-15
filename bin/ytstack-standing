@@ -76,9 +76,12 @@ norun() {
   [ "$YT_IS_GIT" = yes ] || return 0
   case "$YT_DIR" in "$TOP"/*) rel="${YT_DIR#"$TOP"/}" ;; *) return 0 ;; esac
   base=$(yt_standing_default_ref "$TOP")
-  # No default branch yet (a repository without a commit): nothing came from
-  # anyone else, the files are the user's own.
-  [ -n "$base" ] || return 0
+  # No default branch: in a repository without a commit nothing came from
+  # anyone else and the files are the user's own; otherwise fail closed.
+  if [ -z "$base" ]; then
+    git -C "$TOP" rev-parse -q --verify HEAD >/dev/null 2>&1 || return 0
+    echo "default branch unknown (set origin/HEAD: git remote set-head origin --auto)"; return 0
+  fi
   want=$(git -C "$TOP" rev-parse -q --verify "$base:$rel/standing/$1" 2>/dev/null)
   have=$(git -C "$TOP" hash-object "$YT_DIR/standing/$1" 2>/dev/null)
   [ -n "$want" ] && [ "$want" = "$have" ] || echo "not on ${base#refs/*/}"
@@ -142,7 +145,8 @@ cmd_list() {
 
   while IFS="$(printf '\t')" read -r name given scope until ucond ucheck check summary state src _body; do
     [ -n "$name" ] || continue
-    pend=""; case "$src" in pending:*) pend=" (pending: ${src#pending:})" ;; esac
+    # A pending entry's file is not on disk here: show its whole text.
+    pend=""; case "$src" in pending:*) pend=" (pending: ${src#pending:})"; [ "$_body" = - ] || summary="$_body" ;; esac
     why=$(norun "$name" "$src")
     if [ "$state" = active ] && [ "$ucheck" != - ]; then
       if [ "$checks" != yes ]; then summary="$summary [until-check not run]"

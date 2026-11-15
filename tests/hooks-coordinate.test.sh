@@ -138,6 +138,13 @@ for s in q1 q2 q3; do
 done
 eq "the third such session blocks" block "$(ctx .decision)"
 
+echo "# stop: overlapping sessions count once each (A, B, A)"
+rm -rf "$XDG_STATE_HOME/ytstack/repos"
+for s in ov-a ov-b; do marker "$s"; date +%s > "$SH/$s/dispatches"; done
+stop ov-a; stop ov-b; stop ov-a
+eq "A, B, A: two sessions, not three" 2 "$(awk -F '\t' '$1 == "lanes" { print $2 }' "$XDG_STATE_HOME"/ytstack/repos/*/coordinate-lints)"
+eq "and no block" "" "$(ctx .decision)"
+
 echo "# stop: the streak is kept per repository key from the marker (user scope)"
 rm -rf "$XDG_STATE_HOME/ytstack/repos"
 mkdir -p "$SH/u1"; printf '%s\nkeyone\n' "$P/.ytstack" > "$SH/u1/coordinate"; date +%s > "$SH/u1/dispatches"; stop u1

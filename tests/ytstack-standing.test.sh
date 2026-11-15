@@ -266,6 +266,16 @@ hasnt "the role filter applies to pending entries" "keep-lanes-md-current" "$L3"
 OUT=$(bash "$BIN" -C "$M" add "Review every lane once. A second review only for the fix." --scope "every lane" 2>&1)
 L4=$( . "$ROOT/hooks/lib/git-ctx.sh"; yt_standing_lines "$M/.ytstack" lane 0 full )
 has "full mode (the briefs) carries every sentence of a pending entry" "Review every lane once. A second review only for the fix. [pending:standing/$DAY]" "$L4"
+OUT=$(bash "$BIN" -C "$M" list --no-checks 2>&1)
+has "list shows the whole text of a pending entry" "Review every lane once. A second review only for the fix. (pending: standing/$DAY)" "$OUT"
+
+echo "# no default branch to compare with: fail closed"
+ND="$TMP/nd"; git init -q -b develop "$ND"; mkdir -p "$ND/.ytstack/standing"
+( cd "$ND" && printf 'x\n' > .ytstack/STATE.md && git add -A && git commit -qm seed ) >/dev/null 2>&1
+printf -- '---\ngiven: 2026-11-01T10:00:00Z\nscope: x\nsupersedes:\ncheck: touch %s/RAN-ND; exit 1\n---\n\nOn develop.\n' "$TMP" > "$ND/.ytstack/standing/20261101T1000Z-nd.md"
+OUT=$(bash "$BIN" -C "$ND" list 2>&1)
+[ ! -e "$TMP/RAN-ND" ] && ok "a repository with commits but no known default branch runs nothing" || bad "a repository with commits but no known default branch runs nothing"
+has "and says why" "[check not run: default branch unknown" "$OUT"
 
 echo "# a repository whose default branch is master, without origin/HEAD"
 BAREM="$TMP/master.git"; git init -q --bare -b master "$BAREM"

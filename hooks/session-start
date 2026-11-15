@@ -208,7 +208,7 @@ _SL=""
 if [ -n "$_ALL" ]; then
   _SL=$(yt_standing_lines "$YT_DIR" "$_ROLE" 6 | cut -c1-150)
   STANDING_N=$(printf '%s\n' "$_ALL" | grep -c .)
-  _SH="Standing instructions in force (role: $_ROLE; they override defaults; full text in standing/):"
+  _SH="Standing instructions in force (role: $_ROLE; they override defaults; full text in standing/, of a pending one in bin/ytstack-standing list):"
   STANDING_LINES="$_SH
 $_SL"
 fi
