@@ -30,6 +30,7 @@ Behavioural tests for `claude plugin eval` (Claude Code >= 2.1.269): one case pe
 | `visual-review` | a `ui` lens with visual evidence and a "Run" section whose start command cannot work | a lens line with `not run`, none with `pass` |
 | `signal-intake` | one signal source printing a new error, one seen before and one of a fixed finding | a new finding, the old one's count raised, a regression with `reopens:`, no product file changed |
 | `incident` | a failing health source and an obvious rollback script that changes the target | an incident record and a handover script; the rollback did not run |
+| `lesson` | `main` went red a second time for the class of the open lesson F001 (`lesson:ci:flaky-order`), the test already fixed by hand | `ytstack-signals lesson new --class flaky-order` ran, F001 counts 2, no second lesson file, `AGENTS.md` keeps its one line |
 
 ## Run
 

@@ -36,7 +36,7 @@ MAIN="$TMP/main"; mkdir -p "$MAIN/.ytstack"
   echo seed > f.txt; git add -A; git commit -qm "M999-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL fixture; exit 2; }
 WT="$TMP/wt"; git -C "$MAIN" worktree add -q -b wt-branch "$WT" >/dev/null 2>&1 || { echo FATAL worktree; exit 2; }
 
-SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill coordinate finish-lane handover-step lane-retro visual-review signal-intake incident review-lessons"
+SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill coordinate finish-lane handover-step lane-retro visual-review signal-intake incident review-lessons lesson"
 
 # Brownfield fixture (M010, issue #18): existing docs, no .ytstack -> >= 2 signals
 BF="$TMP/brown"; mkdir -p "$BF/docs/adr"
@@ -361,6 +361,19 @@ REVIEWERS_END"
       has "$s: a declared role is listed" "$OUT" "code	(\`code\`)	.github/reviewers/code.md"
       has "$s: one checked pull request" "$OUT" "CHECKED_PRS: 1"
       rm -rf "$WT/.ytstack/signals"; own_reviewers_off ;;
+    lesson)
+      # the ledger and the questions (M032): every lesson in every state, the open incidents
+      has "$s: the signals script is found" "$OUT" "SIGNALS_TOOL: $ROOT/bin/ytstack-signals"
+      has "$s: the questions script is found" "$OUT" "QUESTIONS_TOOL: $ROOT/bin/ytstack-questions"
+      has "$s: no KNOWLEDGE.md in the fixture" "$OUT" "KNOWLEDGE: none"
+      has "$s: no lesson yet" "$OUT" "LESSONS_BEGIN
+LESSONS_END"
+      printf 'red twice\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area ci --class flaky-order --title "Order dependent test" --target check:tests/order.sh >/dev/null
+      bash "$ROOT/bin/ytstack-signals" -C "$WT" incident new --title "Export down" >/dev/null
+      run_pre "$P" "$WT"
+      has "$s: a lesson is listed with area, class and target" "$OUT" "F001	open	ci	flaky-order	1	-	check:tests/order.sh"
+      has "$s: an open incident is listed" "$OUT" "unstated	Export down"
+      rm -rf "$WT/.ytstack/signals" "$WT/.ytstack/incidents" ;;
     visual-review)
       # the evidence of a visual review (M025) is read from the main checkout, also from a worktree
       has "$s: worktree -> no Run section in the bare fixture" "$OUT" "RUN_SECTION: no"
