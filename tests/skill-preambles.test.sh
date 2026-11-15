@@ -22,6 +22,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); echo "  ok   - $1"; }
+eq()  { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected '$2' got '$3'"; fi; }
 bad() { FAIL=$((FAIL+1)); echo "  FAIL - $1${2:+ ($2)}"; }
 has() { case "$2" in *"$3"*) ok "$1";; *) bad "$1" "missing '$3'";; esac; }
 
