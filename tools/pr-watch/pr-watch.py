@@ -21,26 +21,56 @@ from prwatch.state import (cli, connect, handover, known_session, qualify_known,
 from prwatch.worker import tick
 
 
+def skip_reason(pr, authors, drafts, labelled):
+    """Why `register --all-open` leaves an open PR alone, or None: another author, a draft,
+    a do-not-merge label (`do-not-merge`, `DO NOT MERGE`, `do-not-merge/hold` ...)."""
+    author = ((pr.get('user') or {}).get('login') or '').lower()
+    if author not in authors:
+        return f'author {author or "unknown"}'
+    if pr.get('draft') and not drafts:
+        return 'draft'
+    names = [(label.get('name') or '').lower().replace(' ', '-').replace('_', '-') for label in pr.get('labels') or []]
+    if not labelled and any(name.startswith('do-not-merge') for name in names):
+        return 'do-not-merge'
+    return None
+
+
+def origin_repo(cwd):
+    """OWNER/REPO of the origin remote of `cwd`, or None (no checkout, no GitHub origin)."""
+    from prwatch.hooks import REPO
+    p = subprocess.run(['git', '-C', cwd, 'remote', 'get-url', 'origin'], capture_output=True, text=True, timeout=3)
+    match = REPO.fullmatch(p.stdout.strip()) if p.returncode == 0 else None
+    return match[1] if match else None
+
+
 def main():
     parser = argparse.ArgumentParser(prog='ytstack-pr-watch', description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest='command', required=True)
     hook = sub.add_parser('hook', help='Hook entrypoint (stdin: hook payload); called by hooks/pr-watch')
     hook.add_argument('--host', choices=('codex', 'claude'), default='codex')
-    sub.add_parser('status', help='Watches, pending notices and worker health as JSON')
-    poll = sub.add_parser('tick', help='One worker pass: discover, poll GitHub, deliver')
-    poll.add_argument('--no-delivery', action='store_true')
-    poll.add_argument('--no-discovery', action='store_true')
     # Codex exports CODEX_THREAD_ID; Claude Code exports CLAUDE_CODE_SESSION_ID (stored host-qualified).
     default_session = os.environ.get('CODEX_THREAD_ID') or (
         claude.qualify(os.environ['CLAUDE_CODE_SESSION_ID']) if os.environ.get('CLAUDE_CODE_SESSION_ID') else None)
+    show = sub.add_parser('status', help='Watches, pending notices and worker health as JSON; by default only '
+                                         'the current session and the repository of the working directory')
+    show.add_argument('--all', action='store_true', help='every session and repository')
+    show.add_argument('--session', default=default_session)
+    show.add_argument('--repo')
+    poll = sub.add_parser('tick', help='One worker pass: discover, poll GitHub, deliver')
+    poll.add_argument('--no-delivery', action='store_true')
+    poll.add_argument('--no-discovery', action='store_true')
     add = sub.add_parser('register', help='Watch an open PR (or every open PR of a repository) for a session')
     add.add_argument('--repo', required=True)
     which = add.add_mutually_exclusive_group(required=True)
     which.add_argument('--pr', type=int)
     which.add_argument('--all-open', action='store_true',
-                       help='every open PR of --repo, for example the ones subagents or other sessions opened; '
-                            'PRs another session owns are skipped and named')
+                       help='every open PR of --repo by you (gh login), for example the ones subagents opened; '
+                            'drafts, do-not-merge labels and PRs another session owns are skipped and named')
+    add.add_argument('--author', help='with --all-open: also PRs of these logins (comma-separated)')
+    add.add_argument('--include-drafts', action='store_true', help='with --all-open: also draft PRs')
+    add.add_argument('--include-labelled', action='store_true',
+                     help='with --all-open: also PRs with a do-not-merge label')
     add.add_argument('--session', default=default_session)
     add.add_argument('--cwd', default=os.getcwd())
     create = sub.add_parser('create', help='Create a PR and persist ownership before returning')
@@ -156,11 +186,16 @@ def main():
             elif args.command == 'register' and args.all_open:
                 if not args.session:
                     parser.error('--session or CODEX_THREAD_ID required')
-                # One paginated list call (one REST call per 100 open PRs).
+                # One paginated list call (one REST call per 100 open PRs), one for the login.
                 cwd = str(Path(args.cwd).resolve())
-                added, kept, foreign = [], [], []
+                authors = {github.login().lower()} | {a.strip().lower() for a in (args.author or '').split(',') if a.strip()}
+                added, kept, foreign, filtered = [], [], [], []
                 for pr in sorted(github.open_pulls(args.repo), key=lambda p: p['number']):
                     number = pr['number']
+                    reason = skip_reason(pr, authors, args.include_drafts, args.include_labelled)
+                    if reason:
+                        filtered.append(f'#{number} ({reason})')
+                        continue
                     known = db.execute('SELECT session FROM watches WHERE repo=? AND number=?',
                                        (args.repo, number)).fetchone()
                     try:
@@ -173,11 +208,14 @@ def main():
                         continue
                     (kept if known else added).append(f'#{number}')
                 print(f'{args.repo}: {len(added)} registered to {args.session}, {len(kept)} already watched by it, '
-                      f'{len(foreign)} owned by another session')
+                      f'{len(foreign)} owned by another session, {len(filtered)} skipped by filter')
                 if added:
                     print('  registered: ' + ' '.join(added))
                 if foreign:
                     print('  skipped (another session owns them; pause or register them there): ' + ' '.join(foreign))
+                if filtered:
+                    print('  skipped by filter: ' + ' '.join(filtered)
+                          + ' (widen with --author, --include-drafts, --include-labelled, or register --pr N)')
             elif args.command == 'register':
                 if not args.session:
                     parser.error('--session or CODEX_THREAD_ID required')
@@ -192,8 +230,14 @@ def main():
                 if not cursor.rowcount:
                     parser.error('Unknown PR')
             elif args.command == 'status':
-                print(json.dumps(dict(watches=[dict(r) for r in db.execute('SELECT * FROM watches')],
-                    pending_delivery=[dict(r) for r in db.execute('SELECT event_key,session,attempts,error,retry_at,dispatch_id,turn_id FROM outbox WHERE delivered IS NULL AND cancelled IS NULL')],
+                # Default scope: this session and the repository of the working directory (issue #85).
+                scope = {} if args.all else {k: v for k, v in (
+                    ('session', args.session), ('repo', args.repo or origin_repo(os.getcwd()))) if v}
+                where = ' AND '.join(f'{k}=?' for k in scope) or '1'
+                print(json.dumps(dict(scope=scope or 'all',
+                    watches=[dict(r) for r in db.execute(f'SELECT * FROM watches WHERE {where}', tuple(scope.values()))],
+                    pending_delivery=[dict(r) for r in db.execute('SELECT event_key,session,attempts,error,retry_at,dispatch_id,turn_id FROM outbox '
+                                                                  f'WHERE delivered IS NULL AND cancelled IS NULL AND {where}', tuple(scope.values()))],
                     health={r['key']:r['value'] for r in db.execute('SELECT * FROM meta')}), indent=2))
         db.close()
     return 0
