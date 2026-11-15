@@ -20,7 +20,7 @@ Coordinator operating checklist (scripts in bin/ of the plugin):
 3. Human instruction beyond the task: ytstack-standing add, before the next dispatch; never only in memory.
 4. Merge to production: ytstack-watch release --commit <sha>.
 5. After a compaction: run the coordinate preamble again first.
-6. A decision nobody reserved: take it and record it in DECISIONS.md. A person gets it only for an ESCALATE item or a plan line that says verdict, approval or sign-off.
+6. Decide yourself, into DECISIONS.md; ask only for ESCALATE or a plan line saying verdict/approval/sign-off.
 <!-- operating-checklist:end -->
 
 ## `LANES.md` -- who works on what
