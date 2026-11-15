@@ -1316,3 +1316,13 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - This narrows the rule "no edits to STATE.md pointer fields" of `reconcile` (Step 4, and the artifacts area) to: only through `pointer --fix`, after a yes.
 
 **Supersedes:** None.
+
+## 2026-11-15: The spec delta of a lane is checked per area, from the plans of its own range (PR #88 review)
+
+**Context:** An independent review of PR #88 found that one task plan with a "Spec impact" switched the area check off for the whole slice diff (a second area merged unchecked), that task plans of earlier work were checked against the lane's range (a false `person`), and that the report could name any changed file as a "spec edit".
+
+**Chose:** The check runs per area. Every area the diff touches (renames with both paths, as `ytstack-risk` reads a diff) needs its area file or a source in the diff, a plan of the range that says `none -- <reason>` for the files of its own commits, or the report's reason. A plan belongs to the range when it changed in it or a commit of its task is in it. A path the report names is the area file or a source of that area.
+
+**How to apply:** This replaces the first two "How to apply" points of "2026-11-15: `finish-lane`'s route checks the spec delta; a gap routes to a person (issue #75)": a plan of the range that names an area is still checked with `impact` and the report cannot override it, but a plan no longer stands in for areas its task did not touch.
+
+**Supersedes:** None. Narrows the entry named above.

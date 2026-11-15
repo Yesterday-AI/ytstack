@@ -20,12 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails or says "plan it yourself"; the brief's first deliverable is the task
   plan beside the slice plan, in `plan-task`'s format (Files, What this does,
   Spec impact, Verification), committed alone, then the files it names. A
-  slice brief names the plan file to write per unplanned task.
+  slice brief names the plan file to write per unplanned task. A task of a
+  slice plan with its own `## Files` (granularity slice) is briefed from that
+  slice plan instead.
 - **`finish-lane` checks the spec delta before a merge without you** (issue
   #75): `ytstack-finish-lane route --report <file>` runs `ytstack-spec impact`
-  on the lane's commits for every plan that states a "Spec impact"; without
-  one, every area the diff touches needs its area file or a source in the
-  diff, or `Spec: none -- <reason>` in the worker's report. A gap prints
+  on the lane's commits for every plan of the range that states a "Spec
+  impact"; every area the diff touches (a moved file with both paths) needs
+  its area file or a source in the diff, a plan of the range that says
+  `none -- <reason>` for its own files, or `Spec: none -- <reason>` in the
+  worker's report. A path the report names must be the area file or one of
+  its sources (`ytstack-brief check` checks that too in a project with a
+  spec), and `impact` rejects a `TODO` placeholder. A gap prints
   `reason: spec -- ...` and turns `unattended` into `person`, so a lane that
   skipped `summarize-task` is still caught. `ytstack-spec impact` takes
   `--head` to check a commit range that is not checked out. `finish-lane`

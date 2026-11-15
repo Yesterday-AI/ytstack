@@ -161,7 +161,7 @@ The summary records what was updated under `## Spec`: the area, the file and sec
 
 ### Before a merge
 
-A dispatched worker states the spec delta in its report's `Spec:` line: the edited sections as `<area>: <file> (<section>)`, or `none -- <reason>` (`docs/ux/coordinator-format.md`, "The report"). `bin/ytstack-finish-lane route` checks it against the lane's diff before a merge without a person, so a lane that never ran `summarize-task` is still caught: each plan of the lane with a `## Spec impact` goes through `impact` on the commit range; without one, every area whose paths the diff touches needs its area file or a source in the diff, or the report's reason. A path the report names as edited has to be in the diff. A gap sends the change to a person.
+A dispatched worker states the spec delta in its report's `Spec:` line: the edited sections as `<area>: <file> (<section>)`, or `none -- <reason>` (`docs/ux/coordinator-format.md`, "The report"). `bin/ytstack-finish-lane route` checks it against the lane's diff before a merge without a person, so a lane that never ran `summarize-task` is still caught: each plan of the lane that belongs to the range and has a `## Spec impact` goes through `impact` on the commit range; every area whose paths the diff touches (a moved file with both paths) needs its area file or a source in the diff, a plan of the range that says `none -- <reason>` for the files of its commits, or the report's reason. A path the report names as edited is the area file or a source of that area, and in the diff; `bin/ytstack-brief check` checks the first half of that where it runs in the project. A `TODO` in a plan's "Spec impact" fails `impact`: a placeholder is no statement. A gap sends the change to a person.
 
 ### Drift
 
