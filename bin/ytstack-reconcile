@@ -65,7 +65,7 @@ section() {
   ' "$1"
 }
 # paths_in: backticked tokens on stdin that look like paths
-paths_in() { grep -oE '`[^`]+`' | tr -d '`' | grep -E '[/.]' | grep -v ' ' | awk '!seen[$0]++'; }
+paths_in() { grep -oE '`[^`]+`' | tr -d '`' | grep -E '[/.]' | awk '!seen[$0]++'; }
 # open_milestones: roadmap files of milestones still to be worked on
 open_milestones() {
   local f

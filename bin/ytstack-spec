@@ -333,8 +333,10 @@ cmd_impact() {
     echo "spec impact: not stated -- the plan has no '## Spec impact' section; state the impact in the summary"
     return 3
   fi
-  # A skeleton's placeholder (bin/ytstack-reconcile) is no statement yet.
-  line=$(printf '%s\n' "$body" | grep -m1 'TODO')
+  # A skeleton's placeholder (bin/ytstack-reconcile) is no statement yet: a
+  # field that is TODO ("TODO: ...", "<area>: TODO ...", "-- TODO ..."), not
+  # the word inside a filled line.
+  line=$(printf '%s\n' "$body" | grep -m1 -E '(^|^- |: |-- )TODO([[:space:]:]|$)')
   if [ -n "$line" ]; then echo "FAIL placeholder (fill it in): $line"; return 1; fi
   first=$(printf '%s\n' "$body" | head -1)
   case "$first" in

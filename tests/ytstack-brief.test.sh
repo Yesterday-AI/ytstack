@@ -243,6 +243,12 @@ hasnt "granularity slice: no task plan is demanded" "first deliverable" "$OUT"
 has "granularity slice: the slice plan's files are the scope" '- Create: `tests/login.test.sh`' "$(part Scope)"
 has "granularity slice: the slice plan's verification" "bash tests/login.test.sh" "$(part Verification)"
 has "granularity slice: the task line is the outcome" "all of it" "$(part Outcome)"
+# Codex P2 on #88: only an open task of the slice plan gets a brief
+run "$R" render --task M002-S01-T99
+eq "granularity slice: a task the slice plan does not list: exit 1" 1 "$EC"
+printf -- '- [x] T02 -- done already\n' >> "$R/.ytstack/M002-S01-PLAN.md"   # the file ends in "## Tasks"
+run "$R" render --task M002-S01-T02
+eq "granularity slice: a ticked task: exit 1" 1 "$EC"
 
 # review #88 item 3: the plan-first brief names the area of the task line's paths
 mkdir -p "$R/.ytstack/spec"

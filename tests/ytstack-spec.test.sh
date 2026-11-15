@@ -303,6 +303,13 @@ has "and says so" "FAIL placeholder (fill it in): - auth: TODO section -- TODO w
 plan "none -- TODO"
 run "$R" impact --plan "$P" --base "$BASE"
 eq "a TODO reason after none fails too" 1 "$EC"
+plan "TODO: none -- not covered by an area (confirm)"
+run "$R" impact --plan "$P" --base "$BASE"
+eq "a skeleton's TODO: line fails" 1 "$EC"
+# Codex P2 on #88: the word in prose is no placeholder
+plan "- auth: Behavior -- remove the TODO marker"
+run "$R" impact --plan "$P" --base "$BASE"
+eq "TODO inside the text of a filled line is no placeholder" 0 "$EC"
 
 # Filenames git quotes in its plain output (a space, a non-ASCII byte) are
 # compared as the real names: the records are read NUL-delimited.

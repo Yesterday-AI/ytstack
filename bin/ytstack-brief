@@ -301,7 +301,8 @@ cmd_render() {
     add "" "$plan"
   elif [ "$kind" = unplanned ] && [ -n "$(section "$plan" Files)" ]; then
     # granularity: slice -- the slice plan is the plan of each of its tasks
-    x=$(section "$plan" Tasks | sed -n "s/^- \[[ xX]\] ${ref##*-} -- //p" | head -1)
+    x=$(section "$plan" Tasks | sed -n "s/^- \[ \] ${ref##*-} -- //p" | head -1)
+    [ -n "$x" ] || die "no plan for $ref, and $(rel "$plan") lists no open task ${ref##*-}"
     B_OUTCOME=$(para "$x" "$(para "$(field "$plan" Goal)" "$(section "$plan" "What this does")")")
     add "" "$plan"
   elif [ "$kind" = unplanned ]; then

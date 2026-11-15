@@ -117,6 +117,11 @@ has "Files from the slice plan's Own line when the task line names none" "- \`we
 has "a path no area covers: the Spec impact says so, to confirm" "TODO: none -- not covered by an area" "$P"
 P=$(cat "$Y/M046-S02-T03-PLAN.md")
 has "no path anywhere: a TODO for the files" "- TODO: the exact paths" "$P"
+# Codex P2 on #88: a backticked path with a space is kept whole
+slice M046-S04 planned '- [ ] T01 -- the guide in `docs/Web Guide.md`'
+run "$R" skeletons --slice M046-S04
+eq "a spaced path is listed and counted" "M046-S04-T01	.ytstack/M046-S04-T01-PLAN.md	1" "$OUT"
+rm -f "$Y/M046-S04-PLAN.md"
 OUTP=$(bash "$ROOT/bin/ytstack-spec" -C "$R" impact --plan "$Y/M046-S02-T02-PLAN.md" --base HEAD 2>&1); ECP=$?
 eq "an unfilled Spec impact does not pass ytstack-spec impact" 1 "$ECP"
 run "$R" skeletons
