@@ -233,7 +233,7 @@ Lane: {REF}
 "${CLAUDE_SKILL_DIR}/../../bin/ytstack-frontier" set {REF} --pr {N}
 ```
 
-`open-pr` prints the number. When it fails, `gh` said why above the last line: not signed in is the user's to fix; a pull request that already exists for the branch is the one to use.
+Add `--max-open {n}` to `open-pr` when a standing instruction or the plan caps the open pull requests. The cap counts the ones ready for review (drafts do not count) and limits opening, never a merge: at the cap the pull request opens as a draft (`draft:` line), the lane is `parked` (`"${CLAUDE_SKILL_DIR}/../../bin/ytstack-frontier" set {REF} --status parked --next "wait for the cap"`), and `gh pr ready {N}` takes it out of draft once the count is under the cap. `gh pr ready {N} --undo` turns a parked pull request that is still ready for review into a draft; none is closed to make room. `open-pr` prints the number. When it fails, `gh` said why above the last line: not signed in is the user's to fix; a pull request that already exists for the branch is the one to use.
 
 ### Step 5: Wait for the head, check the body
 
@@ -354,7 +354,7 @@ The route speaks about the change, not about the host: the checks, the threads a
 "${CLAUDE_SKILL_DIR}/../../bin/ytstack-finish-lane" -C {WT} gates --pr {N} --reviewed-head {SHA} --verdict-pattern '^Verdict: approved'
 ```
 
-Add `--max-open {n}` when a standing instruction or the plan caps the open pull requests (the gate counts the ones ready for review; drafts do not count), and `--allow-no-checks` only when the project states that this repository runs no checks. The output is one line per gate (`ok` or `FAIL`) and a last line `read <UTC time>`. Keep both for the report.
+A cap on open pull requests is no gate here: merging lowers the count. Add `--allow-no-checks` only when the project states that this repository runs no checks. The output is one line per gate (`ok` or `FAIL`) and a last line `read <UTC time>`. Keep both for the report.
 
 All hold: `ytstack-frontier set {REF} --status ready --next "merge at {SHA}"`. Otherwise the failing gate says what happens next:
 
@@ -365,7 +365,6 @@ All hold: `ytstack-frontier set {REF} --status ready --next "merge at {SHA}"`. O
 | `review` | changes are requested on this head, or the posted verdict is missing | Open findings go to the worker. A missing verdict means Step 7 did not happen on this head. |
 | `threads` | a review thread is unresolved | It is answered and resolved by whoever owns it: the worker for a finding in its code, the human for a question to them. You resolve no thread you did not open. |
 | `mergeable` | a conflict with the base, or the host has not decided | Conflict: the worker integrates the base; the head moves, so the fix round follows. Undecided: read again. |
-| `open-prs` | more pull requests are ready for review than the cap | Finish others first. The lane waits as `parked` (`"${CLAUDE_SKILL_DIR}/../../bin/ytstack-frontier" set {REF} --status parked --next "wait for the cap"`) with its pull request open; none is closed to make room. |
 
 ### Step 11: Merge or hand over
 
@@ -434,7 +433,7 @@ Invoke `ytstack:review-lessons` with the pull request `{N}`. It reads the review
 
 ### Step 14: Lesson
 
-A review that requested changes, a lens that failed and a check that failed are incidents: something got this far that should not have. Each one gets its lesson before the lane goes back, also in round 2. Invoke `ytstack:lesson` once per event of this run and hand it: what got through (the blocking finding in one sentence, or the failed check's name), the lane `{REF}`, the pull request `{N}` and the commit `{SHA}`; the area `review` for a round or a lens, `ci` for a check; and that this session changes no code: a check the lesson needs becomes a lesson lane or goes into the fix brief, never an edit from here. A check that is only pending, and a gate that failed for the host's reasons (the head moved, a conflict, the cap on open pull requests), are no incident. Its `Recorded:` line goes into the report.
+A review that requested changes, a lens that failed and a check that failed are incidents: something got this far that should not have. Each one gets its lesson before the lane goes back, also in round 2. Invoke `ytstack:lesson` once per event of this run and hand it: what got through (the blocking finding in one sentence, or the failed check's name), the lane `{REF}`, the pull request `{N}` and the commit `{SHA}`; the area `review` for a round or a lens, `ci` for a check; and that this session changes no code: a check the lesson needs becomes a lesson lane or goes into the fix brief, never an edit from here. A check that is only pending, and a gate that failed for the host's reasons (the head moved, a conflict), are no incident. Its `Recorded:` line goes into the report.
 
 ### Step 15: Report + return
 

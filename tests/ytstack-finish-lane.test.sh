@@ -72,6 +72,7 @@ answer() {
 }
 case "${1:-} ${2:-}" in
   "pr create")   [ ! -f "$GH_FIX/create.fail" ] || { echo "fake gh: create failed" >&2; exit 1; }; cat "$GH_FIX/create.out" ;;
+  "pr list")     answer "$GH_FIX/list.json" ;;
   "pr view")     [ ! -f "$GH_FIX/view.fail" ] || { echo "fake gh: view failed" >&2; exit 1; }; answer "$GH_FIX/view.json" ;;
   "api graphql") answer "$GH_FIX/graphql.json" ;;
   "api repos/"*/pulls/*/reviews) answer "$GH_FIX/reviews.json" ;;
@@ -235,6 +236,17 @@ run "$P" open-pr --title T --body-file "$TMP/body.md"
 eq "no pull request URL in the answer: open-pr fails" 1 "$EC"
 run "$P" open-pr --title T --body-file "$TMP/none.md"
 eq "an unreadable body file: exit 64" 64 "$EC"
+# The cap limits opening, never merging (issue #83, PR #94 review): at the cap
+# the new pull request opens as a draft; drafts do not count.
+echo "https://github.com/acme/app/pull/8" > "$GH_FIX/create.out"
+printf '[{"isDraft":false},{"isDraft":true},{"isDraft":false}]\n' > "$GH_FIX/list.json"
+quiet; run "$P" open-pr --title T --body-file "$TMP/body.md" --max-open 3
+eq "under the cap (2 ready, a draft not counted): exit 0" 0 "$EC"
+hasnt "and not a draft" "--draft" "$(calls)"
+quiet; run "$P" open-pr --title T --body-file "$TMP/body.md" --max-open 2
+eq "at the cap: still opened" "0 8" "$EC $(printf '%s\n' "$OUT" | tail -1)"
+has "as a draft" "--draft" "$(calls)"
+has "and says how to take it out of draft" "draft: 2 open for review, limit 2: opened as a draft; gh pr ready 8" "$OUT"
 
 # ---- 5. wait-head -------------------------------------------------------------
 echo "# wait-head"
@@ -302,8 +314,7 @@ has "it says so" "not in this checkout" "$OUT"
 # ---- 7. gates -----------------------------------------------------------------
 echo "# gates"
 G="$P"; SHA="$TIP"
-# host: a pull request at $SHA whose gates all hold, 3 open pull requests ready
-# for review and one draft (issue #83: the cap counts the ready ones), one resolved thread
+# host: a pull request at $SHA whose gates all hold, one resolved thread
 host() {
   jq -n --arg h "$SHA" '{state: "OPEN", headRefOid: $h, mergeable: "MERGEABLE",
     statusCheckRollup: [
@@ -313,7 +324,7 @@ host() {
     reviews: [
       {author: {login: "rev"}, state: "COMMENTED", submittedAt: "2026-11-13T10:00:00Z", commit: {oid: $h},
        body: "Verdict: approved\r\nReviewed commit: \($h)"} ]}' > "$GH_FIX/view.json"
-  jq -n '{data: {repository: {pullRequests: {totalCount: 4, nodes: [{isDraft: false}, {isDraft: true}, {isDraft: false}, {isDraft: false}]},
+  jq -n '{data: {repository: {
     pullRequest: {reviewThreads: {totalCount: 1, pageInfo: {hasNextPage: false}, nodes: [{isResolved: true}]}}}}}' > "$GH_FIX/graphql.json"
   rm -f "$GH_FIX"/*.fail "$GH_FIX/merge.queue" "$GH_FIX/log"
 }
@@ -335,10 +346,10 @@ case "$(printf '%s\n' "$OUT" | tail -1)" in
 esac
 has "the checks line counts them and names the commit" "ok   checks: 3 concluded successfully on ${SHA:0:7}" "$OUT"
 has "the threads were read for this pull request" "-F number=7" "$(calls)"
-host; run "$G" gates --pr 7 --reviewed-head "${SHA:0:7}" --max-open 3
-eq "a short commit id and a limit that is just met: exit 0" 0 "$EC"
-has "the limit has its own line, drafts not counted" "ok   open-prs: 3 open for review, limit 3 (1 draft not counted)" "$OUT"
-has "the query reads the drafts" "isDraft" "$(calls)"
+host; run "$G" gates --pr 7 --reviewed-head "${SHA:0:7}"
+eq "a short commit id: exit 0" 0 "$EC"
+host; run "$G" gates --pr 7 --reviewed-head "$SHA" --max-open 3
+eq "the cap is no gate of a merge (PR #94 review): exit 64" 64 "$EC"
 
 host; tweak view '.headRefOid = "ffffffffffffffffffffffffffffffffffffffff"'; gates
 only "the head moved after the review" head
@@ -377,12 +388,6 @@ host; tweak view '.mergeable = "UNKNOWN"'; gates
 only "mergeability the host has not decided" mergeable
 host; tweak view '.state = "CLOSED"'; gates
 only "a closed pull request" mergeable
-host; gates --max-open 2
-only "too many open pull requests" open-prs
-has "count and limit are printed" "3 open for review, limit 2" "$OUT"
-host; tweak graphql '.data.repository.pullRequests |= (.totalCount = 140)'; gates --max-open 5
-only "more open pull requests than were read" open-prs
-has "says so" "140 open, only the first 100 were read" "$OUT"
 
 host; gates --verdict-pattern '^Verdict: approved$'
 eq "the newest review matches the verdict pattern: exit 0" 0 "$EC"
@@ -403,10 +408,10 @@ eq "all gates hold: merge succeeds" 0 "$EC"
 has "the merge is pinned to the full reviewed commit" "pr merge 7 --squash --match-head-commit $SHA" "$(calls)"
 eq "it prints what it merged and where" "merged #7 at $SHA (squash)" "$(printf '%s\n' "$OUT" | tail -1)"
 has "after the gate lines" "ok   head: ${SHA:0:7} is the reviewed commit" "$OUT"
-host; run "$G" merge --pr 7 --at "$SHA" --method rebase --max-open 5 --verdict-pattern 'approved'
+host; run "$G" merge --pr 7 --at "$SHA" --method rebase --verdict-pattern 'approved'
 eq "method and gate options pass through" 0 "$EC"
 has "the method reaches gh" "pr merge 7 --rebase --match-head-commit $SHA" "$(calls)"
-has "the limit was checked" "ok   open-prs: 3 open for review, limit 5" "$OUT"
+hasnt "no open-prs gate before a merge" "open-prs" "$OUT"
 host; tweak view '.headRefOid = "ffffffffffffffffffffffffffffffffffffffff"'; run "$G" merge --pr 7 --at "$SHA"
 eq "the head moved after the review: merge refuses" 1 "$EC"
 has "the gate is named" "FAIL head:" "$OUT"

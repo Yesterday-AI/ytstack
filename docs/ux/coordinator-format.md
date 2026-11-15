@@ -20,8 +20,8 @@ Coordinator operating checklist (scripts in bin/ of the plugin):
 3. Human instruction beyond the task: ytstack-standing add, before the next dispatch; never only in memory.
 4. Merge to production: ytstack-watch release --commit <sha>.
 5. After a compaction: run the coordinate preamble again, then rotate (Step 12).
-6. Every round: ytstack-frontier check; act on each stale: line.
-7. Merge: ytstack-finish-lane merge, never gh pr merge. Never close a lane PR: a cap waits (parked), CI reruns via gh run rerun.
+6. Each round: ytstack-frontier check, act on each stale: line.
+7. Merge via ytstack-finish-lane; never gh pr merge or close a lane PR (cap: parked; CI: gh run rerun).
 <!-- operating-checklist:end -->
 
 ## `LANES.md` -- who works on what
@@ -45,7 +45,7 @@ updated: 2026-11-13T10:42:00Z
 |---|---|
 | Lane | The reference. Unique in the file. |
 | Kind | `implement`, `review` or `prepare` (see "Lane kinds"). |
-| Status | `claimed` (taken, not dispatched yet), `running`, `reported` (the worker's report is in and passed the check), `in-review`, `ready` (its gates held when last read), `parked` (held; its pull request waits open, for a cap on open pull requests or for a person; never closed to make room), `merged`, `blocked`, `dropped`. What the coordinator did or saw last; not a host fact. |
+| Status | `claimed` (taken, not dispatched yet), `running`, `reported` (the worker's report is in and passed the check), `in-review`, `ready` (its gates held when last read), `parked` (held; its pull request waits open, for a person or for the cap on open pull requests, then as a draft: the cap counts pull requests ready for review, limits opening and dispatching, never a merge; `gh pr ready <N>` under the cap, `gh pr ready <N> --undo` takes one out of the count; never closed to make room), `merged`, `blocked`, `dropped`. What the coordinator did or saw last; not a host fact. |
 | Claimed by | The worker's name and the UTC time of the claim. `-` when nobody holds it. |
 | Branch, Worktree | Where the work is. `-` when it does not apply. |
 | PR | The number, as an identifier. Its state is read from the host when needed. |
@@ -270,7 +270,7 @@ The `coordinate` preamble writes the session marker `<session home>/<session id>
 
 - `hooks/pre-tool-use-agent` also adds a line when an `Agent` call that is no lookup has no `isolation` (dispatch lane work with `isolation: "worktree"`), and, on `Bash`, when the command runs `gh pr merge` (the merge is `ytstack-finish-lane merge --at <reviewed head>`) or `gh pr close` (a cap waits with the lane `parked`, a check reruns with `gh run rerun`). Advisory, never a deny: the person may have asked for that close.
 - `hooks/pre-compact` counts the session's compactions in `compactions` beside the marker. After one, `hooks/session-start` says `Compaction N of this coordinator: ytstack:coordinate Step 12, rotate now`; from the second on, `hooks/stop` says it too, once per compaction.
-- `hooks/post-tool-use-bash` adds one note when the output of `gh run list --branch <default branch>` shows a failed run (the tab-separated form, JSON `"conclusion": "failure"`, or the terminal form): a red main, run `ytstack:lesson`. One note per distinct set of failed lines.
+- `hooks/post-tool-use-bash` adds one note when the output of `gh run list --branch <default branch>` shows that the newest run of a workflow failed (the tab-separated form or a JSON array with `conclusion` and `workflowName`; with `--repo`/`-R` only for the repository of `origin`): a red main, run `ytstack:lesson`. One note per distinct set of failed runs.
 - `hooks/stop` gives a coordinate session no reminder about the `STATE.md` task pointer: a coordinator holds no task.
 
 Claude Code only: Codex registers no UserPromptSubmit or Agent hook of ytstack (its subagent tools are not covered), its PreToolUse and PostToolUse entries on `Bash` run only the PR watch, and Kimi's shell has no session id to write the marker with. On both the skill text (HARD-GATE, Steps 5, 6 and 12) carries these rules without the hooks.
