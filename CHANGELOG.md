@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Every incident ends with a lesson** (issue #53): the new skill
+  `ytstack:lesson` names the class, puts the lesson where a machine checks it
+  (test, guard, CI step, alert), or else into `KNOWLEDGE.md` or a proposal for
+  you, never into `AGENTS.md` or `CLAUDE.md`, and records it in
+  `.ytstack/signals/` so a repeat raises a count. `incident`,
+  `systematic-debugging`, `finish-lane` and `coordinate` call it at their end.
+- `ytstack-signals lesson new` / `lesson list` and `set --target`. A lesson
+  whose check is still to be built is a lane (`lesson-F###`) that
+  `ytstack-frontier` lists and `ytstack-brief render --lesson` briefs.
+- `coordinate` shows the open lessons in its status and asks a lesson proposal
+  with the day's question; `retro` reports incidents and repeats per class.
+- **Feedback to ytstack has a channel** (issue #55):
+  `upstream_feedback: suggest | file | off` in `.ytstack/PREFERENCES.md`, or
+  `upstream_feedback=` in `~/.ytstack/config` for all projects. When ytstack
+  itself misbehaves, misses a tool, or a retro or lesson finds something about
+  it, the agent drafts an issue for Yesterday-AI/ytstack and asks you
+  (`suggest`, the default), files it or comments on an existing one (`file`,
+  opt-in because the repository is public), or stays quiet (`off`). Rules in
+  `docs/ux/upstream-feedback.md`.
+- `bin/ytstack-upstream`: `mode` shows the setting in effect (`file` without a
+  `gh` login falls back to `suggest`), `draft` writes an issue body with
+  version and host, `check` blocks leftover placeholders, missing evidence, no
+  search for existing issues, email addresses, secrets and home-directory
+  paths. It never posts.
+
 - **The risk route can trust the review on the pull request** (issue #54):
   `ytstack-risk route --pr N [--repo OWNER/NAME]` reads the review round and
   lens lines from the reviews on the pull request, which the host ties to their
@@ -52,6 +77,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `ytstack-signals check` fails on a closed incident record without a
+  recorded lesson (`lesson:` line, written by `lesson new --incident`); lesson
+  targets in `AGENTS.md` or `CLAUDE.md` are refused.
+- `retro` and `lane-retro` end with an "Upstream" section, and `lesson` sends a
+  lesson about ytstack itself through the upstream channel; non-interactive
+  runs send nothing. `using-ytstack` "Reporting ytstack issues" became
+  "Feeding ytstack upstream"; new projects get `upstream_feedback: suggest`.
 - **`coordinate` runs the factory tools** (issue #54): Step 7 names, for the
   risk route, the PR watch, the release watch, signals and review lessons, the
   command, when it runs and when it is skipped. The route now runs before

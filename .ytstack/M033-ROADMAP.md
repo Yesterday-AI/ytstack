@@ -3,9 +3,9 @@ milestone: M033
 project: ytstack
 size: S
 created: 2026-11-15T00:45:00Z
-status: planned
+status: done
 total_slices: 1
-completed_slices: 0
+completed_slices: 1
 ---
 
 # M033 Roadmap
@@ -18,7 +18,7 @@ completed_slices: 0
 
 Slice detail lives in per-slice `M033-S##-PLAN.md` files, created by `ytstack:slice-milestone`.
 
-- [ ] S01 -- The `upstream_feedback` setting, the channel in `using-ytstack`, the agent rules, and an "Upstream" section in `retro` and `lane-retro`.
+- [x] S01 -- The `upstream_feedback` setting, the channel in `using-ytstack`, the agent rules, and an "Upstream" section in `retro` and `lane-retro`.
 
 ## Run order
 
