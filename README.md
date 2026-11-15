@@ -340,7 +340,7 @@ Without `--permission-mode acceptEdits`, Write operations stall on permission di
 
 Type `/ytstack:<skill-name>` only when you want to override the auto-pick, skip a step, or explicitly re-run one (e.g. `/ytstack:plan-ceo-review` to re-challenge a milestone you already sliced). The using-ytstack directive loaded at session start enforces this model via the Skill tool.
 
-See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example written in the same natural-language style.
+See [QUICKSTART.md](./QUICKSTART.md) for the end-to-end worked example written in the same natural-language style. Setting up risk routing, the PR watch, the release watch, signals and the upkeep run: [Setting up the factory tools](./QUICKSTART.md#setting-up-the-factory-tools). After `claude plugin update ytstack`: [Upgrading from 0.x](./QUICKSTART.md#upgrading-from-0x).
 
 ## Dialing ceremony up or down
 
@@ -376,7 +376,9 @@ Milestone states are data, not prose: `planned`, `in-progress`, `done`, `dropped
 | `ytstack:lane-retro` | samples finished lanes; a mechanical mistake becomes a check that replaces an instruction line |
 | `bin/ytstack-upkeep` | one read-only run over `.ytstack/` that lists what needs a look (spec, STATE, gates, questions, lanes, runtime, review policy); `--question` leaves one question file. On a schedule: [`docs/recipes/recurring-upkeep.md`](./docs/recipes/recurring-upkeep.md) |
 
-A status never states a pull request's state from memory: host facts are read fresh and carry their read time. Nothing in this group has run against a real host or in a real multi-lane run yet; the suites use a stand-in for `gh` and fixture targets, and no eval or session has yet merged a change without a person or watched a real release.
+A status never states a pull request's state from memory: host facts are read fresh and carry their read time. How to switch these tools on, step by step with a check each: [QUICKSTART, "Setting up the factory tools"](./QUICKSTART.md#setting-up-the-factory-tools).
+
+What has run where: the suites use a stand-in for `gh` and fixture targets. Against a real host, `bin/ytstack-review-escapes` has read 30 merged pull requests of one repository (read-only, M030). No eval or session has yet merged a change without a person, and none has run `ytstack-watch release` against a real target. The nearest field case: on 2026-11-14 a coordinator on a large repository dispatched two production releases and did the post-check of each by hand (issue #54), the steps a "Release" section and `ytstack-watch release` are meant to take over.
 
 ## Where ytstack writes
 

@@ -608,7 +608,7 @@ For everything else, just talk.
 - **A visual lens says `not run`.** The session that ran it had no browser tool, no "Run" section in `RUNTIME.md`, or the product did not come up. `not run` is never a pass: the change goes to you until what was missing exists.
 - **No secrets in `RUNTIME.md`.** It is committed. Commands read credentials from the environment; `bin/ytstack-runtime check` fails on a token-looking string, but cannot see a short password.
 - **`ytstack-watch release` exits 4.** `RUNTIME.md` has no "Release" section with a `deployed` line; nothing was run.
-- **Coordinator mode has not run against a real host yet.** The suites use a stand-in for `gh` and fixture targets; no unattended merge or real release watch has happened in a session.
+- **No unattended merge and no release watch has run against a real host yet.** The suites use a stand-in for `gh` and fixture targets. In the field, a coordinator did two production releases with hand-made post-checks on 2026-11-14 (issue #54); a "Release" section is what would let `ytstack-watch release` do that check.
 - **Agent picks the wrong skill?** Sharpen that skill's `description:` field to cover the intent more explicitly. Don't reintroduce phrase-lists -- that's the antipattern the design principle #6 warns about (see README).
 
 ## More
