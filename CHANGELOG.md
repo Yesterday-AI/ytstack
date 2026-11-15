@@ -21,7 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   handoff-session, and the stop, pre-tool-use-edit, session-start,
   task-created, teammate-idle hooks) now find those files there too.
   `plan-milestone` counts moved milestones when it numbers the next one, and
-  `ytstack-risk` counts their files as process records.
+  `ytstack-risk` counts their files as process records (at most one directory
+  below `milestones/` or `backlog/`). Readers that count or list a milestone's
+  files (reassess-roadmap, retro, spawn-milestone-team, task-created,
+  teammate-idle) also see files of that milestone that landed flat before it
+  moved.
+- `teammate-idle` no longer fails on a slice plan without an open task (`grep
+  -c ... || echo 0` produced `0` twice and broke the sum).
 
 ## [0.11.0] - 2026-11-15
 
