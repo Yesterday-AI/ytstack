@@ -196,11 +196,10 @@ echo "QUESTIONS_END"
 _MANUAL_TS=none
 [ -f "$_YT_DIR/HANDOFF.md" ] && _MANUAL_TS=$(sed -n 's/^timestamp: *//p' "$_YT_DIR/HANDOFF.md" | head -1)
 _AUTO=none; _AUTO_TS=none
-if command -v yt_state_base >/dev/null 2>&1 && [ -n "${YT_REPO_KEY:-}" ]; then
-  _LINK="$(yt_state_base)/repos/$YT_REPO_KEY/worktrees/${YT_WT_KEY:-}/latest-handoff"
-  if [ -L "$_LINK" ] && [ -f "$_LINK" ]; then
-    _AUTO=$(readlink "$_LINK"); _AUTO_TS=$(sed -n 's/^timestamp: *//p' "$_AUTO" 2>/dev/null | head -1)
-  fi
+# yt_latest_handoff also looks where the hook wrote it (CLAUDE_PLUGIN_DATA is not set in this shell).
+if command -v yt_latest_handoff >/dev/null 2>&1 && [ -n "${YT_REPO_KEY:-}" ]; then
+  _AUTO=$(yt_latest_handoff)
+  if [ -n "$_AUTO" ]; then _AUTO_TS=$(sed -n 's/^timestamp: *//p' "$_AUTO" 2>/dev/null | head -1); else _AUTO=none; fi
 fi
 echo "HANDOFF_MANUAL: ${_MANUAL_TS:-none}"
 echo "HANDOFF_AUTO: ${_AUTO_TS:-none} ($_AUTO)"

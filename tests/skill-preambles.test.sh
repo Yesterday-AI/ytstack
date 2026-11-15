@@ -106,10 +106,16 @@ upstream_checks() {
 
 PD="$TMP/plugin-data"
 run_pre() { # run_pre <script> <cwd> -> sets OUT (stdout) and EC (exit code) in this shell
-  ( cd "$2" || exit 2; env CLAUDE_PROJECT_DIR="$ELSEWHERE" CLAUDE_PLUGIN_DATA="$PD" HOME="$TMP/home" XDG_STATE_HOME="$TMP/xdg" CLAUDE_CODE_SESSION_ID="${PRE_SID:-}" bash "$1" 2>"$TMP/err" >"$TMP/out" ); EC=$?
+  ( cd "$2" || exit 2; env CLAUDE_PROJECT_DIR="$ELSEWHERE" CLAUDE_PLUGIN_DATA="${PRE_PD-$PD}" HOME="$TMP/home" XDG_STATE_HOME="$TMP/xdg" CLAUDE_CODE_SESSION_ID="${PRE_SID:-}" bash "$1" 2>"$TMP/err" >"$TMP/out" ); EC=$?
   OUT=$(cat "$TMP/out")
 }
 mkdir -p "$TMP/home"
+# seed_home_handoff: an automatic handoff where Claude Code's hooks write it (their
+# CLAUDE_PLUGIN_DATA, ~/.claude/plugins/data/<plugin id>), which the Bash tool does not see.
+HPD="$TMP/home/.claude/plugins/data/ytstack-ytstack"
+seed_home_handoff() {
+  printf '{"session_id":"seedhome","cwd":%s}' "$(printf '%s' "$MAIN" | jq -Rs .)" | ( cd "$ELSEWHERE" && HOME="$TMP/home" CLAUDE_PLUGIN_DATA="$HPD" bash "$ROOT/hooks/pre-compact" >/dev/null 2>&1 )
+}
 
 # Seed one automatic handoff for the main fixture (what pre-compact does on compaction)
 printf -- '---\nkind: handoff\nevent: user-triggered\ntimestamp: 2026-01-01T00:00:00Z\n---\n# manual\n' > "$MAIN/.ytstack/HANDOFF.md"
@@ -297,6 +303,13 @@ for s in $SKILLS; do
       has "$s: task-ref commit -> COMMITS_SOURCE task-ref" "$OUT" "COMMITS_SOURCE: task-ref"
       case "$OUT" in *"BASE_SHA: none"*) bad "$s: task-ref commit -> BASE_SHA resolved";; *) ok "$s: task-ref commit -> BASE_SHA resolved";; esac ;;
     coordinate)
+      # The Bash tool has no CLAUDE_PLUGIN_DATA: the handoff the hook wrote there is found anyway.
+      seed_home_handoff
+      PRE_PD="" run_pre "$P" "$MAIN"
+      has "$s: no CLAUDE_PLUGIN_DATA in the shell -> the hook's handoff is found" "$OUT" "HANDOFF_AUTO: 20"
+      has "$s: and its path" "$OUT" "($HPD/repos/"
+      rm -rf "$TMP/home/.claude"
+      run_pre "$P" "$WT"
       # the operating checklist (issue #76): printed from docs/ux/coordinator-format.md
       has "$s: prints the operating checklist" "$OUT" "OPERATING_CHECKLIST_BEGIN
 Coordinator operating checklist"
@@ -465,7 +478,12 @@ LESSONS_END"
       has "$s: main -> latest auto handoff from out-of-tree state" "$OUT" "LATEST_AUTO_HANDOFF: $PD/repos/"
       has "$s: main -> auto handoff timestamp read" "$OUT" "AUTO_HANDOFF_TS: 20"
       has "$s: main -> manual handoff event read" "$OUT" "MANUAL_HANDOFF_EVENT: user-triggered"
-      has "$s: main -> manual handoff timestamp read" "$OUT" "MANUAL_HANDOFF_TS: 2026-01-01T00:00:00Z" ;;
+      has "$s: main -> manual handoff timestamp read" "$OUT" "MANUAL_HANDOFF_TS: 2026-01-01T00:00:00Z"
+      # The Bash tool has no CLAUDE_PLUGIN_DATA: the handoff the hook wrote there is found anyway.
+      seed_home_handoff
+      PRE_PD="" run_pre "$P" "$MAIN"
+      has "$s: no CLAUDE_PLUGIN_DATA in the shell -> the hook's handoff is found" "$OUT" "LATEST_AUTO_HANDOFF: $HPD/repos/"
+      rm -rf "$TMP/home/.claude" ;;
   esac
 done
 
