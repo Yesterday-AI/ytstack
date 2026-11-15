@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Progress per phase** (issue #81): `ytstack-status --phases [--json]`
+  prints done, in review and total per milestone and in total. When a total
+  changed since the last report, the line says by how much and why (slices
+  added or removed), and every change goes to a log outside the repository,
+  so a grown total no longer reads as negative progress. `coordinate` Step 11
+  points at it; the JSON is what a chart is drawn from.
+
 ## [0.11.0] - 2026-11-15
 
 ### Added

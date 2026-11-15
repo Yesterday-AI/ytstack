@@ -1218,3 +1218,22 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **Chose:** A roadmap status `backlog` (frontmatter and the global ROADMAP column): planned, kept, not picked by `ytstack-frontier` while no milestone is current. Making it current sets `status: planned` and `current_milestone` again.
 
 **Supersedes:** None. Extends the roadmap state values in `docs/ux/skill-structure.md`.
+
+## 2026-11-15: Progress per phase counts slices of each roadmap; the denominator log lives outside the tree (issue #81)
+
+**Context:** Issue #81: in a four-day coordinator run the human asked for "% per phase" 37 times and the coordinator drew 22 charts by hand. Rows were added to phases, their denominators grew and progress looked negative. The issue asked for a report per phase and a log of every denominator change with its cause, kept out of the repository.
+
+**Options considered:**
+- A) Rows are tasks (`M###-S##-PLAN.md` checkboxes).
+- B) Rows are the slices of each `M###-ROADMAP.md`, the unit a lane works on; done from the checkbox or a `merged` lane, in review from the lane status.
+- C) The log in `.ytstack/` (committed history).
+
+**Chose:** B, with the log under `<state base>/repos/<repo key>/phases/` (`snapshot`, `denominator.log`, the state base of `yt_state_base`). Each `--phases` run compares the slice ids per phase with the run before and appends one line per change (`first report`, `new phase`, `added S05`, `removed S04`, `phase left the report`). A `dropped` roadmap is left out.
+
+**Reason:** A coordinator dispatches and finishes slices, and `LANES.md` says which are in review; tasks have no lane status. The log records when a report saw a change, not a host fact or a plan state, and it changes on every report: committed, it would make every status a diff in the tree (the issue asked for it to stay out). Keying by the repository makes linked worktrees share one log.
+
+**How to apply:**
+- A status with progress uses `ytstack-status --phases`, never a count by hand (`coordinate` Step 11).
+- The change shown is the one since the previous `--phases` run; a second run without a change shows none.
+
+**Supersedes:** None.

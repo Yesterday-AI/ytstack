@@ -103,6 +103,8 @@ Kimi's native `sessionStart.skill` supplies the static directive. `bin/ytstack-k
 
 See `docs/statusline.md`. It was read against `bin/ytstack-status` at `verified_at` and matches.
 
+`ytstack-status --phases [--json]` (issue #81) prints done, in review and total per milestone roadmap that is not dropped, and the total, from the checkout's files. It keeps the slice ids of the last run and a log of every change of a total with its cause under `<base>/repos/<repo key>/phases/` (`snapshot`, `denominator.log`), outside the tree; a run that cannot create that directory prints `log none` and writes nothing.
+
 ## Interfaces and contracts
 
 - `hooks/hooks.json` registers the nine lifecycle hooks, `version-notice` and `pr-watch` for Claude Code: event, matcher, timeout. The Codex and Kimi registrations are in the `host-adapters` area.
@@ -113,7 +115,7 @@ See `docs/statusline.md`. It was read against `bin/ytstack-status` at `verified_
 ## Invariants and security boundaries
 
 - No hook resolves its target from `CLAUDE_PROJECT_DIR`. `bin/ytstack-check` fails on that name in a hook script, on `[ -d .git ]` and on a basename slug.
-- Volatile state (automatic handoff, journal, Kimi pending context, the session's plugin version) is written outside the tree. `version-notice` writes only `plugin-version` and `notified-<version>` under `<base>/sessions/<session-id>/`, keyed by the session and not by the checkout, and only for a session id of letters, digits, `.`, `_` and `-`. The only in-tree location is the `.ytstack/.local` fallback.
+- Volatile state (automatic handoff, journal, Kimi pending context, the session's plugin version, the phase snapshot and denominator log of `ytstack-status --phases`) is written outside the tree. `version-notice` writes only `plugin-version` and `notified-<version>` under `<base>/sessions/<session-id>/`, keyed by the session and not by the checkout, and only for a session id of letters, digits, `.`, `_` and `-`. The only in-tree location is the `.ytstack/.local` fallback.
 - No hook creates or changes `.ytstack/HANDOFF.md` or `STATE.md`.
 - Two hooks write deliberate artifacts into the resolved `.ytstack`: `post-tool-use-bash` (the draft stub) and `task-completed` (auto summary, checkbox). Both write into the checkout the payload names, so a session that works in a linked worktree leaves the main checkout unchanged.
 - `session-start`, `stop`, `pre-tool-use-edit`, `task-created` and `teammate-idle` write no files. Plain mode does not change this; the Kimi helper owns the pending write.
@@ -148,7 +150,7 @@ See `docs/statusline.md`. It was read against `bin/ytstack-status` at `verified_
 - `hooks/lib/git-ctx.sh` -- resolver, state directories, preferences, lint, progress parser, brownfield signals, commit discovery
 - `hooks/hooks.json` -- registration
 - `hooks/session-start`, `hooks/version-notice`, `hooks/pre-compact`, `hooks/session-end`, `hooks/stop`, `hooks/pre-tool-use-edit`, `hooks/post-tool-use-bash`, `hooks/task-created`, `hooks/task-completed`, `hooks/teammate-idle`
-- `bin/ytstack-status` -- status line segment
+- `bin/ytstack-status` -- status line segment, and progress per phase (`--phases`)
 - `bin/ytstack-check` (`check_resolver_contract`) -- banned patterns
 - Tests: `tests/git-ctx.test.sh`, `tests/hooks-json.test.sh`, `tests/hooks-readonly.test.sh`, `tests/hooks-stop.test.sh`, `tests/hooks-worktree.test.sh`, `tests/hooks-concurrency.test.sh`, `tests/post-tool-use-bash.test.sh`, `tests/pre-compact.test.sh`, `tests/session-end.test.sh`, `tests/session-notices.test.sh`, `tests/ytstack-status.test.sh`, `tests/kimi_lifecycle_test.py`
 
@@ -185,6 +187,7 @@ python3 -m unittest discover -s tests -p 'kimi_lifecycle_test.py' -v
 - DECISIONS.md -- "2026-11-07: Ceremony scales with the change -- granularity, autonomy, quick lane and minimal-code guard are project preferences with loud defaults"
 - DECISIONS.md -- "2026-11-07: Brownfield adoption is a reference-first distillation, never a pitch"
 - DECISIONS.md -- "2026-11-11: Status line progress is one optional `progress` block in STATE.md, read by a plugin script (M021, issue #31)"
+- DECISIONS.md -- "2026-11-15: Progress per phase counts slices of each roadmap; the denominator log lives outside the tree (issue #81)"
 - DECISIONS.md -- "2026-11-13: `STATE.md` is a pointer with a size bound; history leaves it through `reconcile`, a closed milestone is folded into the spec (M022-S03)" (lint W8 and W9, the cut excerpt in the injection)
 - DECISIONS.md -- "2026-11-13: The technical spec is a set of artifacts of its own under `.ytstack/spec/` (M022, issue #36)" (the closing line of the injection names `spec/SPEC.md`)
 - DECISIONS.md -- "2026-11-14: The six gstack skills become ytstack's own adaptations, synced with upstream; no gstack install" (the library has no gstack functions)
