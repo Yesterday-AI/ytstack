@@ -106,7 +106,7 @@ upstream_checks() {
 
 PD="$TMP/plugin-data"
 run_pre() { # run_pre <script> <cwd> -> sets OUT (stdout) and EC (exit code) in this shell
-  ( cd "$2" || exit 2; env CLAUDE_PROJECT_DIR="$ELSEWHERE" CLAUDE_PLUGIN_DATA="$PD" HOME="$TMP/home" bash "$1" 2>"$TMP/err" >"$TMP/out" ); EC=$?
+  ( cd "$2" || exit 2; env CLAUDE_PROJECT_DIR="$ELSEWHERE" CLAUDE_PLUGIN_DATA="$PD" HOME="$TMP/home" XDG_STATE_HOME="$TMP/xdg" CLAUDE_CODE_SESSION_ID="${PRE_SID:-}" bash "$1" 2>"$TMP/err" >"$TMP/out" ); EC=$?
   OUT=$(cat "$TMP/out")
 }
 mkdir -p "$TMP/home"
@@ -299,17 +299,25 @@ for s in $SKILLS; do
     coordinate)
       # standing instructions, one file per entry (issue #57); STANDING.md alone stays valid
       has "$s: no standing directory" "$OUT" "STANDING: no"
-      has "$s: and no entries" "$OUT" "no standing directory"
+      has "$s: and no entries" "$OUT" "active (0):"
       mkdir -p "$WT/.ytstack/standing"
       printf -- '---\ngiven: 2026-11-14T12:25:00Z\nscope: every author\nsupersedes:\n---\n\nAt most 10.\n' > "$WT/.ytstack/standing/20261114T1225Z-at-most-ten.md"
       printf -- '---\ngiven: 2026-11-14T14:36:00Z\nscope: every lane\nsupersedes: 20261114T1225Z-at-most-ten\n---\n\nAt most 15.\n' > "$WT/.ytstack/standing/20261114T1436Z-at-most-fifteen.md"
       printf '# Standing instructions\n\nSee standing/.\n' > "$WT/.ytstack/STANDING.md"
       run_pre "$P" "$WT"
       has "$s: STANDING.md as an index is still named" "$OUT" "STANDING: yes"
-      has "$s: the entry in force is listed" "$OUT" "STANDING_ENTRIES_BEGIN
-20261114T1436Z-at-most-fifteen.md	2026-11-14T14:36:00Z	every lane
-STANDING_ENTRIES_END"
+      has "$s: the newest entry and its age come first" "$OUT" "STANDING_ENTRIES_BEGIN
+newest entry: 20261114T1436Z-at-most-fifteen ("
+      has "$s: the entry in force is listed with its text" "$OUT" "active (1):
+- 20261114T1436Z-at-most-fifteen (every lane): At most 15."
+      case "$OUT" in *"- 20261114T1225Z-at-most-ten"*) bad "$s: the superseded entry is not listed";; *) ok "$s: the superseded entry is not listed";; esac
       rm -rf "$WT/.ytstack/standing" "$WT/.ytstack/STANDING.md"
+      # coordinate mode (issue #72): the preamble writes the session marker the standing hooks read
+      has "$s: no session id -> no marker" "$OUT" "COORDINATE_MARKER: none"
+      PRE_SID=pre-1 run_pre "$P" "$WT"
+      has "$s: session id -> marker written" "$OUT" "COORDINATE_MARKER: written"
+      eq "$s: the marker names the resolved .ytstack" "$WT/.ytstack" "$(cat "$TMP/xdg/ytstack/sessions/pre-1/coordinate" 2>/dev/null)"
+      rm -rf "$TMP/xdg"
       # the factory tools (M031, issue #54): Step 7 skips by what the project switched on
       run_pre "$P" "$WT"
       has "$s: bare fixture -> merge_by risk" "$OUT" "MERGE_BY: risk"

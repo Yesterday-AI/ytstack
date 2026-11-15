@@ -3,7 +3,7 @@ name: coordinate
 description: "Coordinator mode for the session that owns a plan and delegates all of it, writing no product code itself. Use when many lanes are in flight, when a plan has dozens of work packages, when a session with open lanes continues after a compaction or a resume, or when the user says coordinate this, run the plan, you are the coordinator, keep the lanes moving, where does each lane stand. Not for one milestone with a handful of independent slices (spawn-milestone-team) and not for doing a task yourself (plan-task)."
 metadata:
   tier: task
-  version: 0.5.0
+  version: 0.6.0
 allowed-tools:
   - Bash
   - Read
@@ -41,7 +41,7 @@ You MUST create a TodoWrite task for each of these items. Items 4 to 13 are one 
 6. **Finish reported lanes** -- `ytstack:finish-lane`, one lane at a time per pull request
 7. **Run the factory tools** -- the route before every merge (also your own), the PR watch or `ytstack-watch`, `ytstack-watch release` after every merge to production, signals, review lessons, the lesson of every incident (a red `main`, a slip); each skipped only by its condition
 8. **Queue and ask questions** -- look up, write the file, ask one, late
-9. **Record standing instructions** -- one file per instruction in `standing/` when they are given
+9. **Record standing instructions** -- `ytstack-standing add` when they are given, before the next dispatch; never only in agent memory
 10. **Stop loops that do not converge** -- a diagnosis to the human instead of another dispatch
 11. **Report status** -- only on a change the human acts on, or at a boundary he set
 12. **Rotate** -- after one compaction or with a large context, in one step while lanes run: files current, handoff with the PR watch session, the watches and the workers' addresses, fresh session; this one stays open only as a relay
@@ -137,10 +137,24 @@ echo "LESSONS_BEGIN"
 [ -z "$_LS" ] || printf '%s\n' "$_LS" | head -30
 echo "LESSONS_END"
 echo "STANDING: $([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STANDING.md" ] && echo yes || echo no)"
-# One file per standing instruction (.ytstack/standing/): the ones in force, newest first.
+# Coordinate mode (issue #72): the session marker hooks/standing-prompt and hooks/stop act on.
+_SID="${CLAUDE_CODE_SESSION_ID:-}"
+case "$_SID" in
+  ''|*[!A-Za-z0-9._-]*) echo "COORDINATE_MARKER: none (no session id on this host: the standing hooks stay off)" ;;
+  *) if [ -n "$_YT_DIR" ] && command -v yt_session_home >/dev/null 2>&1 && mkdir -p "$(yt_session_home)/$_SID" 2>/dev/null \
+        && printf '%s\n' "$_YT_DIR" > "$(yt_session_home)/$_SID/coordinate" 2>/dev/null; then
+       echo "COORDINATE_MARKER: written"
+     else
+       echo "COORDINATE_MARKER: not written (the standing hooks stay off)"
+     fi ;;
+esac
+# One file per standing instruction (.ytstack/standing/): the newest entry's age and the
+# human prompts since, the active ones, then ended, conditions to check and failed checks.
 echo "STANDING_ENTRIES_BEGIN"
-if [ -n "$_YT_DIR" ] && [ -d "$_YT_DIR/standing" ]; then
-  command -v yt_standing >/dev/null 2>&1 && yt_standing "$_YT_DIR" || echo "list $_YT_DIR/standing/ yourself: newest first, skip superseded"
+if [ -n "$_YT_DIR" ] && [ -f "$_BIN/ytstack-standing" ]; then
+  bash "$_BIN/ytstack-standing" -C "$_PROJECT_DIR" list 2>&1 | head -80
+elif [ -n "$_YT_DIR" ] && [ -d "$_YT_DIR/standing" ]; then
+  command -v yt_standing >/dev/null 2>&1 && yt_standing "$_YT_DIR" || echo "list $_YT_DIR/standing/ yourself: newest first, skip superseded and ended"
 else
   echo "no standing directory"
 fi
@@ -193,7 +207,7 @@ The scripts live in `${CLAUDE_SKILL_DIR}/../../bin/`; the commands below are wri
 
 **Step 2 -- HARD-GATE.** `HAS_YTSTACK: no`: stop, "run `ytstack:init-project` or `ytstack:adopt-brownfield` first". `SLICE_PLANS: 0` and `no lanes`: stop, "nothing to coordinate; run `ytstack:slice-milestone`". One milestone with a handful of independent slices and no lane yet: `ytstack:spawn-milestone-team` does that with less ceremony; say so and stop unless the user asked for coordinator mode.
 
-**Step 3 -- Start from files.** At the first start, after every compaction and after every resume, before anything else: read the standing instructions in full (every file listed between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END`, newest first, and `STANDING.md` when `STANDING: yes`; an entry that another entry supersedes is not listed and no longer holds), the rows between `LANES_BEGIN` and `LANES_END`, the frontier, every file listed between `QUESTIONS_BEGIN` and `QUESTIONS_END`, and the newer of the two handoffs. Do not rebuild who holds what from a conversation summary. Where a summary and a file disagree, the file is the claim, and Step 4 checks it against the host before anybody acts on it. A `running` row whose worker no longer exists in this session is not dispatched again blindly: read its branch (`git log <base>..<branch>`), then `ytstack-frontier release <lane>` and claim it for a new worker that continues on that branch, or write a question.
+**Step 3 -- Start from files.** At the first start, after every compaction and after every resume, before anything else: read the standing instructions in full (every entry listed as active between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END`, newest first, its file in `standing/`, and `STANDING.md` when `STANDING: yes`; an entry that another entry supersedes, or that ended, is not listed as active and no longer holds). Then act on the rest of that block: an entry under `ended` gets its closing entry now (`ytstack-standing end <entry> --reason "<what ended it>"`), an entry under `condition to check now` is checked against the host now and closed the same way when it is met, a line under `check failed` is an instruction you are not keeping: fix that first. Its first line counts the human prompts since the newest entry: more than a few after a compaction means instructions may be missing, so read the conversation summary for instructions and record them (Step 9) before you dispatch. Then the rows between `LANES_BEGIN` and `LANES_END`, the frontier, every file listed between `QUESTIONS_BEGIN` and `QUESTIONS_END`, and the newer of the two handoffs. Do not rebuild who holds what from a conversation summary. Where a summary and a file disagree, the file is the claim, and Step 4 checks it against the host before anybody acts on it. A `running` row whose worker no longer exists in this session is not dispatched again blindly: read its branch (`git log <base>..<branch>`), then `ytstack-frontier release <lane>` and claim it for a new worker that continues on that branch, or write a question.
 
 When the newer handoff carries a "Rotation" block (Step 12 of the session before, `docs/ux/coordinator-format.md`), this session is its successor. Before Step 4: `ytstack-pr-watch handover --from <the PR watch session it names>` (skip with `PR watch session: none`; check that the output names the moved pull requests), start the background watches it lists again, and leave the rows of its running workers alone: those workers report to the old session, which stays open as a relay and appends each report under "Reports after the rotation" in `HANDOFF.md` and sets the row to `reported`. Read the handoff again when such a row turns `reported`, and send a worker a message at its address only where the host lets this session reach it. Only when the person says the old session is closed before a worker reported does the rule above for a lost worker apply.
 
@@ -254,7 +268,9 @@ A lane named in the `blocks:` of an open or asked question is not ready, whateve
 
 An `asked` question is never asked again: name it as waiting since its time. When the human answers, write what he said under `## Answer`, run `ytstack-questions answer <id>`, and add a `DECISIONS.md` entry when it decides something that lasts. Never record an answer the human did not give, and never take a verdict a plan reserves for a person. At a slice boundary the open gates go out together through `ytstack:reassess-roadmap` (its Step 3b). A step only the human may perform (a secret, a production switch, a merge he reserved) goes through `ytstack:handover-step` as one staged script. `YTSTACK_NON_INTERACTIVE: true`: ask nothing; the files stay `open` and are listed in the status under "Waiting on a person".
 
-**Step 9 -- Record standing instructions.** When the human gives an instruction that holds beyond the task at hand (when to report, what never to merge, what not to touch), write it down at once, before the next dispatch, as a new file `$_YT_DIR/standing/<YYYYMMDDTHHMMZ>-<slug>.md` (`YT_DIR` from the preamble: `.ytstack/` in the repository, or `~/.ytstack/projects/<key>/` in user scope; UTC now): frontmatter `given` (the same time, ISO), `scope` (where it applies) and `supersedes` (empty), and the instruction in your own words as its body (`docs/ux/coordinator-format.md`). Never a quotation. An instruction that replaces an older one is a new file whose `supersedes` names the older file without `.md`; the older file is not edited and nothing is deleted. Then run `ytstack-check --standing` and fix what it prints. One file per instruction keeps two pull requests that each add one from touching the same line. `STANDING.md` is not edited per entry; only a project that has `STANDING.md` and no `standing/` directory yet keeps its form: append `- <UTC> -- <the instruction>. Scope: <where it applies>` and strike a replaced line (`~~...~~ Superseded <UTC>: ...`).
+**Step 9 -- Record standing instructions.** When the human gives an instruction that holds beyond the task at hand (when to report, what never to merge, what not to touch, a priority, an approval that covers later cases), record it at once, before the next dispatch, with one command: `ytstack-standing add "<the instruction in your own words>" --scope "<where it applies>"` (the script is `bin/ytstack-standing` of the plugin, beside `ytstack-frontier`). Add `--supersedes <entry>` when it replaces an older entry, `--until <ISO UTC>` when it ends at a time, `--until-condition "<sentence>"` when it ends with an event, `--until-check "<command>"` when that event can be checked by a command that exits 0 once it happened, and `--check "<command>"` when keeping it can be checked (a command that fails while the instruction is not kept, such as a `LANES.md` older than the last lane change). Name the role in the scope when it applies to one (`the coordinator`, `every lane`, `every reviewer`; `docs/ux/coordinator-format.md`, "Scope and roles"): the SessionStart injection and the lane briefs filter by it. The command writes the entry in a worktree of its own outside the checkout, commits it and opens or updates the one standing pull request of the UTC day; `--here` writes into the resolved `.ytstack/standing/` only, for user scope (always) or a project where you may write in the checkout. It runs `ytstack-check --standing` itself. When `hooks/standing-prompt` says a prompt reads like a standing instruction, decide: record it, or go on when it is not one. The Stop hook blocks once when such prompts got no entry. An instruction that ended is closed with `ytstack-standing end <entry> --reason "<what ended it>"`; nothing is edited or deleted.
+
+Agent-private memory (a memory file, a note in your own context) is no substitute: a successor session, another host and the human read only the repository. An instruction that lives only in your memory is lost at the next rotation. Never a quotation; the body is the instruction in your own words. One file per instruction keeps two pull requests that each add one from touching the same line. `STANDING.md` is not edited per entry; only a project that has `STANDING.md` and no `standing/` directory yet keeps its form: append `- <UTC> -- <the instruction>. Scope: <where it applies>` and strike a replaced line (`~~...~~ Superseded <UTC>: ...`).
 
 **Step 10 -- Stop loops that do not converge.** A lane gets the rounds `ytstack:code-review` allows ("Bounded review": round 1 complete, round 2 the fix, no third). A lane that failed verification twice, or that would need a third review, is not dispatched again: `ytstack-frontier set <lane> --status blocked --next "Q### with the human"`, and a question file with the diagnosis (the plan never decided the point, two rules conflict, or each fix moved the problem).
 
