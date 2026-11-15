@@ -140,9 +140,23 @@ has   "ss-standing: entry naming no role is for everyone" "$CTX" "20261101T1400Z
 mkdir -p "$TMP/xdg/ytstack/sessions/s1co"; printf '%s\n' "$MAIN/.ytstack" > "$TMP/xdg/ytstack/sessions/s1co/coordinate"
 run session-start "{\"session_id\":\"s1co\",\"cwd\":$(jstr "$MAIN"),\"source\":\"compact\"}" XDG_STATE_HOME="$TMP/xdg"
 CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+# This fixture sits at the cap (two handoffs with long paths, the checklist): the list
+# shrinks to the three newest or to its pointer, by the length of the temp paths.
+case "$CTX" in
+  *"Standing instructions in force (role: coordinator"*|*"Standing instructions: 3 in force for role coordinator (cut for the cap)"*) ok "ss-standing: at the cap -> the list or its pointer, with the role" ;;
+  *) bad "ss-standing: at the cap -> the list or its pointer, with the role" ;;
+esac
+has   "ss-standing: the operating checklist stays" "$CTX" "Coordinator operating checklist"
+if [ "${#CTX}" -le 9500 ]; then ok "ss-standing: injection fits the guard (${#CTX})"; else bad "ss-standing: injection fits the guard" "${#CTX}"; fi
+# A lighter project (no handoffs): the coordinator gets the list itself.
+LIGHT="$TMP/light"; mkdir -p "$LIGHT/.ytstack"; cp "$TMP/state.good" "$LIGHT/.ytstack/STATE.md"; cp -R "$SDIR" "$LIGHT/.ytstack/standing"
+( cd "$LIGHT" && git init -q ) >/dev/null 2>&1
+printf '%s\n' "$LIGHT/.ytstack" > "$TMP/xdg/ytstack/sessions/s1co/coordinate"
+run session-start "{\"session_id\":\"s1co\",\"cwd\":$(jstr "$LIGHT"),\"source\":\"compact\"}" XDG_STATE_HOME="$TMP/xdg"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
 has   "ss-standing: coordinate marker -> role coordinator" "$CTX" "(role: coordinator"
 has   "ss-standing: coordinator sees its entry" "$CTX" "20261101T1200Z-coord (the coordinator)"
-if [ "${#CTX}" -le 9500 ]; then ok "ss-standing: injection fits the guard (${#CTX})"; else bad "ss-standing: injection fits the guard" "${#CTX}"; fi
+if [ "${#CTX}" -le 9500 ]; then ok "ss-standing: light project fits the guard (${#CTX})"; else bad "ss-standing: light project fits the guard" "${#CTX}"; fi
 eq  "ss-standing: git status shows only the fixture entries" "?? .ytstack/standing/" "$(git -C "$MAIN" status --porcelain)"
 rm -rf "$SDIR" "$TMP/xdg"
 

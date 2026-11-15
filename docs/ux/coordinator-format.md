@@ -9,6 +9,19 @@ All files live in the project's `.ytstack/` directory and are user-owned like ev
 1. **Written as history.** Every entry carries the UTC time it was written. A statement about code names its commit. An entry that was overtaken is marked superseded with the date and what replaced it; it is not rewritten and not deleted.
 2. **Host facts are never stored as current.** The state of a pull request, of its checks, of a review thread or of a deployed build lives on the host and changes without the coordinator. `.ytstack/` records what the coordinator did (dispatched, reviewed commit X, asked the human) and identifiers (a branch, a pull request number). Before a status goes to the human, the host facts in it are read again, and the status says when: `read 2026-11-13T10:42Z`.
 
+## Operating checklist
+
+The order a coordinator keeps for every event, short enough to survive a compaction. `hooks/session-start` injects the block between the two markers below in a coordinate session (the session marker of "Coordinate mode and the hooks"), on start, resume and after a compaction, and the `coordinate` preamble prints it; both read it from this file, so it lives only here (`tests/hooks-readonly.test.sh` compares them).
+
+<!-- operating-checklist:begin -->
+Coordinator operating checklist (scripts in bin/ of the plugin):
+1. Dispatch: ytstack-frontier claim <lane> --by <worker> -> ytstack-brief render -> Agent with that brief. Never a hand-written brief.
+2. Report: ytstack-brief check -> ytstack-frontier set <lane> --status reported -> ytstack:finish-lane.
+3. Human instruction beyond the task: ytstack-standing add, before the next dispatch; never only in memory.
+4. Merge to production: ytstack-watch release --commit <sha>.
+5. After a compaction: run the coordinate preamble again first.
+<!-- operating-checklist:end -->
+
 ## `LANES.md` -- who works on what
 
 A lane is one unit of delegated work: by default one slice (`M004-S02`), where a plan needs it one task (`M004-S02-T03`), a lesson whose check is still to be built (`lesson-F012`, see below) or a named piece outside the milestone plan (`review-pr-12`). `STATE.md` stays the pointer of the session's own position and links this file; the table does not live in `STATE.md`.
@@ -213,14 +226,17 @@ The scope is free text. Three roles are read from it, as whole words, case-insen
 
 A scope that names no role applies to everyone. The coordinator gets every entry. `hooks/session-start` injects the active entries for the session's role (coordinator when the `coordinate` preamble left its session marker, else lane), at most six lines, cut for the injection cap to one pointer line. `ytstack-brief render` puts the entries for its kind (`review`: reviewer, else lane) under "Standing instructions".
 
-### Coordinate mode and the two hooks
+### Coordinate mode and the hooks
 
-The `coordinate` preamble writes the session marker `<session home>/<session id>/coordinate` (`yt_session_home`: `${XDG_STATE_HOME:-~/.local/state}/ytstack/sessions`; the id is `CLAUDE_CODE_SESSION_ID`), with the resolved `.ytstack` on its first line. Only then do the two hooks act, so a session that never ran `coordinate` is not touched.
+The `coordinate` preamble writes the session marker `<session home>/<session id>/coordinate` (`yt_session_home`: `${XDG_STATE_HOME:-~/.local/state}/ytstack/sessions`; the id is `CLAUDE_CODE_SESSION_ID`), with the resolved `.ytstack` on its first line. Only then do these hooks act, so a session that never ran `coordinate` is not touched.
 
 - `hooks/standing-prompt` (UserPromptSubmit) counts every human prompt and flags one that reads like a standing instruction (always, never, from now on, until, while, prioritise, don't touch, remember; German immer, nie, ab jetzt, bis, waehrend, priorisiere, fass ... nicht an, denk dran). A flagged prompt gets one line of context: record it before the next dispatch.
 - `hooks/stop` blocks the stop once when flagged prompts have no entry since: an entry counts when its name time is in or after the minute of the first flagged prompt, in the working tree or added on any ref of the repository after it (local branches, and the remote-tracking branch a pushed standing pull request left). Local git only. The same prompts never block twice.
+- `hooks/session-start` injects the "Operating checklist" above, in place of the minimal-code line (a coordinator writes no product code).
+- `hooks/pre-tool-use-agent` (PreToolUse on `Agent`, `Task`, `SendMessage`) adds one line of context when the prompt has no line starting with `# Brief: ` (the first line `ytstack-brief render` prints): the path is claim, render, dispatch. It never denies the call; a lookup that is no lane needs no brief. A `SendMessage` of up to 400 characters is a follow-up and is not checked. Each `Agent` call is appended to `dispatches`; a task notification the prompt hook sees is appended to `reports`.
+- `hooks/stop` warns, once per session as a `systemMessage`, when `LANES.md` changed more than five minutes before the newest dispatch or report of the session (or does not exist although lanes were dispatched), and when the `STATE.md` pointer is behind the newest milestone on disk. A warning that comes in three sessions in a row (`YT_LINT_STREAK_N`; counter `<state base>/repos/<repo key>/coordinate-lints`) blocks the stop once in the third session.
 
-Claude Code only: Codex registers no UserPromptSubmit hook of ytstack, and Kimi's shell has no session id to write the marker with.
+Claude Code only: Codex registers no UserPromptSubmit or Agent hook of ytstack (its subagent tools are not covered), and Kimi's shell has no session id to write the marker with.
 
 ### `STANDING.md`
 

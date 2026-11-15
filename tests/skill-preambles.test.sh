@@ -297,6 +297,9 @@ for s in $SKILLS; do
       has "$s: task-ref commit -> COMMITS_SOURCE task-ref" "$OUT" "COMMITS_SOURCE: task-ref"
       case "$OUT" in *"BASE_SHA: none"*) bad "$s: task-ref commit -> BASE_SHA resolved";; *) ok "$s: task-ref commit -> BASE_SHA resolved";; esac ;;
     coordinate)
+      # the operating checklist (issue #76): printed from docs/ux/coordinator-format.md
+      has "$s: prints the operating checklist" "$OUT" "OPERATING_CHECKLIST_BEGIN
+Coordinator operating checklist"
       # standing instructions, one file per entry (issue #57); STANDING.md alone stays valid
       has "$s: no standing directory" "$OUT" "STANDING: no"
       has "$s: and no entries" "$OUT" "active (0):"

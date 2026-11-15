@@ -137,7 +137,12 @@ echo "LESSONS_BEGIN"
 [ -z "$_LS" ] || printf '%s\n' "$_LS" | head -30
 echo "LESSONS_END"
 echo "STANDING: $([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STANDING.md" ] && echo yes || echo no)"
-# Coordinate mode (issue #72): the session marker hooks/standing-prompt and hooks/stop act on.
+# The operating checklist (issue #76): one place, docs/ux/coordinator-format.md.
+echo "OPERATING_CHECKLIST_BEGIN"
+awk '/<!-- operating-checklist:end -->/ { f = 0 } f { print } /<!-- operating-checklist:begin -->/ { f = 1 }' "${CLAUDE_SKILL_DIR}/../../docs/ux/coordinator-format.md" 2>/dev/null \
+  | grep . || echo "read the Operating checklist in docs/ux/coordinator-format.md of the plugin"
+echo "OPERATING_CHECKLIST_END"
+# Coordinate mode (issue #72): the session marker hooks/standing-prompt, hooks/pre-tool-use-agent and hooks/stop act on.
 _SID="${CLAUDE_CODE_SESSION_ID:-}"
 case "$_SID" in
   ''|*[!A-Za-z0-9._-]*) echo "COORDINATE_MARKER: none (no session id on this host: the standing hooks stay off)" ;;
@@ -219,7 +224,7 @@ ytstack-watch --pr <the numbers of the PR column> --once
 
 One line per pull request (state, head, checks, newest review and its commit, mergeable or conflict) ending in `read <UTC>`. That stamp travels with the fact wherever it is used. A deployed build is read with the command `RUNTIME.md` names, with its time. None of this is written into `.ytstack/` as current: `LANES.md` records what you did (dispatched, reviewed commit X) and identifiers (a branch, a number). `PR_HOST: none`: there is no host to read. Say that the picture rests on the files and on local git, and state nothing about pull requests.
 
-**Step 5 -- Delegate what is ready.** Product code, reviews and research run in fresh-context workers. For each lane that `ytstack-frontier list --ready` prints:
+**Step 5 -- Delegate what is ready.** Product code, reviews and research run in fresh-context workers. The order is the one of the operating checklist the preamble prints between `OPERATING_CHECKLIST_BEGIN` and `OPERATING_CHECKLIST_END`; in this session `hooks/pre-tool-use-agent` says so when an `Agent` prompt is no rendered brief, and the Stop hook says when `LANES.md` lags the dispatches and reports or the `STATE.md` pointer is behind, and holds the stop once when that came three sessions in a row. For each lane that `ytstack-frontier list --ready` prints:
 
 1. `ytstack-frontier claim <lane> --by <worker> --kind <implement|review|prepare> --branch <branch>`. Claim before dispatch. A refused claim names the holder: do not dispatch.
 2. `ytstack-brief render --slice <lane> --kind <kind> --branch <branch> --base <base>` (`--task` for a task lane, `--lesson F###` for a lesson lane `lesson-F###`, `--head <sha>` for a review lane). The output is the worker's prompt, with the work contract and the report shape. Never write a brief by hand.
