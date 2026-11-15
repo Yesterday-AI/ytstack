@@ -346,6 +346,19 @@ pr "$FIX/step5" 20 MERGED "$A" "$RUN_OK" "" MERGEABLE
 swatch --pr 20
 eq "the same reviewer's newer approval lifts it" 0 "$(printf '%s\n' "$OUT" | grep -c STALL)"
 fresh
+pr "$FIX/now"   20 OPEN "$A" "$RUN_OK" "$OTHER,$(echo "$OTHER" | sed 's/CHANGES_REQUESTED/COMMENTED/; s/13:00/15:00/')" MERGEABLE
+pr "$FIX/step5" 20 MERGED "$A" "$RUN_OK" "" MERGEABLE
+swatch --pr 20
+like "the same reviewer's later comment does not lift it (PR #92 review)" "^$STAMP #20 STALL 1: review changes_requested; " "$OUT"
+# PR #92 review: a new head after STALL 1 restarts the clock; the next mark is STALL 1 again
+fresh
+pr "$FIX/now"   20 OPEN "$A" "$RUN_BAD" "" MERGEABLE           # poll 1 (t 0)
+pr "$FIX/step5" 20 OPEN "$B" "$RUN_BAD" "" MERGEABLE           # poll 5 (t 20 min): a new head, still red
+pr "$FIX/step10" 20 MERGED "$B" "$RUN_BAD" "" MERGEABLE        # poll 10 (t 45 min), before a second window
+swatch --pr 20
+eq "STALL 1 before the push and STALL 1 again 15 minutes after it, no STALL 2" "1:head a1b2c3d 1:head b2c3d4e" \
+  "$(printf '%s\n' "$OUT" | sed -n 's/.* STALL \([12]\): .*(\(head [0-9a-f]*\)).*/\1:\2/p' | paste -sd' ' -)"
+fresh
 pr "$FIX/now" 20 OPEN "$A" "$RUN_BAD" "" MERGEABLE
 pr "$FIX/step4" 20 OPEN "$A" "$RUN_BUSY" "" MERGEABLE           # poll 4: the checks run again: not actionable
 pr "$FIX/step7" 20 OPEN "$A" "$RUN_BAD" "" MERGEABLE

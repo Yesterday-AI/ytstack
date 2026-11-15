@@ -313,9 +313,10 @@ def one:
      elif .mergeable == "CONFLICTING" then "conflict"
      else "unknown" end),
     # blocked: a reviewer whose newest review on the head requests changes
-    # (another reviewer approving later does not lift it; as ytstack-finish-lane)
+    # (another reviewer approving later does not lift it, nor a later comment
+    # of the same reviewer; as ytstack-finish-lane)
     (.headRefOid as $h
-     | [ (.reviews // [])[] | select(.submittedAt != null and .commit.oid == $h) ]
+     | [ (.reviews // [])[] | select(.submittedAt != null and .commit.oid == $h and .state != "COMMENTED") ]
      | if any(group_by(.author.login)[]; max_by(.submittedAt).state == "CHANGES_REQUESTED")
        then "blocked" else "-" end)
   ] | join(" ")'

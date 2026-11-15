@@ -362,6 +362,8 @@ eq "changes requested on an earlier commit do not count" 0 "$EC"
 has "the head has no review then" "ok   review: none on ${SHA:0:7}" "$OUT"
 host; tweak view '.reviews[0].state = "CHANGES_REQUESTED" | .reviews += [.reviews[0] | .state = "APPROVED" | .submittedAt = "2026-11-13T11:00:00Z"]'; gates
 eq "a reviewer's newer review replaces the older one" 0 "$EC"
+host; tweak view '.reviews[0].state = "CHANGES_REQUESTED" | .reviews += [.reviews[0] | .state = "COMMENTED" | .submittedAt = "2026-11-13T11:00:00Z"]'; gates
+only "a reviewer's later comment does not lift their changes request (PR #92 review)" review
 host; tweak view '.reviews += [{author: {login: "sam"}, state: "CHANGES_REQUESTED", submittedAt: "2026-11-13T09:00:00Z", commit: {oid: .headRefOid}, body: ""}]'; gates
 only "another reviewer's changes requested stand beside a newer comment" review
 host; tweak graphql '.data.repository.pullRequest.reviewThreads |= (.totalCount = 2 | .nodes += [{isResolved: false}])'; gates
