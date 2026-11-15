@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Focus PRs and STALL lines** (issue #91): a pull request that sat in a
+  blocking review, a conflict or a red check with no new head for 15 minutes
+  now gets a `STALL 1` mark, and `STALL 2` after the next 15, instead of
+  looking like every other waiting PR. The mark names the lane that holds it
+  and that lane's last commit, from `LANES.md`
+  (`ytstack-frontier owner --pr N`, new), so "still working" and "gone" read
+  differently. Both watchers have it: the PR watch's status block (policy key
+  `stall_minutes`) and `ytstack-watch --stall MINUTES`. A PR other lanes wait
+  on can be a focus PR: `ytstack-pr-watch register --pr N --focus` reads it
+  every tick and lists it first; `ytstack-watch --focus N` reads it every 20
+  seconds. `coordinate` 0.6.2, Step 7: on `STALL 1` ask the lane once for an
+  ETA, on `STALL 2` release the lane and give the branch to a fresh worker
+  instead of relaying the same instruction again.
+
 - **Progress per phase** (issue #81): `ytstack-status --phases [--json]`
   prints done, in review and total per milestone and in total. When a total
   changed since the last report, the line says by how much and why (slices

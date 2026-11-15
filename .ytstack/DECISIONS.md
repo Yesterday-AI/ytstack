@@ -1305,3 +1305,24 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - `--worktrees` prints no command for a branch with any open pull request, or whose local head is in neither the pull request head nor `origin/<branch>` (unpushed commits). It leaves out the worktree it runs in and reads `LANES.md` from the main checkout (PR #90 review).
 
 **Supersedes:** None. Extends "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)".
+
+## 2026-11-15: STALL detection lives in both watchers, owner liveness in `ytstack-frontier owner`; focus PRs are read every tick (issue #91)
+
+**Context:** Issue #91: in a coordinator run a PR sat for an hour with a blocking review and then a conflict while its lane ran a long local job and pushed nothing. PR watch reported the conflict among 15 other PRs on every tick, `ytstack-watch` prints only on change, so a PR on which nothing happens was as quiet as a healthy one. The coordinator relayed "merge main" and noticed the stall only after the operator escalated twice.
+
+**Options considered:**
+- Where the stall rule lives: A) only in the PR watch engine, B) only in `ytstack-watch`, C) in both, with the lane lookup in one place.
+- Where liveness comes from: the PR watch reading `LANES.md` itself, or a `ytstack-frontier` subcommand both call.
+- Focus: an interval per watch, or "every tick" as a flag.
+
+**Chose:** C. Each watcher keeps its own clock, because the clock is state only it has: the PR watch's `changed_at` (head or status) in its database, `ytstack-watch`'s first sight in its process. The rule is one (an actionable state, no new head for T minutes, default 15, a mark after T and after 2T, never a third) and the lane lookup is one: `ytstack-frontier owner --pr N`, which reuses the clock of `check` (the last commit on the lane's branch, or the claim when newer; `claimed_at` and `last_commit` are shared by both). The PR watch calls it from the UserPromptSubmit hook only for a STALL line it shows, only from the watch's `cwd` and only when that checkout's `origin` is the PR's repository. Focus is a flag: the PR watch reads a focus watch on every 60-second tick and lists it first under `Focus (read every tick):`; `ytstack-watch --focus` reads it every 20 seconds (its minimum) and the others every `--interval`.
+
+**Reason:** A without B leaves the coordinator without the PR watch (worker off, or another host) with no stall signal, and the PR watch's block reaches a Claude session only with a prompt, while `ytstack-watch` under a monitor tool wakes it. B without A leaves the per-prompt block, where the issue's coordinator looked, as quiet as before. Moving one clock into the other watcher would need the PR watch to run as a long process or `ytstack-watch` to keep state on disk. The lane lookup is the part that must not drift: it reads the coordinator's format, and `ytstack-frontier` already owns that format and the liveness clock. Two windows match what the coordinator does with them (ask once, then hand over); more marks would bring back the noise of issue #85. Stall marks stop at 24 hours, where the pause suggestion takes over. Every tick for a focus PR costs about 480 REST calls an hour, so focus stays opt-in and per PR.
+
+**How to apply:**
+- STALL 1: ask the lane once for an ETA. STALL 2: `ytstack-frontier release <lane>`, claim a fresh worker on the same branch in a new worktree, never relay the same instruction a third time (`coordinate` Step 7).
+- PR watch: `stall_minutes` in `policy.json` (`defaults` or per repository, 0 = off); `ytstack-watch --stall MINUTES` (0 = off). A focus or stall mark joins a line's fingerprint only when set, so existing fingerprints stay equal across the upgrade.
+- The PR watch's state is `action_required` (it includes unresolved threads); `ytstack-watch` counts checks red, a conflict and changes requested on the head, the states its five fields show.
+- A new caller that needs "who holds PR N and is it alive" calls `ytstack-frontier owner`, not its own `LANES.md` reader.
+
+**Supersedes:** None. Extends "2026-11-15: Lane liveness is part of `ytstack-frontier check`, worktree cleanup only prints commands, peers are list lines in `LANES.md` (issue #84)" and "2026-11-15: PR watch bulk registration takes only your own ready PRs; bins are called through `YT_BIN` (issue #85)".

@@ -91,6 +91,19 @@ stale: M004-S06: ready, nobody claimed it for 70 minutes (first seen 2026-11-15T
 
 A `running` row is stale when its worktree no longer exists (the worker ended) or, for an `implement` lane, when its branch had no commit for N minutes (default 60), counted from the claim when that is newer or the row names no branch. A running row with a pull request in it is a fix round (`finish-lane`), not a report: its clock starts when a check first sees that pull request and round in the row, and a new round starts it again. A `review` or `prepare` lane commits nothing; it is stale after 3 x N minutes since its claim without a report. A `ready` lane of the frontier is stale when nobody claimed it for N minutes since a check first saw it ready. First sights are kept outside the tree, one writer at a time (`<state base>/repos/<repo key>/frontier-seen`, the base of `yt_state_base`). `bin/ytstack-upkeep` lists these lines under `lanes`. A stale line is a prompt to read the lane's branch and set its row, or to dispatch the ready lane; it never releases a lane by itself.
 
+### Pull requests that stall
+
+A lane with a pull request can stall in a way the clock above does not see in time: a blocking review, a conflict or a red check, and then nobody pushes. Both watchers say so (issue #91). The rule is the same in both: a pull request in an actionable state with no new head for T minutes (default 15) gets a mark, once after T and once more after the next T, never a third time.
+
+```
+2026-11-15T14:30:07Z #1896 STALL 1: conflict, review changes_requested; no new head for 15 min (head a1b2c3d); lane M004-S03 held by impl-S03 (running), last commit 52 min ago on ytstack/M004-S03
+- acme/app#1896: action_required (head a1b2c3d4, 40s ago) -- Merge conflict with base branch; STALL 2: no new head or status for 31 min; lane M004-S03 held by impl-S03 (running), last commit 68 min ago on ytstack/M004-S03
+```
+
+The first is a line of `ytstack-watch --stall <minutes>` (states it counts: checks red, a conflict, changes requested on the head), the second the line of the PR watch's status block (state `action_required`, policy key `stall_minutes`; `docs/pr-watch.md`). The tail after the time is `ytstack-frontier owner --pr <N>`: the lane whose `PR` cell names the pull request (`12` or `#12`), its holder and status, and the age of the last commit on its branch, or of the claim when that is newer, the clock `check` uses. Without such a row the line ends after the time. What the coordinator does with `STALL 1` and `STALL 2` is in `skills/coordinate/SKILL.md`, Step 7.
+
+A pull request that blocks other lanes is a focus pull request: `ytstack-pr-watch register --pr <N> --focus` reads it on every worker tick and lists it first under `Focus (read every tick):`, `ytstack-watch --focus <N>` reads it every 20 seconds and prints it first.
+
 ### Lesson lanes
 
 Every incident ends with a lesson (`docs/ux/signal-format.md`, "Lessons"). A lesson whose target is a check that nobody built yet, `open` or `planned`, is work that may start like a slice. The frontier lists it after the slices of the milestone, also when no milestone is open:
@@ -251,7 +264,7 @@ The old session stays open as a relay until every listed worker has reported. Pe
 
 ## Checked mechanically
 
-- `bin/ytstack-frontier check`: `LANES.md` has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time, every line under `## Peers` is a list line with four cells and a UTC time (a table row there is named as one); then the lanes that stall ("Lanes that stall", exit 2).
+- `bin/ytstack-frontier check`: `LANES.md` has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time, every line under `## Peers` is a list line with four cells and a UTC time (a table row there is named as one); then the lanes that stall ("Lanes that stall", exit 2). `ytstack-frontier owner --pr <N>`: the lane that holds a pull request and its last commit or claim, exit 1 without a row ("Pull requests that stall").
 - `bin/ytstack-upkeep --worktrees`: the linked worktrees (not the main one, not the one it runs in) and local branches with the state of their pull request (an open one first, else the newest), the age of the last commit, uncommitted changes, unpushed commits and the lane of the main checkout's `LANES.md` that holds them, and the `git worktree remove` / `git branch -D` commands for those whose pull request is merged or closed, with no open one, nothing unpushed, clean, unlocked and unheld. It prints the commands and runs none.
 - `bin/ytstack-status --phases [--json]`: done, in review and total per milestone and in total, with each change since the last text report, its cause and the phases that joined or left (`docs/statusline.md`, "Progress per phase").
 - `bin/ytstack-questions check`: ids are unique and match the file name, `state` holds a listed value, `asked` and `answered` are set exactly when the state says so, an answered file has text under `## Answer`.
