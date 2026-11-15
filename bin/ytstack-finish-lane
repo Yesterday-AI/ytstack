@@ -626,7 +626,7 @@ EOF
 # line there. A note, not a gap: a change to CI goes to a person anyway.
 checks_note() {
   local p ci=""
-  [ -f "$YT_DIR/spec/REVIEW.md" ] && grep -x '## Checks' "$YT_DIR/spec/REVIEW.md" >/dev/null || return 0
+  [ -f "$YT_DIR/spec/REVIEW.md" ] && grep -E '^## Checks[[:space:]]*$' "$YT_DIR/spec/REVIEW.md" >/dev/null || return 0
   touched_by "${YT_DIR#"$TOP"/}/spec/REVIEW.md" && return 0
   while IFS= read -r p; do
     case "$p" in .github/workflows/*|.gitlab-ci.yml) ci="$ci${ci:+, }$p" ;; esac

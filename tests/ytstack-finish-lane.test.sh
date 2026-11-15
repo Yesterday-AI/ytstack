@@ -606,6 +606,11 @@ sroute "$SG"
 has "a CI change without its line in the checks inventory is named" 'checks: the change edits CI (.github/workflows/levels.yml) and .ytstack/spec/REVIEW.md "## Checks" did not change' "$OUT"
 rm -f "$RS/.ytstack/spec/REVIEW.md"; sroute "$SG"
 hasnt "without an inventory there is no such line" "checks:" "$OUT"
+# Codex P2 on #88: the heading is read the way ytstack-risk reads it
+printf '# Review policy\n\n## Checks  \n\n- spec | file: .ytstack/spec/core.md | guards: x\n' > "$RS/.ytstack/spec/REVIEW.md"
+sroute "$SG"
+has "a Checks heading with trailing spaces is the inventory" 'checks: the change edits CI' "$OUT"
+rm -f "$RS/.ytstack/spec/REVIEW.md"
 
 # A visual lens. The reviewer stored its images in the main checkout; the
 # coordinating session works in a linked worktree of the same repository.
