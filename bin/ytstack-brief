@@ -471,7 +471,8 @@ cmd_check() {
         # Well formed: the caller checks the paths against the project spec.
         else for (i = 1; i <= k; i++) {
           e = E[i]; gsub(/`/, "", e); gsub(/^[ \t]+|[ \t]+$/, "", e)
-          p = substr(e, index(e, ": ") + 2); sub(/ .*/, "", p)
+          # the path runs to the "(<section>)" at the end; it may hold spaces
+          p = substr(e, index(e, ": ") + 2); sub(/[ \t]*\([^()]*\)$/, "", p)
           print "@entry " substr(e, 1, index(e, ": ") - 1) "\t" p
         }
       }

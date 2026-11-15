@@ -514,6 +514,9 @@ schk 'auth: src/auth/login.sh (Behavior)'
 eq "a code file is no spec edit" 'Spec: "auth: src/auth/login.sh" is neither .ytstack/spec/auth.md nor one of its sources' "$OUT"
 schk 'auth: .ytstack/spec/auth.md (Behavior); auth: `docs/auth.md` (Login)'
 eq "the area file and a source pass" "report ok" "$OUT"
+printf -- '---\narea: auth\nstatus: planned\npaths:\n  - src/auth/**\nsources:\n  - docs/Auth Guide.md\n---\n' > "$SR/.ytstack/spec/auth.md"
+schk 'auth: docs/Auth Guide.md (Login)'
+eq "a source with a space in its name is read whole" "report ok" "$OUT"
 schk 'billing: .ytstack/spec/billing.md (Behavior)'
 eq "an area the project does not have fails" 'Spec: "billing: .ytstack/spec/billing.md" names no area of this project (.ytstack/spec/billing.md does not exist)' "$OUT"
 

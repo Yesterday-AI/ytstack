@@ -580,6 +580,17 @@ quiet; run "$R2" route --lane M001-S01 --base "$B2" --head "$C2"
 eq "T01 says none, T02 changed another area unplanned: exit 10" 10 "$EC"
 has "T01's statement covers core" "spec: core unchanged -- restores the described behaviour (.ytstack/M001-S01-T01-PLAN.md)" "$OUT"
 has "web needs its own edit or reason" "reason: spec -- web: the change touches its paths" "$OUT"
+# Codex P2 on #88: a source with a space in its name is read whole
+( cd "$R2" && git checkout -q -b guide main && mkdir -p docs && echo g > "docs/Web Guide.md" && echo y >> web/w.ts \
+  && git add -A docs web && git commit -qm "M001-S01-T02: web and its guide" && git checkout -q main ) >/dev/null 2>&1
+G2=$(git -C "$R2" rev-parse guide); cp "$R2/.ytstack/spec/web.md" "$TMP/web.md.bak"
+awk '{ print } /^  - web\/\*\*$/ { print "sources:"; print "  - docs/Web Guide.md" }' "$TMP/web.md.bak" > "$R2/.ytstack/spec/web.md"
+r2plan "$G2"; rm -f "$R2/.ytstack/M001-S01-T01-PLAN.md"
+printf 'Task: M001-S01\nStatus: complete\nSpec: web: docs/Web Guide.md (Usage)\nNext: review\n' > "$TMP/report2.md"
+quiet; run "$R2" route --lane M001-S01 --base "$B2" --head "$G2" --report "$TMP/report2.md"
+has "a spaced source named in the report counts" "spec: web -- docs/Web Guide.md changed" "$OUT"
+hasnt "and is not truncated" "reason: spec -- the report names docs/Web" "$OUT"
+cp "$TMP/web.md.bak" "$R2/.ytstack/spec/web.md"
 # item 4: a file renamed out of an area still touches it
 r2plan "$M2"; rm -f "$R2/.ytstack/M001-S01-T01-PLAN.md"
 quiet; run "$R2" route --lane M001-S01 --base "$B2" --head "$M2"

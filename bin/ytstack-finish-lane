@@ -580,7 +580,9 @@ EOF
       [ -n "$noneclaim" ] || { echo "reason: spec -- the report's Spec: line gives no reason after \"none --\""; bad=1; } ;;
     *)
       while IFS= read -r e; do
-        e=$(trim "$e"); a=${e%%:*}; ep=${e#*: }; ep=${ep%% *}
+        # The path runs to the "(<section>)" at the end; it may hold spaces.
+        e=$(trim "$e"); a=${e%%:*}; ep=${e#*: }
+        case "$ep" in *"("*")") ep=$(trim "${ep%(*}") ;; esac
         [ -n "$ep" ] && [ "$ep" != "$e" ] || continue
         if ! area_paths "$a" | grep -Fx -- "$ep" >/dev/null; then
           echo "reason: spec -- the report names $ep for $a, which is neither ${YT_DIR#"$TOP"/}/spec/$a.md nor one of its sources"; bad=1
