@@ -161,7 +161,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 - `bin/ytstack-check` -- the checker; its docstring names the flags and exit codes. `bin/ytstack-spec` (the spec tool) and `bin/ytstack-brief` (brief renderer and report check), pinned by `tests/ytstack-spec.test.sh` and `tests/ytstack-brief.test.sh`.
 - `bin/ytstack-frontier`, `bin/ytstack-questions`, `bin/ytstack-finish-lane`, `bin/ytstack-handover`, `bin/ytstack-watch` -- the coordinator scripts, each with `tests/<name>.test.sh`.
-- `bin/ytstack-risk`, `bin/ytstack-review-escapes`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, `bin/ytstack-plans`, `bin/ytstack-upstream`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it).
+- `bin/ytstack-risk`, `bin/ytstack-review-escapes`, `bin/ytstack-runtime`, `bin/ytstack-signals`, `bin/ytstack-upkeep`, `bin/ytstack-plans`, `bin/ytstack-upstream`, each with `tests/<name>.test.sh` (the live cases of `ytstack-runtime` need `python3` and are skipped without it). `tests/evals-frontmatter.test.sh` lints every `evals/*/prompt.md` frontmatter for plain scalars holding `: ` or ` #`, which keep a case from loading.
 - `tests/run-all.sh` -- the suite runner. `tests/*.test.sh` -- the suites. `tests/codex_plugin_test.py`, `kimi_plugin_test.py`, `kimi_lifecycle_test.py`, `kimi_live_test.py` -- the Python host tests. `evals/<case>/` -- the eval cases. `evals/README.md` -- how to run them.
 - `.github/workflows/ci.yml`, `plugin-check.yml`, `secret-scan.yml`.
 - `docs/ux/skill-structure.md`, `docs/ux/agent-structure.md`, `docs/ux/writing-style.md` -- the contracts the checker enforces in part.
