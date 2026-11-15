@@ -20,6 +20,10 @@ cli = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cli)
 
 
+def pull(number, author='me', draft=False, labels=()):
+    return {'number': number, 'user': {'login': author}, 'draft': draft, 'labels': [{'name': n} for n in labels]}
+
+
 class RegisterAllOpen(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -50,8 +54,9 @@ class RegisterAllOpen(unittest.TestCase):
             register(db, 'o/r', 2, 'claude:coordinator', '/tmp')   # already ours
             register(db, 'o/r', 3, 'claude:other', '/tmp')         # another session's
         db.close()
-        prs = [{'number': n} for n in (4, 1, 3, 2)]
-        with patch.object(github, 'open_pulls', return_value=prs) as listing:
+        prs = [pull(n) for n in (4, 1, 3, 2)]
+        with patch.object(github, 'open_pulls', return_value=prs) as listing, \
+                patch.object(github, 'login', return_value='me'):
             code, out = self.run_cli('register', '--repo', 'o/r', '--all-open',
                                      '--session', 'claude:coordinator', '--cwd', self.tmp.name)
         self.assertEqual(code, 0)
@@ -71,7 +76,8 @@ class RegisterAllOpen(unittest.TestCase):
                        (repo, number, 'claude:worker-found', cwd))
             return real_register(db, repo, number, session, cwd)
 
-        with patch.object(github, 'open_pulls', return_value=[{'number': 7}]), \
+        with patch.object(github, 'open_pulls', return_value=[pull(7)]), \
+                patch.object(github, 'login', return_value='me'), \
                 patch.object(cli, 'register', side_effect=racing_register):
             code, out = self.run_cli('register', '--repo', 'o/r', '--all-open',
                                      '--session', 'claude:coordinator', '--cwd', self.tmp.name)
@@ -87,6 +93,77 @@ class RegisterAllOpen(unittest.TestCase):
                 register(db, 'o/r', 8, 'claude:coordinator', '/tmp')
         db.close()
         self.assertEqual(self.watches(), {8: 'claude:worker-found'})
+
+    def test_only_own_ready_prs_by_default(self):
+        # Issue #85: --all-open adopted another author's do-not-merge prototype.
+        prs = [pull(1), pull(2, author='other'), pull(3, draft=True),
+               pull(4, labels=['Do Not Merge']), pull(5, labels=['do-not-merge/hold']), pull(6, labels=['bug'])]
+        with patch.object(github, 'open_pulls', return_value=prs), \
+                patch.object(github, 'login', return_value='me'):
+            code, out = self.run_cli('register', '--repo', 'o/r', '--all-open',
+                                     '--session', 'claude:coordinator', '--cwd', self.tmp.name)
+        self.assertEqual(code, 0)
+        self.assertEqual(sorted(self.watches()), [1, 6])
+        self.assertIn('skipped by filter: #2 (author other) #3 (draft) #4 (do-not-merge) #5 (do-not-merge)', out)
+
+    def test_author_widens_and_include_flags_opt_in(self):
+        prs = [pull(1), pull(2, author='other'), pull(3, author='third'), pull(4, author='bot[bot]'),
+               pull(5, draft=True), pull(6, labels=['DO_NOT_MERGE'])]
+        with patch.object(github, 'open_pulls', return_value=prs), \
+                patch.object(github, 'login', return_value='me'):
+            code, out = self.run_cli('register', '--repo', 'o/r', '--all-open', '--author', 'other,bot[bot]',
+                                     '--include-drafts', '--include-labelled',
+                                     '--session', 'claude:coordinator', '--cwd', self.tmp.name)
+        self.assertEqual(code, 0)
+        self.assertEqual(sorted(self.watches()), [1, 2, 4, 5, 6])
+        self.assertIn('#3 (author third)', out)
+
+    def test_label_spellings_and_bot_authors(self):
+        prs = [pull(1, labels=['DNM']), pull(2, labels=['status: do not merge']), pull(3, labels=['dnmx']),
+               pull(4, author='dependabot[bot]'), pull(5, labels=['Do_Not_Merge'])]
+        with patch.object(github, 'open_pulls', return_value=prs), \
+                patch.object(github, 'login', return_value='me'):
+            code, out = self.run_cli('register', '--repo', 'o/r', '--all-open', '--author', 'Dependabot',
+                                     '--session', 'claude:coordinator', '--cwd', self.tmp.name)
+        self.assertEqual(code, 0)
+        self.assertEqual(sorted(self.watches()), [3, 4])
+
+    def test_rerun_pauses_own_watches_the_filter_now_skips(self):
+        # PR #89 review: a watch from an earlier unfiltered run stayed active.
+        db = connect()
+        with db:
+            register(db, 'o/r', 20, 'claude:coordinator', '/tmp')
+            register(db, 'o/r', 21, 'claude:other', '/tmp')
+        db.close()
+        with patch.object(github, 'open_pulls', return_value=[pull(20, author='someone'), pull(21, author='someone')]), \
+                patch.object(github, 'login', return_value='me'):
+            code, out = self.run_cli('register', '--repo', 'o/r', '--all-open',
+                                     '--session', 'claude:coordinator', '--cwd', self.tmp.name)
+        self.assertEqual(code, 0)
+        db = connect()
+        paused = {r['number']: r['paused'] for r in db.execute('SELECT number, paused FROM watches')}
+        db.close()
+        self.assertEqual(paused, {20: 1, 21: 0})
+        self.assertIn('paused (watched by this session, now skipped by the filter): #20', out)
+        self.assertIn('resume --repo o/r --pr N', out)
+
+    def test_login_lookup_failure(self):
+        failing = patch.object(github, 'login', side_effect=github.APIError('gh api failed (exit 1)'))
+        with patch.object(github, 'open_pulls', return_value=[pull(1), pull(2, author='bot')]), failing, \
+                patch('sys.stderr', io.StringIO()) as err:
+            with self.assertRaises(SystemExit):
+                self.run_cli('register', '--repo', 'o/r', '--all-open', '--session', 's', '--cwd', self.tmp.name)
+            self.assertIn('--author <login>', err.getvalue())
+            code, out = self.run_cli('register', '--repo', 'o/r', '--all-open', '--author', 'bot',
+                                     '--session', 's', '--cwd', self.tmp.name)
+            self.assertIn('only --author', err.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(sorted(self.watches()), [2])
+
+    def test_filter_flags_need_all_open(self):
+        for flag in (['--author', 'x'], ['--include-drafts'], ['--include-labelled']):
+            with self.subTest(flag=flag), self.assertRaises(SystemExit), patch('sys.stderr', io.StringIO()):
+                self.run_cli('register', '--repo', 'o/r', '--pr', '5', '--session', 's', *flag)
 
     def test_needs_a_session(self):
         with patch.object(github, 'open_pulls', return_value=[]), self.assertRaises(SystemExit):

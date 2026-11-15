@@ -31,6 +31,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   list`); `coordinate` prints them in its preamble and its Rotation block,
   so a compaction no longer loses which session is which.
 
+### Changed
+
+- **PR watch stays on your own PRs and says less** (issue #85).
+  `ytstack-pr-watch register --all-open` registers only open PRs you authored
+  (the `gh` login) and skips drafts and do-not-merge labels, each named with
+  the reason; `--author <login>[,<login>]`, `--include-drafts` and
+  `--include-labelled` widen it; a rerun pauses a watch of yours that the
+  filter now skips. The status block on each prompt lists only the PR lines
+  that changed plus "N unchanged", a PR that closed gets one last
+  `closed (merged)` / `closed` line, and a PR stuck in `action_required` for
+  24 hours gets one line suggesting `pause`.
+  `ytstack-pr-watch status` shows the current session and repository;
+  `--all` shows everything.
+- **Bins through `YT_BIN`** (issue #85): the `coordinate` preamble
+  (`coordinate` 0.5.1) and the SessionStart context (where it fits under the
+  injection cap) print `YT_BIN=<bin of the running version>`, and
+  `coordinate` runs its bins as
+  `"$YT_BIN/ytstack-<name>"`, so a long session no longer calls a removed
+  version's path after an update.
+
+### Fixed
+
+- **New artifacts follow the directory their milestone lives in** (issue #70):
+  when a milestone's roadmap or files already sit in
+  `.ytstack/milestones/M###/` (or a `backlog/<PREFIX>/` directory), new plans,
+  summaries, reviews and retros of that milestone are written there instead of
+  flat into `.ytstack/`. The lib functions `yt_artifact_dir` and
+  `yt_artifact_path` decide; skills print `ARTIFACT_DIR`. Flat stays the
+  default and nothing is moved. Readers that built flat paths (plan-task,
+  summarize-task, slice-milestone, reassess-roadmap, retro, the review and
+  execution skills, finish-branch, ship, spawn-milestone-team, grill,
+  handoff-session, and the stop, pre-tool-use-edit, session-start,
+  task-created, teammate-idle hooks) now find those files there too.
+  `plan-milestone` counts moved milestones when it numbers the next one, and
+  `ytstack-risk` counts their files as process records (at most one directory
+  below `milestones/` or `backlog/`). Readers that count or list a milestone's
+  files (reassess-roadmap, retro, spawn-milestone-team, task-created,
+  teammate-idle) also see files of that milestone that landed flat before it
+  moved.
+- `teammate-idle` no longer fails on a slice plan without an open task (`grep
+  -c ... || echo 0` produced `0` twice and broke the sum).
+
 ## [0.11.0] - 2026-11-15
 
 ### Added

@@ -31,8 +31,12 @@ class SessionSpelling(unittest.TestCase):
                               clear=False)
         self.env.start()
         os.environ.pop('CODEX_THREAD_ID', None)
+        # register --all-open asks gh for the login (issue #85); never the real one here.
+        self.login = patch.object(github, 'login', return_value='me')
+        self.login.start()
 
     def tearDown(self):
+        self.login.stop()
         self.env.stop()
         self.tmp.cleanup()
 
@@ -49,7 +53,7 @@ class SessionSpelling(unittest.TestCase):
         return rows
 
     def test_bare_id_of_the_current_claude_session_is_qualified(self):
-        with patch.object(github, 'open_pulls', return_value=[{'number': 5}]):
+        with patch.object(github, 'open_pulls', return_value=[{'number': 5, 'user': {'login': 'me'}}]):
             code, out = self.run_cli('register', '--repo', 'o/r', '--all-open', '--session', SID,
                                      '--cwd', self.tmp.name)
         self.assertEqual(code, 0)
@@ -58,7 +62,7 @@ class SessionSpelling(unittest.TestCase):
 
     def test_bare_id_of_another_session_stays_as_given(self):
         # A Codex thread id is bare by design.
-        with patch.object(github, 'open_pulls', return_value=[{'number': 5}]):
+        with patch.object(github, 'open_pulls', return_value=[{'number': 5, 'user': {'login': 'me'}}]):
             self.run_cli('register', '--repo', 'o/r', '--all-open', '--session', 'codex-thread-1',
                          '--cwd', self.tmp.name)
         self.assertEqual(self.rows('SELECT session FROM watches'), [('codex-thread-1',)])
@@ -70,7 +74,7 @@ class SessionSpelling(unittest.TestCase):
             enqueue(db, 'ci:o/r#7:abc', {'repo': 'o/r', 'number': 7, 'session': SID}, 'CI failed')
             db.execute("UPDATE outbox SET error='RPCError', attempts=3")
         db.close()
-        with patch.object(github, 'open_pulls', return_value=[{'number': 7}]):
+        with patch.object(github, 'open_pulls', return_value=[{'number': 7, 'user': {'login': 'me'}}]):
             code, out = self.run_cli('register', '--repo', 'o/r', '--all-open', '--cwd', self.tmp.name)
         self.assertEqual(code, 0)
         self.assertEqual(self.rows('SELECT session FROM watches'), [('claude:' + SID,)])

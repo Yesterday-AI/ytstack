@@ -623,7 +623,7 @@ yt_brownfield_signals() {
 # line, from the flat layout and the layouts consumers already use:
 #   <yt_dir>/<glob>  milestones/<glob>  milestones/*/<glob>  decisions/<glob>
 #   backlog/<glob>   backlog/*/<glob>   quick/<glob>
-# Writing stays flat; only reading tolerates the alternatives.
+# Writing follows the directory a milestone already lives in: yt_artifact_dir.
 yt_find_artifacts() {
   local ytd="$1" pat="$2" d
   [ -d "$ytd" ] || return 0
@@ -637,6 +637,40 @@ yt_find_artifacts() {
     _mt=$(stat -c %Y "$f" 2>/dev/null) || _mt=$(stat -f %m "$f" 2>/dev/null) || _mt=0
     printf '%s\t%s\n' "$_mt" "$f"
   done | sort -rn | cut -f2-
+  return 0
+}
+
+# yt_artifact_dir <yt_dir> <id> -> the directory the artifacts of <id> live in
+# and new ones go to (issue #70). <id> is an artifact id or its prefix
+# (M005, M005-S02, M005-S02-T01, a backlog prefix); only the part before the
+# first `-` counts. First the directory holding <prefix>-ROADMAP.md, then the
+# one holding any <prefix>-* file, searched in <yt_dir>, milestones/,
+# milestones/*/, backlog/, backlog/*/ (flat first); else <yt_dir>. Nothing is
+# moved: a milestone that lives flat stays flat.
+yt_artifact_dir() {
+  local ytd="$1" p="${2%%-*}" d f
+  [ -n "$ytd" ] && [ -n "$p" ] && [ -d "$ytd" ] || { printf '%s\n' "$ytd"; return 0; }
+  for f in "$p-ROADMAP.md" "$p-*"; do
+    for d in "$ytd" "$ytd"/milestones "$ytd"/milestones/* "$ytd"/backlog "$ytd"/backlog/*; do
+      [ -d "$d" ] || continue
+      # shellcheck disable=SC2086  # $f is a glob on purpose
+      set -- "$d"/$f
+      [ -e "$1" ] && { printf '%s\n' "$d"; return 0; }
+    done
+  done
+  printf '%s\n' "$ytd"
+  return 0
+}
+
+# yt_artifact_path <yt_dir> <file name> -> where that artifact is read from
+# and written to: the file in yt_artifact_dir if it is there, else the newest
+# one yt_find_artifacts finds, else <yt_artifact_dir>/<file name> (new file).
+yt_artifact_path() {
+  local ytd="$1" name="$2" d hit
+  d=$(yt_artifact_dir "$ytd" "$name")
+  [ -e "$d/$name" ] && { printf '%s\n' "$d/$name"; return 0; }
+  hit=$(yt_find_artifacts "$ytd" "$name" | head -1)
+  printf '%s\n' "${hit:-$d/$name}"
   return 0
 }
 

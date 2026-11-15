@@ -3,7 +3,7 @@ name: coordinate
 description: "Coordinator mode for the session that owns a plan and delegates all of it, writing no product code itself. Use when many lanes are in flight, when a plan has dozens of work packages, when a session with open lanes continues after a compaction or a resume, or when the user says coordinate this, run the plan, you are the coordinator, keep the lanes moving, where does each lane stand. Not for one milestone with a handful of independent slices (spawn-milestone-team) and not for doing a task yourself (plan-task)."
 metadata:
   tier: task
-  version: 0.6.0
+  version: 0.6.1
 allowed-tools:
   - Bash
   - Read
@@ -108,7 +108,8 @@ _PR_HOST=none
 [ -n "$(git remote 2>/dev/null | head -1)" ] && command -v gh >/dev/null 2>&1 && _PR_HOST=gh
 echo "PR_HOST: $_PR_HOST"
 # Factory tools (M031): what the project switched on; Step 7 skips a tool by these lines.
-_BIN="${CLAUDE_SKILL_DIR}/../../bin"
+_BIN=$(cd "${CLAUDE_SKILL_DIR}/../../bin" 2>/dev/null && pwd -P || echo "${CLAUDE_SKILL_DIR}/../../bin")
+echo "YT_BIN=$_BIN"
 _MERGE_BY=human
 command -v yt_prefs >/dev/null 2>&1 && { yt_prefs "$_YT_DIR" >/dev/null; _MERGE_BY="$YT_PREF_MERGE_BY"; }
 echo "MERGE_BY: $_MERGE_BY"
@@ -196,7 +197,7 @@ echo "HANDOFF_AUTO: ${_AUTO_TS:-none} ($_AUTO)"
 
 ## Procedure
 
-The scripts live in `${CLAUDE_SKILL_DIR}/../../bin/`; the commands below are written without that path. The work contract (`ytstack:minimal-code`) holds for orchestration as it does for code: no review round, verifier or check that the plan does not name, and evidence for the same commit in the same environment stands.
+The scripts live in the directory the preamble prints as `YT_BIN=<dir>` (also in the SessionStart context); the commands below are written without that path. Run each as `"$YT_BIN/ytstack-<name>"` with the newest printed value set in the same command (`YT_BIN=<dir>; "$YT_BIN/ytstack-frontier" list`): a shell variable does not survive a tool call, and a versioned path from before an update or a compaction can name a removed version. The work contract (`ytstack:minimal-code`) holds for orchestration as it does for code: no review round, verifier or check that the plan does not name, and evidence for the same commit in the same environment stands.
 
 **Step 2 -- HARD-GATE.** `HAS_YTSTACK: no`: stop, "run `ytstack:init-project` or `ytstack:adopt-brownfield` first". `SLICE_PLANS: 0` and `no lanes`: stop, "nothing to coordinate; run `ytstack:slice-milestone`". One milestone with a handful of independent slices and no lane yet: `ytstack:spawn-milestone-team` does that with less ceremony; say so and stop unless the user asked for coordinator mode.
 
@@ -240,7 +241,7 @@ A lane named in the `blocks:` of an open or asked question is not ready, whateve
 
 **The route, also when you merge yourself.** A merge you make outside `finish-lane` (a pull request outside the lanes, a project rule that the coordinator merges) reads the route for the reviewed head first and follows `finish-lane` Step 11: `MERGE_BY: risk` merges only after `route: unattended`; `coordinator` merges and names the route in the status; `human`, or a standing instruction that reserves the merge, leaves the merge to a person with the `reason:` lines. The merge itself is `ytstack-finish-lane -C <worktree> merge --pr <N> --at <reviewed head> --verdict-pattern '^Verdict: approved'`, never `gh pr merge` by hand. Exit 0 of the route means `unattended`; everything else, an error included, means a person.
 
-**Watching pull requests.** Polling happens outside the model. The PR watch counts as on only when `pr_watch=on` is set in `~/.ytstack/config` (`docs/pr-watch.md`) and the worker runs (`PR_WATCH: on, heartbeat <n> s ago`, under 600). The flag alone enables only the hooks; without a fresh heartbeat nothing polls. With the PR watch on, the worker reports red checks, unresolved bot threads, conflicts and merges to this session with the next prompt, also for pull requests the lanes' subagents opened. The `register` call defaults to this session; check that its output says `registered to claude:<id>` in Claude Code. Only the coordinator runs it; a session that works in the same repository outside this coordination keeps its own PRs (`register --pr N`), and `--all-open` skips the ones another session owns. Without the PR watch, start `ytstack-watch` as a background process; on a host with a monitor tool, through that tool, so that each new line reaches you as an event. It prints a line only when a head moved, the checks changed, a review arrived, mergeability changed or a pull request closed, and it ends when all are merged or closed; start it again with the new list when a pull request opens. Act on a line or a notice: red checks go back to the lane's worker with the name of the check; a review on a commit that is not the head is no review of the head. Never read status in a loop from the conversation, with or without a sleep. The single read of Step 4 before an action is not polling.
+**Watching pull requests.** Polling happens outside the model. The PR watch counts as on only when `pr_watch=on` is set in `~/.ytstack/config` (`docs/pr-watch.md`) and the worker runs (`PR_WATCH: on, heartbeat <n> s ago`, under 600). The flag alone enables only the hooks; without a fresh heartbeat nothing polls. With the PR watch on, the worker reports red checks, unresolved bot threads, conflicts and merges to this session with the next prompt, also for pull requests the lanes' subagents opened. The `register` call defaults to this session; check that its output says `registered to claude:<id>` in Claude Code. `--all-open` takes only open pull requests by your GitHub login (the lanes' workers open them under it) and skips drafts, a `do-not-merge` label and the ones another session owns, each by name; `--author <login>[,<login>]`, `--include-drafts` and `--include-labelled` widen it only where this coordination owns such a pull request. Only the coordinator runs it; a session that works in the same repository outside this coordination keeps its own PRs (`register --pr N`). Without the PR watch, start `ytstack-watch` as a background process; on a host with a monitor tool, through that tool, so that each new line reaches you as an event. It prints a line only when a head moved, the checks changed, a review arrived, mergeability changed or a pull request closed, and it ends when all are merged or closed; start it again with the new list when a pull request opens. Act on a line or a notice: red checks go back to the lane's worker with the name of the check; a review on a commit that is not the head is no review of the head. Never read status in a loop from the conversation, with or without a sleep. The single read of Step 4 before an action is not polling.
 
 **After a merge.** A pull request that merged, also when a person merged it: set its lane to `merged`, then the release watch and the review lessons of the table. A merged lesson lane also closes its lesson: `ytstack-signals set F### --state fixed` once this checkout has the merged check (the script refuses while the file is missing). The receipt goes into the next status; `not arrived` or `unhealthy` is a status at once. You deploy nothing and roll nothing back: a countermeasure on the target is a step for the human (`ytstack:handover-step`).
 

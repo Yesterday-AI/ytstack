@@ -65,7 +65,8 @@ if ! [[ "$SUBJECT" =~ $PATTERN ]]; then
   exit 0
 fi
 
-SUMMARY_FILE="$YT_DIR/$TASK_REF-SUMMARY.md"
+# The milestone's directory: flat, or milestones/M###/ once it lives there (#70).
+SUMMARY_FILE=$(yt_artifact_path "$YT_DIR" "$TASK_REF-SUMMARY.md")
 [ -f "$SUMMARY_FILE" ] && exit 0   # stub-once
 
 COMMIT_SHA=$(git -C "$YT_TOPLEVEL" rev-parse --short HEAD 2>/dev/null || echo unknown)

@@ -40,7 +40,8 @@ if [ -z "$TASK_ID" ]; then
   exit 0
 fi
 
-SUMMARY_FILE="$YT_DIR/$TASK_ID-SUMMARY.md"
+# The milestone's directory: flat, or milestones/M###/ once it lives there (#70).
+SUMMARY_FILE=$(yt_artifact_path "$YT_DIR" "$TASK_ID-SUMMARY.md")
 
 # Don't overwrite an existing summary
 if [ -f "$SUMMARY_FILE" ]; then
@@ -89,7 +90,7 @@ Task was marked complete by the Agent Teams lead or by self-claim. Check \`~/.cl
 EOF
 
 # Also flip the slice-plan checkbox if we can
-SLICE_PLAN="$YT_DIR/$MILESTONE-$SLICE-PLAN.md"
+SLICE_PLAN=$(yt_artifact_path "$YT_DIR" "$MILESTONE-$SLICE-PLAN.md")
 if [ -f "$SLICE_PLAN" ]; then
   if sed --version >/dev/null 2>&1; then
     sed -i "s/^- \[ \] $TASK /- [x] $TASK /" "$SLICE_PLAN" 2>/dev/null || true

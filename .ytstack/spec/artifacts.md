@@ -20,7 +20,7 @@ sources:
   - docs/ux/signal-format.md
   - docs/statusline.md
   - docs/ux/external-plans.md
-verified_at: c5b405d
+verified_at: db07481
 ---
 
 # artifacts
@@ -36,7 +36,7 @@ The `.ytstack/` artifact model: the Markdown files that hold a project's memory 
 - `yt_resolve_yt_dir` in `hooks/lib/git-ctx.sh` picks the directory: `<toplevel>/.ytstack` if it exists (project scope, tracked in git), otherwise `~/.ytstack/projects/<repo key>` (user scope), otherwise none. The repo key is a hash of the git common dir, so all worktrees of a repository share one user-scope directory.
 - `init-project` asks for project, user or both and records the answer as `scope:` in the `PROJECT.md` frontmatter. `both` writes identical files to both directories; the resolver then reads the project one. `adopt-brownfield` always uses project scope.
 - In project scope a linked worktree has its own copy of `.ytstack/` at its branch's state.
-- Skills write a flat layout: every file directly in the directory, except `quick/`, `codebase/`, `backlog/` and `archive/`. Readers that go through `yt_find_artifacts` also find files under `milestones/`, `decisions/`, `backlog/` and `quick/`.
+- Skills write a flat layout by default: every file directly in the directory, except `quick/`, `codebase/`, `backlog/` and `archive/`. Readers that go through `yt_find_artifacts` also find files under `milestones/`, `decisions/`, `backlog/` and `quick/`. A milestone whose files already live in a subdirectory keeps getting its new files there (issue #70). `yt_artifact_dir <yt_dir> <id>` names the directory: the one that holds `<prefix>-ROADMAP.md`, else the one that holds any `<prefix>-*` file, searched flat first, then in `milestones/`, `milestones/*/`, `backlog/`, `backlog/*/`; else the flat directory. The prefix is the id up to its first `-` (`M005` for `M005-S02-T01`, `OPS` for a backlog prefix). `yt_artifact_path <yt_dir> <file>` gives one file: where it exists, else in that directory. The skills that write or read a milestone's files print it as `ARTIFACT_DIR` (with `$_YT_DIR` as the fallback when the library is not reachable); `hooks/post-tool-use-bash` and `hooks/task-completed` write their summaries there. Skills and hooks that count or list a milestone's files read every layout, one file per name, so files that landed flat before the milestone moved count too. Nothing is moved, and a milestone that lives flat stays flat; `plan-milestone` counts moved milestones when it picks the next number.
 
 ### Files and writers
 
@@ -165,9 +165,9 @@ Automatic handoffs and the session journal are not artifacts. `hooks/pre-compact
 - Templates: `skills/init-project/SKILL.md` and `skills/adopt-brownfield/SKILL.md` (the core files, `codebase/`, `backlog/`), `skills/plan-milestone/SKILL.md`, `skills/slice-milestone/SKILL.md`, `skills/plan-task/SKILL.md`, `skills/summarize-task/SKILL.md`, `skills/quick-task/SKILL.md`, `skills/handoff-session/SKILL.md`.
 - Cleanup: `skills/reconcile/SKILL.md`. States `dropped` and `shipped-informally`: `skills/reassess-roadmap/SKILL.md`.
 - Technical spec: scaffolds in `skills/init-project/SKILL.md` (Step 7) and `skills/adopt-brownfield/SKILL.md` (Steps 2 and 7); "Spec impact" in `skills/plan-task/SKILL.md` (Step 7); the closure check in `skills/summarize-task/SKILL.md` (preamble and Step 8); the tool `bin/ytstack-spec`; this repository's own spec under `.ytstack/spec/`.
-- `hooks/lib/git-ctx.sh`: `yt_resolve_yt_dir`, `yt_state_lint`, `yt_progress_parse`, `yt_commit_ref_pattern`, `yt_task_commits`, `yt_find_artifacts`, `yt_state_base`, `yt_state_dir`, `yt_ensure_gitignore`.
+- `hooks/lib/git-ctx.sh`: `yt_resolve_yt_dir`, `yt_state_lint`, `yt_progress_parse`, `yt_commit_ref_pattern`, `yt_task_commits`, `yt_find_artifacts`, `yt_artifact_dir`, `yt_artifact_path`, `yt_state_base`, `yt_state_dir`, `yt_ensure_gitignore`.
 - Hooks that touch artifacts: `hooks/post-tool-use-bash`, `hooks/task-completed`. Out-of-tree writers: `hooks/pre-compact`, `hooks/session-end`.
-- Tests: `tests/git-ctx.test.sh` (scope resolution, state dirs, commit discovery, lint, `progress`, gitignore block), `tests/skill-preambles.test.sh` (`reconcile` classes, the external plan offer of `reconcile` and `adopt-brownfield`, `Q###` numbering, tracker, handoff lookup), `tests/post-tool-use-bash.test.sh` (stub once, ref match), `tests/pre-compact.test.sh` (`HANDOFF.md` untouched), `tests/ytstack-status.test.sh` (`progress` block).
+- Tests: `tests/git-ctx.test.sh` (scope resolution, state dirs, commit discovery, lint, `progress`, gitignore block, the artifact directory), `tests/skill-preambles.test.sh` (a milestone in `milestones/M###/`, `reconcile` classes, the external plan offer of `reconcile` and `adopt-brownfield`, `Q###` numbering, tracker, handoff lookup), `tests/post-tool-use-bash.test.sh` (stub once, ref match), `tests/pre-compact.test.sh` (`HANDOFF.md` untouched), `tests/ytstack-status.test.sh` (`progress` block).
 
 ## How to verify
 
@@ -191,7 +191,7 @@ Automatic handoffs and the session journal are not artifacts. `hooks/pre-compact
 - DECISIONS.md -- "2026-11-13: `STATE.md` is a pointer with a size bound; history leaves it through `reconcile`, a closed milestone is folded into the spec (M022-S03)"; "2026-11-15: A plan outside `.ytstack/` is detected by a script and mapped by the agent, after one question (M031-S05, issue #54)" (the external plan class)
 - DECISIONS.md -- "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)" (the lanes table is not part of `STATE.md`, which narrows the proposal in issue #34)
 - DECISIONS.md -- "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/`; `STANDING.md` stays valid (issue #57)"
-- DECISIONS.md -- "2026-04-23: `.ytstack/` location is user-chosen (project vs user vs both)"
+- DECISIONS.md -- "2026-04-23: `.ytstack/` location is user-chosen (project vs user vs both)"; "2026-11-15: New artifacts follow the directory a milestone already lives in (issue #70)"
 - DECISIONS.md -- "2026-05-31: active_slice is plan-task-owned and team-member-guarded (M012 / issue #21-RC1)"
 - DECISIONS.md -- "2026-05-31: post-tool-use-bash is stub-once; summarize-task owns commit-to-task linking (M015 / issue #22)"
 - DECISIONS.md -- "2026-11-07: Hooks never write relative to CLAUDE_PROJECT_DIR; volatile state lives out-of-tree, per session and per worktree" (extends the stub-once entry to all hooks; ends hook writes to `HANDOFF.md` and the in-tree journal; user scope is keyed by the repo key, which narrows the slug path in the 2026-04-23 entry)
