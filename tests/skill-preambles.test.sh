@@ -210,6 +210,18 @@ for s in $SKILLS; do
       has "$s: planned-never-sliced counted"  "$OUT" "PLANNED_NEVER_SLICED: 1"
       has "$s: untracked counted (3 new files)" "$OUT" "UNTRACKED: 3"
       rm -f "$WT/.ytstack/M999-S01-T09-SUMMARY.md" "$WT/.ytstack/M777-ROADMAP.md" "$WT/.ytstack/stray.md"
+      has "$s: clean fixture -> no task without a plan" "$OUT" "TASKS_WITHOUT_PLAN: 0"
+      has "$s: clean fixture -> the pointer is not behind" "$OUT" "STATE_POINTER: pointer: no milestone in progress"
+      # issue #76: a slice in progress whose task has no plan, STATE on a closed milestone
+      cp "$WT/.ytstack/M999-ROADMAP.md" "$TMP/rm999.bak"
+      printf -- '---\nmilestone: M999\nstatus: done\n---\n- [x] S01 -- x\n' > "$WT/.ytstack/M999-ROADMAP.md"
+      printf -- '---\nmilestone: M888\nstatus: in-progress\n---\n- [ ] S01 -- y\n' > "$WT/.ytstack/M888-ROADMAP.md"
+      printf -- '---\nstatus: planned\n---\n## Tasks\n\n- [ ] T01 -- y in `src/y.sh`\n' > "$WT/.ytstack/M888-S01-PLAN.md"
+      run_pre "$P" "$WT"
+      has "$s: a task without a plan is counted" "$OUT" "TASKS_WITHOUT_PLAN: 1"
+      has "$s: and listed with the plan to write" "$OUT" "M888-S01-T01	.ytstack/M888-S01-T01-PLAN.md	1"
+      has "$s: a pointer on a closed milestone is behind" "$OUT" "STATE_POINTER: pointer: behind -- current_milestone M999"
+      cp "$TMP/rm999.bak" "$WT/.ytstack/M999-ROADMAP.md"; rm -f "$WT/.ytstack/M888-ROADMAP.md" "$WT/.ytstack/M888-S01-PLAN.md"
       ext_plan_checks ;;
     reassess-roadmap)
       # bounded work (M023): open gates, non-converging reviews, the two numbers

@@ -84,7 +84,7 @@ Read from `PREFERENCES.md` in the resolved `.ytstack` directory by `yt_prefs` in
 ### The technical spec in the loop
 
 - `plan-task` works out a task's spec impact from the area files that cover the planned files; `summarize-task` does not close a task whose named area was not updated ([artifacts.md](artifacts.md)).
-- `code-review` gives the reviewer the plan's "Spec impact" and the area files of the changed paths. The reviewer reads those against the diff and nothing else of the spec. The verifier does the same for the task it verifies.
+- `code-review` gives the reviewer the plan's "Spec impact" and the area files of the changed paths. The reviewer reads those against the diff and nothing else of the spec; with a `## Checks` section in `REVIEW.md`, a guard the diff adds or changes without its line there is a finding too. The verifier does the same for the task it verifies.
 - `reassess-roadmap` answers the drift report of `bin/ytstack-spec` at the slice boundary, once per area: correct the description, or set `verified_at`.
 - `resume-session`, `handoff-session` and the SessionStart injection name `spec/SPEC.md`; they do not restate it. `quick-task` corrects an area file only when the change made a statement in it false.
 
@@ -130,7 +130,7 @@ Formats: `docs/ux/coordinator-format.md`. The four skills below are for the sess
 - `vendor/**` is never edited. Different behavior goes into the wrapper.
 - No skill installs, calls or references a gstack runtime. `bin/ytstack-check` (`check_gstack_adapted`) fails an adapted skill without `metadata.upstream`, with such a reference, a symlink or an em-dash.
 - No preamble uses the banned patterns listed in `docs/ux/skill-structure.md`; `bin/ytstack-check` fails on them and on a shell preamble that does not source the lib.
-- Skills and agents never delete, move or revert `.ytstack/` artifacts. `reconcile` is the only skill that moves them, and it asks first.
+- Skills and agents never delete, move or revert `.ytstack/` artifacts. `reconcile` is the only skill that moves them, and it asks first; it is also the one that writes task-plan skeletons for tasks that ran without a plan and moves a `STATE.md` pointer that is behind, each after its own question ([artifacts.md](artifacts.md)).
 - No skill merges to a shared branch, pushes or opens a pull request unless the user asked for it (`ship`, `finish-branch`).
 - Directives are not user-invocable.
 

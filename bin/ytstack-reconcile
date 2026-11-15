@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+# ytstack reconcile helpers: the two migration classes of ytstack:reconcile
+# (issue #76) that need more than a file list. The skill asks first; this
+# script lists without writing, and writes only with --write or --fix.
+#
+#   ytstack-reconcile [-C DIR] skeletons [--write] [--slice M###-S## ...]
+#   ytstack-reconcile [-C DIR] pointer [--fix]
+#
+# skeletons  one tab separated line per open task ("- [ ] T## -- ...") of a
+#            slice that has no task plan at all and no "## Files" of its own,
+#            in a slice that is not done or dropped, of a milestone whose
+#            roadmap is not done, dropped, shipped-informally or backlog:
+#              <M###-S##-T##> <the plan to write> <number of paths found>
+#            The plan goes beside the slice plan. --write writes each one in
+#            the format of skills/plan-task (Step 9), never over a file:
+#            Files from the task line's backticked paths, else from the slice
+#            plan's "Own:" or "Files:" lines, else a TODO; Spec impact one
+#            line per area of those paths (bin/ytstack-spec areas) with TODO
+#            fields, which `ytstack-spec impact` does not accept until filled;
+#            a TODO verification. Frontmatter "skeleton: reconcile <date>".
+#            --slice (repeatable) keeps the tasks of the named slices.
+# pointer    "pointer: ok -- ...", "pointer: no milestone in progress", or
+#            "pointer: behind -- ..." when current_milestone in STATE.md is
+#            not the newest milestone whose roadmap is in-progress and is
+#            older than it, none, or closed (done, dropped,
+#            shipped-informally). Names the first open slice of the target
+#            ("- [ ] S##" in its roadmap). --fix sets current_milestone,
+#            active_slice, active_task (none) and last_updated in the
+#            frontmatter of STATE.md and touches nothing else.
+#
+# Exit codes: 0 done; 10 pointer behind (without --fix); 1 no .ytstack or no
+# STATE.md for pointer; 64 usage.
+
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/hooks/lib/git-ctx.sh"
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+
+usage() { sed -n '6,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+bad_usage() { usage >&2; exit 64; }
+[ -d "$DIR" ] || bad_usage
+case "$CMD" in skeletons|pointer) ;; -h|--help|help) usage; exit 0 ;; *) bad_usage ;; esac
+
+yt_git_ctx "$DIR"
+yt_resolve_yt_dir >/dev/null
+TOP="$YT_TOPLEVEL"
+[ -n "${YT_DIR:-}" ] && [ -d "$YT_DIR" ] || { echo "ytstack-reconcile: no .ytstack directory for $DIR" >&2; exit 1; }
+
+rel() { case "$1" in "$TOP"/*) printf '%s' "${1#"$TOP"/}" ;; *) printf '%s' "$1" ;; esac; }
+status_of() { sed -n '2,20{s/^status:[ ]*//p;}' "$1" | head -1; }
+# section <file> <heading>: the body of "## <heading>", fences respected
+section() {
+  awk -v h="## $2" '
+    /^```/ { fence = !fence }
+    !fence && /^## / { t = $0; sub(/[ \t]+$/, "", t); on = (t == h); next }
+    on { print }
+  ' "$1"
+}
+# paths_in: backticked tokens on stdin that look like paths
+paths_in() { grep -oE '`[^`]+`' | tr -d '`' | grep -E '[/.]' | grep -v ' ' | awk '!seen[$0]++'; }
+# open_milestones: roadmap files of milestones still to be worked on
+open_milestones() {
+  local f
+  yt_find_artifacts "$YT_DIR" "M[0-9][0-9][0-9]-ROADMAP.md" | while IFS= read -r f; do
+    case "$(status_of "$f")" in done|dropped|shipped-informally|backlog) ;; *) printf '%s\t%s\n' "$(basename "$f")" "$f" ;; esac
+  done | sort | cut -f2-
+}
+
+# ---- skeletons -----------------------------------------------------------------
+# candidates: "<ref>\t<plan to write>\t<n>\t<slice plan>\t<task line>" per task
+candidates() {
+  local rm m sp s t line to paths
+  open_milestones | while IFS= read -r rm; do
+    m=$(basename "$rm" -ROADMAP.md)
+    yt_find_artifacts "$YT_DIR" "$m-S[0-9][0-9]-PLAN.md" | sort | while IFS= read -r sp; do
+      s=$(basename "$sp" -PLAN.md)
+      case "$(status_of "$sp")" in done|dropped) continue ;; esac
+      [ -z "$(section "$sp" Files | grep -v '^[[:space:]]*$')" ] || continue
+      [ -z "$(yt_find_artifacts "$YT_DIR" "$s-T[0-9][0-9]-PLAN.md")" ] || continue
+      section "$sp" Tasks | sed -n 's/^- \[ \] \(T[0-9][0-9]\) -- \(.*\)$/\1	\2/p' | while IFS='	' read -r t line; do
+        to="$(dirname "$sp")/$s-$t-PLAN.md"
+        paths=$(printf '%s\n' "$line" | paths_in)
+        # The slice plan's owner lines stand in when the task line names nothing.
+        [ -n "$paths" ] || paths=$(grep -E '^[-* ]*(\*\*)?(Own|Owns|Files)(\*\*)?:' "$sp" | paths_in)
+        printf '%s\t%s\t%s\t%s\t%s\n' "$s-$t" "$to" "$(printf '%s' "$paths" | grep -c .)" "$sp" "$line"
+      done
+    done
+  done
+}
+
+write_skeleton() { # <ref> <to> <slice plan> <task line>
+  local ref="$1" to="$2" sp="$3" line="$4" paths p areas a project now
+  paths=$(printf '%s\n' "$line" | paths_in)
+  [ -n "$paths" ] || paths=$(grep -E '^[-* ]*(\*\*)?(Own|Owns|Files)(\*\*)?:' "$sp" | paths_in)
+  project=$(sed -n '2,10{s/^name:[ ]*//p;}' "$YT_DIR/PROJECT.md" 2>/dev/null | head -1 | tr -d '"')
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  {
+    printf -- '---\nmilestone: %s\nslice: %s\ntask: %s\nproject: %s\ncreated: %s\nstatus: planned\nskeleton: reconcile %s\n---\n\n' \
+      "${ref%%-*}" "$(printf '%s' "$ref" | cut -d- -f2)" "${ref##*-}" "${project:-$(basename "$TOP")}" "$now" "${now%%T*}"
+    printf '# %s -- Task Plan\n\n**Summary:** %s\n\n## Files\n\n' "$ref" "$line"
+    if [ -n "$paths" ]; then
+      printf '%s\n' "$paths" | sed 's/^/- `/; s/$/`/'
+      printf -- '- TODO: check these paths (taken from %s) and add Create/Modify/Delete\n' "$(rel "$sp")"
+    else
+      printf -- '- TODO: the exact paths to create, modify or delete (%s names none for this task)\n' "$(rel "$sp")"
+    fi
+    printf '\n## What this does\n\nTODO: what the code does, in prose or pseudocode. From the slice plan: %s\n\n## Spec impact\n\n' "$line"
+    if [ ! -f "$YT_DIR/spec/SPEC.md" ]; then
+      printf 'none -- the project has no technical spec\n'
+    else
+      set --
+      while IFS= read -r p; do [ -z "$p" ] || set -- "$@" "$p"; done <<EOF
+$paths
+EOF
+      areas=""; [ $# -eq 0 ] || areas=$(bash "$ROOT/bin/ytstack-spec" -C "$TOP" areas --names "$@" 2>/dev/null)
+      if [ -n "$areas" ]; then
+        for a in $areas; do printf -- '- %s: TODO section -- TODO what changes\n' "$a"; done
+        printf '\nTODO: keep the lines of the areas this task changes; when it changes none, replace them with "none -- <reason>".\n'
+      elif [ -n "$paths" ]; then
+        printf 'TODO: none -- not covered by an area (confirm, or name the area that should cover these paths)\n'
+      else
+        printf 'TODO: one line per area the task changes, "- <area>: <section> -- <what changes>", or "none -- <reason>"\n'
+      fi
+    fi
+    printf '\n## Verification\n\n```bash\nTODO: one or two commands that show this task done\n```\n\nRuns: once. Environment: local checkout.\n\n'
+    printf 'Success: command exits 0 and shows expected output. Failure: re-read plan, check if spec drifted.\n\n'
+    printf '## Done signal\n\nRun `/ytstack:summarize-task` after execution to mark complete and advance STATE.md.\n'
+  } > "$to.tmp.$$" || { rm -f "$to.tmp.$$"; return 1; }
+  # Never over an existing plan: the link fails when the name is taken.
+  if ln "$to.tmp.$$" "$to" 2>/dev/null; then rm -f "$to.tmp.$$"; echo "wrote $(rel "$to")"
+  else rm -f "$to.tmp.$$"; echo "kept $(rel "$to"): it exists"; fi
+}
+
+cmd_skeletons() {
+  local write=no only="" ref to n sp line
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --write) write=yes ;;
+      --slice) case "${2:-}" in M[0-9][0-9][0-9]-S[0-9][0-9]) only="$only $2 "; shift ;; *) bad_usage ;; esac ;;
+      *) bad_usage ;;
+    esac
+    shift
+  done
+  candidates | while IFS='	' read -r ref to n sp line; do
+    case "$only" in ""|*" ${ref%-T[0-9][0-9]} "*) ;; *) continue ;; esac
+    if [ "$write" = yes ]; then write_skeleton "$ref" "$to" "$sp" "$line"
+    else printf '%s\t%s\t%s\n' "$ref" "$(rel "$to")" "$n"; fi
+  done
+}
+
+# ---- pointer -------------------------------------------------------------------
+cmd_pointer() {
+  local fix=no sf="$YT_DIR/STATE.md" m s t target="" tslice rm now
+  while [ $# -gt 0 ]; do
+    case "$1" in --fix) fix=yes ;; *) bad_usage ;; esac
+    shift
+  done
+  [ -f "$sf" ] || { echo "ytstack-reconcile: no STATE.md in $(rel "$YT_DIR")" >&2; return 1; }
+  m=$(sed -n 's/^current_milestone:[ ]*//p' "$sf" | head -1); m=${m:-none}
+  s=$(sed -n 's/^active_slice:[ ]*//p' "$sf" | head -1); s=${s:-none}
+  t=$(sed -n 's/^active_task:[ ]*//p' "$sf" | head -1); t=${t:-none}
+  while IFS= read -r rm; do
+    [ -n "$rm" ] && [ "$(status_of "$rm")" = in-progress ] && target=$(basename "$rm" -ROADMAP.md)
+  done <<EOF
+$(open_milestones)
+EOF
+  [ -n "$target" ] || { echo "pointer: no milestone in progress"; return 0; }
+  if [ "$m" = "$target" ]; then echo "pointer: ok -- current_milestone $m"; return 0; fi
+  case "$m" in
+    M[0-9][0-9][0-9])
+      rm=$(yt_find_artifacts "$YT_DIR" "$m-ROADMAP.md" | head -1)
+      case "$([ -z "$rm" ] || status_of "$rm")" in
+        done|dropped|shipped-informally) ;;
+        *) [ "$((10#${m#M}))" -lt "$((10#${target#M}))" ] || { echo "pointer: ok -- current_milestone $m"; return 0; } ;;
+      esac ;;
+  esac
+  rm=$(yt_find_artifacts "$YT_DIR" "$target-ROADMAP.md" | head -1)
+  tslice=$(sed -n 's/^- \[ \] \(S[0-9][0-9]\) .*/\1/p' "$rm" | head -1); tslice=${tslice:-none}
+  if [ "$fix" = no ]; then
+    echo "pointer: behind -- current_milestone $m, active_slice $s; newest milestone in progress: $target, first open slice $tslice"
+    return 10
+  fi
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  awk -v m="$target" -v s="$tslice" -v now="$now" '
+    NR == 1 && $0 == "---" { fm = 1; print; next }
+    fm && $0 == "---" { fm = 0 }
+    fm && /^current_milestone:/ { print "current_milestone: " m; next }
+    fm && /^active_slice:/ { print "active_slice: " s; next }
+    fm && /^active_task:/ { print "active_task: none"; next }
+    fm && /^last_updated:/ { print "last_updated: " now; next }
+    { print }
+  ' "$sf" > "$sf.tmp.$$" && mv "$sf.tmp.$$" "$sf" || { rm -f "$sf.tmp.$$"; echo "ytstack-reconcile: could not write $(rel "$sf")" >&2; return 1; }
+  echo "fixed: current_milestone $m -> $target, active_slice $s -> $tslice, active_task $t -> none"
+}
+
+case "$CMD" in
+  skeletons) cmd_skeletons "$@" ;;
+  pointer)   cmd_pointer "$@" ;;
+esac

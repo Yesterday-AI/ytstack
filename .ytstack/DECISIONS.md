@@ -1296,3 +1296,23 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - This repository keeps no `REVIEW.md` yet; its checks are listed in `checks-and-evals.md`.
 
 **Supersedes:** None.
+
+## 2026-11-15: `reconcile` writes task-plan skeletons and fixes the STATE pointer, after asking; the logic is `bin/ytstack-reconcile` (issue #76)
+
+**Context:** A project ran three milestones with no task plans, and `current_milestone` stayed two milestones behind while the lint warned at every start. `reconcile` did not touch either: it never wrote plans and never edited the pointer.
+
+**Options considered:**
+- A) A new skill (`ytstack-adopt-plan`).
+- B) Two classes of `reconcile`, one question each, with a script that lists without writing and writes only with `--write` / `--fix`.
+
+**Chose:** B.
+
+**Reason:** Both are leftovers of work that went past the loop, which is what `reconcile` is for, and its contract (ask per class, never delete, log every choice) is the one these edits need. The listing has to be exact (open milestones, slices with no task plan at all, the newest roadmap in progress), so it is a tested script and not prose.
+
+**How to apply:**
+- Only slices with no task plan at all are listed: a slice planned one task at a time is the normal loop, not a leftover.
+- A skeleton fills only what the slice plan says and marks the rest `TODO`; its Spec impact is not accepted by `ytstack-spec impact` until a person or `plan-task` fills it. Existing plans are never written over.
+- The pointer target is the newest roadmap with `status: in-progress`; a planned or backlog milestone is never made current here (the user picks, as after an external-plan mapping). `active_task` becomes `none`.
+- This narrows the rule "no edits to STATE.md pointer fields" of `reconcile` (Step 4, and the artifacts area) to: only through `pointer --fix`, after a yes.
+
+**Supersedes:** None.

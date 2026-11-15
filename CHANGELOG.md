@@ -40,6 +40,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `code-review` 0.5.1 treats a guard without its line as a finding, and
   `ytstack-finish-lane route` prints a `checks:` line when a change edits CI
   and the inventory did not move.
+- **`reconcile` migrates a project that ran past `plan-task`** (issue #76):
+  two new classes, each asked once. Tasks of open slices without any task
+  plan get skeletons in `plan-task`'s format (Files from the task line or the
+  slice plan's `Own:` lines, Spec impact per area with `TODO` fields that
+  `ytstack-spec impact` rejects until filled, a `TODO` verification); a
+  `STATE.md` pointer on a closed or older milestone than the newest one in
+  progress is moved to it. The logic is the new `bin/ytstack-reconcile`
+  (`skeletons [--write] [--slice]`, `pointer [--fix]`). `reconcile` 0.4.0.
 
 ## [0.11.0] - 2026-11-15
 
