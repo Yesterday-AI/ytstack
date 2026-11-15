@@ -306,6 +306,19 @@ $STATE_CONTEXT"
 # non-Claude adapter prepends (YTSTACK_HOST_CONTEXT, e.g. codex/adapter.md)
 # is not counted; that host's own limit lives in its hooks config.
 _HOST="${YTSTACK_HOST_CONTEXT:-}"; _HOST_LEN=${#_HOST}
+_NEXT_SHORT="$NEXT_ACTION"
+# First the standing lines shrink to the three newest at 100 characters: the
+# next action outranks a long list (the rest is a pointer line away).
+if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ] && [ -n "${_SL:-}" ]; then
+  STANDING_LINES="$_SH
+$(yt_standing_lines "$YT_DIR" "$_ROLE" 3 | cut -c1-100)"
+  STATE_CONTEXT=$(build_state_context "$NEXT_ACTION")
+  FULL_CONTEXT="$DIRECTIVE
+
+---
+
+$STATE_CONTEXT"
+fi
 if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ]; then
   # Cut the excerpt to what still fits instead of dropping it: the next action
   # is the one line a session needs most. Below 200 characters it says nothing
@@ -358,17 +371,21 @@ $STATE_CONTEXT"
 
 $STATE_CONTEXT"
   fi
-  # The standing lines: first the three newest at 100 characters, then a pointer.
-  if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ] && [ -n "${_SL:-}" ]; then
-    STANDING_LINES="$_SH
-$(yt_standing_lines "$YT_DIR" "$_ROLE" 3 | cut -c1-100)"
-    STATE_CONTEXT=$(build_state_context "$_NEXT_SHORT")
-    FULL_CONTEXT="$DIRECTIVE
+  # The next action was left out before the later blocks shrank: give it back
+  # the room they freed.
+  case "$_NEXT_SHORT" in "(omitted:"*)
+    _KEEP=$(( 9500 - (${#FULL_CONTEXT} - _HOST_LEN - ${#_NEXT_SHORT}) - 40 ))
+    if [ "$_KEEP" -ge 200 ] && [ "$_KEEP" -lt "${#NEXT_ACTION}" ]; then
+      _NEXT_SHORT="${NEXT_ACTION:0:$_KEEP} ... (cut: rest in STATE.md)"
+      STATE_CONTEXT=$(build_state_context "$_NEXT_SHORT")
+      FULL_CONTEXT="$DIRECTIVE
 
 ---
 
 $STATE_CONTEXT"
-  fi
+    fi ;;
+  esac
+  # Last the standing lines shrink to a pointer.
   if [ $(( ${#FULL_CONTEXT} - _HOST_LEN )) -gt 9500 ] && [ -n "$STANDING_LINES" ]; then
     STANDING_LINES="Standing instructions: $STANDING_N in force for role $_ROLE (cut for the cap): bin/ytstack-standing list, before you act."
     STATE_CONTEXT=$(build_state_context "$_NEXT_SHORT")

@@ -157,6 +157,21 @@ CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty
 has   "ss-standing: coordinate marker -> role coordinator" "$CTX" "(role: coordinator"
 has   "ss-standing: coordinator sees its entry" "$CTX" "20261101T1200Z-coord (the coordinator)"
 if [ "${#CTX}" -le 9500 ]; then ok "ss-standing: light project fits the guard (${#CTX})"; else bad "ss-standing: light project fits the guard" "${#CTX}"; fi
+# A long next action and fifty long entries: the list shrinks to three before the next action is cut.
+awk -v lu="$(date -u +%Y-%m-%dT%H:%M:%SZ)" 'BEGIN { printf "project: p\nlast_updated: %s\ncurrent_milestone: M001\nactive_slice: S01\nactive_task: T01\n\n## Next action\n\n", lu; for (i = 0; i < 300; i++) printf "word%d ", i; print "" }' > "$LIGHT/.ytstack/STATE.md"
+for i in 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39; do
+  printf -- '---\ngiven: 2026-11-15T10:%s:00Z\nscope: the coordinator and every lane\nsupersedes:\n---\n\nThis is a very long standing instruction number %s that goes on and on about what must never happen and why.\n' "$i" "$i" > "$LIGHT/.ytstack/standing/20261115T10${i}Z-s$i.md"
+done
+run session-start "{\"session_id\":\"x9\",\"cwd\":$(jstr "$LIGHT"),\"source\":\"compact\"}" XDG_STATE_HOME="$TMP/xdg"
+CTX=$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
+case "$CTX" in
+  *"Next action:
+word0 word1"*|*"(omitted: see STATE.md"*) ok "ss-standing: long list -> the next action is cut by the room left, not by the list" ;;
+  *) bad "ss-standing: long list -> the next action is cut by the room left, not by the list" ;;
+esac
+lacks "ss-standing: long list -> not cut to the pointer" "$CTX" "(cut for the cap): bin/ytstack-standing list"
+has   "ss-standing: long list -> three lines and a count of the rest" "$CTX" "- ... 29 more: bin/ytstack-standing list"
+if [ "${#CTX}" -le 9500 ]; then ok "ss-standing: long list fits the guard (${#CTX})"; else bad "ss-standing: long list fits the guard" "${#CTX}"; fi
 eq  "ss-standing: git status shows only the fixture entries" "?? .ytstack/standing/" "$(git -C "$MAIN" status --porcelain)"
 rm -rf "$SDIR" "$TMP/xdg"
 
