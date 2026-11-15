@@ -141,6 +141,8 @@ bin/ytstack-signals lesson new --area <area> --class <class-slug> --title <text>
 | `contract:<path>[#<anchor>]` | the lane contract: the file a dispatched worker reads as its rules (in ytstack itself `skills/minimal-code/SKILL.md`; in a project a role file of `REVIEW.md` or what its briefs name) |
 | `proposal:<ref>` | nowhere yet: a person decides; `<ref>` is the question (`Q012`) |
 
+A `<path>` is read from the root of the checkout, except one that starts with `.ytstack/`: it names a file in the project's `.ytstack` directory wherever that lives, also in user scope (`~/.ytstack/projects/<key>/`), so `knowledge:.ytstack/KNOWLEDGE.md#<anchor>` works in both. The same holds for the script and receipt paths of an incident record.
+
 A machine check comes first. A knowledge entry or the contract only where no machine can check it. A lesson never lives in `AGENTS.md` or `CLAUDE.md`: the script refuses that target, and the check fails on it.
 
 What the states mean for a lesson:

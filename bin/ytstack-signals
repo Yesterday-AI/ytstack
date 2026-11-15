@@ -149,13 +149,22 @@ target_ok() {
   esac
   return 0
 }
-# target_path <target>: the file a check, knowledge or contract target names,
-# from the root of the checkout; nothing for a proposal.
+# resolve <path>: a path as a record writes it. One under .ytstack/ names a
+# file in the resolved .ytstack directory (the checkout's, or the user-scope
+# ~/.ytstack/projects/<key>); anything else is read from the root of the checkout.
+resolve() {
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    .ytstack/*) printf '%s\n' "$YT_DIR/${1#.ytstack/}" ;;
+    *) printf '%s\n' "$YT_TOPLEVEL/$1" ;;
+  esac
+}
+# target_path <target>: the file a check, knowledge or contract target names
+# (see resolve); nothing for a proposal.
 target_path() {
   local w=${1#*:}
   case "$1" in check:*|knowledge:*|contract:*) ;; *) return 0 ;; esac
-  w=${w%%#*}
-  case "$w" in /*) printf '%s\n' "$w" ;; *) printf '%s\n' "$YT_TOPLEVEL/$w" ;; esac
+  resolve "${w%%#*}"
 }
 
 # rows: one line per finding file, in id order, tab separated, "-" for an empty
@@ -394,7 +403,7 @@ cmd_list() {
 
 # ---- set -----------------------------------------------------------------------
 cmd_set() {
-  local id="${1:-}" st="" ref="" target="" reason="" all r cur oldref key f other kind oldtarget p
+  local id="${1:-}" st="" ref="" target="" reason="" all r cur oldref key f other kind oldtarget p p2
   case "$id" in F[0-9][0-9][0-9]) shift ;; *) usage >&2; return 64 ;; esac
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || { usage >&2; return 64; }
@@ -431,7 +440,8 @@ EOF
       proposal:*) die "$id stays '$cur': its target $target is a proposal; a fixed lesson lives in a check, a knowledge entry or the contract (--target)" ;;
       check:*|knowledge:*|contract:*)
         p=$(target_path "$target")
-        [ -f "$p" ] || die "$id stays '$cur': its target names ${p#"$YT_TOPLEVEL"/}, which does not exist" ;;
+        p2=${target#*:}
+        [ -f "$p" ] || die "$id stays '$cur': its target names ${p2%%#*}, which does not exist" ;;
       *) die "$id has no valid target ('$target'); pass --target" ;;
     esac
   fi
@@ -695,7 +705,7 @@ check_review_checks() {
 # check_incidents: the records under incidents/. Sets NI; status 1 with a problem.
 # What a file cannot show on its own is asked afterwards: a mitigation's script
 # has to exist and pass ytstack-handover check, a receipt has to exist. Paths
-# are read from the root of the checkout.
+# are read as resolve reads them.
 NI=0
 check_incidents() {
   local f name bad=0 out line kind mid path full msg lessons=""
@@ -815,7 +825,7 @@ EOF
         IFS=$TAB read -r kind name mid path <<EOF
 $line
 EOF
-        case "$path" in /*) full=$path ;; *) full="$YT_TOPLEVEL/$path" ;; esac
+        full=$(resolve "$path")
         if [ ! -f "$full" ]; then
           echo "$name: $mid: the ${kind#=} $path does not exist"; bad=1
         elif [ "$kind" = "=script" ] && ! msg=$(bash "$ROOT/bin/ytstack-handover" check "$full" 2>&1); then
@@ -949,7 +959,7 @@ check_findings() {
           IFS=$TAB read -r _ name path <<EOF
 $line
 EOF
-          case "$path" in /*) full=$path ;; *) full="$YT_TOPLEVEL/$path" ;; esac
+          full=$(resolve "$path")
           [ -f "$full" ] || { echo "$name: state fixed, but its target $path does not exist"; bad=1; } ;;
         *) echo "$line" ;;
       esac

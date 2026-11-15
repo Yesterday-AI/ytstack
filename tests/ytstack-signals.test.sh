@@ -694,6 +694,24 @@ defect "a lesson whose source is not its area" "kind lesson, but source \"eviden
 edit "$L3" 's/^key: .*/key: lesson:evidence:receipt-before-run/'
 run "$D" check; eq "repaired, the ledger passes again" "signals ok: 4 finding(s), 0 incident(s)" "$OUT"
 
+# User scope: the .ytstack directory is ~/.ytstack/projects/<key>, outside the
+# checkout. A target under .ytstack/ names a file there. HOME is temporary.
+echo "# lesson in user scope"
+UH="$TMP/uhome"; U="$TMP/uscope"; mkdir -p "$UH" "$U"
+( cd "$U" && git init -q -b main && git config user.email t@t.t && git config user.name t ) >/dev/null 2>&1
+UKEY=$(HOME="$UH" bash -c '. "$1/hooks/lib/git-ctx.sh"; yt_git_ctx "$2"; printf %s "$YT_REPO_KEY"' _ "$ROOT" "$U")
+UD="$UH/.ytstack/projects/$UKEY"; mkdir -p "$UD"
+runu() { OUT=$(printf 'x\n' | HOME="$UH" bash "$BIN" -C "$U" "$@" 2>&1); EC=$?; }
+runu lesson new --area process --class env-gotcha --title "A gotcha" --target knowledge:.ytstack/KNOWLEDGE.md#env
+eq "user scope: lesson new writes under ~/.ytstack/projects/<key>" "0 new F001 $UD/signals/F001-a-gotcha.md" "$EC $OUT"
+runu set F001 --state fixed
+eq "user scope: fixed while KNOWLEDGE.md is missing: exit 1" 1 "$EC"
+printf '# Knowledge\n\n## env\n' > "$UD/KNOWLEDGE.md"
+runu set F001 --state fixed
+eq "user scope: a .ytstack/ target resolves against the user-scope directory" "0 F001 fixed" "$EC $OUT"
+runu check
+eq "user scope: check resolves it the same way" "0 signals ok: 1 finding(s), 0 incident(s)" "$EC $OUT"
+
 # ---- review escapes: kind review and the checked pull requests -----------------
 echo "# kind review"
 project review

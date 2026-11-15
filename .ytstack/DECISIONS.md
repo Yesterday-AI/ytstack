@@ -1163,6 +1163,7 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - A repeat of a class is `seen-again` on the open lesson; one after `fixed` is a regression, and its lesson needs a stronger target.
 - Only an incident record that is `closed` needs its lesson; an open or mitigated one may still be waiting for the root cause. A record written before lessons reads as `lesson: none`.
 - A person dismisses a class with `set <id> --state dismissed` and a reason; a lesson is not deleted.
+- A target path under `.ytstack/` resolves against the resolved `.ytstack` directory (project or user scope), every other path against the checkout (PR #67 review).
 
 **Supersedes:** None. Extends the 2026-11-13 production findings entry (M027): the ledger also holds lessons.
 
