@@ -20,7 +20,7 @@ sources:
   - docs/ux/signal-format.md
   - docs/statusline.md
   - docs/ux/external-plans.md
-verified_at: c5b405d
+verified_at: db07481
 ---
 
 # artifacts
@@ -36,7 +36,7 @@ The `.ytstack/` artifact model: the Markdown files that hold a project's memory 
 - `yt_resolve_yt_dir` in `hooks/lib/git-ctx.sh` picks the directory: `<toplevel>/.ytstack` if it exists (project scope, tracked in git), otherwise `~/.ytstack/projects/<repo key>` (user scope), otherwise none. The repo key is a hash of the git common dir, so all worktrees of a repository share one user-scope directory.
 - `init-project` asks for project, user or both and records the answer as `scope:` in the `PROJECT.md` frontmatter. `both` writes identical files to both directories; the resolver then reads the project one. `adopt-brownfield` always uses project scope.
 - In project scope a linked worktree has its own copy of `.ytstack/` at its branch's state.
-- Skills write a flat layout by default: every file directly in the directory, except `quick/`, `codebase/`, `backlog/` and `archive/`. Readers that go through `yt_find_artifacts` also find files under `milestones/`, `decisions/`, `backlog/` and `quick/`. A milestone whose files already live in a subdirectory keeps getting its new files there (issue #70). `yt_artifact_dir <yt_dir> <id>` names the directory: the one that holds `<prefix>-ROADMAP.md`, else the one that holds any `<prefix>-*` file, searched flat first, then in `milestones/`, `milestones/*/`, `backlog/`, `backlog/*/`; else the flat directory. The prefix is the id up to its first `-` (`M005` for `M005-S02-T01`, `OPS` for a backlog prefix). `yt_artifact_path <yt_dir> <file>` gives one file: where it exists, else in that directory. The skills that write or read a milestone's files print it as `ARTIFACT_DIR` (with `$_YT_DIR` as the fallback when the library is not reachable); `hooks/post-tool-use-bash` and `hooks/task-completed` write their summaries there. Nothing is moved, and a milestone that lives flat stays flat; `plan-milestone` counts moved milestones when it picks the next number.
+- Skills write a flat layout by default: every file directly in the directory, except `quick/`, `codebase/`, `backlog/` and `archive/`. Readers that go through `yt_find_artifacts` also find files under `milestones/`, `decisions/`, `backlog/` and `quick/`. A milestone whose files already live in a subdirectory keeps getting its new files there (issue #70). `yt_artifact_dir <yt_dir> <id>` names the directory: the one that holds `<prefix>-ROADMAP.md`, else the one that holds any `<prefix>-*` file, searched flat first, then in `milestones/`, `milestones/*/`, `backlog/`, `backlog/*/`; else the flat directory. The prefix is the id up to its first `-` (`M005` for `M005-S02-T01`, `OPS` for a backlog prefix). `yt_artifact_path <yt_dir> <file>` gives one file: where it exists, else in that directory. The skills that write or read a milestone's files print it as `ARTIFACT_DIR` (with `$_YT_DIR` as the fallback when the library is not reachable); `hooks/post-tool-use-bash` and `hooks/task-completed` write their summaries there. Skills and hooks that count or list a milestone's files read every layout, one file per name, so files that landed flat before the milestone moved count too. Nothing is moved, and a milestone that lives flat stays flat; `plan-milestone` counts moved milestones when it picks the next number.
 
 ### Files and writers
 

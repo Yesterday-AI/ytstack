@@ -8,7 +8,7 @@ sources:
   - docs/ux/skill-structure.md
   - docs/ux/askuserquestion-format.md
   - docs/ux/agent-structure.md
-verified_at: b448b13
+verified_at: db07481
 ---
 
 # skills
@@ -42,9 +42,9 @@ Every native procedure and every wrapper starts its first shell block with the r
 - `yt_git_ctx "$PWD"`: the checkout is where the shell runs. It yields the toplevel, whether this is a linked worktree, and a repo key (a hash of the git common dir, shared by all worktrees of a repository).
 - `yt_resolve_yt_dir`: `<toplevel>/.ytstack` if it exists (project scope), otherwise `~/.ytstack/projects/<repo key>` (user scope), otherwise none.
 
-Further lib functions the preambles call: `yt_prefs`, `yt_state_lint`, `yt_commit_ref_pattern`, `yt_task_commits`, `yt_find_artifacts`, `yt_brownfield_signals`, `yt_ensure_gitignore`, `yt_state_base`.
+Further lib functions the preambles call: `yt_prefs`, `yt_state_lint`, `yt_commit_ref_pattern`, `yt_task_commits`, `yt_find_artifacts`, `yt_artifact_dir`, `yt_artifact_path`, `yt_brownfield_signals`, `yt_ensure_gitignore`, `yt_state_base`. A skill that writes or reads a milestone's files prints `ARTIFACT_DIR`, the directory the milestone already lives in (flat, or `milestones/M###/`, see [artifacts.md](artifacts.md)), and writes its new files there. A skill that counts or lists a milestone's files (`reassess-roadmap`, `retro`, `spawn-milestone-team`, `plan-eng-review`) reads every layout through `yt_find_artifacts`, one file per name. Shell parameters in skill text are written `${1}`, awk fields `$ 1`, because Kimi expands `$1` in loaded skill text.
 
-When the host does not substitute `${CLAUDE_SKILL_DIR}`, the block's fallback branch resolves project scope only. Lib-only values then print as defaults or `unknown`, and user scope is not found.
+When the host does not substitute `${CLAUDE_SKILL_DIR}`, the block's fallback branch resolves project scope only. Lib-only values then print as defaults or `unknown`, `ARTIFACT_DIR` is the flat directory, and user scope is not found.
 
 A preamble prints `KEY: value` lines. The procedure refers to them by name. Each preamble prints the flags its own procedure uses; `HAS_YTSTACK` is the only one all of them print.
 
@@ -158,7 +158,7 @@ Formats: `docs/ux/coordinator-format.md`. The four skills below are for the sess
 - `hooks/session-start`: injection of `using-ytstack` and the `minimal-code` pointer.
 - `vendor/superpowers/skills/`: the inlined procedures.
 - `bin/ytstack-check`: `check_skill`, `check_agent`, `check_cross_refs`, `check_resolver_contract`, `check_inline_leaks`, `check_gstack_adapted`.
-- Tests: `tests/skill-preambles.test.sh` (every preamble in a main checkout and a linked worktree, preference flags, fallback branch), `tests/ytstack-check.test.sh` (checker rules), `tests/git-ctx.test.sh` (resolver, `yt_prefs`), `tests/hooks-readonly.test.sh` (injection size, `minimal_code` pointer).
+- Tests: `tests/skill-preambles.test.sh` (every preamble in a main checkout and a linked worktree, preference flags, fallback branch, a milestone in `milestones/M###/`, `backlog/<dir>/` and split between there and flat), `tests/ytstack-check.test.sh` (checker rules), `tests/git-ctx.test.sh` (resolver, `yt_prefs`), `tests/hooks-readonly.test.sh` (injection size, `minimal_code` pointer).
 - `evals/`: one trigger and outcome case per lifecycle skill, see `evals/README.md`.
 
 ## How to verify
