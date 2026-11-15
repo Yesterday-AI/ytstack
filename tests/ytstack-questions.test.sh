@@ -188,11 +188,12 @@ edit "$B" 's/^Source: .*/Source: plan line 12/'
 run "$D" ask Q002
 eq "a source without a purpose is refused" 1 "$EC"
 has "and the purpose is named" "its Context names no purpose" "$OUT"
-edit "$B" 's/^Purpose: .*/Purpose:/; s/^Source: .*/Source:/'
+edit "$B" 's/^Purpose: .*/Purpose:/'
 printf 'Purpose: unblocks the export lane\n' >> "$B"
 run "$D" ask Q002
 eq "a Purpose line outside Context does not count" 1 "$EC"
-edit "$B" '$d'
+has "and the purpose is still missing" "its Context names no purpose" "$OUT"
+edit "$B" '$d'; edit "$B" 's/^Source: .*/Source:/'
 fill "$B"
 
 BEFORE=$(grep -v '^state: \|^asked: ' "$B")
