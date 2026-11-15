@@ -1237,3 +1237,22 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - `bin/ytstack-brief check` checks the form only; whether the diff matches the delta is checked by `bin/ytstack-finish-lane route`.
 
 **Supersedes:** None.
+
+## 2026-11-15: A brief for an unplanned task makes the task plan its first deliverable (issue #76)
+
+**Context:** In a long coordinator run no lane planned its tasks. `ytstack-brief render` said "not planned yet: run ytstack:plan-task first, or plan it yourself", so lanes coded without Files, Verification or Spec impact.
+
+**Options considered:**
+- A) `render` runs `plan-task` inline before the brief.
+- B) A plan-first brief: the worker writes the task plan in `plan-task`'s format first, commits it alone, then implements what it names.
+- C) Refuse to render until the plan exists.
+
+**Chose:** B.
+
+**Reason:** A script cannot run a skill, and `plan-task` asks questions a coordinator answers poorly at dispatch time (A). C was the old behaviour for `--task` and is what coordinators routed around by writing briefs by hand. B keeps the dispatch on the rendered path and leaves a plan on disk that `summarize-task`, `ytstack-spec impact` and `finish-lane` can check.
+
+**How to apply:**
+- The plan goes beside the slice plan; the slice plan's backticked paths of the task line are hints, not the scope.
+- A review of an unplanned task still has no brief: there is nothing to review against.
+
+**Supersedes:** None.

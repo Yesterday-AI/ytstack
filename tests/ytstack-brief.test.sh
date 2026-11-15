@@ -9,7 +9,9 @@
 #                   technical spec covers the planned files; Gates only when
 #                   the plan has some; Git only with --branch
 #   render --slice  goal and task list; per planned task its parts; a task
-#                   without a plan is named as not planned
+#                   without a plan gets the plan to write as its first step
+#   render --task   of a task the slice plan lists and no plan describes: a
+#                   plan-first brief, the task plan is the first deliverable
 #   render --kind   "## Kind" says what the worker may do: implement (the
 #                   default) commits with the prefix; review is read only, pins
 #                   the range from --head (a commit hash, required) and --base,
@@ -180,7 +182,7 @@ has "a plan under milestones/M###/ is found" '- `.ytstack/milestones/M002/M002-S
 # ---- 2. render --slice --------------------------------------------------------
 echo "# render --slice"
 R=$(new_repo slice)
-printf -- '---\nstatus: planned\n---\n\n# Slice Plan\n\n**Goal:** Token login works end to end\n\n## Tasks\n\n- [ ] T01 -- accept a token\n- [ ] T02 -- reject an expired token\n\n## Gates\n\n- [ ] G01 -- pilot customer agrees | decides: Kim | how: call | lapses: unknown\n\n## Done when\n\nAll tasks done.\n' > "$R/.ytstack/M001-S01-PLAN.md"
+printf -- '---\nstatus: planned\n---\n\n# Slice Plan\n\n**Goal:** Token login works end to end\n\n## Tasks\n\n- [ ] T01 -- accept a token\n- [ ] T02 -- reject an expired token in `src/auth/login.sh`\n\n## Gates\n\n- [ ] G01 -- pilot customer agrees | decides: Kim | how: call | lapses: unknown\n\n## Done when\n\nAll tasks done.\n' > "$R/.ytstack/M001-S01-PLAN.md"
 plan "$R/.ytstack/M001-S01-T01-PLAN.md" "Accept a token" yes
 run "$R" render --slice M001-S01 --branch ytstack/M001-S01
 eq "a slice with one planned and one unplanned task renders" 0 "$EC"
@@ -191,7 +193,8 @@ S=$(part Scope)
 has "Scope: the planned task's files under its label" '**T01**
 
 - Modify: `src/auth/login.sh:10-20`' "$S"
-has "Scope: the unplanned task is named as such" "**T02** -- not planned yet: run ytstack:plan-task first, or plan it yourself with exact files and a verification command before you write code" "$S"
+has "Scope: the unplanned task's plan is its first deliverable" "**T02** -- not planned yet: first write its plan \`.ytstack/M001-S01-T02-PLAN.md\` in the format of \`ytstack:plan-task\`" "$S"
+hasnt "nobody is told to plan it himself" "plan it yourself" "$OUT"
 C=$(part "Read for context")
 has "Context: the slice plan" '- `.ytstack/M001-S01-PLAN.md`' "$C"
 has "Context: the task plan" '- `.ytstack/M001-S01-T01-PLAN.md`' "$C"
@@ -203,6 +206,29 @@ G=$(part Gates)
 has "Gates: the slice's gate" "G01 -- pilot customer agrees" "$G"
 has "Gates: the task's gate" "G01 -- sign-off" "$G"
 has "Git: one prefix per task" 'prefix `M001-S01-T##:`' "$(part Git)"
+
+# An unplanned task of a planned slice (issue #76): a plan-first brief whose
+# first deliverable is the task plan, then the implementation.
+run "$R" render --task M001-S01-T02 --branch ytstack/M001-S01
+eq "an unplanned task of a planned slice renders" 0 "$EC"
+O=$(part Outcome)
+has "plan first: the task line" "reject an expired token" "$O"
+has "plan first: the plan is the first deliverable" 'Your first deliverable is its plan: write `.ytstack/M001-S01-T02-PLAN.md`' "$O"
+has "plan first: in the format of plan-task" "Step 9 of \`$ROOT/skills/plan-task/SKILL.md\`" "$O"
+has "plan first: the sections of a task plan" '`## Files` with the exact paths' "$O"
+has "plan first: the plan is committed before the code" "it goes into your first commit, alone" "$O"
+hasnt "plan first: nobody is told to plan it himself" "plan it yourself" "$OUT"
+S=$(part Scope)
+has "plan first: Scope starts with the plan file" '`.ytstack/M001-S01-T02-PLAN.md` (the plan you write first), then the files that plan names under `## Files`.' "$S"
+has "plan first: the paths the slice plan names for the task" '- `src/auth/login.sh`' "$S"
+has "plan first: Verification comes from the plan the worker writes" 'The command your plan names under `## Verification`.' "$(part Verification)"
+has "plan first: Spec impact comes from that plan too" 'What your plan names under `## Spec impact`.' "$(part "Spec impact")"
+has "plan first: the slice plan is read" '- `.ytstack/M001-S01-PLAN.md`' "$(part "Read for context")"
+has "plan first: the commit prefix is the task" 'prefix `M001-S01-T02:`' "$(part Git)"
+run "$R" render --task M001-S01-T02 --kind review --head abc1234
+eq "plan first: a review of an unplanned task has nothing to review against: exit 1" 1 "$EC"
+run "$R" render --task M001-S01-T07
+eq "plan first: a task the slice plan does not list: exit 1" 1 "$EC"
 
 # granularity: slice -- the slice plan carries Files and Verification itself
 plan "$R/.ytstack/M002-S01-PLAN.md" "unused"

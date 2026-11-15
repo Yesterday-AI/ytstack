@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Spec:` line names the edited sections (`<area>: <file> (<section>)`) or
   says `none -- <reason>`. `ytstack-brief check` fails a bare `none` and prose
   without an area and a path. `spawn-milestone-team` 0.5.1 (brief template).
+- **A brief for an unplanned task plans it first** (issue #76): `ytstack-brief
+  render --task` on a task its slice plan lists without a task plan no longer
+  fails or says "plan it yourself"; the brief's first deliverable is the task
+  plan beside the slice plan, in `plan-task`'s format (Files, What this does,
+  Spec impact, Verification), committed alone, then the files it names. A
+  slice brief names the plan file to write per unplanned task.
 
 ## [0.11.0] - 2026-11-15
 

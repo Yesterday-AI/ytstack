@@ -21,6 +21,11 @@
 # else. Skeleton, fixed sentences and the report shape:
 # skills/spawn-milestone-team/brief-template.md.
 #
+# A task without a plan whose slice plan lists it as open (implement or
+# prepare): the brief makes the task plan the first deliverable, in the format
+# of skills/plan-task (Step 9), beside the slice plan, then the implementation
+# of what that plan names. A slice brief says the same per unplanned task.
+#
 # KIND says what the worker may do (docs/ux/coordinator-format.md, "Lane kinds"):
 #   implement  (default) change files inside the scope, commit with the prefix
 #   review     read only: review the range --base..--head, or the commit --head
@@ -104,6 +109,39 @@ add() {
   x=$(section "$2" Verification);  B_VERIFICATION=$(para "$B_VERIFICATION" "$l${x:-$(snip no-verification)}")
   x=$(section "$2" "Spec impact"); B_SPEC_IMPACT=$(para "$B_SPEC_IMPACT" "$l${x:-$(snip no-spec-impact)}")
   x=$(section "$2" Gates);         [ -z "$x" ] || B_GATES=$(para "$B_GATES" "$l$x")
+}
+
+# fill <name> <plan to write>: the sentences of that name with the path of the
+# plan to write and the plan format filled in; a template without them ends
+# the render.
+fill() {
+  local s m='{{PLAN}}' f='{{PLAN_FORMAT}}' p
+  s=$(lens_snip "$1") || exit 1
+  p=$(rel "$2"); s=${s//"$m"/"$p"}
+  s=${s//"$f"/"$ROOT/skills/plan-task/SKILL.md"}
+  printf '%s' "$s"
+}
+
+# plan_first <slice plan> <task ref>: the brief of a task its slice plan lists
+# and no task plan describes (issue #76). Its first deliverable is the task
+# plan in the format of skills/plan-task (Step 9), then what that plan names.
+plan_first() {
+  local t=${2##*-} line to x
+  line=$(section "$1" Tasks | sed -n "s/^- \[ \] $t -- //p" | head -1)
+  [ -n "$line" ] || die "no plan for $2, and $(rel "$1") lists no open task $t"
+  to="$(dirname "$1")/$2-PLAN.md"
+  x=$(fill plan-first "$to") || exit 1
+  B_OUTCOME=$(para "$line" "${x//$NL/$NL$NL}")
+  B_FILES=$(fill plan-first-scope "$to") || exit 1
+  # The paths the task line names in backticks: a hint for the plan, and what
+  # the area lookup below reads.
+  ALL_FILES=$(printf '%s\n' "$line" | grep -oE '`[^`]+`' | tr -d '`' | grep -E '[/.]' | sort -u)
+  if [ -n "$ALL_FILES" ]; then
+    x=$(lens_snip plan-first-hint) || exit 1
+    B_FILES=$(para "$B_FILES" "$x$NL$NL$(printf '%s\n' "$ALL_FILES" | sed 's/^/- `/; s/$/`/')")
+  fi
+  B_VERIFICATION=$(lens_snip plan-first-verification) || exit 1
+  B_SPEC_IMPACT=$(lens_snip plan-first-spec-impact) || exit 1
 }
 
 # ---- the lens of a review ------------------------------------------------------
@@ -234,6 +272,11 @@ cmd_render() {
     ref="lesson-$ref"
   else
     plan=$(find_plan "$ref")
+    # A task without a plan whose slice plan exists: the brief to plan it first.
+    # A review has nothing to review against without one.
+    if [ -z "$plan" ] && [ "$kind" = task ] && [ "$lane" != review ]; then
+      plan=$(find_plan "${ref%-T[0-9][0-9]}"); [ -z "$plan" ] || kind=unplanned
+    fi
     [ -n "$plan" ] || die "no plan for $ref: looked for ${YT_DIR:-$TOP/.ytstack}/$ref-PLAN.md"
   fi
 
@@ -252,6 +295,8 @@ cmd_render() {
   elif [ "$kind" = task ]; then
     B_OUTCOME=$(para "$(field "$plan" Summary)" "$(section "$plan" "What this does")")
     add "" "$plan"
+  elif [ "$kind" = unplanned ]; then
+    plan_first "$plan" "$ref"
   else
     B_COMMIT_PREFIX="$ref-T##"
     B_OUTCOME=$(para "$(field "$plan" Goal)" "$(section "$plan" Tasks)")
@@ -266,7 +311,8 @@ cmd_render() {
       for t in $ids; do
         tp=$(find_plan "$ref-$t")
         if [ -n "$tp" ]; then add "$t" "$tp"; continue; fi
-        B_FILES=$(para "$B_FILES" "**$t** -- $(snip unplanned)")
+        x=$(fill unplanned "$(dirname "$plan")/$ref-$t-PLAN.md") || exit 1
+        B_FILES=$(para "$B_FILES" "**$t** -- $x")
         B_VERIFICATION=$(para "$B_VERIFICATION" "**$t** -- $(snip unplanned-part)")
         B_SPEC_IMPACT=$(para "$B_SPEC_IMPACT" "**$t** -- $(snip unplanned-part)")
       done
