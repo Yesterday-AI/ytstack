@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `stall_minutes`) and `ytstack-watch --stall MINUTES`. A PR other lanes wait
   on can be a focus PR: `ytstack-pr-watch register --pr N --focus` reads it
   every tick and lists it first; `ytstack-watch --focus N` reads it every 20
-  seconds. `coordinate` 0.6.2, Step 7: on `STALL 1` ask the lane once for an
+  seconds. `coordinate` 0.6.3, Step 7: on `STALL 1` ask the lane once for an
   ETA, on `STALL 2` release the lane and give the branch to a fresh worker
   instead of relaying the same instruction again.
 
@@ -44,6 +44,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `## Peers` section of `LANES.md` (`ytstack-frontier peer set` / `peer
   list`); `coordinate` prints them in its preamble and its Rotation block,
   so a compaction no longer loses which session is which.
+- **Standing instructions are recorded under load** (issue #72): in a
+  `coordinate` session the new prompt hook `hooks/standing-prompt` flags a
+  prompt that reads like a standing instruction ("always", "never", "from now
+  on", "until", "priorisiere", "fass ... nicht an", ...) and says to record it
+  before the next dispatch; the Stop hook holds the turn once when flagged
+  prompts got no entry. Coordinate mode is a session marker the `coordinate`
+  preamble writes. Claude Code only.
+- **`bin/ytstack-standing`**: `add` records an entry in one command, in its
+  own worktree with a commit and one standing pull request per UTC day (or in
+  place with `--here`); `end` closes one; `list` prints the active entries,
+  the ended ones, the conditions to check and the failed checks. The
+  `coordinate` preamble prints it, with the newest entry's age and the human
+  prompts since.
+- **Temporary and conditional entries** (issue #73): optional `until`,
+  `until-condition` and `until-check`; an ended entry is closed by an entry of
+  `kind: end`. `ytstack-check --standing` validates the new keys.
+- **Standing entries reach every context** (issue #74): `hooks/session-start`
+  injects the active entries for the session's role (also after a
+  compaction), `ytstack-brief render` puts the ones for lanes or reviewers
+  into the brief, and an optional `check:` command shows a broken instruction
+  in the `coordinate` preamble. Commands of an entry run only there, bounded
+  by a timeout.
+- **Coordinate mode keeps the operating path** (issue #76, part of #75): a
+  short ordered checklist (claim, render, dispatch; check, set; standing
+  entry; release watch) is injected at session start and after a compaction
+  and printed by the `coordinate` preamble, from one place in
+  `docs/ux/coordinator-format.md`. The new `hooks/pre-tool-use-agent` warns
+  when an `Agent` or long `SendMessage` prompt is no rendered brief. The Stop
+  hook warns when `LANES.md` lags the session's dispatches or the STATE
+  pointer is behind, and holds the stop once when that came three sessions in
+  a row.
 
 ### Changed
 
@@ -64,6 +95,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `coordinate` runs its bins as
   `"$YT_BIN/ytstack-<name>"`, so a long session no longer calls a removed
   version's path after an update.
+- `coordinate` 0.6.2: Step 9 records with `ytstack-standing add` and says
+  that agent memory is no substitute; Step 3 acts on ended entries,
+  conditions and failed checks.
+- `ytstack-standing list` runs an entry's `check` and `until-check` only when
+  the entry is merged on the default branch, never from a pending or a
+  remote-only branch; a timeout kills the command's whole process group.
 
 ### Fixed
 
@@ -86,6 +123,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moved.
 - `teammate-idle` no longer fails on a slice plan without an open task (`grep
   -c ... || echo 0` produced `0` twice and broke the sum).
+- `coordinate` and `resume-session` (0.1.2) find the automatic handoff the
+  PreCompact hook wrote under `CLAUDE_PLUGIN_DATA`, which their shell does
+  not see (`yt_latest_handoff`).
+- The SessionStart injection near its cap shrinks the standing list before it
+  cuts the Next action, and keeps a Next action shorter than its omission
+  note.
 
 ## [0.11.0] - 2026-11-15
 

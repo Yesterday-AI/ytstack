@@ -38,6 +38,10 @@ eq "pr-watch timeouts are 15 s" "15" \
   "$(jq -r --arg c "$PW" '[.hooks[][].hooks[] | select(.command == $c) | .timeout] | unique | join(",")' "$J")"
 eq "version-notice is the first UserPromptSubmit entry, 5 s" 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/version-notice"|5' \
   "$(jq -r '.hooks.UserPromptSubmit[0].hooks[0] | "\(.command)|\(.timeout)"' "$J")"
+eq "standing-prompt is the second UserPromptSubmit entry, 5 s (issue #72)" 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/standing-prompt"|5' \
+  "$(jq -r '.hooks.UserPromptSubmit[1].hooks[0] | "\(.command)|\(.timeout)"' "$J")"
+eq "pre-tool-use-agent on Agent|Task|SendMessage, 5 s (issue #76)" 'Agent|Task|SendMessage|5' \
+  "$(jq -r '.hooks.PreToolUse[] | select(.hooks[0].command == "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use-agent\"") | "\(.matcher)|\(.hooks[0].timeout)"' "$J")"
 eq "session-start stays the first SessionStart entry" 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/session-start"' \
   "$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$J")"
 

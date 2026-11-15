@@ -824,6 +824,31 @@ def check_standing(yt_dir):
             fails.append(f"{rel}: scope is empty (where the instruction applies)")
         if not body.strip():
             fails.append(f"{rel}: no instruction below the frontmatter")
+        # Optional keys (issues #73, #74): until is a real ISO UTC time after
+        # given; until-condition, until-check and check are one line each when
+        # present (until-check may stand alone: the command is the condition);
+        # kind is empty or `end`, and an `end` names the entry it closes.
+        until = _fm_scalar(fm, "until")
+        if until is None:
+            fails.append(f"{rel}: until is one time, not a list")
+        elif until and "until" in fm:
+            um = _STANDING_GIVEN.match(until)
+            if not um:
+                fails.append(f"{rel}: until '{until}' is not an ISO UTC time (YYYY-MM-DDTHH:MMZ or with seconds)")
+            elif _standing_time(um.groups()) is None:
+                fails.append(f"{rel}: until {until} is not a real UTC date and time")
+            elif gm and _standing_time(gm.groups()) is not None and _standing_time(um.groups()) <= _standing_time(gm.groups()):
+                fails.append(f"{rel}: until {until} is not after given {given}")
+        for k in ("until-condition", "until-check", "check"):
+            if k in fm:
+                v = _fm_scalar(fm, k)
+                if v is None or not v or "\n" in v:
+                    fails.append(f"{rel}: {k} is empty or not one line (leave the key out when there is none)")
+        kind = _fm_scalar(fm, "kind")
+        if kind not in ("", "end"):
+            fails.append(f"{rel}: kind '{kind}' is not 'end' (leave the key out for an instruction)")
+        elif kind == "end" and _fm_scalar(fm, "supersedes") in ("", "none", "None", "-", None):
+            fails.append(f"{rel}: kind end closes an entry, but supersedes names none")
     for name, (rel, fm, key) in sorted(entries.items()):
         sup = _fm_scalar(fm, "supersedes")
         if sup is None:

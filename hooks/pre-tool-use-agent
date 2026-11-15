@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# ytstack PreToolUse hook on Agent and SendMessage (issue #76, part of #75):
+# in a coordinate session (the marker of hooks/standing-prompt), a dispatch
+# whose prompt carries no rendered brief gets one line of additionalContext:
+# render it with ytstack-brief. It never blocks (no permissionDecision).
+#
+# The marker of a rendered brief is its first line "# Brief: <ref> (<project>)"
+# (skills/spawn-milestone-team/brief-template.md); it counts anywhere in the
+# prompt, at the start of a line. SendMessage is checked only when its text is
+# longer than 400 characters: a short follow-up ("go on", an answer) is no
+# dispatch. An Agent call of a lookup type (Explore, Plan, claude-code-guide,
+# statusline-setup, any type naming search or explore) without a brief is
+# neither warned nor counted. Every other Agent call is a dispatch, appended
+# to <session dir>/dispatches (epoch per line) for the LANES.md staleness
+# check of hooks/stop.
+#
+# Files only. Fail open: any problem ends silent with exit 0.
+
+set -uo pipefail
+trap '' PIPE
+
+. "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
+
+yt_read_stdin
+SID="${YT_SESSION_ID:-}"
+case "$SID" in ''|.|..|*[!A-Za-z0-9._-]*) exit 0 ;; esac
+SD="$(yt_session_home)/$SID"
+[ -f "$SD/coordinate" ] || exit 0
+JQ=$(yt_jq); PY=$(yt_python)
+# field <name>: tool_name, text (prompt, message or content of tool_input) or
+# type (its subagent_type), through jq, else python3.
+field() {
+  if [ -n "$JQ" ]; then
+    case "$1" in
+      tool) printf '%s' "$YT_STDIN" | "$JQ" -r '.tool_name // ""' ;;
+      text) printf '%s' "$YT_STDIN" | "$JQ" -r '(.tool_input // {}) | (.prompt // .message // .content // "") | if type == "string" then . else tostring end' ;;
+      type) printf '%s' "$YT_STDIN" | "$JQ" -r '(.tool_input // {}) | (.subagent_type // "") | tostring' ;;
+    esac
+  elif [ -n "$PY" ]; then
+    printf '%s' "$YT_STDIN" | "$PY" -I -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = {}
+ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
+if sys.argv[1] == "tool":
+    v = d.get("tool_name", "")
+elif sys.argv[1] == "type":
+    v = ti.get("subagent_type", "")
+else:
+    v = ti.get("prompt") or ti.get("message") or ti.get("content") or ""
+print(v if isinstance(v, str) else json.dumps(v), end="")' "$1"
+  fi
+} 2>/dev/null
+[ -n "$JQ$PY" ] || exit 0
+TOOL=$(field tool); TEXT=$(field text); TYPE=$(field type)
+BRIEF=no
+case "$TEXT" in "# Brief: "*|*"
+# Brief: "*) BRIEF=yes ;; esac
+# A lookup agent (read-only search or planning types) is no lane: neither a
+# dispatch for the LANES.md check nor a missing brief.
+LOOKUP=no
+case "$TYPE" in Explore|Plan|claude-code-guide|statusline-setup|*[Ss]earch*|*[Ee]xplore*) LOOKUP=yes ;; esac
+case "$TOOL" in
+  Agent|Task)
+    [ "$BRIEF" = yes ] || [ "$LOOKUP" = no ] || exit 0
+    printf '%s\n' "$(date +%s)" >> "$SD/dispatches" 2>/dev/null ;;
+  SendMessage) [ "${#TEXT}" -gt 400 ] || exit 0 ;;
+  *) exit 0 ;;
+esac
+[ "$BRIEF" = no ] || exit 0
+
+ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+MSG="ytstack: this $TOOL prompt carries no rendered brief (no line \"# Brief: <ref> (<project>)\"). If it dispatches lane work, the path is: bash \"$ROOT/bin/ytstack-frontier\" claim <lane> --by <worker>, then bash \"$ROOT/bin/ytstack-brief\" render --task|--slice <ref> [--kind ...] as the prompt (ytstack:coordinate Step 5). A hand-written brief skips the scope, the verification, the spec areas and the standing instructions. A lookup that is no lane needs nothing."
+if [ -n "$JQ" ]; then
+  printf '%s' "$MSG" | "$JQ" -Rs '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: .}}' 2>/dev/null
+else
+  printf '%s' "$MSG" | "$PY" -I -c 'import sys, json; print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": sys.stdin.read()}}))' 2>/dev/null
+fi
+exit 0

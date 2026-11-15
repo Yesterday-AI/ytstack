@@ -1,10 +1,26 @@
 #!/usr/bin/env bash
-# ytstack Stop hook (advisory, M019)
+# ytstack Stop hook (M019, issue #72)
 #
-# Fires when the main agent is about to stop. If STATE.md still points at an
-# active task whose SUMMARY is missing or a draft stub, surface a one-line
-# reminder to the user via `systemMessage`. Never blocks (exit 0, no
-# `decision: block`): the user may well be stopping on purpose.
+# Fires when the main agent is about to stop.
+#
+#   1. Task reminder (advisory): if STATE.md still points at an active task
+#      whose SUMMARY is missing or a draft stub, surface a one-line reminder
+#      via `systemMessage`. Never blocks for this: the user may well be
+#      stopping on purpose.
+#   2. Standing instructions (coordinate mode only, the session marker of
+#      hooks/standing-prompt): when hooks/standing-prompt flagged human
+#      prompts that were not handled yet and no standing entry was written
+#      since the first of them, block the stop ONCE with the list
+#      (`decision: block`). An entry counts when its name time is in or after
+#      the minute of that prompt and it is in the working tree's standing/,
+#      or any ref of the repository (local branches, and the remote-tracking
+#      branch of a pushed standing PR) added it after that prompt. Local git
+#      only, no network. Afterwards the flags count as handled
+#      (<session dir>/standing-stop), so the same prompts never block twice.
+#   3. Coordinate lints (coordinate mode, issue #76): LANES.md behind the
+#      session's dispatches and reports, the STATE pointer behind the newest
+#      milestone. Said once per session; after YT_LINT_STREAK_N sessions in a
+#      row (default 3) the stop is blocked once. See the section below.
 #
 # Resolution: payload `cwd` via hooks/lib/git-ctx.sh (never CLAUDE_PROJECT_DIR).
 # Respects `stop_hook_active` (set when a previous Stop hook already continued
@@ -16,38 +32,157 @@ trap '' PIPE
 . "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
 
 yt_read_stdin
-# stop_hook_active: do nothing when we are inside a hook-continued turn
-if [ -n "${YT_STDIN:-}" ]; then
-  JQ=$(yt_jq)
-  if [ -n "$JQ" ] && [ "$(printf '%s' "$YT_STDIN" | "$JQ" -r '.stop_hook_active // false' 2>/dev/null)" = true ]; then
-    exit 0
-  fi
-fi
-
-yt_git_ctx "${YT_CWD:-$PWD}"
-YT_DIR=$(yt_resolve_yt_dir)
-[ -z "$YT_DIR" ] && exit 0
-STATE_FILE="$YT_DIR/STATE.md"
-[ -f "$STATE_FILE" ] || exit 0
-
-get_field() { sed -n "s/^$1: *//p" "$STATE_FILE" 2>/dev/null | head -1; }
-M=$(get_field current_milestone); S=$(get_field active_slice); T=$(get_field active_task)
-case "$T" in ""|none|all) exit 0 ;; esac
-case "$S" in ""|none|all) exit 0 ;; esac
-case "$M" in ""|none) exit 0 ;; esac
-
-SUMMARY=$(yt_artifact_path "$YT_DIR" "$M-$S-$T-SUMMARY.md")
-MSG=""
-if [ ! -f "$SUMMARY" ]; then
-  MSG="ytstack: $M-$S-$T is still the active task and has no summary. If the work is done, run /ytstack:summarize-task; if you are pausing, /ytstack:handoff-session keeps the thread."
-elif [ "$(sed -n 's/^closed: *//p' "$SUMMARY" | head -1)" = draft ]; then
-  MSG="ytstack: $M-$S-$T has only a draft summary stub. Run /ytstack:summarize-task to close it, or /ytstack:handoff-session if you are pausing."
-fi
-[ -z "$MSG" ] && exit 0
-
 JQ=$(yt_jq)
+# stop_hook_active: do nothing when we are inside a hook-continued turn
+if [ -n "${YT_STDIN:-}" ] && [ -n "$JQ" ] && [ "$(printf '%s' "$YT_STDIN" | "$JQ" -r '.stop_hook_active // false' 2>/dev/null)" = true ]; then
+  exit 0
+fi
+
+# ---- 2. standing instructions (coordinate mode) ----------------------------------
+standing_block() {
+  local sid="${YT_SESSION_ID:-}" sd ytd done_at first_m first_iso last_e n f list
+  case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  sd="$(yt_session_home)/$sid"
+  [ -f "$sd/coordinate" ] && [ -s "$sd/standing-flags" ] || return 0
+  ytd=$(sed -n 1p "$sd/coordinate" 2>/dev/null)
+  [ -n "$ytd" ] && [ -d "$ytd" ] || return 0
+  done_at=$(sed -n 1p "$sd/standing-stop" 2>/dev/null); case "$done_at" in ''|*[!0-9]*) done_at=0 ;; esac
+  list=$(awk -F '\t' -v d="$done_at" '$1 + 0 > d + 0' "$sd/standing-flags" 2>/dev/null)
+  [ -n "$list" ] || return 0
+  first_m=$(printf '%s\n' "$list" | awk -F '\t' 'NR == 1 { print $2 }')
+  first_iso=$(printf '%s\n' "$list" | awk -F '\t' 'NR == 1 { print $3 }')
+  last_e=$(printf '%s\n' "$list" | awk -F '\t' 'END { print $1 }')
+  printf '%s\n' "$last_e" > "$sd/standing-stop" 2>/dev/null || return 0
+
+  # An entry since the first flagged prompt? Name time YYYYMMDDHHMM >= its minute.
+  newer() { awk -v m="$first_m" '{ b = $0; sub(/.*\//, "", b); k = substr(b, 1, 8) substr(b, 10, 4) } k ~ /^[0-9]+$/ && k >= m { f = 1 } END { exit !f }'; }
+  for f in "$ytd"/standing/*.md; do [ -f "$f" ] && printf '%s\n' "$f"; done | newer && return 0
+  if [ "$(git -C "$ytd" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then
+    git -C "$ytd" log --all --since="$first_iso" --diff-filter=A --name-only --format= -- standing/ 2>/dev/null | newer && return 0
+  fi
+  n=$(printf '%s\n' "$list" | grep -c .)
+  BLOCK_REASON="ytstack: $n human prompt(s) in this coordinator session read like standing instructions, and no standing entry was written since $first_iso:
+$(printf '%s\n' "$list" | awk -F '\t' '{ print "- " $3 ": \"" $4 "\"" }')
+Record each one that holds beyond the task at hand, in your own words: bash \"${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}/bin/ytstack-standing\" add \"<the instruction>\" --scope \"<where it applies>\" (ytstack:coordinate Step 9). If none of them is one, say so in one line and stop. This check blocks once for these prompts."
+}
+BLOCK_REASON=""
+standing_block
+
+# ---- 3. coordinate lints, escalating (issue #76) ----------------------------------
+# lanes: LANES.md older than the newest lane event minus 5 minutes (a claim comes
+# right before its dispatch), or missing although lanes were dispatched; the
+# events are <session dir>/dispatches (hooks/pre-tool-use-agent) and reports
+# (hooks/standing-prompt). state: the STATE pointer is behind the newest
+# milestone on disk (yt_state_lint W2). Each is said once per session as a
+# systemMessage. A finding present in YT_LINT_STREAK_N sessions in a row (default
+# 3; counter <state base>/repos/<repo key>/coordinate-lints, kind TAB count TAB
+# last session TAB counted TAB the counted session ids) blocks the stop once in
+# that session; overlapping sessions count once each. A session
+# counts once when the finding was there at any of its stops, also when its
+# first stop came before its first dispatch.
+LINT_MSG=""
+coordinate_lints() {
+  local sid="${YT_SESSION_ID:-}" sd ytd key last lm kind present n s seen ids streak need tmp text
+  case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  sd="$(yt_session_home)/$sid"
+  [ -f "$sd/coordinate" ] || return 0
+  ytd=$(sed -n 1p "$sd/coordinate" 2>/dev/null)
+  [ -n "$ytd" ] && [ -d "$ytd" ] || return 0
+  need="${YT_LINT_STREAK_N:-3}"; case "$need" in ''|*[!0-9]*) need=3 ;; esac
+  # The repository key from the marker's second line (the coordinate preamble's
+  # YT_REPO_KEY): in user scope the .ytstack lies outside the repository.
+  key=$(sed -n 2p "$sd/coordinate" 2>/dev/null); case "$key" in *[!A-Za-z0-9]*) key="" ;; esac
+  if [ -z "$key" ]; then yt_git_ctx "$(dirname "$ytd")"; key="${YT_REPO_KEY:-unknown}"; fi
+  streak="$(yt_state_base)/repos/$key/coordinate-lints"
+  mkdir -p "$(dirname "$streak")" 2>/dev/null || return 0
+  last=$(cat "$sd/dispatches" "$sd/reports" 2>/dev/null | awk '$1 + 0 > m { m = $1 + 0 } END { print m + 0 }')
+  yt_state_lint "$ytd" >/dev/null
+  for kind in lanes state; do
+    text=""
+    if [ "$kind" = lanes ] && [ "${last:-0}" -gt 0 ]; then
+      lm=$(yt_mtime "$ytd/LANES.md"); case "$lm" in ''|*[!0-9]*) lm=0 ;; esac
+      if [ "$lm" -eq 0 ]; then
+        text="lanes were dispatched in this session, but $ytd/LANES.md does not exist: claim every lane with ytstack-frontier claim before its dispatch."
+      elif [ $((lm + 300)) -lt "$last" ]; then
+        text="LANES.md last changed $(( (last - lm) / 60 )) min before the newest dispatch or report of this session: ytstack-frontier claim before a dispatch, ytstack-frontier set after a report."
+      fi
+    elif [ "$kind" = state ]; then
+      text=$(printf '%s\n' "${YT_STATE_WARNINGS:-}" | grep 'is behind the newest milestone' | head -1)
+      [ -z "$text" ] || text="STATE lint: $text. Set current_milestone in $ytd/STATE.md."
+    fi
+    present=no; [ -z "$text" ] || present=yes
+    # Per kind: n sessions in a row ending with session s; seen = s counted.
+    # A session counts once when the finding was there at any of its stops;
+    # a session that ended without it breaks the row (seen at the next one).
+    # ids: the sessions counted in the current row, so that overlapping
+    # sessions (A, B, A) are counted once each.
+    s=$(awk -F '\t' -v k="$kind" '$1 == k { print $3 }' "$streak" 2>/dev/null)
+    seen=$(awk -F '\t' -v k="$kind" '$1 == k { print $4 }' "$streak" 2>/dev/null)
+    ids=$(awk -F '\t' -v k="$kind" '$1 == k { print $5 }' "$streak" 2>/dev/null); [ "$ids" != - ] || ids=""
+    if [ "$s" != "$sid" ]; then
+      [ "$seen" = 1 ] || ids=""
+      case ",$ids," in *",$sid,"*) seen=1 ;; *) seen=0 ;; esac
+    fi
+    if [ "$present" = yes ]; then
+      case ",$ids," in *",$sid,"*) ;; *) ids="${ids:+$ids,}$sid" ;; esac
+      seen=1
+    fi
+    n=$(printf '%s' "$ids" | tr ',' '\n' | grep -c .)
+    [ "$present" = yes ] || rm -f "$sd/lint-warned-$kind" 2>/dev/null
+    tmp="$streak.$$"
+    { awk -F '\t' -v k="$kind" '$1 != k' "$streak" 2>/dev/null; printf '%s\t%s\t%s\t%s\t%s\n' "$kind" "$n" "$sid" "$seen" "${ids:--}"; } > "$tmp" 2>/dev/null && mv -f "$tmp" "$streak" 2>/dev/null
+    [ "$present" = yes ] || continue
+    if [ "$n" -ge "$need" ] && [ ! -e "$sd/lint-blocked-$kind" ]; then
+      : > "$sd/lint-blocked-$kind" 2>/dev/null
+      BLOCK_REASON="${BLOCK_REASON:+$BLOCK_REASON
+
+}ytstack: this coordinator warning came in $n sessions in a row and now holds the stop once: $text Fix it now, then stop."
+    elif [ ! -e "$sd/lint-warned-$kind" ]; then
+      : > "$sd/lint-warned-$kind" 2>/dev/null
+      LINT_MSG="${LINT_MSG:+$LINT_MSG }ytstack: $text"
+    fi
+  done
+}
+coordinate_lints
+
+# ---- 1. task reminder --------------------------------------------------------------
+task_msg() {
+  local ytd state m s t summary
+  yt_git_ctx "${YT_CWD:-$PWD}"
+  ytd=$(yt_resolve_yt_dir)
+  [ -n "$ytd" ] && [ -f "$ytd/STATE.md" ] || return 0
+  state="$ytd/STATE.md"
+  get_field() { sed -n "s/^$1: *//p" "$state" 2>/dev/null | head -1; }
+  m=$(get_field current_milestone); s=$(get_field active_slice); t=$(get_field active_task)
+  case "$t" in ""|none|all) return 0 ;; esac
+  case "$s" in ""|none|all) return 0 ;; esac
+  case "$m" in ""|none) return 0 ;; esac
+  # The summary where the task's milestone lives (issue #70), flat or nested.
+  summary=$(yt_artifact_path "$ytd" "$m-$s-$t-SUMMARY.md")
+  if [ ! -f "$summary" ]; then
+    MSG="ytstack: $m-$s-$t is still the active task and has no summary. If the work is done, run /ytstack:summarize-task; if you are pausing, /ytstack:handoff-session keeps the thread."
+  elif [ "$(sed -n 's/^closed: *//p' "$summary" | head -1)" = draft ]; then
+    MSG="ytstack: $m-$s-$t has only a draft summary stub. Run /ytstack:summarize-task to close it, or /ytstack:handoff-session if you are pausing."
+  fi
+}
+MSG=""
+task_msg
+[ -z "$LINT_MSG" ] || MSG="${MSG:+$MSG }$LINT_MSG"
+
+[ -n "$MSG$BLOCK_REASON" ] || exit 0
 if [ -n "$JQ" ]; then
-  printf '%s' "$MSG" | "$JQ" -Rs '{systemMessage: .}'
+  "$JQ" -n --arg m "$MSG" --arg r "$BLOCK_REASON" \
+    '(if $r != "" then {decision: "block", reason: $r} else {} end) + (if $m != "" then {systemMessage: $m} else {} end)'
+elif [ -n "$(yt_python)" ]; then
+  "$(yt_python)" -I -c '
+import json, sys
+m, r = sys.argv[1], sys.argv[2]
+o = {}
+if r:
+    o.update(decision="block", reason=r)
+if m:
+    o["systemMessage"] = m
+print(json.dumps(o))' "$MSG" "$BLOCK_REASON"
 else
   printf '{"systemMessage":"%s"}\n' "$(printf '%s' "$MSG" | sed 's/"/\\"/g')"
 fi
