@@ -13,9 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ytstack-pr-watch register --all-open` registers only open PRs you authored
   (the `gh` login) and skips drafts and do-not-merge labels, each named with
   the reason; `--author <login>[,<login>]`, `--include-drafts` and
-  `--include-labelled` widen it. The status block on each prompt lists only
-  the PR lines that changed plus "N unchanged", and a PR stuck in
-  `action_required` for 24 hours gets one line suggesting `pause`.
+  `--include-labelled` widen it; a rerun pauses a watch of yours that the
+  filter now skips. The status block on each prompt lists only the PR lines
+  that changed plus "N unchanged", a PR that closed gets one last
+  `closed (merged)` / `closed` line, and a PR stuck in `action_required` for
+  24 hours gets one line suggesting `pause`.
   `ytstack-pr-watch status` shows the current session and repository;
   `--all` shows everything.
 - **Bins through `YT_BIN`** (issue #85): the `coordinate` preamble

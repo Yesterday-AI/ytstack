@@ -1233,8 +1233,9 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 
 **How to apply:**
 - `register --pr N` registers one PR whatever its author or label; the filters apply to `--all-open` only, and every skipped PR is named with its reason.
-- A do-not-merge label is any label that, lowercased with spaces and underscores read as `-`, starts with `do-not-merge`.
-- The status block lists changed lines and `- N unchanged`; a PR `action_required` without a head or status change for 24 hours gets one `pause` suggestion. `status` shows the current session and repository unless `--all`.
+- A do-not-merge label is any label that, lowercased with `-`, `_`, `/`, `:` and `.` read as spaces, contains the words "do not merge" or `dnm`. Logins compare without case and without a `[bot]` suffix. When the login cannot be read, only an explicit `--author` list is used (with a warning); without one the command stops.
+- A rerun that skips a PR this session already watches pauses that watch and names it: the filter exists to stop such reports, and `resume` undoes it.
+- The status block lists changed lines, `- N unchanged`, and one last `closed` line for a PR of the previous block (a merge without a bot finding has no other report); a PR `action_required` without a head or status change for 24 hours (NULL `changed_at` counts as older) gets one `pause` suggestion per stretch, remembered apart from the block fingerprint so SessionStart does not repeat it. `status` shows the current session and repository (compared without case) unless `--all`.
 - The SessionStart line comes on every source but only where it still fits under the injection guard: this repository's injection sits within about 50 characters of it with a long Next action, and the excerpt matters more. The `coordinate` preamble is the source that always prints it. A session started before an update runs the old version's hooks, so after an update the line is renewed by reloading the skill (the version notice asks for that), not by the hook.
 - A skill that runs ytstack bins over a long session names them through `YT_BIN`; a short skill keeps `${CLAUDE_SKILL_DIR}/../../bin`, which the host substitutes when it loads the skill.
 

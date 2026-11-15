@@ -84,7 +84,8 @@ bin/ytstack-pr-watch status --all    # every session and repository
 `all`), the watches and undelivered notices in that scope, and `health` (the
 worker heartbeat and errors, always whole). The session is the current one
 (`--session` overrides it), the repository is the GitHub `origin` of the
-working directory (`--repo` overrides it); what cannot be resolved does not
+working directory (`--repo` overrides it; compared without case, as GitHub
+does); what cannot be resolved does not
 narrow the list, so outside a session and a checkout it shows everything.
 
 Inside a session `--session` defaults to the current one (`CODEX_THREAD_ID`, or
@@ -100,10 +101,16 @@ repository to the current session in one listing call (one REST call per 100
 open PRs, plus one for your login) and skips, by name, PRs another session
 already owns. It takes only PRs whose author is the login `gh` is signed in as
 (subagents open theirs under it), and skips drafts and PRs with a label that
-reads `do-not-merge` (any case, spaces or underscores, also `do-not-merge/hold`),
-each named with its reason. `--author <login>[,<login>]` adds other authors
-(a bot that opens PRs for you, for example), `--include-drafts` and
-`--include-labelled` take drafts and labelled PRs as well; `register --pr N`
+says "do not merge" (any case, with spaces, `-`, `_`, `/` or `:` between the
+words, so `do-not-merge/hold` and `status: do not merge` too, or the word
+`dnm`), each named with its reason. `--author <login>[,<login>]` adds other
+authors (a bot that opens PRs for you, for example; `dependabot` matches
+`dependabot[bot]`), `--include-drafts` and `--include-labelled` take drafts
+and labelled PRs as well; these three flags need `--all-open`. When `gh` cannot
+say who you are, `--all-open` stops with an error, or, with `--author` given,
+registers only those authors and says so on stderr. A run that skips a PR this
+session already watches (from an earlier run without the filter) pauses that
+watch and names it, with the `resume` command to undo it. `register --pr N`
 registers one PR whatever its author or label. Without these limits one bulk
 run registered every open PR of a repository, including another author's
 do-not-merge prototype, which was then reported 967 times (issue #85). Only the session
@@ -163,14 +170,18 @@ injection in that session (ages do not count), or with a pending notice; a
 session that gets many prompts from background agents sees it once per change,
 not once per prompt. It then lists only the lines that changed, and the rest
 as one line `- N unchanged`: with 34 watched PRs one changed PR is two lines,
-not 34 (issue #85). SessionStart (start, resume, compaction) resets this, so
-the next prompt shows every line again.
+not 34 (issue #85). A PR that was in the last block and has closed since gets
+one last line, `- OWNER/REPO#N: closed (merged)` or `closed`, and leaves the
+count: a merge without a bot finding sends no notice, so this line is how the
+session hears of it. SessionStart (start, resume, compaction) resets this, so
+the next prompt shows every open line again.
 
 A PR that stays `action_required` for 24 hours without a new head or status
-change gets one suggestion on its line: `unchanged for N h: if nobody works on
-it, ytstack-pr-watch pause --repo OWNER/REPO --pr N`. The line changes once
-when it crosses the 24 hours, so the suggestion comes once and then counts as
-unchanged. A paused PR gets none. When the session pushes to a watched
+change (a watch from before that time was recorded counts as older) gets one
+suggestion on its line: `no new head or status for N h: if nobody works on it,
+ytstack-pr-watch pause --repo OWNER/REPO --pr N`. It comes once per such
+stretch, also across SessionStart and when only the findings change; a new head
+or status starts a new stretch. A paused PR gets none. When the session pushes to a watched
 PR's branch (`git push` seen by the PostToolUse hook in a bound worktree, and
 the branch's remote-tracking ref, or the local branch where a narrow fetch
 refspec keeps none, then differs from the watched head), the
