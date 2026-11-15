@@ -150,9 +150,11 @@ cmd_check() {
     }
     # email(v): an address that names a person. Only a bare noreply@ or
     # no-reply@ is none; <id>+<login>@users.noreply.github.com names the login.
+    # A git@ SSH remote and a user@host:path target are no address.
     function email(v,   addr) {
       while (match(v, /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z][A-Za-z]+/)) {
         addr = tolower(substr(v, RSTART, RLENGTH)); v = substr(v, RSTART + RLENGTH)
+        if (addr ~ /^git@/ || substr(v, 1, 1) == ":") continue
         if (addr !~ /^no-?reply@/) return 1
       }
       return 0
@@ -177,10 +179,13 @@ cmd_check() {
       if (ENVIRON["YTUP_HAS_TITLE"] != "") scan(ENVIRON["YTUP_TITLE"], "title: ")
     }
     { sub(/\r$/, ""); at = "line " NR ": " }
-    /^## / { sec = substr($0, 4) }
+    index($0, "```") == 1 { fence = !fence }
+    !fence && /^## / { sec = substr($0, 4) }
     sec == "Evidence" && $0 !~ /^## / && $0 ~ /[^ \t]/ && $0 !~ /^---/ { evidence++ }
-    /^---/ { sec = "" }
-    /TODO:/ { problem(at "still a TODO: write it, or delete the line") }
+    !fence && /^---/ { sec = "" }
+    # The placeholders draft writes start a line (or the Searched: value); a
+    # TODO: inside a sentence, a quote or a fenced block is the evidence.
+    !fence && /^(Searched:[ \t]*)?TODO:/ { problem(at "still a TODO: write it, or delete the line") }
     /^Searched:/ { v = $0; sub(/^Searched:[ \t]*/, "", v); if (v != "" && v !~ /^TODO:/) searched = 1 }
     { scan($0, at) }
     END {

@@ -202,6 +202,13 @@ passl "a short commit SHA and a UUID" "- 9932ca7, run 123e4567-e89b-12d3-a456-42
 passl "a path without dots" "- src/components/UserProfile2/index/Section4Header"
 addl "a noreply address with a login" "- by 12345+jane@users.noreply.github.com" "an email address"
 
+passl "an SSH remote" "- remote git@github.com:Yesterday-AI/ytstack.git"
+passl "an scp target user@host:path" "- copied to deploy@build-01.example.net:/srv/x"
+passl "a TODO: inside a line" "- the hook prints TODO: lines for the agent"
+passl "a TODO: in quoted text" "> TODO: from the upstream README"
+passl "a TODO: in fenced code" "$(printf '```\nTODO: a placeholder in the output\n```')"
+addl "a Searched: line left as TODO" "Searched: TODO: the query" "still a TODO"
+
 echo "# check --title"
 good
 run check --title "PR watch misses skipped checks" "$TMP/good.md"; eq "check --title: a clean title passes" "0 draft ok" "$EC $OUT"
