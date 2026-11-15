@@ -720,6 +720,21 @@ eq "user scope: a .ytstack/ target resolves against the user-scope directory" "0
 runu check
 eq "user scope: check resolves it the same way" "0 signals ok: 1 finding(s), 0 incident(s)" "$EC $OUT"
 
+echo "# set inserts a missing frontmatter line"
+project lessonset
+feed "x" "$D" lesson new --area ci --class no-target-line --title "No target line" --target check:tests/a.sh
+L="$S/F001-no-target-line.md"; edit "$L" '/^target: /d'
+run "$D" set F001 --target check:tests/b.sh
+eq "set --target on a lesson without a target line: exit 0" "0 F001 open" "$EC $OUT"
+eq "and the line is written" "check:tests/b.sh" "$(field "$L" target)"
+eq "inside the frontmatter, once" 1 "$(sed -n '2,/^---$/p' "$L" | grep -c '^target: ')"
+run "$D" check; eq "the ledger passes the check" "0 signals ok: 1 finding(s), 0 incident(s)" "$EC $OUT"
+edit "$L" '13{/^---$/d;}'; BEFORE=$(cat "$L")
+run "$D" set F001 --target check:tests/c.sh
+eq "a frontmatter that is not closed: set fails loudly" 1 "$EC"
+has "and says why" "the frontmatter must be closed" "$OUT"
+eq "and leaves the file as it was" "$BEFORE" "$(cat "$L")"
+
 # ---- review escapes: kind review and the checked pull requests -----------------
 echo "# kind review"
 project review
