@@ -3,7 +3,7 @@ milestone: M034
 project: ytstack
 size: M
 created: 2026-11-15T12:00:00Z
-status: planned
+status: backlog
 total_slices: 3
 completed_slices: 0
 ---
