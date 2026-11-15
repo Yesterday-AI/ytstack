@@ -179,26 +179,9 @@ sha256_of() {
 
 # ---- readers -------------------------------------------------------------------
 # fm <file>: frontmatter as "key<TAB>value" lines; list items repeat the key.
-# The same reader as in bin/ytstack-spec: keep the two in step.
-fm() {
-  awk '
-    NR == 1 { if ($0 != "---") exit; next }
-    $0 == "---" { exit }
-    /^[ \t]*#/ { next }
-    /^[A-Za-z_][A-Za-z0-9_]*:/ {
-      key = $0; sub(/:.*/, "", key)
-      val = $0; sub(/^[^:]*:[ \t]*/, "", val); sub(/[ \t]+$/, "", val)
-      if (val == "" || val == "[]") next
-      gsub(/^["'\'']|["'\'']$/, "", val)
-      print key "\t" val; next
-    }
-    /^[ \t]+-[ \t]+/ {
-      val = $0; sub(/^[ \t]+-[ \t]+/, "", val); sub(/[ \t]+$/, "", val)
-      gsub(/^["'\'']|["'\'']$/, "", val)
-      if (key != "" && val != "") print key "\t" val
-    }
-  ' "$1"
-}
+# yt_fm of hooks/lib/git-ctx.sh, shared with the session-start notices; the
+# same reader as in bin/ytstack-spec: keep the two in step.
+fm() { yt_fm "$1"; }
 fm_get()  { fm "$1" | awk -F'\t' -v k="$2" '$1 == k { print $2; exit }'; }
 fm_list() { fm "$1" | awk -F'\t' -v k="$2" '$1 == k { print $2 }'; }
 

@@ -58,7 +58,8 @@ TOP="$YT_TOPLEVEL"
 SPEC_DIR="${YT_DIR:+$YT_DIR/spec}"
 
 # fm <file>: frontmatter as "key<TAB>value" lines; list items repeat the key.
-# bin/ytstack-risk carries a copy of this reader: keep the two in step.
+# hooks/lib/git-ctx.sh carries a copy of this reader (yt_fm, used by
+# bin/ytstack-risk and the session-start notices): keep the two in step.
 fm() {
   awk '
     NR == 1 { if ($0 != "---") exit; next }

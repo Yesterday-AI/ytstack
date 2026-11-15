@@ -88,6 +88,13 @@ rm "$Y/spec/REVIEW.md"; printf 'merge_by: human\n' > "$Y/PREFERENCES.md"
 notices; eq "merge_by human is a choice: silent" "" "$NOTES"
 printf 'merge_by: risk\n' > "$Y/PREFERENCES.md"
 notices; has "merge_by risk without REVIEW.md: a line" "$NOTES" "(no spec/REVIEW.md)"
+# auto_merge as ytstack-risk reads it: frontmatter only, quotes allowed (PR #66 review).
+printf '# Review\n' > "$Y/spec/REVIEW.md"
+printf -- '---\narea: core\nauto_merge: "low"\n---\n' > "$Y/spec/core.md"
+notices; eq "a quoted auto_merge \"low\": silent" "" "$NOTES"
+printf -- '---\narea: core\nauto_merge: none\n---\n\nExample:\n\nauto_merge: low\n' > "$Y/spec/core.md"
+notices; has "auto_merge: low in the body only: a line" "$NOTES" "(no area allows auto_merge low or normal)"
+rm "$Y/spec/REVIEW.md"
 
 # ---- 3. PR watch ------------------------------------------------------------------
 echo "# PR watch"
@@ -113,6 +120,11 @@ fi
 git -C "$D" remote set-url origin https://github.com/acme/shop
 touch -t 202001010000 "$PR_WATCH_HOME/worker.lock"
 notices; has "https origin, old lock: stale" "$NOTES" "PR watch is on, but its worker last ticked"
+# pr_watch as hooks/pr-watch reads it: on when any line says on (PR #66 review).
+printf 'pr_watch=on\npr_watch=off\n' > "$HOME/.ytstack/config"
+notices; has "an on line before an off line: on, as the hook runs" "$NOTES" "PR watch is on, but its worker last ticked"
+printf 'pr_watch=yes\n' > "$HOME/.ytstack/config"
+notices; has "a value that is neither on nor off: the hook does not run, off" "$NOTES" "PR watch is off for this GitHub repository"
 rm -f "$HOME/.ytstack/config"
 
 # ---- 4. RUNTIME.md ----------------------------------------------------------------
