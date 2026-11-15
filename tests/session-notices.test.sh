@@ -211,6 +211,19 @@ if [ "${#SHORT}" -le 900 ]; then ok "and bounded (${#SHORT} chars without the pa
 has "with the rest pointed at" "$CTXV" "more in"
 OUT=$(printf '{"session_id":"v6","cwd":"%s"}' "$D" | CLAUDE_PLUGIN_ROOT="$OLD" YTSTACK_HOOK_FORMAT=plain bash "$H/version-notice" 2>&1)
 has "plain format: raw text" "$OUT" "ytstack 0.30.0 installed, this session loaded 0.10.0"
+# Which entries of installed_plugins.json count (PR #66 review): scope user,
+# or project/local for this project only, and only this plugin's marketplace.
+entries() { printf '{"version":2,"plugins":{"ytstack@mkt":[{"scope":"user","installPath":"%s"}%s]%s}}\n' "$OLD" "$1" "$2" > "$HOME/.claude/plugins/installed_plugins.json"; }
+entries "" ",\"ytstack@othermkt\":[{\"scope\":\"user\",\"installPath\":\"$CACHE/0.30.0\"}]"
+vn v7 "$OLD"; eq "another marketplace's newer ytstack does not count" "0:" "$EC:$OUT"
+entries ",{\"scope\":\"project\",\"projectPath\":\"$TMP/elsewhere\",\"installPath\":\"$CACHE/0.30.0\"}" ""
+vn v8 "$OLD"; eq "a project-scope install of another project does not count" "0:" "$EC:$OUT"
+entries ",{\"scope\":\"local\",\"projectPath\":\"$D\",\"installPath\":\"$CACHE/0.30.0\"}" ""
+vn v9 "$OLD"; has "a local-scope install of this project counts" "$CTXV" "ytstack 0.30.0 installed"
+# The marker is written only after the notice was printed.
+OUT=$(printf '{"session_id":"v10","cwd":"%s"}' "$D" | CLAUDE_PLUGIN_ROOT="$OLD" YTSTACK_HOOK_FORMAT=plain bash "$H/version-notice" 2>/dev/null >&-)
+eq "a notice that could not be printed leaves no marker" "no" "$([ -e "$CLAUDE_PLUGIN_DATA/sessions/v10/notified-0.30.0" ] && echo yes || echo no)"
+vn v10 "$OLD"; has "and is said on the next prompt" "$CTXV" "ytstack 0.30.0 installed"
 
 echo
 echo "$PASS passed, $FAIL failed"

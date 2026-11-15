@@ -69,7 +69,7 @@ Every hook except `pr-watch` sources the library and resolves from the payload `
 | Hook | Event | Reads from the payload | Effect | Exit |
 |---|---|---|---|---|
 | `session-start` | SessionStart | `cwd`, `source` | prints the injection as JSON on stdout, writes nothing | 0 |
-| `version-notice` | UserPromptSubmit (first entry) | `session_id` | records the plugin version of the session's first prompt in `<base>/sessions/<session-id>/plugin-version`; when the installed version (`installed_plugins.json`, else the newest cache sibling without `.orphaned_at`) is newer, prints once per installed version "ytstack X installed, this session loaded A: reload the skills you use" and the CHANGELOG entry titles in between (cut at 600 characters), and writes `notified-<X>` | 0 |
+| `version-notice` | UserPromptSubmit (first entry) | `session_id` | records the plugin version of the session's first prompt in `<base>/sessions/<session-id>/plugin-version`; when the installed version (`installed_plugins.json` entries of this root's marketplace with scope `user`, or `project`/`local` whose `projectPath` is the session's project; else the newest cache sibling without `.orphaned_at`) is newer, prints once per installed version "ytstack X installed, this session loaded A: reload the skills you use" and the CHANGELOG entry titles in between (cut at 600 characters), and writes `notified-<X>` after the notice was printed | 0 |
 | `pre-compact` | PreCompact | `cwd`, `session_id`, `trigger` | writes `HANDOFF.auto.md` into the session state directory, renames a fresh `latest-handoff` symlink into the worktree state directory, prints compaction guidance on stdout | 0 |
 | `session-end` | SessionEnd | `cwd`, `session_id`, `reason` | appends one JSON line to `session.jsonl` in the session state directory | 0 |
 | `stop` | Stop | `cwd`, `stop_hook_active` | prints a `systemMessage` when the active task has no summary or only a draft | 0 |
@@ -140,7 +140,7 @@ See `docs/statusline.md`. It was read against `bin/ytstack-status` at `verified_
 - `post-tool-use-bash` attributes a commit to the payload `cwd`, also when the command changed directory first.
 - The scope check in `pre-tool-use-edit` is a substring match over the whole task plan, not over its Files section.
 - `session.jsonl` has no reader in this repository.
-- Codex and Kimi do not register `version-notice`; their sessions get no version notice. With several ytstack entries in `installed_plugins.json` the highest version counts. The PR watch notice keys on a GitHub `origin`, not on open pull requests (that needs a host call).
+- Codex and Kimi do not register `version-notice`; their sessions get no version notice. With several ytstack entries in `installed_plugins.json` that count the highest version counts. The PR watch notice keys on a GitHub `origin`, not on open pull requests (that needs a host call).
 - The key digest depends on the tool `yt_sha16` finds first, so keys can differ between machines.
 
 ## Where implemented
