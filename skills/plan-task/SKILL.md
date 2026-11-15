@@ -3,7 +3,7 @@ name: plan-task
 description: "Turns the next task of the current slice into M###-S##-T##-PLAN.md with exact files and a verification command, and sets STATE active_task. Use after slice-milestone, before executing a task, or when the user says plan the task, next task, detail the task. Not for one-sentence changes (quick-task) and not for closing a task (summarize-task)."
 metadata:
   tier: core
-  version: 0.3.2
+  version: 0.3.3
   triggers:
     - plan task
     - detail next task
@@ -87,22 +87,26 @@ if [ -f "$_YT_DIR/STATE.md" ]; then
   _ACTIVE_SLICE=$(sed -n 's/^active_slice: *//p' "$_YT_DIR/STATE.md" | head -1)
 fi
 
+# Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
+_ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "$1"; else printf '%s\n' "$_YT_DIR/$1"; fi; }
+if command -v yt_artifact_dir >/dev/null 2>&1; then _ARTIFACT_DIR=$(yt_artifact_dir "$_YT_DIR" "$_CURRENT_MILESTONE"); else _ARTIFACT_DIR="$_YT_DIR"; fi
+
 # If no active slice in STATE.md, infer the first unfinished slice from ROADMAP
 if [ "$_ACTIVE_SLICE" = "none" ] || [ -z "$_ACTIVE_SLICE" ]; then
-  ROADMAP="$_YT_DIR/$_CURRENT_MILESTONE-ROADMAP.md"
+  ROADMAP=$(_ap "$_CURRENT_MILESTONE-ROADMAP.md")
   if [ -f "$ROADMAP" ]; then
     _ACTIVE_SLICE=$(grep -oE '^- \[ \] S[0-9][0-9] --' "$ROADMAP" | head -1 | grep -oE 'S[0-9][0-9]')
   fi
 fi
 
-_SLICE_PLAN="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md"
+_SLICE_PLAN=$(_ap "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md")
 
 # Next unplanned task = first un-elaborated task in slice-plan
 # (Un-elaborated = listed in slice-plan but no corresponding T##-PLAN.md file exists)
 _NEXT_TASK=""
 if [ -f "$_SLICE_PLAN" ]; then
   for t in $(grep -oE '^- \[ \] T[0-9][0-9] --' "$_SLICE_PLAN" | grep -oE 'T[0-9][0-9]'); do
-    _TASK_FILE="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$t-PLAN.md"
+    _TASK_FILE=$(_ap "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$t-PLAN.md")
     if [ ! -f "$_TASK_FILE" ]; then
       _NEXT_TASK="$t"
       break
@@ -115,6 +119,7 @@ echo "YTSTACK_NON_INTERACTIVE: $_NON_INTERACTIVE"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "ACTIVE_SLICE: $_ACTIVE_SLICE"
 echo "SLICE_PLAN: $_SLICE_PLAN"
+echo "ARTIFACT_DIR: $_ARTIFACT_DIR"
 echo "NEXT_TASK: ${_NEXT_TASK:-none}"
 echo "HAS_SPEC: $([ -f "$_YT_DIR/spec/SPEC.md" ] && echo yes || echo no)"
 echo "SPEC_TOOL: ${CLAUDE_SKILL_DIR}/../../bin/ytstack-spec"
@@ -231,6 +236,8 @@ If A: proceed.
 
 ### Step 9: Write `M###-S##-T##-PLAN.md`
 
+Use Write. Path: `{ARTIFACT_DIR}/{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{NEXT_TASK}-PLAN.md`. `ARTIFACT_DIR` is `.ytstack/` itself, or `milestones/M###/` (or a `backlog/` subdirectory) when the milestone's files already live there; never move existing files.
+
 Write the `**Blocked by:**` line only when this task cannot start without the result of another task of the slice (`T01`, or `T01, T03`); the order of the task list alone is not a reason, and without such a task the line is left out.
 
 ```markdown
@@ -295,7 +302,7 @@ Bump `last_updated` regardless.
 
 Update Status line: `**Status:** {CURRENT_MILESTONE} / {ACTIVE_SLICE} / {NEXT_TASK} planned -- ready to execute.`
 
-**Milestone state (M018):** if `{CURRENT_MILESTONE}-ROADMAP.md` still says `status: planned`, flip it to `status: in-progress` (Edit) and mirror the global `ROADMAP.md` row -- the first planned task is where work starts. States are the enum in `docs/ux/skill-structure.md` ("Artifact states").
+**Milestone state (M018):** if `{ARTIFACT_DIR}/{CURRENT_MILESTONE}-ROADMAP.md` still says `status: planned`, flip it to `status: in-progress` (Edit) and mirror the global `ROADMAP.md` row -- the first planned task is where work starts. States are the enum in `docs/ux/skill-structure.md` ("Artifact states").
 
 ### Step 11: Report + return
 
@@ -303,7 +310,7 @@ Report:
 
 > Task **{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{NEXT_TASK}** planned.
 >
-> File: `{SLICE_PLAN_DIR}/{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{NEXT_TASK}-PLAN.md`
+> File: `{ARTIFACT_DIR}/{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{NEXT_TASK}-PLAN.md`
 >
 > Spec impact: {SPEC_IMPACT}
 >

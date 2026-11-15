@@ -544,6 +544,54 @@ cp "$TMP/tp.spec.bak" "$WT/.ytstack/M999-S01-T01-PLAN.md"
 ( cd "$WT" && git rm -rq .ytstack/spec && git commit -qm "chore: remove fixture spec" ) >/dev/null 2>&1
 rm -f "$WT/.ytstack/spec/core.md"; rmdir "$WT/.ytstack/spec" 2>/dev/null
 
+# A milestone that lives in milestones/M041/ (issue #70): readers find its files
+# there and writers are pointed at the same directory, not at the flat layout.
+echo "# milestone in milestones/M041/"
+MV="$TMP/moved"; MD="$MV/.ytstack/milestones/M041"; mkdir -p "$MD"
+( cd "$MV" || exit 2
+  git init -q && git config user.email t@t.t && git config user.name t
+  printf 'project: fixture\nlast_updated: %s\ncurrent_milestone: M041\nactive_slice: S01\nactive_task: T01\n\n# State\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .ytstack/STATE.md
+  printf 'name: fixture\n' > .ytstack/PROJECT.md
+  printf -- '---\nmilestone: M040\nstatus: done\n---\n' > .ytstack/M040-ROADMAP.md
+  printf -- '---\nmilestone: M041\ncreated: 2026-11-01T00:00:00Z\n---\n# M041\n' > "$MD/M041-CONTEXT.md"
+  printf -- '---\nmilestone: M041\nstatus: in-progress\n---\n- [ ] S01 -- one\n- [ ] S02 -- (to be planned)\n' > "$MD/M041-ROADMAP.md"
+  printf -- '---\nmilestone: M041\nslice: S01\n---\n- [ ] T01 -- a\n- [ ] T02 -- b\n' > "$MD/M041-S01-PLAN.md"
+  printf -- '---\ntask: T01\n---\n## Files\n\n- Modify: a.ts\n\n## Verification\n\n```bash\ntrue\n```\n' > "$MD/M041-S01-T01-PLAN.md"
+  echo seed > f.txt; git add -A; git commit -qm "M041-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL moved fixture; exit 2; }
+pre plan-task "$MV"
+has "plan-task: moved -> slice plan found there"      "$OUT" "SLICE_PLAN: $MD/M041-S01-PLAN.md"
+has "plan-task: moved -> next task is T02 (T01 planned there)" "$OUT" "NEXT_TASK: T02"
+has "plan-task: moved -> new task plan goes there"   "$OUT" "ARTIFACT_DIR: $MD"
+pre summarize-task "$MV"
+has "summarize-task: moved -> task plan found there"  "$OUT" "PLAN_FILE: $MD/M041-S01-T01-PLAN.md"
+has "summarize-task: moved -> slice plan found there" "$OUT" "SLICE_PLAN: $MD/M041-S01-PLAN.md"
+has "summarize-task: moved -> summary goes there"     "$OUT" "ARTIFACT_DIR: $MD"
+pre slice-milestone "$MV"
+has "slice-milestone: moved -> roadmap found there"   "$OUT" "ROADMAP: $MD/M041-ROADMAP.md"
+has "slice-milestone: moved -> S02 still to plan"     "$OUT" "UNPLANNED_SLICES: S02"
+has "slice-milestone: moved -> slice plans go there"  "$OUT" "ARTIFACT_DIR: $MD"
+pre plan-milestone "$MV"
+has "plan-milestone: moved milestones count for the number" "$OUT" "NEXT_MILESTONE: M042"
+has "plan-milestone: a new milestone starts flat"     "$OUT" "ARTIFACT_DIR: $MV/.ytstack"
+pre reassess-roadmap "$MV"
+has "reassess-roadmap: moved -> artifact dir"         "$OUT" "ARTIFACT_DIR: $MD"
+has "reassess-roadmap: moved -> slices counted from the moved roadmap" "$OUT" "SLICES_TOTAL: 2"
+for s in test-driven-development verification-before-completion code-review; do
+  pre "$s" "$MV"; has "$s: moved -> task plan found there" "$OUT" "TASK_PLAN: $MD/M041-S01-T01-PLAN.md"
+done
+pre finish-branch "$MV";        has "finish-branch: moved -> both tasks open"  "$OUT" "OPEN_TASKS:  T01 T02"
+pre ship "$MV";                 has "ship: moved -> slice plan found there"    "$OUT" "SLICE_PLAN: $MD/M041-S01-PLAN.md"
+pre retro "$MV";                has "retro: moved -> tasks counted"            "$OUT" "PLAN_TASKS: 0/2 done"
+has "retro: moved -> retro goes there"                                          "$OUT" "RETRO_FILE: $MD/M041-RETRO.md"
+pre plan-ceo-review "$MV";      has "plan-ceo-review: moved -> milestone mode" "$OUT" "MODE: milestone"
+has "plan-ceo-review: moved -> review goes there"                               "$OUT" "REVIEW_FILE: $MD/M041-CEO-REVIEW.md"
+pre plan-eng-review "$MV";      has "plan-eng-review: moved -> review goes there" "$OUT" "REVIEW_FILE: $MD/M041-ENG-REVIEW.md"
+has "plan-eng-review: moved -> the roadmap is read"                             "$OUT" "MILESTONE_DOC: $MD/M041-ROADMAP.md"
+pre grill "$MV";                has "grill: moved -> CONTEXT there"            "$OUT" "DESIGN_TARGET: $MD/M041-CONTEXT.md"
+pre handoff-session "$MV";      has "handoff-session: moved -> artifact dir"   "$OUT" "ARTIFACT_DIR: $MD"
+pre spawn-milestone-team "$MV"; has "spawn-milestone-team: moved -> slice plan counted" "$OUT" "SLICE_COUNT: 1"
+[ ! -e "$MV/.ytstack/M041-S01-PLAN.md" ] && ok "moved: nothing written flat by the preambles" || bad "moved: nothing written flat by the preambles"
+
 # Fallback path: CLAUDE_SKILL_DIR left unsubstituted (foreign host) -> still resolves project scope
 echo "# fallback without lib"
 P=$(extract summarize-task); sed "s|$ROOT/skills/summarize-task|/nonexistent-skill-dir|g" "$P" > "$TMP/pre-fallback.sh"

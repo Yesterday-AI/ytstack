@@ -3,7 +3,7 @@ name: summarize-task
 description: "Closes the active task: writes M###-S##-T##-SUMMARY.md with commits, outcome, deviations, follow-ups and the verification result, flips the slice-plan checkbox and advances STATE. Use when a task's verification passed, or when the user says task done, close the task, summarize. Not before verification passed and not for quick-lane changes (quick-task writes its own summary)."
 metadata:
   tier: core
-  version: 0.3.0
+  version: 0.3.1
   triggers:
     - summarize task
     - task done
@@ -83,13 +83,12 @@ if [ -f "$_YT_DIR/STATE.md" ]; then
   _ACTIVE_TASK=$(sed -n 's/^active_task: *//p' "$_YT_DIR/STATE.md" | head -1)
 fi
 
-_PLAN_FILE="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$_ACTIVE_TASK-PLAN.md"
-# M018-S03: tolerate milestones/M###/ layouts on the read side
-if [ ! -f "$_PLAN_FILE" ] && command -v yt_find_artifacts >/dev/null 2>&1; then
-  _ALT=$(yt_find_artifacts "$_YT_DIR" "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$_ACTIVE_TASK-PLAN.md" | head -1)
-  [ -n "$_ALT" ] && _PLAN_FILE="$_ALT"
-fi
-_SLICE_PLAN="$_YT_DIR/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md"
+# Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
+_ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "$1"; else printf '%s\n' "$_YT_DIR/$1"; fi; }
+if command -v yt_artifact_dir >/dev/null 2>&1; then _ARTIFACT_DIR=$(yt_artifact_dir "$_YT_DIR" "$_CURRENT_MILESTONE"); else _ARTIFACT_DIR="$_YT_DIR"; fi
+_PLAN_FILE=$(_ap "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$_ACTIVE_TASK-PLAN.md")
+_SLICE_PLAN=$(_ap "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md")
+_ROADMAP=$(_ap "$_CURRENT_MILESTONE-ROADMAP.md")
 
 # Gather this task's commits for a durable, committed `## Commits` section.
 # ytstack's commit convention prefixes task commits with `M###-S##-T##:`
@@ -121,6 +120,8 @@ echo "ACTIVE_SLICE: $_ACTIVE_SLICE"
 echo "ACTIVE_TASK: $_ACTIVE_TASK"
 echo "PLAN_FILE: $_PLAN_FILE"
 echo "SLICE_PLAN: $_SLICE_PLAN"
+echo "ROADMAP: $_ROADMAP"
+echo "ARTIFACT_DIR: $_ARTIFACT_DIR"
 echo "IS_GIT: $_IS_GIT"
 echo "COMMIT_PATTERN: $_COMMIT_PATTERN"
 echo "TASK_COMMITS_SOURCE: $_TASK_COMMITS_SOURCE"
@@ -264,6 +265,8 @@ A sentence in the summary does not satisfy the check, and neither does an edit t
 
 ### Step 9: Write `M###-S##-T##-SUMMARY.md`
 
+Path: `{ARTIFACT_DIR}/{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{ACTIVE_TASK}-SUMMARY.md` (beside the milestone's other files; a draft stub found elsewhere is replaced where it is).
+
 ```markdown
 ---
 milestone: {CURRENT_MILESTONE}
@@ -340,7 +343,7 @@ Regardless of teammate mode:
 
 **Progress block (M021):** if the `STATE.md` frontmatter has a `progress:` block, update it in the same edit. Add 1 to `done` when the closed task is an item the block counts. Tasks are the default unit; a project that counts something else says so in a comment line inside the block, and `done` / `total` then follow that ledger. If the closed task was added after `total` was set, raise `total` as well. Never write `done` above `total`. Then run `yt_state_lint "$_YT_DIR"`: a warning that starts with `progress:` means the edit is wrong; fix it before Step 12. As a swarm teammate skip the block with the other frontmatter writes and note the pending increment under Follow-ups in the summary. No block: do nothing and do not add one. `bin/ytstack-status` shows these numbers in the status line (`docs/statusline.md`).
 
-If the slice is now fully complete (all tasks `[x]`): update status to recommend `/ytstack:reassess-roadmap`, flip the slice's `status:` to `done` in `{SLICE_PLAN}` frontmatter, and when every slice in `{CURRENT_MILESTONE}-ROADMAP.md` is checked flip the milestone's `status:` to `done` there and mirror the global `ROADMAP.md` row (M018 artifact states).
+If the slice is now fully complete (all tasks `[x]`): update status to recommend `/ytstack:reassess-roadmap`, flip the slice's `status:` to `done` in `{SLICE_PLAN}` frontmatter, and when every slice in `{ROADMAP}` is checked flip the milestone's `status:` to `done` there and mirror the global `ROADMAP.md` row (M018 artifact states).
 
 ### Step 12: Offer git stage
 
@@ -366,7 +369,7 @@ Report:
 
 > Task **{ACTIVE_TASK}** closed.
 >
-> Summary at: `{YT_DIR}/{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{ACTIVE_TASK}-SUMMARY.md`
+> Summary at: `{ARTIFACT_DIR}/{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{ACTIVE_TASK}-SUMMARY.md`
 > Spec: {SPEC_RECORD}
 > Slice-plan checkbox flipped.
 > STATE.md: `active_task` cleared.

@@ -3,7 +3,7 @@ name: ship
 description: "Ships the current branch (merge the base, tests, coverage and plan audit, pre-landing review, version and CHANGELOG, docs sync, commit, push, pull request), gated on ytstack's slice state. Use when a slice or milestone is closed on paper and verified, or when the user says ship it, open the PR, land this, create a PR. Not before every task of the slice has a summary (summarize-task), not for merging into the base locally (finish-branch), and never for a merge without an explicit merge instruction."
 metadata:
   tier: task
-  version: 1.0.2
+  version: 1.0.3
   upstream: "gstack v1.99.3.0 (ship/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
@@ -133,10 +133,12 @@ if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STATE.md" ]; then
   _S=$(sed -n 's/^active_slice: *//p' "$_YT_DIR/STATE.md" | head -1); _S=${_S:-none}
   echo "CURRENT_MILESTONE: $_M"
   echo "ACTIVE_SLICE: $_S"
-  if [ -f "$_YT_DIR/$_M-$_S-PLAN.md" ]; then
-    _SLICE_PLAN="$_YT_DIR/$_M-$_S-PLAN.md"
+  # Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
+  _ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "$1"; else printf '%s\n' "$_YT_DIR/$1"; fi; }
+  if [ -f "$(_ap "$_M-$_S-PLAN.md")" ]; then
+    _SLICE_PLAN=$(_ap "$_M-$_S-PLAN.md")
     for t in $(grep -oE '^- \[.\] T[0-9][0-9] --' "$_SLICE_PLAN" | grep -oE 'T[0-9][0-9]'); do
-      f="$_YT_DIR/$_M-$_S-$t-SUMMARY.md"
+      f=$(_ap "$_M-$_S-$t-SUMMARY.md")
       { [ ! -f "$f" ] || grep -q '^closed: draft' "$f"; } && _OPEN_TASKS="$_OPEN_TASKS $t"
     done
   fi
