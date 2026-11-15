@@ -49,7 +49,10 @@
 # "Checks run:" line, "Status:" one of complete, partial, blocked, and
 # consistent with "Blockers:" (blocked names one, complete has none), and
 # "Spec:" a spec delta: "none -- <reason>", or "<area>: <path>" per edited
-# section (a "(<section>)" may follow), several joined by ";". A report
+# section (a "(<section>)" may follow), several joined by ";", backticks
+# ignored; when DIR (default $PWD) has a technical spec, each path is the
+# area file or one of its sources. A task of a slice plan that has its own
+# "## Files" (granularity slice) is briefed from the slice plan. A report
 # that carries one of the four labels of a review (Risk, Severity, Reach,
 # Invariants touched) has to carry all four with a value, and "Risk:" is low,
 # normal or high. A report that carries "Lens:" or "Evidence:" has to carry
@@ -134,11 +137,12 @@ plan_first() {
   B_OUTCOME=$(para "$line" "${x//$NL/$NL$NL}")
   B_FILES=$(fill plan-first-scope "$to") || exit 1
   # The paths the task line names in backticks: a hint for the plan, and what
-  # the area lookup below reads.
-  ALL_FILES=$(printf '%s\n' "$line" | grep -oE '`[^`]+`' | tr -d '`' | grep -E '[/.]' | sort -u)
+  # the area lookup below reads (it takes the backticked tokens, so they keep
+  # their backticks here).
+  ALL_FILES=$(printf '%s\n' "$line" | grep -oE '`[^`]+`' | grep -E '[/.]' | sort -u)
   if [ -n "$ALL_FILES" ]; then
     x=$(lens_snip plan-first-hint) || exit 1
-    B_FILES=$(para "$B_FILES" "$x$NL$NL$(printf '%s\n' "$ALL_FILES" | sed 's/^/- `/; s/$/`/')")
+    B_FILES=$(para "$B_FILES" "$x$NL$NL$(printf '%s\n' "$ALL_FILES" | sed 's/^/- /')")
   fi
   B_VERIFICATION=$(lens_snip plan-first-verification) || exit 1
   B_SPEC_IMPACT=$(lens_snip plan-first-spec-impact) || exit 1
@@ -295,6 +299,11 @@ cmd_render() {
   elif [ "$kind" = task ]; then
     B_OUTCOME=$(para "$(field "$plan" Summary)" "$(section "$plan" "What this does")")
     add "" "$plan"
+  elif [ "$kind" = unplanned ] && [ -n "$(section "$plan" Files)" ]; then
+    # granularity: slice -- the slice plan is the plan of each of its tasks
+    x=$(section "$plan" Tasks | sed -n "s/^- \[[ xX]\] ${ref##*-} -- //p" | head -1)
+    B_OUTCOME=$(para "$x" "$(para "$(field "$plan" Goal)" "$(section "$plan" "What this does")")")
+    add "" "$plan"
   elif [ "$kind" = unplanned ]; then
     plan_first "$plan" "$ref"
   else
@@ -421,7 +430,8 @@ cmd_check() {
     [ -r "$1" ] && [ ! -d "$1" ] || { echo "ytstack-brief: cannot read report '$1'" >&2; return 64; }
     exec < "$1"
   fi
-  awk '
+  local out ec bad=0 a p f
+  out=$(awk '
     BEGIN {
       n = split("Task|Status|Outcome|Commits|Uncommitted|Checks run|Spec|Deviations|Blockers|Not checked|Next", L, "|")
       # What a review (four) and a lens (two) add after the eleven; read as
@@ -456,8 +466,14 @@ cmd_check() {
       sp = V["Spec"]
       if (sp != "" && sp !~ /^[Nn]one -- [^ ]/) {
         k = split(sp, E, ";"); fine = 1
-        for (i = 1; i <= k; i++) { e = E[i]; gsub(/^[ \t]+|[ \t]+$/, "", e); if (e !~ /^[a-z0-9][a-z0-9-]*: [^ <>|]+/) fine = 0 }
+        for (i = 1; i <= k; i++) { e = E[i]; gsub(/`/, "", e); gsub(/^[ \t]+|[ \t]+$/, "", e); if (e !~ /^[a-z0-9][a-z0-9-]*: [^ <>|]+/) fine = 0 }
         if (!fine) { print "Spec: \"" sp "\" is no spec delta: name each edited section as \"<area>: <file> (<section>)\", or write \"none -- <reason>\""; bad = 1 }
+        # Well formed: the caller checks the paths against the project spec.
+        else for (i = 1; i <= k; i++) {
+          e = E[i]; gsub(/`/, "", e); gsub(/^[ \t]+|[ \t]+$/, "", e)
+          p = substr(e, index(e, ": ") + 2); sub(/ .*/, "", p)
+          print "@entry " substr(e, 1, index(e, ": ") - 1) "\t" p
+        }
       }
       s = V["Status"]; b = V["Blockers"]
       if (s != "" && s !~ /^(complete|partial|blocked)$/) { print "Status: \"" s "\" is not complete, partial or blocked"; bad = 1 }
@@ -487,9 +503,31 @@ cmd_check() {
         if (e != "" && e != "none" && e !~ / \([0-9]+ images?\)$/) { print "Evidence: \"" e "\" is neither \"none\" nor \"<directory> (<n> images)\""; bad = 1 }
       }
       if (bad) exit 1
-      print "report ok"
     }
-  '
+  ')
+  ec=$?
+  printf '%s\n' "$out" | grep -v '^@entry ' | grep -v '^$'
+  [ "$ec" -eq 0 ] || return 1
+  # In a project with a technical spec, an edited section lies in the area
+  # file or in one of the sources it names.
+  if [ -d "$DIR" ]; then
+    . "$ROOT/hooks/lib/git-ctx.sh"
+    yt_git_ctx "$DIR"; yt_resolve_yt_dir >/dev/null; TOP="$YT_TOPLEVEL"
+    if [ -n "${YT_DIR:-}" ] && [ -f "$YT_DIR/spec/SPEC.md" ]; then
+      while IFS='	' read -r a p; do
+        [ -n "$a" ] || continue
+        f="$YT_DIR/spec/$a.md"
+        if [ ! -f "$f" ]; then echo "Spec: \"$a: $p\" names no area of this project ($(rel "$f") does not exist)"; bad=1; continue; fi
+        [ "$p" = "$(rel "$f")" ] && continue
+        yt_fm "$f" | awk -F'\t' -v p="$p" '$1 == "sources" && $2 == p { hit = 1 } END { exit !hit }' && continue
+        echo "Spec: \"$a: $p\" is neither $(rel "$f") nor one of its sources"; bad=1
+      done <<EOF
+$(printf '%s\n' "$out" | sed -n 's/^@entry //p')
+EOF
+    fi
+  fi
+  [ "$bad" -eq 0 ] || return 1
+  echo "report ok"
 }
 
 case "$CMD" in

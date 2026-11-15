@@ -236,6 +236,21 @@ printf '\n**Goal:** Whole slice in one plan\n\n## Tasks\n\n- [ ] T01 -- all of i
 run "$R" render --slice M002-S01
 hasnt "a slice plan with its own Files has no unplanned tasks" "not planned yet" "$OUT"
 has "and its own files are the scope" '- Create: `tests/login.test.sh`' "$(part Scope)"
+# review #88 item 9: a task of such a slice is not asked for a task plan
+run "$R" render --task M002-S01-T01
+eq "granularity slice: a task of a slice plan with its own Files renders" 0 "$EC"
+hasnt "granularity slice: no task plan is demanded" "first deliverable" "$OUT"
+has "granularity slice: the slice plan's files are the scope" '- Create: `tests/login.test.sh`' "$(part Scope)"
+has "granularity slice: the slice plan's verification" "bash tests/login.test.sh" "$(part Verification)"
+has "granularity slice: the task line is the outcome" "all of it" "$(part Outcome)"
+
+# review #88 item 3: the plan-first brief names the area of the task line's paths
+mkdir -p "$R/.ytstack/spec"
+printf -- '---\nproject: acme\n---\n\n# spec\n' > "$R/.ytstack/spec/SPEC.md"
+printf -- '---\narea: auth\nstatus: planned\npaths:\n  - src/auth/**\n---\n' > "$R/.ytstack/spec/auth.md"
+run "$R" render --task M001-S01-T02
+has "plan first: the area file of the task line's paths is read" '- `.ytstack/spec/auth.md`' "$(part "Read for context")"
+rm -rf "$R/.ytstack/spec"
 
 # ---- 3. render --kind ---------------------------------------------------------
 echo "# render --kind"
@@ -446,13 +461,14 @@ Blockers: none
 Not checked: the CI run, it starts after the push
 Next: dispatch the verifier on abc1234'
 # chk <report text>: sets OUT and EC
-chk() { OUT=$(printf '%s\n' "$1" | bash "$BIN" check 2>&1); EC=$?; }
+# (from $TMP: in a project with a spec, check also reads its area files)
+chk() { OUT=$(cd "$TMP" && printf '%s\n' "$1" | bash "$BIN" check 2>&1); EC=$?; }
 
 chk "$GOOD"
 eq "a complete report passes" 0 "$EC"
 eq "and says so" "report ok" "$OUT"
 printf '%s\n' "$GOOD" > "$TMP/report.txt"
-OUT=$(bash "$BIN" check "$TMP/report.txt" 2>&1); eq "a report file is read like stdin" "report ok" "$OUT"
+OUT=$(bash "$BIN" -C "$TMP" check "$TMP/report.txt" 2>&1); eq "a report file is read like stdin" "report ok" "$OUT"
 
 for L in "Task" "Status" "Outcome" "Commits" "Uncommitted" "Checks run" "Spec" "Deviations" "Blockers" "Not checked" "Next"; do
   chk "$(printf '%s\n' "$GOOD" | grep -v "^$L:")"
@@ -486,6 +502,20 @@ chk "$(printf '%s\n' "$GOOD" | sed 's/^Spec:.*/Spec: updated the auth docs/')"
 eq "Spec: prose without an area and a path fails" 'Spec: "updated the auth docs" is no spec delta: name each edited section as "<area>: <file> (<section>)", or write "none -- <reason>"' "$OUT"
 chk "$(printf '%s\n' "$GOOD" | sed 's#^Spec:.*#Spec: auth: .ytstack/spec/auth.md; the rest is unchanged#')"
 eq "Spec: every entry needs an area and a path" 1 "$EC"
+chk "$(printf '%s\n' "$GOOD" | sed 's#^Spec:.*#Spec: auth: `.ytstack/spec/auth.md` (Behavior)#')"
+eq "Spec: a path in backticks is read like a bare one" "report ok" "$OUT"
+# review #88 item 1: in a project with a spec, the path is the area file or one of its sources
+SR=$(new_repo specchk); mkdir -p "$SR/.ytstack/spec" "$SR/docs"; echo d > "$SR/docs/auth.md"
+printf -- '---\nproject: acme\n---\n\n# spec\n' > "$SR/.ytstack/spec/SPEC.md"
+printf -- '---\narea: auth\nstatus: planned\npaths:\n  - src/auth/**\nsources:\n  - docs/auth.md\n---\n' > "$SR/.ytstack/spec/auth.md"
+# schk <spec value>: the report with that Spec: line, checked in the project
+schk() { OUT=$(printf '%s\n' "$GOOD" | sed "s#^Spec:.*#Spec: $1#" | bash "$BIN" -C "$SR" check 2>&1); EC=$?; }
+schk 'auth: src/auth/login.sh (Behavior)'
+eq "a code file is no spec edit" 'Spec: "auth: src/auth/login.sh" is neither .ytstack/spec/auth.md nor one of its sources' "$OUT"
+schk 'auth: .ytstack/spec/auth.md (Behavior); auth: `docs/auth.md` (Login)'
+eq "the area file and a source pass" "report ok" "$OUT"
+schk 'billing: .ytstack/spec/billing.md (Behavior)'
+eq "an area the project does not have fails" 'Spec: "billing: .ytstack/spec/billing.md" names no area of this project (.ytstack/spec/billing.md does not exist)' "$OUT"
 
 chk "$(printf '%s\n' "$GOOD" | sed 's/^Not checked:.*/Not checked:   /')"
 eq "an empty Not checked fails" 1 "$EC"
