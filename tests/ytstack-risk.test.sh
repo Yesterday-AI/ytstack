@@ -229,6 +229,8 @@ change "$R" files21 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20
 normal "21 changed files are over the limit" "reason: size -- never low: 21 changed lines in 21 files"
 change "$R" bigrecord 'echo b >> src/auth/login.sh; awk "BEGIN { for (i = 0; i < 500; i++) print \"l\" }" > .ytstack/M001-S01-T01-PLAN.md'; fl
 eq "process records do not count towards the size" "floor: low" "$(line floor)"
+change "$R" bigrecord-moved 'echo b >> src/auth/login.sh; mkdir -p .ytstack/milestones/M001 && awk "BEGIN { for (i = 0; i < 500; i++) print \"l\" }" > .ytstack/milestones/M001/M001-S01-T01-PLAN.md'; fl
+eq "a record in milestones/M###/ is a process record too (#70)" "floor: low" "$(line floor)"
 change "$R" binary 'printf "\0\1\2\3" > src/auth/blob.bin'; fl
 eq "a binary file is one file and no lines" "floor: low" "$(line floor)"
 

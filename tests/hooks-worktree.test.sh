@@ -121,6 +121,22 @@ eq "repeat: no new files in main"     "$MAIN_FILES" "$(files_in "$MAIN")"
 eq "repeat: main HANDOFF.md still intact" "$H_SHA" "$(shasum -a 256 "$MAIN/.ytstack/HANDOFF.md" | cut -c1-16)"
 eq "repeat: journal appended, not duplicated elsewhere" 2 "$(cat "$PD/repos/$KW/sessions/sc/session.jsonl" | wc -l | tr -d ' ')"
 
+# ---- (d) milestone moved to milestones/M050/ (#70) ---------------------------
+echo "# (d) moved milestone"
+MV="$TMP/moved"; mkdir -p "$MV/.ytstack/milestones/M050"
+( cd "$MV" || exit 2; git init -q && git config user.email t@t.t && git config user.name t
+  printf 'current_milestone: M050\nactive_slice: S01\nactive_task: T01\n' > .ytstack/STATE.md
+  printf -- '---\nmilestone: M050\n---\n- [ ] S01 -- x\n' > .ytstack/milestones/M050/M050-ROADMAP.md
+  printf -- '---\nslice: S01\n---\n- [ ] T01 -- one (src/a.ts)\n- [ ] T02 -- two\n' > .ytstack/milestones/M050/M050-S01-PLAN.md
+  echo seed > f.txt; git add -A; git commit -qm seed ) >/dev/null 2>&1 || { echo FATAL moved fixture; exit 2; }
+SESSION=sd
+fire task-completed "$MV" "$MV" ',"tool_input":{"subject":"M050-S01-T02 -- two"}'
+[ -f "$MV/.ytstack/milestones/M050/M050-S01-T02-SUMMARY.md" ] && ok "d: task-completed writes the summary into milestones/M050/" || bad "d: summary in milestones/M050/"
+[ -e "$MV/.ytstack/M050-S01-T02-SUMMARY.md" ] && bad "d: no flat summary" || ok "d: no flat summary"
+grep -F -- '- [x] T02 -- two' >/dev/null "$MV/.ytstack/milestones/M050/M050-S01-PLAN.md" && ok "d: checkbox ticked in the moved slice plan" || bad "d: checkbox ticked in the moved slice plan"
+fire teammate-idle "$MV" "$MV" ''
+case "$(cat "$TMP/err.teammate-idle")" in *"1 task(s) still open in milestone M050"*) ok "d: teammate-idle counts the moved slice plan";; *) bad "d: teammate-idle counts the moved slice plan" "$(cat "$TMP/err.teammate-idle")";; esac
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -175,6 +175,15 @@ printf '{"tool_input":{"command":"git commit -m x"},"tool_response":{"exit_code"
 [ -f "$R14/$SUMREL" ] && ok "T14 no cwd in payload -> falls back to hook PWD" \
   || bad "T14 PWD fallback failed"
 
+# --- T15: milestone moved to milestones/M999/ -> stub lands there (#70) ------
+R15=$(new_repo)
+in_fixture "$R15"; mkdir -p "$R15/.ytstack/milestones/M999"; printf 'r\n' > "$R15/.ytstack/milestones/M999/M999-ROADMAP.md"
+commit_in "$R15" m "M999-S01-T01: add m"
+fire "$R15" 'git commit -m "M999-S01-T01: add m"' 0
+[ -f "$R15/.ytstack/milestones/M999/M999-S01-T01-SUMMARY.md" ] && ok "T15 moved milestone -> stub in milestones/M999/" \
+  || bad "T15 stub not in the milestone's directory"
+[ ! -f "$R15/$SUMREL" ] && ok "T15 no flat stub beside the moved milestone" || bad "T15 stub written flat"
+
 echo
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

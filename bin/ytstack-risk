@@ -397,6 +397,9 @@ is_record() {
     .ytstack/M[0-9][0-9][0-9]-*-PLAN.md|.ytstack/M[0-9][0-9][0-9]-*-SUMMARY.md) return 0 ;;
     .ytstack/M[0-9][0-9][0-9]-CONTEXT.md|.ytstack/M[0-9][0-9][0-9]-ROADMAP.md|.ytstack/M[0-9][0-9][0-9]-SUMMARY.md) return 0 ;;
   esac
+  # The same files in the directory a milestone lives in (issue #70): judged by name.
+  case "$1" in .ytstack/milestones/*/M[0-9][0-9][0-9]-*|.ytstack/milestones/M[0-9][0-9][0-9]-*|.ytstack/backlog/*/M[0-9][0-9][0-9]-*|.ytstack/backlog/M[0-9][0-9][0-9]-*)
+    is_record ".ytstack/${1##*/}"; return ;; esac
   return 1
 }
 

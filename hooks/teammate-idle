@@ -29,7 +29,7 @@ CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$STATE_FILE" | head -1)
 
 # Count unfinished tasks across all slice-plans for this milestone
 OPEN_TASK_COUNT=0
-for plan in "$YT_DIR"/$CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md; do
+for plan in "$(yt_artifact_dir "$YT_DIR" "$CURRENT_MILESTONE")"/$CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md; do
   [ -f "$plan" ] || continue
   count=$(grep -c '^- \[ \] T[0-9][0-9]' "$plan" 2>/dev/null || echo 0)
   OPEN_TASK_COUNT=$((OPEN_TASK_COUNT + count))
