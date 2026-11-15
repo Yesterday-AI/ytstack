@@ -566,6 +566,10 @@ inc; edit "$R" 's/^lesson: .*/lesson: the flaky test/'
 defect "a lesson that is no finding id" "$INAME: lesson \"the flaky test\" is not \"none\" or finding ids"
 inc; edit "$R" '/^lesson: /d'
 passes "a record written before lessons (no lesson line) passes while it is open"
+inc; edit "$R" '/^lesson: /d; s/^state: .*/state: closed/; s/^closed: .*/closed: 2026-11-13T12:00:00Z/; s/^root_cause: .*/root_cause: M005-S01-T02/'
+run "$D" check
+eq "a closed record written before lessons (no lesson line): a warning, exit 0" "0 $INAME: warning: closed without a lesson: line (a record from before lessons); add one with ytstack-signals lesson new --incident ${INAME%.md}
+signals ok: 0 finding(s), 1 incident(s)" "$EC $OUT"
 inc; edit "$R" 's/^severity: .*/severity:/'
 defect "a record without severity" "$INAME: no severity"
 inc; edit "$R" '/^## Hypotheses$/d'

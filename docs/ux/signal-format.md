@@ -233,7 +233,7 @@ lesson: F014
 | `opened`, `mitigated`, `closed` | UTC times with seconds, or `none`. `open`: only `opened` is set. `mitigated`: `mitigated` is set, `closed` is not. `closed`: `closed` is set; `mitigated` stays `none` when the incident ended without a mitigation. |
 | `severity` | As the person stated it, in their terms, or `unstated`. Nobody else grades an incident. |
 | `root_cause` | `none`, then the reference of the task that found the cause (`M005-S01-T02`). A closed record needs that reference or `not pursued -- <reason>`. |
-| `lesson` | `none`, then the id of the lesson the incident taught (`F014`), several comma separated (`F014,F016`); written by `lesson new --incident`. A closed record needs one. A record written before lessons has no line, which reads as `none`. |
+| `lesson` | `none`, then the id of the lesson the incident taught (`F014`), several comma separated (`F014,F016`); written by `lesson new --incident`. A closed record needs one. A record written before lessons has no line: `check` warns about it once it is closed (a legacy record) and does not fail. |
 
 The six sections stand in this order:
 
@@ -270,7 +270,7 @@ Every mitigation is a staged script for a person, made with `bin/ytstack-handove
 - a file in `incidents/` whose name is not `<YYYY-MM-DD>-<slug>.md`, an `id` that differs from the file name, a file without frontmatter
 - a `state` outside the three values, an `opened` that is not a UTC time, a `mitigated` or `closed` that is neither `none` nor a UTC time, and times that contradict the state
 - a record without `severity`, a closed record whose `root_cause` is `none`, a `not pursued` without a reason
-- a closed record whose `lesson` is `none` or missing, a `lesson` that is not `none` or finding ids, and an id that names no finding of `kind: lesson`
+- a closed record whose `lesson` is `none`, a `lesson` that is not `none` or finding ids, and an id that names no finding of `kind: lesson`. A closed record with no `lesson:` line at all was written before lessons existed: `check` lists it as a `warning:` line (a legacy record) and the exit stays as it is; `lesson new --incident <id>` adds the line
 - a body that does not have the six sections, each once and in order
 - a list line under "Proposed mitigations" that does not start with `M<n> -- `, an id used twice, a missing field, a `status` outside the four forms
 - a mitigation that is not `declined` and whose script does not exist or does not pass `bin/ytstack-handover check`, and a `carried out` whose receipt does not exist

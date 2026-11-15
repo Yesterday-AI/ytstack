@@ -64,7 +64,8 @@
 #                   when the pull request has a line; without: 0 and its line,
 #                   1 when it has none; 1 no .ytstack directory; 64 usage
 #   check  0 "signals ok: <n> finding(s), <m> incident(s)", or "no signals"
-#          without both directories; 1 one line per problem
+#          without both directories; 1 one line per problem. A "warning:"
+#          line (a closed record from before lessons) leaves the exit as it is
 
 set -uo pipefail
 # Keys, ids and slugs are ASCII: ranges and classes mean bytes everywhere below.
@@ -757,9 +758,12 @@ check_incidents() {
       if (rc == "") p("no root_cause; \"none\" until there is one")
       else if (st == "closed" && rc == "none") p("state closed, but root_cause is \"none\": name the task, or \"not pursued -- <reason>\"")
       else if (rc ~ /^not pursued/ && rc !~ /^not pursued -- [^ ]/) p("root_cause \"" rc "\" gives no reason: \"not pursued -- <reason>\"")
-      # What the incident taught: a record written before lessons has no line, which reads as "none".
+      # What the incident taught. A record written before lessons has no line:
+      # closed, it is a legacy record and only warned about; "lesson: none"
+      # (what incident new writes) on a closed record fails.
       ls = ("lesson" in V && V["lesson"] != "") ? V["lesson"] : "none"
       if (ls != "none" && ls !~ /^F[0-9][0-9][0-9](,F[0-9][0-9][0-9])*$/) p("lesson \"" ls "\" is not \"none\" or finding ids like F007,F012")
+      else if (st == "closed" && !("lesson" in V)) print "=warn\t" name ": warning: closed without a lesson: line (a record from before lessons); add one with ytstack-signals lesson new --incident " V["id"]
       else if (st == "closed" && ls == "none") p("state closed, but lesson is \"none\": record what it taught with ytstack-signals lesson new --incident " V["id"])
       else if (ls != "none") { nl = split(ls, LS, ","); for (j = 1; j <= nl; j++) print "=lesson\t" name "\t-\t" LS[j] }
       if (order != "123456") p("the sections are not \"What is seen\", \"Timeline\", \"Hypotheses\", \"Proposed mitigations\", \"Decisions\" and \"After\", each once and in this order")
@@ -826,6 +830,7 @@ check_incidents() {
   while IFS= read -r line; do
     case "$line" in
       "") continue ;;
+      "=warn$TAB"*) echo "${line#=warn"$TAB"}" ;;
       "=lesson$TAB"*)
         IFS=$TAB read -r _ name _ mid <<EOF
 $line

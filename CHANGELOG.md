@@ -81,9 +81,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `ytstack-signals check` fails on a closed incident record without a
-  recorded lesson (`lesson:` line, written by `lesson new --incident`); lesson
-  targets in `AGENTS.md` or `CLAUDE.md` are refused.
+- `ytstack-signals check` fails on a closed incident record whose `lesson:`
+  line is `none` (`lesson new --incident` fills it); lesson targets in
+  `AGENTS.md`, `CLAUDE.md` or `CLAUDE.local.md` (any case) are refused.
 - `retro` and `lane-retro` end with an "Upstream" section, and `lesson` sends a
   lesson about ytstack itself through the upstream channel; non-interactive
   runs send nothing. `using-ytstack` "Reporting ytstack issues" became
@@ -105,6 +105,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `bin/ytstack-risk --help` printed a sed error instead of the commands.
+
+### Upgrade note
+
+- Closed incident records from before this release have no `lesson:` line.
+  `ytstack-signals check` lists each as a `warning:` (a legacy record) and
+  still passes; add the lesson with
+  `ytstack-signals lesson new --incident <id>` when you get to it. Only a
+  closed record with `lesson: none`, which new records start with, fails.
 
 ## [0.10.0] - 2026-11-15
 
