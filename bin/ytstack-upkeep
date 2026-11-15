@@ -51,8 +51,8 @@
 # Exit 10 when it printed a command, 0 otherwise, 1 outside a git repository.
 #
 # It only reads. With --question, and only when something needs a look, it
-# writes ONE question file through `ytstack-questions new` ("Upkeep found N
-# things that need a look") with the report under "## Context", and prints
+# writes ONE question file through `ytstack-questions new --info` ("Upkeep
+# found N things that need a look") with the report under "## Context", and prints
 # "question: <path>". While an earlier question of this script is open or
 # asked it writes none. It never changes another file, and it never commits.
 #
@@ -420,9 +420,13 @@ if [ "$QUESTION" = yes ]; then
   if [ -n "$earlier" ]; then
     echo "question: none written, $earlier already carries an upkeep report"
   else
-    f=$(tool ytstack-questions new --question "Upkeep found $THINGS" --decides "the operator") || die "could not write the question"
+    # A report decides nothing: class info (issue #78); Source and Purpose let it be asked.
+    f=$(tool ytstack-questions new --question "Upkeep found $THINGS" --info "the operator") || die "could not write the question"
     YTU_TEXT="\`bin/ytstack-upkeep\` wrote this file at $READ and changed nothing else. Its report:$NL$NL$(printf '%s\n' "$REPORT" | sed 's/^/    /')" \
-      awk '{ print } $0 == "## Context" && !done { print ""; print ENVIRON["YTU_TEXT"]; done = 1 }' "$f" > "$f.tmp" \
+    YTU_SRC="Source: the run of \`bin/ytstack-upkeep\` at $READ" \
+    YTU_PUR="Purpose: the operator sees what needs a look and says which of it becomes work" \
+      awk '$0 == "Source:" { print ENVIRON["YTU_SRC"]; next } $0 == "Purpose:" { print ENVIRON["YTU_PUR"]; next }
+           { print } $0 == "## Context" && !done { print ""; print ENVIRON["YTU_TEXT"]; done = 1 }' "$f" > "$f.tmp" \
       && mv "$f.tmp" "$f" || die "could not write the report into $f"
     echo "question: $f"
   fi

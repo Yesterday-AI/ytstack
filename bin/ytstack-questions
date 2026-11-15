@@ -4,7 +4,7 @@
 #
 #   ytstack-questions [-C DIR] list [--state open|asked|answered]
 #   ytstack-questions [-C DIR] next
-#   ytstack-questions [-C DIR] new --question TEXT --decides WHO [--blocks REFS]
+#   ytstack-questions [-C DIR] new --question TEXT (--decides WHO --because ITEM | --info WHO) [--blocks REFS]
 #   ytstack-questions [-C DIR] ask <id>
 #   ytstack-questions [-C DIR] answer <id>
 #   ytstack-questions [-C DIR] check
@@ -13,12 +13,21 @@
 # (default: $PWD). ask and answer change the frontmatter only; the text of an
 # answer is written into the file by whoever heard it, never by this script.
 #
+# Who decides (issue #78): --decides writes class escalation and needs
+# --because, one item of `escalate:` in PREFERENCES.md (default violation,
+# deviation, irreversible, secret, spend) or `reserved` (a plan line or a
+# standing entry reserves the verdict). Everything else the coordinator
+# decides itself. --info writes class info: WHO supplies a fact or takes
+# note, the decision stays with the coordinator.
+#
 # Exit codes
 #   list    0; one line per file: id, state, decides, blocks, question (tab
 #           separated); without --state the open and the asked ones
 #   next    0 "<id><TAB><path>" of the oldest open question; 1 none is open
-#   new     0 the path of the new file; 1 no .ytstack directory; 64 usage
-#   ask     0; 1 unknown id, or the state is not open (a question is asked once)
+#   new     0 the path of the new file; 1 no .ytstack directory; 64 usage,
+#           also --decides without an item of the list
+#   ask     0; 1 unknown id, the state is not open (a question is asked once),
+#           or "## Context" has no "Source:" or no "Purpose:" line with a value
 #   answer  0; 1 unknown id, already answered, or no text under "## Answer"
 #   check   0 clean, or "no questions" without the directory; 1 one line per problem
 
@@ -31,6 +40,8 @@ if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
 usage() { sed -n '5,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+# The items --because takes beside the project's list; check knows all of them.
+REASONS_ALL="violation|deviation|irreversible|secret|spend|reserved"
 die() { echo "ytstack-questions: $*" >&2; exit 1; }
 case "$CMD" in list|next|new|ask|answer|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 # The resolver falls back to $PWD for a missing directory: refuse it here.
@@ -89,6 +100,19 @@ answer_text() {
     on && NF && $0 !~ /^[ \t]*<.*>[ \t]*$/ { print }
   ' "$1"
 }
+# context_names <file> <label>: status 0 when "## Context" has a "<label>:" line
+# with a value; blanks and a "<placeholder>" are no value.
+context_names() {
+  awk -v l="$2:" '
+    /^```/ { fence = !fence }
+    !fence && /^## / { on = ($0 ~ /^## Context[ \t]*$/); next }
+    on && index($0, l) == 1 {
+      v = substr($0, length(l) + 1); gsub(/^[ \t]+|[ \t]+$/, "", v)
+      if (v != "" && v !~ /^<.*>$/) { hit = 1; exit }
+    }
+    END { exit !hit }
+  ' "$1"
+}
 # find_q <id>: the one file of a question, or a message and status 1.
 find_q() {
   local f hit="" n=0
@@ -138,18 +162,39 @@ EOF
 
 # ---- new -----------------------------------------------------------------------
 cmd_new() {
-  local q="" who="" blocks="" n=0 f id slug
+  local q="" who="" info="" because="" blocks="" n=0 f id slug class list
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || { usage >&2; return 64; }
     case "$1" in
       --question) q=$(oneline "$2") ;;
       --decides)  who=$(oneline "$2") ;;
+      --because)  because=$(oneline "$2") ;;
+      --info)     info=$(oneline "$2") ;;
       --blocks)   blocks=$(oneline "$2") ;;
       *) usage >&2; return 64 ;;
     esac
     shift 2
   done
-  [ -n "$q" ] && [ -n "$who" ] || { usage >&2; return 64; }
+  [ -n "$q" ] || { usage >&2; return 64; }
+  if [ -n "$info" ]; then
+    [ -z "$who" ] && [ -z "$because" ] || { echo "ytstack-questions: --info asks for a fact and decides nothing; it takes no --decides or --because" >&2; return 64; }
+    class=info; who="$info"; because=none
+  else
+    [ -n "$who" ] || { usage >&2; return 64; }
+    class=escalation
+    list="violation|deviation|irreversible|secret|spend"
+    command -v yt_prefs >/dev/null 2>&1 && [ -n "$YT_DIR" ] && { yt_prefs "$YT_DIR" >/dev/null; list=$(printf '%s' "$YT_PREF_ESCALATE" | sed 's/, */|/g'); }
+    list="$list|reserved"
+    f="no --because given"
+    [ -z "$because" ] || case "|$list|" in
+      *"|$because|"*) f="" ;;
+      *) f="'$because' is not on the escalation list" ;;
+    esac
+    if [ -n "$f" ]; then
+      echo "ytstack-questions: $f. --decides needs --because <$list>; anything else, decide it yourself and record it in DECISIONS.md (or ask with --info)" >&2
+      return 64
+    fi
+  fi
   [ -n "$QDIR" ] || die "no .ytstack directory for $DIR"
   mkdir -p "$QDIR" || die "cannot create $QDIR"
   # The next id follows the highest one in use; a gap is not filled.
@@ -162,8 +207,8 @@ cmd_new() {
   id=$(printf 'Q%03d' $((n + 1)))
   slug=$(printf '%s' "$q" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C tr -c 'a-z0-9' '-' | sed 's/--*/-/g; s/^-//' | cut -c1-48 | sed 's/-$//')
   f="$QDIR/$id-${slug:-question}.md"
-  printf -- '---\nid: %s\nstate: open\ndecides: %s\nopened: %s\nasked: none\nanswered: none\nblocks: %s\n---\n\n# %s -- %s\n\n## Context\n\n## Options\n\n## Recommendation\n\n## Answer\n' \
-    "$id" "$who" "$(now)" "${blocks:-none}" "$id" "$q" > "$f" || die "cannot write $f"
+  printf -- '---\nid: %s\nstate: open\nclass: %s\ndecides: %s\nbecause: %s\nopened: %s\nasked: none\nanswered: none\nblocks: %s\n---\n\n# %s -- %s\n\n## Context\n\nSource:\nPurpose:\n\n## Options\n\n## Recommendation\n\n## Answer\n' \
+    "$id" "$class" "$who" "$because" "$(now)" "${blocks:-none}" "$id" "$q" > "$f" || die "cannot write $f"
   printf '%s\n' "$f"
 }
 
@@ -175,6 +220,13 @@ cmd_ask() {
   s=$(fm "$f" state)
   if [ "$s" != open ]; then
     echo "ytstack-questions: $1 is '$s', not open; a question is asked once" >&2; return 1
+  fi
+  # The person answers from the file alone: where the need comes from and what it is for.
+  local miss=""
+  context_names "$f" Source || miss="source"
+  context_names "$f" Purpose || miss="${miss:+$miss and no }purpose"
+  if [ -n "$miss" ]; then
+    echo "ytstack-questions: $1 is not asked: its Context names no $miss; write 'Source:' and 'Purpose:' lines under '## Context' in $f first" >&2; return 1
   fi
   setfm "$f" state asked asked "$(now)" || die "cannot write $f"
   echo "$1 asked"
@@ -198,7 +250,7 @@ cmd_answer() {
 
 # ---- check ---------------------------------------------------------------------
 cmd_check() {
-  local f name id s asked answered n=0 bad=0 ids=" "
+  local f name id s asked answered cls why n=0 bad=0 ids=" "
   problem() { bad=$((bad + 1)); echo "$1"; }
   if [ -z "$QDIR" ] || [ ! -d "$QDIR" ]; then echo "no questions"; return 0; fi
   for f in "$QDIR"/*.md; do
@@ -225,6 +277,16 @@ cmd_check() {
         [ -n "$(answer_text "$f")" ] || problem "$name: state answered, but there is no text under '## Answer'" ;;
       *) problem "$name: state '$s' is not open, asked or answered" ;;
     esac
+    # class and because (issue #78): a file without class is from before and
+    # reads as escalation; the item is checked against all items, not against
+    # the project's list of today.
+    cls=$(fm "$f" class); why=$(fm "$f" because)
+    case "$cls" in
+      ''|info) ;;
+      escalation) is_set "$why" || problem "$name: class escalation, but because is not set" ;;
+      *) problem "$name: class '$cls' is not escalation or info" ;;
+    esac
+    ! is_set "$why" || case "|$REASONS_ALL|" in *"|$why|"*) ;; *) problem "$name: because '$why' is not $REASONS_ALL" ;; esac
   done
   [ "$bad" -eq 0 ] || return 1
   echo "questions ok: $n file(s)"

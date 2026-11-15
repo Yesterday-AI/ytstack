@@ -3,7 +3,7 @@ name: handover-step
 description: "Prepares a step that only the human may perform (a production action, a check in a GUI application, anything behind their credentials or their eyes) as one staged script they start with one short command. Use when the plan, a gate or a standing instruction reserves a step for the human, or when the user says hand this over, prepare the production step, give me a script for it. Not for a step the agent may do itself, and not for a decision only the human can take (that is a question file under .ytstack/questions/, written with bin/ytstack-questions)."
 metadata:
   tier: task
-  version: 0.1.1
+  version: 0.1.2
 allowed-tools:
   - Bash
   - Read
@@ -137,7 +137,7 @@ Read the plan that names the step (the task plan, the slice plan with its `## Ga
 - it needs credentials you do not hold and must not be given;
 - it needs eyes or hands: a GUI, a device, a real screen.
 
-If none holds, the step is yours: say so in one line, do it the normal way, and STOP this skill. If the open point is a decision and not an action ("which of the two regions?"), it is a question, not a handover: write a question file with `bin/ytstack-questions new` (format: `docs/ux/coordinator-format.md`) and STOP.
+If none holds, the step is yours: say so in one line, do it the normal way, and STOP this skill. If the open point is a decision and not an action ("which of the two regions?"), it is a question, not a handover: write a question file with `bin/ytstack-questions new --question "<text>" --decides "<who>" --because <item>` (`--info "<who>"` for a fact only that person has; the items and the Source and Purpose lines: `docs/ux/coordinator-format.md`, "Who decides") and STOP.
 
 A file under `HANDOVER_FILES_BEGIN..END` that already covers this step is not written a second time. If its receipt lies next to it, go to step 8.
 

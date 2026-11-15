@@ -20,8 +20,9 @@ Coordinator operating checklist (scripts in bin/ of the plugin):
 3. Human instruction beyond the task: ytstack-standing add, before the next dispatch; never only in memory.
 4. Merge to production: ytstack-watch release --commit <sha>.
 5. After a compaction: run the coordinate preamble again, then rotate (Step 12).
-6. Each round: ytstack-frontier check, act on each stale: line.
-7. Merge via ytstack-finish-lane; never gh pr merge or close a lane PR (cap: parked; CI: gh run rerun).
+6. Decide yourself, into DECISIONS.md; ask only for ESCALATE or a plan line saying verdict/approval/sign-off.
+7. Each round: ytstack-frontier check, act on each stale: line.
+8. Merge via ytstack-finish-lane; never gh pr merge or close a lane PR (cap: parked; CI: gh run rerun).
 <!-- operating-checklist:end -->
 
 ## `LANES.md` -- who works on what
@@ -106,6 +107,19 @@ stale: M004-S06: ready, nobody claimed it for 70 minutes (first seen 2026-11-15T
 
 A `running` row is stale when its worktree no longer exists (the worker ended) or, for an `implement` lane, when its branch had no commit for N minutes (default 60), counted from the claim when that is newer or the row names no branch. A running row with a pull request in it is a fix round (`finish-lane`), not a report: its clock starts when a check first sees that pull request and round in the row, and a new round starts it again. A `review` or `prepare` lane commits nothing; it is stale after 3 x N minutes since its claim without a report. A `ready` lane of the frontier is stale when nobody claimed it for N minutes since a check first saw it ready. First sights are kept outside the tree, one writer at a time (`<state base>/repos/<repo key>/frontier-seen`, the base of `yt_state_base`). `bin/ytstack-upkeep` lists these lines under `lanes`. A stale line is a prompt to read the lane's branch and set its row, or to dispatch the ready lane; it never releases a lane by itself.
 
+### Pull requests that stall
+
+A lane with a pull request can stall in a way the clock above does not see in time: a blocking review, a conflict or a red check, and then nobody pushes. Both watchers say so (issue #91). The rule is the same in both: a pull request in an actionable state with no new head for T minutes (default 15) gets a mark, once after T and once more after the next T, never a third time.
+
+```
+2026-11-15T14:30:07Z #1896 STALL 1: conflict, review changes_requested; no new head for 15 min (head a1b2c3d); lane M004-S03 held by impl-S03 (running), last commit 52 min ago on ytstack/M004-S03
+- acme/app#1896: action_required (head a1b2c3d4, 40s ago) -- Merge conflict with base branch; STALL 2: no new head or status for 31 min; lane M004-S03 held by impl-S03 (running), last commit 68 min ago on ytstack/M004-S03
+```
+
+The first is a line of `ytstack-watch --stall <minutes>` (states it counts: checks red, a conflict, a reviewer whose newest review on the head requests changes), the second the line of the PR watch's status block (state `action_required`, policy key `stall_minutes`; `docs/pr-watch.md`). `STALL 2` comes one full window after `STALL 1`, never first; a new head starts at `STALL 1` again. The tail after the time is `ytstack-frontier owner --pr <N>`: the lane whose `PR` cell names the pull request (`12` or `#12`; a held row before a dropped or merged one), its holder and status, and the age of the last commit on its branch, or of the claim when that is newer, the clock `check` uses. Without such a row the line ends after the time. What the coordinator does with `STALL 1` and `STALL 2` is in `skills/coordinate/SKILL.md`, Step 7.
+
+A pull request that blocks other lanes is a focus pull request: `ytstack-pr-watch register --pr <N> --focus` reads it on every worker tick and lists it first under `Focus (read every tick):`, `ytstack-watch --focus <N>` reads it every 20 seconds and prints it first.
+
 ### Lesson lanes
 
 Every incident ends with a lesson (`docs/ux/signal-format.md`, "Lessons"). A lesson whose target is a check that nobody built yet, `open` or `planned`, is work that may start like a slice. The frontier lists it after the slices of the milestone, also when no milestone is open:
@@ -157,7 +171,9 @@ One file per pending question: `.ytstack/questions/Q###-<slug>.md`.
 ---
 id: Q007
 state: open
+class: escalation
 decides: the operator
+because: deviation
 opened: 2026-11-13T09:15:00Z
 asked: none
 answered: none
@@ -167,6 +183,9 @@ blocks: M004-S03, G02
 # Q007 -- Does the export include rows that were archived before the cut-over?
 
 ## Context
+
+Source: <where the need comes from: the plan line, file, commit, standing entry or review thread>
+Purpose: <what the answer is for: what it unblocks or changes>
 
 <What the coordinator knows, with pointers to files and commits. Enough to answer without asking back.>
 
@@ -190,6 +209,30 @@ blocks: M004-S03, G02
 | `asked` | Put to the human at `asked`. It is not asked again. |
 | `answered` | `## Answer` is filled; the answer is recorded in `DECISIONS.md` when it decides something that lasts. |
 
+| `class` | Means | Written by |
+|---|---|---|
+| `escalation` | `decides` takes the decision; `because` names the item of the list below that sends it to that person. | `new --decides <who> --because <item>` |
+| `info` | `decides` supplies a fact (a token and where it lives, an access, a date) or takes note of a report; the decision stays with the coordinator. `because: none`. | `new --info <who>` |
+
+A file without `class` and `because` was written before these keys and reads as `escalation`; `check` accepts it.
+
+### Who decides
+
+What the plan or a standing entry does not reserve for a person, the coordinator decides, and records in `DECISIONS.md` when it lasts. A question goes to a person only for one item of a closed list:
+
+| `because` | What |
+|---|---|
+| `violation` | The work would break a rule of the project or a concept it stands on (`DECISIONS.md`, an invariant of the spec, `AGENTS.md`). |
+| `deviation` | The work would leave the plan: other scope, another approach, a dropped or added slice. |
+| `irreversible` | An irreversible step, or one on production, that no plan line covers. |
+| `secret` | A secret: a token, a key, a credential. |
+| `spend` | Money: a paid service, more capacity, a purchase. |
+| `reserved` | A plan line or a standing entry reserves the verdict. A plan line reserves only when it says verdict, approval or sign-off; a line that names a person as the author of an analysis or a step reserves nothing. |
+
+`escalate:` in `PREFERENCES.md` (under `## Ceremony`) narrows the first five for a project: `escalate: violation, deviation, irreversible, secret, spend` is the default, and a value with an item outside them reads as the default. `reserved` always holds. `new --decides` refuses an item that is not on the list and says to decide it instead.
+
+`ask` refuses a question whose `## Context` has no `Source:` line or no `Purpose:` line with a value (a `<placeholder>` is no value): the person answers from the file alone. This holds for both classes and for files written before the two lines.
+
 Rules:
 
 - Before a question file is written, the plan, `DECISIONS.md` and the answered questions are searched. What they answer is not asked.
@@ -197,7 +240,7 @@ Rules:
 - A gate of a slice or task plan (`## Gates`) that needs a person's verdict gets a question file; `blocks` names the gate. `reassess-roadmap` still brings all open ones in one message at a slice boundary.
 - No agent fills `## Answer` with anything the human did not say.
 
-`bin/ytstack-questions list` prints the open and asked ones; `check` validates the files.
+`bin/ytstack-questions list` prints the open and asked ones; `check` validates the files, `class` and `because` included.
 
 ## `standing/` -- what the human asked for once and for all
 
@@ -315,10 +358,10 @@ The old session stays open as a relay until every listed worker has reported. Pe
 
 ## Checked mechanically
 
-- `bin/ytstack-frontier check`: `LANES.md` has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time, every line under `## Peers` is a list line with four cells and a UTC time (a table row there is named as one); then the lanes that stall ("Lanes that stall", exit 2).
+- `bin/ytstack-frontier check`: `LANES.md` has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time, every line under `## Peers` is a list line with four cells and a UTC time (a table row there is named as one); then the lanes that stall ("Lanes that stall", exit 2). `ytstack-frontier owner --pr <N>[,<N>...]`: the lane that holds a pull request and its last commit or claim, one line per PR (with several, each led by the number and a tab), exit 1 without a row ("Pull requests that stall"). A fresh worker's `claim` of a released lane keeps branch and worktree unless given: `--worktree <new>` sets its own, `--worktree -` clears it.
 - `bin/ytstack-upkeep --worktrees`: the linked worktrees (not the main one, not the one it runs in) and local branches with the state of their pull request (an open one first, else the newest), the age of the last commit, uncommitted changes, unpushed commits and the lane of the main checkout's `LANES.md` that holds them, and the `git worktree remove` / `git branch -D` commands for those whose pull request is merged or closed, with no open one, nothing unpushed, clean, unlocked and unheld. It prints the commands and runs none.
 - `bin/ytstack-status --phases [--json]`: done, in review and total per milestone and in total, with each change since the last text report, its cause and the phases that joined or left (`docs/statusline.md`, "Progress per phase").
-- `bin/ytstack-questions check`: ids are unique and match the file name, `state` holds a listed value, `asked` and `answered` are set exactly when the state says so, an answered file has text under `## Answer`.
+- `bin/ytstack-questions check`: ids are unique and match the file name, `state` holds a listed value, `asked` and `answered` are set exactly when the state says so, an answered file has text under `## Answer`, `class` is `escalation` or `info` (or missing), an escalation names its `because`, and `because` is an item of the list in "Who decides". `new --decides` refuses an item that is not on the project's list, and `ask` a Context without `Source:` and `Purpose:` (issue #78).
 - `bin/ytstack-brief check`: the report labels, the three `Status:` values and their consistency with `Blockers:`, and the form of the spec delta under `Spec:`.
 - `bin/ytstack-handover check`: the staged script of a human-only step (see `skills/handover-step/SKILL.md`).
 - `bin/ytstack-check --standing [<project dir>]`: every entry in `standing/` has a name of the form above with a date and time that exist, `given` as an existing ISO UTC time in the minute of its name, a `scope` and a body, and every `supersedes` names an earlier entry that exists (missing seconds count as `00`); `until` is an existing ISO UTC time after `given`, `until-condition`, `until-check` and `check` are one non-empty line when present, `kind` is `end` or absent, and an `end` names the entry it closes. Without a directory argument it resolves `.ytstack` like the skill preambles, user scope included.

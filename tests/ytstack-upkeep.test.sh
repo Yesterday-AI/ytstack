@@ -350,6 +350,7 @@ eq "the last line names the question file" "question: $F" "$(printf '%s\n' "$OUT
 if [ -f "$F" ]; then ok "the file exists, with the next id"; else bad "the file exists, with the next id" "$(ls "$Y/questions")"; fi
 eq "its title" "# Q002 -- Upkeep found 1 thing that needs a look" "$(grep '^# ' "$F")"
 eq "it is open and for the operator" "open|the operator" "$(sed -n 's/^state: //p' "$F")|$(sed -n 's/^decides: //p' "$F")"
+eq "a report decides nothing: class info (issue #78)" "info" "$(sed -n 's/^class: //p' "$F")"
 CONTEXT=$(awk '/^## / { on = ($0 == "## Context"); next } on' "$F")
 has "the report stands under Context: the section" "state: 1" "$CONTEXT"
 has "the report stands under Context: the item" "current_milestone 'banana' is not M### or none" "$CONTEXT"

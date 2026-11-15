@@ -19,6 +19,7 @@ minimal_code: on         # inject the minimal-code guard (YAGNI ladder, never-cu
 team: off                # off = spawn-milestone-team dispatches worktree subagents (default); on = Claude Code Agent Teams (experimental)
 upstream_feedback: suggest  # this is the ytstack repository: its own artifacts are the place; the channel is for consumer projects
 merge_by: human          # the maintainer merges every pull request here (decided 2026-11-15); no REVIEW.md, no auto_merge
+escalate: violation, deviation, irreversible, secret, spend  # the full list: the maintainer wants rule and plan breaks, one-way steps, secrets and spend; the rest the coordinator decides (issue #78)
 
 ## Model preferences
 

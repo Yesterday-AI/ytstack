@@ -3,7 +3,7 @@ name: lesson
 description: "Closes an incident of any class with its lesson: names the class in one line, puts the lesson where a machine checks it (a test, a guard, a CI step, an alert) or else into KNOWLEDGE.md or the lane contract, and records it in the signals ledger so that a repeat of the class counts. Use at the end of incident, systematic-debugging, finish-lane and coordinate, which call it, or when the user says learn from this, what is the lesson, make sure this does not happen again, that is the second time this happened, always learn from incidents. Not for working the incident itself (incident, systematic-debugging), not for review-bot findings the own reviewers missed (review-lessons) and not for sampling finished lanes (lane-retro)."
 metadata:
   tier: task
-  version: 0.2.0
+  version: 0.2.1
 allowed-tools:
   - Bash
   - Read
@@ -211,10 +211,10 @@ By target:
 - **`proposal:`** One question file, written before Step 5:
 
   ```bash
-  cd "{PROJECT_DIR}" && bash "{QUESTIONS_TOOL}" new --question "Add a lesson for the class {class} to {file}?" --decides "{the person who owns the file, or the operator}"
+  cd "{PROJECT_DIR}" && bash "{QUESTIONS_TOOL}" new --question "Add a lesson for the class {class} to {file}?" --decides "{the person who owns the file, or the operator}" --because reserved
   ```
 
-  Fill `## Context` (what happened, the count, the finding once it exists), `## Options` (A: the exact line or rule for the file named, and what changes for every worker; B: another wording or place; C: no lesson, dismiss the class) and `## Recommendation`. The lesson stays `open` with `--target proposal:Q###`. After the answer whoever writes the line sets `--target contract:<path> --state fixed`, or a person dismisses the class.
+  `reserved`: a line in an instruction or contract file is approved by a person. Fill `## Context` (`Source:` the incident or finding, `Purpose:` the line for `{file}` that stops the class; then what happened, the count, the finding once it exists), `## Options` (A: the exact line or rule for the file named, and what changes for every worker; B: another wording or place; C: no lesson, dismiss the class) and `## Recommendation`. The lesson stays `open` with `--target proposal:Q###`. After the answer whoever writes the line sets `--target contract:<path> --state fixed`, or a person dismisses the class.
 
 ### Step 7: Ask the person
 

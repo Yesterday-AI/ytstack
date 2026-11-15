@@ -12,6 +12,14 @@
 #             pull request is not read again
 #   errors    a failed read prints one line and the loop continues; three
 #             failed polls in a row end it with 1
+#   focus     --focus PRs are read every 20 seconds and listed first, the
+#             others every --interval
+#   stall     a STALL line when an open pull request sat in an actionable state
+#             (red checks, a conflict, a reviewer's newest review on the head
+#             requests changes) without
+#             a new head for --stall minutes (default 15), once per window,
+#             two windows; with the lane of LANES.md that holds it and that
+#             lane's last commit (ytstack-frontier owner)
 #   usage     no --pr, a value that is no number, --interval below 20: exit 64
 #   no state  nothing is written into the repository
 #   release   reads "Release" of RUNTIME.md through bin/ytstack-runtime; asks
@@ -267,7 +275,7 @@ watch --pr 12 --interval 19 --once
 eq "also with --once" 64 "$EC"
 watch --pr 12 --interval soon;  eq "--interval that is no number" 64 "$EC"
 watch --once;                   eq "no --pr" 64 "$EC"
-has "usage on stderr" "ytstack-watch [-C DIR] --pr N[,N...] [--interval SECONDS] [--once]" "$ERRS"
+has "usage on stderr" "ytstack-watch [-C DIR] --pr N[,N...] [--focus N[,N...]] [--interval SECONDS] [--stall MINUTES] [--once]" "$ERRS"
 watch --pr 12,x --once;         eq "--pr with a value that is no number" 64 "$EC"
 watch --pr "12;id" --once;      eq "--pr with shell characters" 64 "$EC"
 watch --pr 12, --once;          eq "--pr with an empty entry" 64 "$EC"
@@ -287,6 +295,118 @@ eq "gh ran in that directory" "$REPO" "$(cat "$FIX/cwd")"
 # ---- 5. nothing is written into the repository ----------------------------------
 echo "# no state in the repository"
 eq "the repository is clean after every run above" "" "$(git -C "$REPO" status --porcelain)"
+
+# ---- 5b. focus pull requests and STALL lines (issue #91) ---------------------------
+echo "# focus and stall"
+# The clock: five minutes per poll (YTSTACK_WATCH_CLOCK, test only).
+cat > "$FAKE/clock" <<'EOF'
+#!/usr/bin/env bash
+k=$(cat "$FIX/polls" 2>/dev/null || echo 1); echo $((1000000 + (k - 1) * 300))
+EOF
+chmod +x "$FAKE/clock"
+LREPO="$TMP/lanes"; mkdir -p "$LREPO/.ytstack"
+( cd "$LREPO" && git init -q -b main && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false \
+  && echo seed > f.txt && git add -A && git commit -qm seed && git branch work/s01 ) >/dev/null 2>&1
+{ printf -- '---\nupdated: 2026-11-15T10:00:00Z\n---\n\n# Lanes\n\n'
+  echo '| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |'
+  echo '|---|---|---|---|---|---|---|---|---|---|'
+  echo '| M001-S01 | implement | running | w1 2026-01-01T00:00Z | work/s01 | - | 20 | - | 1 | fix the review |'
+} > "$LREPO/.ytstack/LANES.md"
+# swatch <args...>: watch in the lanes repository with the fake clock
+swatch() {
+  OUT=$(cd "${SDIR:-$LREPO}" && FIX="$FIX" PATH="$FAKE:$PATH" YTSTACK_WATCH_SLEEP="$FAKE/next-step" YTSTACK_WATCH_CLOCK="$FAKE/clock" bash "$BIN" "$@" 2>"$TMP/stderr"); EC=$?
+  ERRS=$(cat "$TMP/stderr")
+}
+fresh
+BLOCK=$(review CHANGES_REQUESTED "$A" 2026-11-15T13:40:00Z)
+pr "$FIX/now"    20 OPEN "$A" "$RUN_OK" "$BLOCK" MERGEABLE     # poll 1 (t 0): a blocking review on the head
+pr "$FIX/step5"  20 OPEN "$A" "$RUN_OK" "$BLOCK" CONFLICTING   # poll 5 (t 20 min): a conflict too
+pr "$FIX/step9"  20 OPEN "$B" "$RUN_OK" "$BLOCK" CONFLICTING   # poll 9: a new head; the review is on the old one
+pr "$FIX/step10" 20 CLOSED "$B" "$RUN_OK" "$BLOCK" CONFLICTING
+swatch --pr 20
+eq "the loop ends when the pull request closed" 0 "$EC"
+S1=$(printf '%s\n' "$OUT" | grep ' STALL 1: ')
+S2=$(printf '%s\n' "$OUT" | grep ' STALL 2: ')
+like "STALL 1 after 15 minutes in an actionable state without a new head, with the lane's liveness" \
+  "^$STAMP #20 STALL 1: review changes_requested; no new head for 15 min \(head a1b2c3d\); lane M001-S01 held by w1 \(running\), last commit [0-9]+ min ago on work/s01\$" "$S1"
+like "STALL 2 after the next window, with what is actionable now" \
+  "^$STAMP #20 STALL 2: conflict, review changes_requested; no new head for 30 min \(head a1b2c3d\); lane M001-S01 " "$S2"
+eq "one line per window, two windows only" "1 1" "$(lines "$S1") $(lines "$S2")"
+eq "nothing after the new head: no STALL from poll 9 on" 0 "$(printf '%s\n' "$OUT" | sed -n '/head=b2c3d4e/,$p' | grep -c STALL)"
+# PR #92 review: a later approval by another reviewer does not lift a changes request
+fresh
+OTHER='{"author":{"login":"rev2"},"state":"CHANGES_REQUESTED","submittedAt":"2026-11-15T13:00:00Z","commit":{"oid":"'"$A"'"}}'
+pr "$FIX/now"   20 OPEN "$A" "$RUN_OK" "$OTHER,$(review APPROVED "$A" 2026-11-15T14:00:00Z)" MERGEABLE
+pr "$FIX/step5" 20 MERGED "$A" "$RUN_OK" "$OTHER,$(review APPROVED "$A" 2026-11-15T14:00:00Z)" MERGEABLE
+swatch --pr 20
+like "a reviewer's changes request stays blocking after another reviewer approved" "^$STAMP #20 STALL 1: review changes_requested; " "$OUT"
+fresh
+pr "$FIX/now"   20 OPEN "$A" "$RUN_OK" "$OTHER,$(review APPROVED "$A" 2026-11-15T14:00:00Z),$(echo "$OTHER" | sed 's/CHANGES_REQUESTED/APPROVED/; s/13:00/15:00/')" MERGEABLE
+pr "$FIX/step5" 20 MERGED "$A" "$RUN_OK" "" MERGEABLE
+swatch --pr 20
+eq "the same reviewer's newer approval lifts it" 0 "$(printf '%s\n' "$OUT" | grep -c STALL)"
+fresh
+pr "$FIX/now"   20 OPEN "$A" "$RUN_OK" "$OTHER,$(echo "$OTHER" | sed 's/CHANGES_REQUESTED/COMMENTED/; s/13:00/15:00/')" MERGEABLE
+pr "$FIX/step5" 20 MERGED "$A" "$RUN_OK" "" MERGEABLE
+swatch --pr 20
+like "the same reviewer's later comment does not lift it (PR #92 review)" "^$STAMP #20 STALL 1: review changes_requested; " "$OUT"
+# PR #92 review: a new head after STALL 1 restarts the clock; the next mark is STALL 1 again
+fresh
+pr "$FIX/now"   20 OPEN "$A" "$RUN_BAD" "" MERGEABLE           # poll 1 (t 0)
+pr "$FIX/step5" 20 OPEN "$B" "$RUN_BAD" "" MERGEABLE           # poll 5 (t 20 min): a new head, still red
+pr "$FIX/step10" 20 MERGED "$B" "$RUN_BAD" "" MERGEABLE        # poll 10 (t 45 min), before a second window
+swatch --pr 20
+eq "STALL 1 before the push and STALL 1 again 15 minutes after it, no STALL 2" "1:head a1b2c3d 1:head b2c3d4e" \
+  "$(printf '%s\n' "$OUT" | sed -n 's/.* STALL \([12]\): .*(\(head [0-9a-f]*\)).*/\1:\2/p' | paste -sd' ' -)"
+fresh
+pr "$FIX/now" 20 OPEN "$A" "$RUN_BAD" "" MERGEABLE
+pr "$FIX/step4" 20 OPEN "$A" "$RUN_BUSY" "" MERGEABLE           # poll 4: the checks run again: not actionable
+pr "$FIX/step7" 20 OPEN "$A" "$RUN_BAD" "" MERGEABLE
+pr "$FIX/step8" 20 MERGED "$A" "$RUN_BAD" "" MERGEABLE
+swatch --pr 20 --stall 20
+eq "a state that stops being actionable starts the clock again" 0 "$(printf '%s\n' "$OUT" | grep -c STALL)"
+fresh
+pr "$FIX/now" 20 OPEN "$A" "$RUN_BAD" "" MERGEABLE
+pr "$FIX/step6" 20 MERGED "$A" "$RUN_BAD" "" MERGEABLE
+swatch --pr 20 --stall 0
+eq "--stall 0: no STALL line" 0 "$(printf '%s\n' "$OUT" | grep -c STALL)"
+watch --pr 20 --stall 1 --once
+hasnt "--once has no history: no STALL line" "STALL" "$OUT"
+watch --pr 20 --stall x;  eq "--stall takes whole minutes" 64 "$EC"
+fresh
+pr "$FIX/now" 20 OPEN "$A" "$RUN_BAD" "" MERGEABLE
+pr "$FIX/step4" 20 MERGED "$A" "$RUN_BAD" "" MERGEABLE
+SDIR=$REPO swatch --pr 20 --stall 1
+like "a pull request without a lane row: the STALL line without liveness" "^$STAMP #20 STALL 1: checks red; no new head for [0-9]+ min \(head a1b2c3d\)\$" "$OUT"
+
+# --focus: read every 20 seconds and first; the other pull requests every --interval
+fresh
+pr "$FIX/now"   30 OPEN "$A" "$RUN_OK" "" MERGEABLE
+pr "$FIX/now"   31 OPEN "$A" "$RUN_OK" "" MERGEABLE
+pr "$FIX/step7" 31 CLOSED "$A" "$RUN_OK" "" MERGEABLE
+pr "$FIX/step8" 30 MERGED "$A" "$RUN_OK" "" MERGEABLE
+watch --pr 31 --focus 30
+eq "--focus: the loop ends when all are finished" 0 "$EC"
+eq "it sleeps 20 seconds while a focus pull request is open" "20 20 20 20 20 20 20" "$(tr '\n' ' ' < "$FIX/sleeps" | sed 's/ $//')"
+eq "the focus pull request is read every poll" 8 "$(grep -c 'pr view 30' "$FIX/calls")"
+eq "the other one every 60 seconds (polls 1, 4, 7)" 3 "$(grep -c 'pr view 31' "$FIX/calls")"
+like "the focus pull request comes first" "^$STAMP #30 " "$(L 1)"
+# PR #92 review: a failed read of an open focus pull request keeps the 20 seconds
+fresh
+pr "$FIX/now"   30 OPEN "$A" "$RUN_OK" "" MERGEABLE
+mkdir -p "$FIX/step2" "$FIX/step3"; echo "HTTP 502: Bad Gateway" > "$FIX/step2/30.err"; : > "$FIX/step3/30.err.gone"
+pr "$FIX/step3" 30 MERGED "$A" "$RUN_OK" "" MERGEABLE
+watch --focus 30 --interval 300
+eq "after a failed read of a focus pull request the loop still sleeps 20 seconds" "20 20" "$(tr '\n' ' ' < "$FIX/sleeps" | sed 's/ $//')"
+fresh
+pr "$FIX/now" 30 OPEN "$A" "$RUN_OK" "" MERGEABLE
+pr "$FIX/now" 31 OPEN "$A" "$RUN_OK" "" MERGEABLE
+watch --pr 31,30 --focus 30 --once
+like "--once: the focus pull request first" "^#30 " "$(L 1)"
+eq "a pull request in --pr and --focus is read once" 2 "$(lines "$OUT")"
+watch --focus 30 --once
+eq "--focus alone is enough" 0 "$EC"
+watch --focus 30,x --once; eq "--focus takes numbers" 64 "$EC"
 
 # ---- 6. release -------------------------------------------------------------------
 echo "# release"

@@ -216,6 +216,14 @@ for v in human coordinator risk; do
 done
 printf 'merge_by: robot\nevidence_dir: shots/\n' > "$MP/PREFERENCES.md"
 eq "merge_by: invalid -> human + warning; evidence_dir without the trailing slash" "human|shots|merge_by: 'robot' is not human|coordinator|risk (using human)" "$(merge_pref "$MP")"
+# escalate (issue #78, docs/ux/coordinator-format.md "Who decides"): a typo never takes a class from the person
+esc_pref() { ( . "$LIB"; yt_prefs "$1" >/dev/null; printf '%s|%s' "$YT_PREF_ESCALATE" "${YT_PREF_WARNINGS:-}" ); }
+EP="$TMP/escprefs"; mkdir -p "$EP"
+eq "escalate: default all five" "violation, deviation, irreversible, secret, spend|" "$(esc_pref "$EP")"
+printf 'escalate: secret,violation   # only these\n' > "$EP/PREFERENCES.md"
+eq "escalate: a subset, in its order" "secret, violation|" "$(esc_pref "$EP")"
+printf 'escalate: critical\n' > "$EP/PREFERENCES.md"
+eq "escalate: invalid -> all five + warning" "violation, deviation, irreversible, secret, spend|escalate: 'critical' is not a list of violation|deviation|irreversible|secret|spend (using all five)" "$(esc_pref "$EP")"
 # upstream_feedback (M033, docs/ux/upstream-feedback.md): PREFERENCES first, then ~/.ytstack/config, then suggest
 up_pref() { ( . "$LIB"; HOME="$UH"; yt_prefs "$1" >/dev/null; printf '%s|%s|%s' "$YT_PREF_UPSTREAM_FEEDBACK" "$YT_PREF_UPSTREAM_FEEDBACK_FROM" "${YT_PREF_WARNINGS:-}" ); }
 UP="$TMP/upprefs"; UH="$TMP/uphome"; mkdir -p "$UP" "$UH/.ytstack"
