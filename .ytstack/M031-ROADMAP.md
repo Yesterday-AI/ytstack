@@ -3,9 +3,9 @@ milestone: M031
 project: ytstack
 size: L
 created: 2026-11-15T00:45:00Z
-status: in_progress
+status: done
 total_slices: 5
-completed_slices: 4
+completed_slices: 5
 ---
 
 # M031 Roadmap
@@ -21,7 +21,7 @@ Slice detail lives in per-slice `M031-S##-PLAN.md` files, created by `ytstack:sl
 - [x] S01 -- `coordinate` gets the "Factory tools" step (risk route per merge, PR watch, release watch, signals, review lessons) and a one-step rotation while lanes run.
 - [x] S02 -- `ytstack-risk route` reads the review round from the host, so a head-bound review gate can still route `unattended`.
 - [x] S03 -- SessionStart and `ytstack-upkeep` say, once and only when it applies, which factory tool is off and when the installed plugin is newer than the session's.
-- [ ] S04 -- QUICKSTART "Setting up the factory tools" (greenfield, brownfield/upgrade) and an "Upgrading from 0.x" checklist.
+- [x] S04 -- QUICKSTART "Setting up the factory tools" (greenfield, brownfield/upgrade) and an "Upgrading from 0.x" checklist.
 - [x] S05 -- `reconcile` detects a large plan outside `.ytstack/` and offers to map it into milestones and slices.
 
 ## Run order

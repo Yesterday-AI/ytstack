@@ -39,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   milestones and slices; each open row then links back to its line, the plan
   files are never edited, and the answer is kept in `PREFERENCES.md`.
 - `ytstack-runtime sections` names the filled-in sections of `RUNTIME.md`.
+- **QUICKSTART "Setting up the factory tools"**: risk routing, the PR watch,
+  the "Release" and "Signals" sections of `RUNTIME.md`, upkeep on a schedule,
+  standing instructions and external plans, each as numbered steps with the
+  command and a check (among them a dry `ytstack-risk route --pr <n>` on a
+  recent pull request), for a new project and for an adopted or upgraded one,
+  plus what the session-start "Factory tools" lines and the version notice mean.
+- **QUICKSTART "Upgrading from 0.x"**: what to run after a plugin update, by
+  the version you come from.
 
 ### Changed
 
@@ -53,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session only relays its workers' reports.
 - `finish-lane` and `code-review` put the round and lens lines into the body
   of the review on the pull request, and `finish-lane` routes with `--pr`.
+- README and QUICKSTART say what has run against a real host so far, and what
+  has not: no unattended merge and no release watch yet.
 
 ### Fixed
 
