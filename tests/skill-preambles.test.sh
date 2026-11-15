@@ -82,6 +82,24 @@ ext_plan_checks() {
   rm -rf "$WT/plans" "$WT/.ytstack/PREFERENCES.md"
 }
 
+# upstream_checks: the upstream feedback setting (M033, docs/ux/upstream-feedback.md);
+# uses $s and $P of the loop below. Only suggest and off: file would ask the gh of this machine.
+upstream_checks() {
+  run_pre "$P" "$WT"
+  has "$s: upstream_feedback defaults to suggest" "$OUT" "UPSTREAM_FEEDBACK: suggest"
+  case "$OUT" in *"UPSTREAM_TOOL: "*/bin/ytstack-upstream*) ok "$s: the upstream script is found" ;; *) bad "$s: the upstream script is found" "$(printf '%s\n' "$OUT" | grep UPSTREAM_TOOL)" ;; esac
+  printf 'upstream_feedback: off\n' > "$WT/.ytstack/PREFERENCES.md"
+  run_pre "$P" "$WT"
+  has "$s: PREFERENCES off -> off" "$OUT" "UPSTREAM_FEEDBACK: off"
+  rm -f "$WT/.ytstack/PREFERENCES.md"
+  mkdir -p "$TMP/home/.ytstack"; printf 'upstream_feedback=off\n' > "$TMP/home/.ytstack/config"
+  run_pre "$P" "$WT"
+  has "$s: ~/.ytstack/config off -> off" "$OUT" "UPSTREAM_FEEDBACK: off"
+  rm -f "$TMP/home/.ytstack/config"
+  grep -qF 'docs/ux/upstream-feedback.md' "$ROOT/skills/$s/SKILL.md" && ok "$s: names the channel's rules" || bad "$s: names the channel's rules"
+  grep -q '^## Upstream\|Upstream:' "$ROOT/skills/$s/SKILL.md" && ok "$s: ends with an Upstream part" || bad "$s: ends with an Upstream part"
+}
+
 PD="$TMP/plugin-data"
 run_pre() { # run_pre <script> <cwd> -> sets OUT (stdout) and EC (exit code) in this shell
   ( cd "$2" || exit 2; env CLAUDE_PROJECT_DIR="$ELSEWHERE" CLAUDE_PLUGIN_DATA="$PD" HOME="$TMP/home" bash "$1" 2>"$TMP/err" >"$TMP/out" ); EC=$?
@@ -142,7 +160,18 @@ for s in $SKILLS; do
         run_pre "$P" "$WT"
         has "$s: the declared roles are named" "$OUT" "OWN_REVIEWERS: code"
         has "$s: the review findings are listed" "$OUT" "review:code:missing-null-guard"
-        rm -rf "$WT/.ytstack/signals"; own_reviewers_off ;;
+        rm -rf "$WT/.ytstack/signals"; own_reviewers_off
+        # incidents and repeats per class (M032): the count of lessons decides whether step 8 reads them.
+        # (This block sat in a second `retro)` branch of the outer case, which never ran.)
+        run_pre "$P" "$WT"
+        has "$s: no lesson -> LESSONS 0" "$OUT" "LESSONS: 0"
+        has "$s: the signals script is found" "$OUT" "SIGNALS_TOOL: $ROOT/skills/$s/../../bin/ytstack-signals"
+        printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area ci --class flaky-order --title "Order" --target check:tests/order.sh >/dev/null
+        run_pre "$P" "$WT"
+        has "$s: one lesson -> LESSONS 1" "$OUT" "LESSONS: 1"
+        grep -qF 'lesson list --state all --since' "$ROOT/skills/$s/SKILL.md" && ok "$s: step 8 counts the lessons of the window" || bad "$s: step 8 counts the lessons of the window"
+        rm -rf "$WT/.ytstack/signals"
+        upstream_checks ;;
       esac
       # Concept mode picks the newest pitch, also in a checkout path with a space (PR #39 review).
       case "$s" in plan-ceo-review|plan-eng-review)
@@ -375,15 +404,8 @@ REVIEWERS_END"
       has "$s: a declared role is listed" "$OUT" "code	(\`code\`)	.github/reviewers/code.md"
       has "$s: one checked pull request" "$OUT" "CHECKED_PRS: 1"
       rm -rf "$WT/.ytstack/signals"; own_reviewers_off ;;
-    retro)
-      # incidents and repeats per class (M032): the count of lessons decides whether step 8 reads them
-      has "$s: no lesson -> LESSONS 0" "$OUT" "LESSONS: 0"
-      has "$s: the signals script is found" "$OUT" "SIGNALS_TOOL: $ROOT/skills/$s/../../bin/ytstack-signals"
-      printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area ci --class flaky-order --title "Order" --target check:tests/order.sh >/dev/null
-      run_pre "$P" "$WT"
-      has "$s: one lesson -> LESSONS 1" "$OUT" "LESSONS: 1"
-      grep -qF 'lesson list --state all --since' "$ROOT/skills/$s/SKILL.md" && ok "$s: step 8 counts the lessons of the window" || bad "$s: step 8 counts the lessons of the window"
-      rm -rf "$WT/.ytstack/signals" ;;
+    lane-retro)
+      upstream_checks ;;
     lesson)
       # the ledger and the questions (M032): every lesson in every state, the open incidents
       has "$s: the signals script is found" "$OUT" "SIGNALS_TOOL: $ROOT/bin/ytstack-signals"
@@ -396,7 +418,8 @@ LESSONS_END"
       run_pre "$P" "$WT"
       has "$s: a lesson is listed with area, class and target" "$OUT" "F001	open	ci	flaky-order	1	-	check:tests/order.sh"
       has "$s: an open incident is listed" "$OUT" "unstated	Export down"
-      rm -rf "$WT/.ytstack/signals" "$WT/.ytstack/incidents" ;;
+      rm -rf "$WT/.ytstack/signals" "$WT/.ytstack/incidents"
+      upstream_checks ;;
     visual-review)
       # the evidence of a visual review (M025) is read from the main checkout, also from a worktree
       has "$s: worktree -> no Run section in the bare fixture" "$OUT" "RUN_SECTION: no"

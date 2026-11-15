@@ -61,6 +61,7 @@ In a skill, the script is `${CLAUDE_SKILL_DIR}/../../bin/ytstack-upstream`; else
 ## What stays out
 
 - The project's own bugs and lessons: they go into its ledger, its `KNOWLEDGE.md` or its tracker.
+- Work in the ytstack repository itself: its own `.ytstack/` artifacts are the place, and an issue is opened there as part of the work, not through this channel.
 - Taste and wishes without a run behind them ("my agent might want X"): no evidence, no issue (`AGENTS.md`, "Speculative features").
 - Anything from a dispatched worker on its own: a worker puts the observation into its report (`Not checked:` or a deviation), and the session that owns the person's conversation decides. A worker never posts.
 - A second report of the same run: one observation is reported once, by the session that saw it.

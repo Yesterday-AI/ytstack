@@ -3,7 +3,7 @@ name: lane-retro
 description: "Looks at a sample of finished lanes while coordinated work is still running and proposes checks and pointers for what went wrong in them. Use when several lanes finished, when a lane went wrong, when the same finding came back in a review, or when the user says lane retro, why does this keep happening, what do the lanes keep getting wrong. Not the retrospective of a finished milestone (retro) and not a review of one change (code-review)."
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.2.0
 allowed-tools:
   - Bash
   - Read
@@ -33,7 +33,8 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 7. **Write `.ytstack/retro/LANES-<date>.md`**
 8. **Ask once** -- all candidates numbered, a recommendation each (only if there are candidates)
 9. **Turn accepted candidates into tasks** -- a task line or a quick task; implement nothing
-10. **Report + return**
+10. **Upstream** -- what of these lanes concerns ytstack itself, handled per `UPSTREAM_FEEDBACK`, recorded under `## Upstream`
+11. **Report + return**
 
 ## Process Flow
 
@@ -46,6 +47,7 @@ digraph lane_retro {
     "Write LANES-<date>.md" [shape=box];
     "Ask once" [shape=box];
     "Accepted -> task or quick task" [shape=box];
+    "Upstream per setting" [shape=box];
     "Stop: nothing to look at" [shape=doublecircle];
     "Report + return" [shape=doublecircle];
 
@@ -53,9 +55,10 @@ digraph lane_retro {
     "Finished lane?" -> "Stop: nothing to look at" [label="no"];
     "Finished lane?" -> "Sample: four things per lane, six categories" [label="yes"];
     "Sample: four things per lane, six categories" -> "Write LANES-<date>.md" -> "Candidates?";
-    "Candidates?" -> "Report + return" [label="none"];
+    "Candidates?" -> "Upstream per setting" [label="none"];
     "Candidates?" -> "Ask once" [label="yes"];
-    "Ask once" -> "Accepted -> task or quick task" -> "Report + return";
+    "Ask once" -> "Accepted -> task or quick task" -> "Upstream per setting";
+    "Upstream per setting" -> "Report + return";
 }
 ```
 
@@ -120,6 +123,11 @@ echo "SAMPLE_SIZE: $(( (_NNEW + 4) / 5 ))"
 _TODAY=$(date -u +%Y-%m-%d)
 echo "RETRO_FILE: $_YT_DIR/retro/LANES-$_TODAY.md"
 echo "RETRO_FILE_EXISTS: $([ -f "$_YT_DIR/retro/LANES-$_TODAY.md" ] && echo yes || echo no)"
+# Upstream feedback (M033): the effective setting; the rules are docs/ux/upstream-feedback.md.
+_UP="${CLAUDE_SKILL_DIR}/../../bin/ytstack-upstream"; [ -f "$_UP" ] || _UP=$(command -v ytstack-upstream 2>/dev/null)
+_UPM=""; [ -n "$_UP" ] && _UPM=$(bash "$_UP" -C "$_PROJECT_DIR" mode 2>/dev/null | sed -n 's/^mode: //p')
+echo "UPSTREAM_FEEDBACK: ${_UPM:-unavailable}"
+echo "UPSTREAM_TOOL: ${_UP:-unavailable}"
 ```
 
 ## Procedure
@@ -181,9 +189,13 @@ of_finished: {FINISHED}
 ## Looked at, no candidate
 
 - {lane} / {category}: {what was seen and why nothing follows}
+
+## Upstream
+
+{filled in Step 10}
 ```
 
-**Step 8 -- Ask once.** No candidates: skip to Step 10. Otherwise ONE AskUserQuestion with all of them, never one question per candidate:
+**Step 8 -- Ask once.** No candidates: skip to Step 10 (Upstream). Otherwise ONE AskUserQuestion with all of them, never one question per candidate:
 
 > Lane retro for **{PROJECT_SLUG}** on `{BRANCH}`: I looked at {n} of {FINISHED} finished lanes ({the lane references}) and found {k} mistakes that a machine or a link would have prevented. Details: `{RETRO_FILE}`.
 >
@@ -208,9 +220,17 @@ Record each answer in its candidate: `Decision: accepted {UTC}` or `Decision: sk
 - It fits one sentence and about three files, and the project's quick lane is on: a quick task. Write the sentence into the candidate; `ytstack:quick-task` takes it as it is, in a worker when a coordinator runs the plan.
 - Otherwise a task: append `- [ ] T## -- {text} (lane retro {date} C#)` under `## Tasks` of the open, unclaimed slice plan whose files it touches, with the next free number, and raise `task_count` in its frontmatter. No such slice: leave it for `ytstack:reassess-roadmap` to place, and say so.
 
-**Step 10 -- Report + return.**
+**Step 10 -- Upstream.** The candidates are the project's checks and pointers. This step is about ytstack itself: a mistake that a ytstack tool made possible or missed (the brief `ytstack-brief` rendered, the lane contract, a coordinator script that only polled, a missing ytstack check), or a ytstack tool that ran against a real host for the first time. The channel and its rules: `${CLAUDE_SKILL_DIR}/../../docs/ux/upstream-feedback.md`; read its "The steps" and "The rules" before acting. One line per observation under `## Upstream` in `RETRO_FILE`, with its kind and the lane evidence; none, or the project is ytstack itself: "Nothing in these lanes concerns ytstack itself." Then by `UPSTREAM_FEEDBACK`:
 
-> Lane retro: {n} of {FINISHED} finished lanes sampled, {k} candidates ({a} accepted, {s} skipped, {o} open). File: `{RETRO_FILE}`. Planned: {the task lines and quick-task sentences, or "nothing"}.
+- `off`: the lines stay as they are; nothing is sent or suggested.
+- `suggest` or `unavailable`: per line, search, `"{UPSTREAM_TOOL}" draft`, fill, `check` until `draft ok`; the line ends with `suggested: <draft path>` (and `matches #<n>` for a match). Nothing is sent.
+- `file`: the same, then `gh issue create`, or `gh issue comment` on the match; the line ends with `filed #<n>` or `commented #<n>`, or `not sent: <the check's line>`.
+
+`YTSTACK_NON_INTERACTIVE: true`: nothing is sent under any setting; the drafts are listed under "Waiting on a person".
+
+**Step 11 -- Report + return.**
+
+> Lane retro: {n} of {FINISHED} finished lanes sampled, {k} candidates ({a} accepted, {s} skipped, {o} open). File: `{RETRO_FILE}`. Planned: {the task lines and quick-task sentences, or "nothing"}. Upstream: {one line per observation: the link, or the title and draft path with "file it at Yesterday-AI/ytstack?", or "none"}.
 
 ## Terminal State
 

@@ -3,7 +3,7 @@ name: lesson
 description: "Closes an incident of any class with its lesson: names the class in one line, puts the lesson where a machine checks it (a test, a guard, a CI step, an alert) or else into KNOWLEDGE.md or the lane contract, and records it in the signals ledger so that a repeat of the class counts. Use at the end of incident, systematic-debugging, finish-lane and coordinate, which call it, or when the user says learn from this, what is the lesson, make sure this does not happen again, that is the second time this happened, always learn from incidents. Not for working the incident itself (incident, systematic-debugging), not for review-bot findings the own reviewers missed (review-lessons) and not for sampling finished lanes (lane-retro)."
 metadata:
   tier: task
-  version: 0.1.0
+  version: 0.2.0
 allowed-tools:
   - Bash
   - Read
@@ -40,7 +40,8 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 5. **Record** -- `ytstack-signals lesson new` (with `--incident` when there is a record); act on the case it prints
 6. **Put the lesson in place** -- write the knowledge entry, build the check where the caller may, or describe the check for a lane; set `fixed` only when the target exists
 7. **Ask the person** (only for a proposal, in an interactive session that is not a coordinator's) -- ONE question
-8. **Check and report** -- `ytstack-signals check`, then the report in the fixed shape
+8. **Upstream** (only when the class is a behaviour of ytstack itself) -- per `UPSTREAM_FEEDBACK`
+9. **Check and report** -- `ytstack-signals check`, then the report in the fixed shape
 
 ## Process Flow
 
@@ -57,6 +58,8 @@ digraph lesson {
     "Target knowledge entry" [shape=box];
     "lesson new" [shape=box];
     "Put it in place, or describe the lane" [shape=box];
+    "About ytstack itself?" [shape=diamond];
+    "Upstream per setting" [shape=box];
     "Check and report" [shape=doublecircle];
 
     "Run preamble" -> "Scripts and .ytstack?";
@@ -70,7 +73,10 @@ digraph lesson {
     "Target check:<path>" -> "lesson new";
     "Target proposal:Q###" -> "lesson new";
     "Target knowledge entry" -> "lesson new";
-    "lesson new" -> "Put it in place, or describe the lane" -> "Check and report";
+    "lesson new" -> "Put it in place, or describe the lane" -> "About ytstack itself?";
+    "About ytstack itself?" -> "Upstream per setting" [label="yes"];
+    "About ytstack itself?" -> "Check and report" [label="no"];
+    "Upstream per setting" -> "Check and report";
 }
 ```
 
@@ -95,7 +101,9 @@ _HAS_YTSTACK=$([ -n "$_YT_DIR" ] && echo yes || echo no)
 
 # The two scripts: the ledger and the questions for a person.
 _tool() { local t="${CLAUDE_SKILL_DIR}/../../bin/$1"; if [ -f "$t" ]; then (cd "$(dirname "$t")" && echo "$(pwd -P)/$1"); else command -v "$1" 2>/dev/null; fi; }
-_SIG=$(_tool ytstack-signals); _QS=$(_tool ytstack-questions)
+_SIG=$(_tool ytstack-signals); _QS=$(_tool ytstack-questions); _UP=$(_tool ytstack-upstream)
+# Upstream feedback (M033): the effective setting; the rules are docs/ux/upstream-feedback.md.
+_UPM=""; [ -n "$_UP" ] && _UPM=$(bash "$_UP" -C "$_PROJECT_DIR" mode 2>/dev/null | sed -n 's/^mode: //p')
 
 echo "BRANCH: $(git branch --show-current 2>/dev/null || echo unknown)"
 echo "HEAD: $(git rev-parse --short HEAD 2>/dev/null || echo none)"
@@ -115,6 +123,8 @@ if [ -f "$_YT_DIR/STATE.md" ]; then
 fi
 echo "SIGNALS_TOOL: ${_SIG:-unavailable}"
 echo "QUESTIONS_TOOL: ${_QS:-unavailable}"
+echo "UPSTREAM_FEEDBACK: ${_UPM:-unavailable}"
+echo "UPSTREAM_TOOL: ${_UP:-unavailable}"
 echo "KNOWLEDGE: $([ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/KNOWLEDGE.md" ] && echo "$_YT_DIR/KNOWLEDGE.md" || echo none)"
 echo "NOW: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # Every lesson so far, whatever its state: id, state, area, class, count, -, target, ref, reopens, title.
@@ -155,6 +165,8 @@ The target is where the lesson will live. Take the first rule that applies:
 1. **A machine can see it next time.** A test that fails on what happened, a guard that makes a script refuse, a step in CI, an alert or a signal source that would have shown it. Target `check:<path>`: the file that holds or will hold it (`tests/export-order.test.sh`, `.github/workflows/ci.yml`, `ops/alerts.yml`). Prefer the smallest check at the place the mistake was made.
 2. **It is how agents or the coordinator work, and no script can see it.** That is the lane contract or a rule file (a role file of `REVIEW.md`, the file a project's briefs name as the workers' rules): every future worker follows it. A change there is a person's decision. Target `proposal:<Q###>` (Step 6 writes the question).
 3. **Otherwise** it is project knowledge a session has to find: a gotcha of the environment, a command that misleads. Target `knowledge:.ytstack/KNOWLEDGE.md#<anchor>`, where the anchor is a short slug of the entry.
+
+**A lesson about ytstack itself.** When the class is a behaviour of the ytstack plugin (a skill that misled, a script of the plugin that let the mistake through or refused valid input, a ytstack tool that was missing or not pointed at), the target above still holds for this project, and Step 8 also sends the observation upstream. The project's own mistakes stay here.
 
 Never `AGENTS.md`, `CLAUDE.md` or another file every session loads: one more sentence there is the anti-pattern above, and the script refuses it. A lesson that would only say "be more careful" has not found its class yet: go back to Step 3 and name what a machine or a person could look at.
 
@@ -227,7 +239,17 @@ Mark it (`ytstack-questions ask Q###`), then use AskUserQuestion:
 
 Write what the person said under `## Answer`, run `ytstack-questions answer Q###`. A and B: write the line, then `set F### --target contract:<path> --state fixed`. C: `set F### --state dismissed` with their reason on stdin.
 
-### Step 8: Check and report
+### Step 8: Upstream
+
+Only for a lesson about ytstack itself (Step 4), and not when the project is ytstack. The channel and its rules: `${CLAUDE_SKILL_DIR}/../../docs/ux/upstream-feedback.md`; read its "The steps" and "The rules" before acting. The kind is `bug` for a ytstack tool that did the wrong thing, `gap` for one that was missing or not pointed at, `proposal` for the check ytstack should carry. The evidence is what Step 5 recorded, without the project's names. By `UPSTREAM_FEEDBACK`:
+
+- `off`: nothing; the report says `Upstream: off`.
+- `suggest` or `unavailable`: search, `"{UPSTREAM_TOOL}" draft`, fill, `check` until `draft ok`. Send nothing; the report carries the title and the draft path.
+- `file`: the same, then `gh issue create`, or `gh issue comment` on the issue the search found; the report carries the link.
+
+`YTSTACK_NON_INTERACTIVE: true`, or a caller that is a dispatched worker: nothing is sent under any setting; the draft path goes into the report for the session that owns the conversation.
+
+### Step 9: Check and report
 
 ```bash
 cd "{PROJECT_DIR}" && bash "{SIGNALS_TOOL}" check
@@ -243,6 +265,7 @@ Class: {the line of Step 3}
 Recorded: F### lesson:{area}:{class} ({new | seen-again, count n | regression of F### | dismissed}) -> {target} ({open | fixed})
 In place: {the knowledge entry, the check with its red and green run | a lane: lesson-F### | a question: Q### | not yet}
 Repeats: {the lessons of this area with a count of 2 or more that are still open, or none}
+Upstream: {filed Yesterday-AI/ytstack#n | commented #n | suggested: <title>, <draft path> | off | none}
 Check: {the last line of ytstack-signals check}
 ```
 
