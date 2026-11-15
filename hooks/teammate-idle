@@ -29,11 +29,16 @@ CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$STATE_FILE" | head -1)
 
 # Count unfinished tasks across all slice-plans for this milestone
 OPEN_TASK_COUNT=0
-for plan in "$(yt_artifact_dir "$YT_DIR" "$CURRENT_MILESTONE")"/$CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md; do
+# Every layout, one file per name: plans that landed flat before the milestone
+# moved to milestones/M###/ count too (#70).
+while IFS= read -r plan; do
   [ -f "$plan" ] || continue
-  count=$(grep -c '^- \[ \] T[0-9][0-9]' "$plan" 2>/dev/null || echo 0)
+  # grep -c prints 0 itself and exits 1; `|| echo 0` would yield "0\n0".
+  count=$(grep -c '^- \[ \] T[0-9][0-9]' "$plan" 2>/dev/null); count=${count:-0}
   OPEN_TASK_COUNT=$((OPEN_TASK_COUNT + count))
-done
+done <<EOF
+$(yt_find_artifacts "$YT_DIR" "$CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md" | awk -F/ 'NF && !s[$NF]++')
+EOF
 
 # If everything done, let teammate idle (exit 0, no feedback)
 if [ "$OPEN_TASK_COUNT" -eq 0 ]; then

@@ -231,6 +231,10 @@ change "$R" bigrecord 'echo b >> src/auth/login.sh; awk "BEGIN { for (i = 0; i <
 eq "process records do not count towards the size" "floor: low" "$(line floor)"
 change "$R" bigrecord-moved 'echo b >> src/auth/login.sh; mkdir -p .ytstack/milestones/M001 && awk "BEGIN { for (i = 0; i < 500; i++) print \"l\" }" > .ytstack/milestones/M001/M001-S01-T01-PLAN.md'; fl
 eq "a record in milestones/M###/ is a process record too (#70)" "floor: low" "$(line floor)"
+change "$R" bigrecord-deep 'echo b >> src/auth/login.sh; mkdir -p .ytstack/milestones/a/b && awk "BEGIN { for (i = 0; i < 500; i++) print \"l\" }" > .ytstack/milestones/a/b/M001-S01-T01-PLAN.md'; fl
+[ "$(line floor)" != "floor: low" ] && ok "two directories below milestones/ is not a process record" || bad "two directories below milestones/ is not a process record" "$OUT"
+change "$R" bigrecord-flatdir 'echo b >> src/auth/login.sh; mkdir -p .ytstack/M001-x && awk "BEGIN { for (i = 0; i < 500; i++) print \"l\" }" > .ytstack/M001-x/y-PLAN.md'; fl
+[ "$(line floor)" != "floor: low" ] && ok "a directory named like a milestone file is not a process record" || bad "a directory named like a milestone file is not a process record" "$OUT"
 change "$R" binary 'printf "\0\1\2\3" > src/auth/blob.bin'; fl
 eq "a binary file is one file and no lines" "floor: low" "$(line floor)"
 

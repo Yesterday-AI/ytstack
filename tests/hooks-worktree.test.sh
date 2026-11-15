@@ -137,6 +137,24 @@ grep -F -- '- [x] T02 -- two' >/dev/null "$MV/.ytstack/milestones/M050/M050-S01-
 fire teammate-idle "$MV" "$MV" ''
 case "$(cat "$TMP/err.teammate-idle")" in *"1 task(s) still open in milestone M050"*) ok "d: teammate-idle counts the moved slice plan";; *) bad "d: teammate-idle counts the moved slice plan" "$(cat "$TMP/err.teammate-idle")";; esac
 
+# ---- (e) split state: roadmap moved, a slice plan still flat (#70) -----------
+echo "# (e) split state"
+printf -- '---\nslice: S02\n---\n- [ ] T01 -- three (src/flat.ts)\n- [ ] T02 -- four\n' > "$MV/.ytstack/M050-S02-PLAN.md"
+fire teammate-idle "$MV" "$MV" ''
+case "$(cat "$TMP/err.teammate-idle")" in *"3 task(s) still open in milestone M050"*) ok "e: teammate-idle counts the flat straggler too";; *) bad "e: teammate-idle counts the flat straggler too" "$(cat "$TMP/err.teammate-idle")";; esac
+printf '{"session_id":"se","cwd":%s,"hook_event_name":"TaskCreated","tool_input":{"subject":"touch src/flat.ts"}}' "$(jstr "$MV")" \
+  | ( cd "$MV" && env CLAUDE_PLUGIN_DATA="$PD" CLAUDE_PROJECT_DIR="$MV" bash "$H/task-created" >/dev/null 2>"$TMP/err.tc" ); EC=$?
+eq "e: task-created finds the file in the flat slice plan (no drift)" 0 "$EC"
+
+# ---- (f) every task done: teammate-idle lets the teammate idle ---------------
+echo "# (f) all done"
+printf -- '---\nslice: S01\n---\n- [x] T01 -- one\n- [x] T02 -- two\n' > "$MV/.ytstack/milestones/M050/M050-S01-PLAN.md"
+printf -- '---\nslice: S02\n---\n- [x] T01 -- three\n' > "$MV/.ytstack/M050-S02-PLAN.md"
+printf '{"session_id":"sf","cwd":%s,"hook_event_name":"TeammateIdle"}' "$(jstr "$MV")" \
+  | ( cd "$MV" && env CLAUDE_PLUGIN_DATA="$PD" CLAUDE_PROJECT_DIR="$MV" bash "$H/teammate-idle" >/dev/null 2>"$TMP/err.ti" ); EC=$?
+eq "f: no open task -> exit 0" 0 "$EC"
+eq "f: no open task -> no message" "" "$(cat "$TMP/err.ti")"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
