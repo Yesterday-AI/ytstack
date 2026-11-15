@@ -78,9 +78,13 @@ fi
 
 # Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
 if command -v yt_artifact_dir >/dev/null 2>&1; then _AD=$(yt_artifact_dir "$_YT_DIR" "$_CURRENT_MILESTONE"); else _AD="$_YT_DIR"; fi
+# One file wherever it is; all files of a glob in every layout, one per name (a
+# milestone moved after some of its files landed flat has files in both places).
+_ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "${1}"; else printf '%s\n' "$_YT_DIR/${1}"; fi; }
+_fa() { if command -v yt_find_artifacts >/dev/null 2>&1; then yt_find_artifacts "$_YT_DIR" "${1}"; else ls "$_YT_DIR"/${1} 2>/dev/null; fi | awk -F/ 'NF && !s[$NF]++'; }
 
 # Determine if the current slice is complete
-_SLICE_PLAN="$_AD/$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md"
+_SLICE_PLAN=$(_ap "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md")
 _SLICE_COMPLETE=no
 if [ -f "$_SLICE_PLAN" ]; then
   # Open TASK lines only: an open gate (`- [ ] G01 --`) does not keep a slice
@@ -126,25 +130,30 @@ echo "SPEC_DRIFT_END"
 # and the two progress numbers (closed by work, accepted).
 _GATE_RE='^- \[ \] G[0-9]+ --'
 echo "OPEN_GATES_BEGIN"
-grep -Hn -E "$_GATE_RE" "$_AD"/"$_CURRENT_MILESTONE"-*PLAN.md 2>/dev/null | sed "s|^$_YT_DIR/||"
+_fa "$_CURRENT_MILESTONE-*PLAN.md" | sort | while IFS= read -r _p; do
+  grep -Hn -E "$_GATE_RE" "$_p" 2>/dev/null | sed "s|^$_YT_DIR/||"
+done
 echo "OPEN_GATES_END"
 echo "REVIEW_ROUNDS_BEGIN"
-for _p in "$_AD"/"$_CURRENT_MILESTONE-$_ACTIVE_SLICE"-T[0-9][0-9]-PLAN.md; do
+_fa "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-T[0-9][0-9]-PLAN.md" | sort | while IFS= read -r _p; do
   [ -f "$_p" ] || continue
   _r=$(grep -c -E '^- Round [0-9]+:' "$_p" 2>/dev/null); _r=${_r:-0}
   [ "$_r" -ge 3 ] && echo "$(basename "$_p" -PLAN.md): $_r review rounds"
 done
 echo "REVIEW_ROUNDS_END"
 _SL_TOTAL=0; _SL_WORK=0; _SL_ACC=0
-[ -f "$_AD/$_CURRENT_MILESTONE-ROADMAP.md" ] && _SL_TOTAL=$(grep -c -E '^- \[.\] S[0-9][0-9] --' "$_AD/$_CURRENT_MILESTONE-ROADMAP.md" 2>/dev/null)
-for _sp in "$_AD"/"$_CURRENT_MILESTONE"-S[0-9][0-9]-PLAN.md; do
+_RM=$(_ap "$_CURRENT_MILESTONE-ROADMAP.md")
+[ -f "$_RM" ] && _SL_TOTAL=$(grep -c -E '^- \[.\] S[0-9][0-9] --' "$_RM" 2>/dev/null)
+while IFS= read -r _sp; do
   [ -f "$_sp" ] || continue
   grep -q '^- \[ \] T[0-9]' "$_sp" && continue
   grep -q '^- \[[xX]\] T[0-9]' "$_sp" || continue
   _SL_WORK=$((_SL_WORK + 1))
   _s=$(basename "$_sp" -PLAN.md)
-  cat "$_sp" "$_AD"/"$_s"-T[0-9][0-9]-PLAN.md 2>/dev/null | grep -q -E "$_GATE_RE" || _SL_ACC=$((_SL_ACC + 1))
-done
+  { cat "$_sp"; _fa "$_s-T[0-9][0-9]-PLAN.md" | while IFS= read -r _tp; do cat "$_tp"; done; } 2>/dev/null | grep -E "$_GATE_RE" >/dev/null || _SL_ACC=$((_SL_ACC + 1))
+done <<_SPS_
+$(_fa "$_CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md")
+_SPS_
 echo "SLICES_TOTAL: ${_SL_TOTAL:-0}"
 echo "SLICES_CLOSED_BY_WORK: $_SL_WORK"
 echo "SLICES_ACCEPTED: $_SL_ACC"

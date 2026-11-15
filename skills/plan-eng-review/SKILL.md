@@ -133,9 +133,14 @@ fi
 # Milestone mode target: the current milestone's slice plans (flat or milestones/ layout).
 _SLICE_PLANS=""
 if [ "$_M" != none ] && [ -n "$_YT_DIR" ]; then
-  for _f in "$_YT_DIR/$_M"-S[0-9][0-9]-PLAN.md "$_YT_DIR"/milestones/"$_M"-S[0-9][0-9]-PLAN.md "$_YT_DIR"/milestones/*/"$_M"-S[0-9][0-9]-PLAN.md; do
-    [ -f "$_f" ] && _SLICE_PLANS="$_SLICE_PLANS$_f "
-  done
+  # Every layout the lib reads (flat, milestones/, backlog/ and one level below), one per name.
+  if command -v yt_find_artifacts >/dev/null 2>&1; then
+    _SLICE_PLANS=$(yt_find_artifacts "$_YT_DIR" "$_M-S[0-9][0-9]-PLAN.md" | awk -F/ 'NF && !s[$NF]++' | sort | tr '\n' ' ')
+  else
+    for _f in "$_YT_DIR/$_M"-S[0-9][0-9]-PLAN.md "$_YT_DIR"/milestones/"$_M"-S[0-9][0-9]-PLAN.md "$_YT_DIR"/milestones/*/"$_M"-S[0-9][0-9]-PLAN.md; do
+      [ -f "$_f" ] && _SLICE_PLANS="$_SLICE_PLANS$_f "
+    done
+  fi
 fi
 # Concept mode target: the office-hours pitch.
 _PITCH=""

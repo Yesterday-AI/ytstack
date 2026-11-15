@@ -592,6 +592,43 @@ pre handoff-session "$MV";      has "handoff-session: moved -> artifact dir"   "
 pre spawn-milestone-team "$MV"; has "spawn-milestone-team: moved -> slice plan counted" "$OUT" "SLICE_COUNT: 1"
 [ ! -e "$MV/.ytstack/M041-S01-PLAN.md" ] && ok "moved: nothing written flat by the preambles" || bad "moved: nothing written flat by the preambles"
 
+# Split state (the consumer's in #70): the roadmap moved, some files of the same
+# milestone still flat. Readers that count or list must see both places.
+echo "# split: roadmap in milestones/M041/, stragglers flat"
+SP="$TMP/split"; SD="$SP/.ytstack/milestones/M041"; mkdir -p "$SD"
+( cd "$SP" || exit 2
+  git init -q && git config user.email t@t.t && git config user.name t
+  printf 'project: fixture\nlast_updated: %s\ncurrent_milestone: M041\nactive_slice: S02\nactive_task: none\n\n# State\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .ytstack/STATE.md
+  printf 'name: fixture\n' > .ytstack/PROJECT.md
+  printf -- '---\nmilestone: M041\nstatus: in-progress\n---\n- [ ] S01 -- one\n- [ ] S02 -- two\n' > "$SD/M041-ROADMAP.md"
+  printf -- '---\nslice: S01\n---\n- [x] T01 -- a\n- [ ] T02 -- b\n' > "$SD/M041-S01-PLAN.md"
+  printf -- '---\nclosed: 2026-11-01T00:00:00Z\n---\n' > "$SD/M041-S01-T01-SUMMARY.md"
+  printf -- '---\nslice: S02\n---\n- [x] T01 -- c\n' > .ytstack/M041-S02-PLAN.md
+  printf -- '---\nclosed: 2026-11-02T00:00:00Z\n---\n' > .ytstack/M041-S01-T02-SUMMARY.md
+  echo seed > f.txt; git add -A; git commit -qm "M041-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL split fixture; exit 2; }
+pre reassess-roadmap "$SP"
+has "split: reassess-roadmap finds the flat slice plan complete" "$OUT" "SLICE_COMPLETE: yes"
+has "split: reassess-roadmap counts the flat slice as closed by work" "$OUT" "SLICES_CLOSED_BY_WORK: 1"
+pre retro "$SP"
+has "split: retro counts both summaries"            "$OUT" "SUMMARIES: 2"
+has "split: retro counts the tasks of both slice plans" "$OUT" "PLAN_TASKS: 2/3 done"
+has "split: retro lists the flat summary"           "$OUT" "$SP/.ytstack/M041-S01-T02-SUMMARY.md"
+pre spawn-milestone-team "$SP"
+has "split: spawn-milestone-team counts both slice plans" "$OUT" "SLICE_COUNT: 2"
+
+# A milestone that lives in backlog/<PREFIX>/ (Codex review on PR #77).
+echo "# backlog: milestone in backlog/OLD/"
+BL="$TMP/backlog"; BD="$BL/.ytstack/backlog/OLD"; mkdir -p "$BD"
+( cd "$BL" || exit 2
+  git init -q && git config user.email t@t.t && git config user.name t
+  printf 'project: fixture\nlast_updated: %s\ncurrent_milestone: M030\nactive_slice: S01\nactive_task: none\n\n# State\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .ytstack/STATE.md
+  printf -- '---\nmilestone: M030\n---\n- [ ] S01 -- one\n' > "$BD/M030-ROADMAP.md"
+  printf -- '---\nslice: S01\n---\n- [ ] T01 -- a\n' > "$BD/M030-S01-PLAN.md"
+  echo seed > f.txt; git add -A; git commit -qm seed ) >/dev/null 2>&1 || { echo FATAL backlog fixture; exit 2; }
+pre plan-eng-review "$BL"
+has "backlog: plan-eng-review finds the slice plan -> milestone mode" "$OUT" "MODE: milestone"
+has "backlog: plan-eng-review review goes there" "$OUT" "REVIEW_FILE: $BD/M030-ENG-REVIEW.md"
+
 # Fallback path: CLAUDE_SKILL_DIR left unsubstituted (foreign host) -> still resolves project scope
 echo "# fallback without lib"
 P=$(extract summarize-task); sed "s|$ROOT/skills/summarize-task|/nonexistent-skill-dir|g" "$P" > "$TMP/pre-fallback.sh"
@@ -599,6 +636,13 @@ run_pre "$TMP/pre-fallback.sh" "$WT"
 [ "$EC" -eq 0 ] && ok "fallback: runs" || bad "fallback: runs" "exit $EC"
 has "fallback: HAS_YTSTACK yes" "$OUT" "HAS_YTSTACK: yes"
 has "fallback: IS_GIT yes in worktree" "$OUT" "IS_GIT: yes"
+has "fallback: ARTIFACT_DIR is the flat directory" "$OUT" "ARTIFACT_DIR: $WT/.ytstack"
+for s in plan-task reassess-roadmap slice-milestone; do
+  P=$(extract "$s"); sed "s|$ROOT/skills/$s|/nonexistent-skill-dir|g" "$P" > "$TMP/pre-fallback-$s.sh"
+  run_pre "$TMP/pre-fallback-$s.sh" "$WT"
+  [ "$EC" -eq 0 ] && ok "fallback: $s runs" || bad "fallback: $s runs" "exit $EC"
+  has "fallback: $s ARTIFACT_DIR is the flat directory" "$OUT" "ARTIFACT_DIR: $WT/.ytstack"
+done
 
 echo "# tree hygiene"
 [ -z "$(git -C "$MAIN" status --porcelain)" ] && ok "main checkout clean after all preambles" || bad "main checkout clean" "$(git -C "$MAIN" status --porcelain | head -3 | tr '\n' ' ')"

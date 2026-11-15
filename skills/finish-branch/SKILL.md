@@ -41,7 +41,7 @@ fi
 # Slice summary state: every task in the slice plan needs a non-draft summary before a branch is "done".
 _OPEN_TASKS=""; _DRAFT_SUMMARIES=0
 # Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
-_ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "$1"; else printf '%s\n' "$_YT_DIR/$1"; fi; }
+_ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "${1}"; else printf '%s\n' "$_YT_DIR/${1}"; fi; }
 _SP=$(_ap "$_M-$_S-PLAN.md")
 if [ -n "$_YT_DIR" ] && [ -f "$_SP" ]; then
   for t in $(grep -oE '^- \[.\] T[0-9][0-9] --' "$_SP" | grep -oE 'T[0-9][0-9]'); do

@@ -134,7 +134,7 @@ if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STATE.md" ]; then
   echo "CURRENT_MILESTONE: $_M"
   echo "ACTIVE_SLICE: $_S"
   # Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
-  _ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "$1"; else printf '%s\n' "$_YT_DIR/$1"; fi; }
+  _ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "${1}"; else printf '%s\n' "$_YT_DIR/${1}"; fi; }
   if [ -f "$(_ap "$_M-$_S-PLAN.md")" ]; then
     _SLICE_PLAN=$(_ap "$_M-$_S-PLAN.md")
     for t in $(grep -oE '^- \[.\] T[0-9][0-9] --' "$_SLICE_PLAN" | grep -oE 'T[0-9][0-9]'); do

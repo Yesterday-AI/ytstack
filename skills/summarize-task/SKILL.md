@@ -84,7 +84,7 @@ if [ -f "$_YT_DIR/STATE.md" ]; then
 fi
 
 # Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
-_ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "$1"; else printf '%s\n' "$_YT_DIR/$1"; fi; }
+_ap() { if command -v yt_artifact_path >/dev/null 2>&1; then yt_artifact_path "$_YT_DIR" "${1}"; else printf '%s\n' "$_YT_DIR/${1}"; fi; }
 if command -v yt_artifact_dir >/dev/null 2>&1; then _ARTIFACT_DIR=$(yt_artifact_dir "$_YT_DIR" "$_CURRENT_MILESTONE"); else _ARTIFACT_DIR="$_YT_DIR"; fi
 _PLAN_FILE=$(_ap "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-$_ACTIVE_TASK-PLAN.md")
 _SLICE_PLAN=$(_ap "$_CURRENT_MILESTONE-$_ACTIVE_SLICE-PLAN.md")

@@ -75,24 +75,30 @@ _CURRENT_MILESTONE=none
 _SLICE_PLANS=""
 # Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
 if command -v yt_artifact_dir >/dev/null 2>&1; then _AD=$(yt_artifact_dir "$_YT_DIR" "$_CURRENT_MILESTONE"); else _AD="$_YT_DIR"; fi
+# Every file of a glob in every layout, one per name (files that landed flat
+# before the milestone moved count too).
+_fa() { if command -v yt_find_artifacts >/dev/null 2>&1; then yt_find_artifacts "$_YT_DIR" "${1}"; else ls "$_YT_DIR"/${1} 2>/dev/null; fi | awk -F/ 'NF && !s[$NF]++' | sort; }
 if [ "$_CURRENT_MILESTONE" != none ] && [ -d "$_YT_DIR" ]; then
-  _SLICE_PLANS=$(ls "$_AD"/$_CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md 2>/dev/null)
+  _SLICE_PLANS=$(_fa "$_CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md")
 fi
 echo "ARTIFACT_DIR: $_AD"
 _SLICE_COUNT=$(printf '%s' "$_SLICE_PLANS" | grep -c . 2>/dev/null); _SLICE_COUNT=${_SLICE_COUNT:-0}
 
 # Open slices (status not done) and file overlap between their task plans / Files sections.
 _OPEN_SLICES=""; _OVERLAP=""
-for p in $_SLICE_PLANS; do
+while IFS= read -r p; do
+  [ -f "$p" ] || continue
   s=$(printf '%s' "$p" | sed -E 's/.*-(S[0-9][0-9])-PLAN\.md$/\1/')
   [ "$(sed -n 's/^status: *//p' "$p" | head -1)" = done ] && continue
   _OPEN_SLICES="$_OPEN_SLICES $s"
-done
+done <<_SPS_
+$_SLICE_PLANS
+_SPS_
 if [ -n "$_OPEN_SLICES" ]; then
   _TMPF=$(mktemp "${TMPDIR:-/tmp}/ytspawn.XXXXXX")
   for s in $_OPEN_SLICES; do
     # file-like tokens: backticked `path.ext`, "Create/Modify/Delete: path", or bare dir/file.ext in the slice + task plans
-    cat "$_AD"/$_CURRENT_MILESTONE-$s-PLAN.md "$_AD"/$_CURRENT_MILESTONE-$s-T[0-9][0-9]-PLAN.md 2>/dev/null \
+    _fa "$_CURRENT_MILESTONE-$s*PLAN.md" | while IFS= read -r p; do cat "$p"; done 2>/dev/null \
       | grep -oE '(`[^` ]+\.[A-Za-z0-9]+`|(Create|Modify|Delete): *[A-Za-z0-9_./-]+\.[A-Za-z0-9]+|[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+\.[A-Za-z0-9]+)' \
       | sed -E 's/^(Create|Modify|Delete): *//' | tr -d '`' | sort -u | sed "s/^/$s /"
   done > "$_TMPF"

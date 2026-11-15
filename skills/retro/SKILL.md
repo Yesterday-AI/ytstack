@@ -124,15 +124,21 @@ if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STATE.md" ]; then
   if [ "$_M" != none ]; then
     # Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
     if command -v yt_artifact_dir >/dev/null 2>&1; then _AD=$(yt_artifact_dir "$_YT_DIR" "$_M"); else _AD="$_YT_DIR"; fi
-    _SUMMARIES=$(ls "$_AD"/$_M-S[0-9][0-9]-T[0-9][0-9]-SUMMARY.md 2>/dev/null | grep -c .)
+    # Every file of the milestone in every layout, one per name: files that
+    # landed flat before the milestone moved count too.
+    _fa() { if command -v yt_find_artifacts >/dev/null 2>&1; then yt_find_artifacts "$_YT_DIR" "${1}"; else ls "$_YT_DIR"/${1} 2>/dev/null; fi | awk -F/ 'NF && !s[$NF]++' | sort; }
+    _SUMMARY_FILES=$(_fa "$_M-S[0-9][0-9]-T[0-9][0-9]-SUMMARY.md")
+    _SLICE_FILES=$(_fa "$_M-S[0-9][0-9]-PLAN.md")
+    _SUMMARIES=$(printf '%s' "$_SUMMARY_FILES" | grep -c .)
     _RETRO_FILE="$_AD/$_M-RETRO.md"
     if command -v yt_find_artifacts >/dev/null 2>&1; then
-      _PRIOR=$(yt_find_artifacts "$_YT_DIR" 'M[0-9][0-9][0-9]-RETRO.md' | grep -v "/$_M-RETRO.md" | awk -F/ '{print $NF "\t" $0}' | sort | tail -1 | cut -f2-)
+      _PRIOR=$(yt_find_artifacts "$_YT_DIR" 'M[0-9][0-9][0-9]-RETRO.md' | grep -v "/$_M-RETRO.md" | awk -F/ '{print $NF "\t" $ 0}' | sort | tail -1 | cut -f2-)
     else
       _PRIOR=$(ls "$_YT_DIR"/M[0-9][0-9][0-9]-RETRO.md 2>/dev/null | grep -v "/$_M-RETRO.md" | sort | tail -1)
     fi
     _PRIOR=${_PRIOR:-none}
-    [ -f "$_AD/$_M-CONTEXT.md" ] && _CREATED=$(sed -n 's/^created: *//p' "$_AD/$_M-CONTEXT.md" | head -1 | cut -c1-10)
+    _CTX=$(_fa "$_M-CONTEXT.md" | head -1)
+    [ -n "$_CTX" ] && _CREATED=$(sed -n 's/^created: *//p' "$_CTX" | head -1 | cut -c1-10)
     _CREATED=${_CREATED:-none}
     if command -v yt_commit_ref_pattern >/dev/null 2>&1; then
       _PAT=$(yt_commit_ref_pattern "$_YT_DIR" "$_M" 'S[0-9][0-9]' 'T[0-9][0-9]')
@@ -140,14 +146,17 @@ if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STATE.md" ]; then
       _PAT="^$_M-S[0-9][0-9]-T[0-9][0-9]:"
     fi
     _FIRST=$(git log --no-merges -E --grep "$_PAT" --date=format-local:%Y-%m-%d --format=%ad 2>/dev/null | tail -1); _FIRST=${_FIRST:-none}
-    _TASKS_DONE=$(cat "$_AD"/$_M-S[0-9][0-9]-PLAN.md 2>/dev/null | grep -cE '^- \[[xX]\] T[0-9][0-9]')
-    _TASKS_ALL=$(cat "$_AD"/$_M-S[0-9][0-9]-PLAN.md 2>/dev/null | grep -cE '^- \[[ xX]\] T[0-9][0-9]')
+    _TASKS_DONE=$(printf '%s\n' "$_SLICE_FILES" | while IFS= read -r _f; do [ -f "$_f" ] && cat "$_f"; done | grep -cE '^- \[[xX]\] T[0-9][0-9]')
+    _TASKS_ALL=$(printf '%s\n' "$_SLICE_FILES" | while IFS= read -r _f; do [ -f "$_f" ] && cat "$_f"; done | grep -cE '^- \[[ xX]\] T[0-9][0-9]')
   fi
 fi
 _BASE=$(git symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null | sed 's|^refs/remotes/origin/||')
 for _C in main master; do [ -n "$_BASE" ] && break; git rev-parse --verify --quiet "$_C" >/dev/null 2>&1 && _BASE=$_C; done
 echo "MILESTONE: $_M"
 echo "ARTIFACT_DIR: ${_AD:-$_YT_DIR}"
+echo "MILESTONE_FILES_BEGIN"
+printf '%s\n' "${_SLICE_FILES:-}" "${_SUMMARY_FILES:-}" | grep .
+echo "MILESTONE_FILES_END"
 echo "SUMMARIES: $_SUMMARIES"
 echo "RETRO_FILE: $_RETRO_FILE"
 echo "RETRO_EXISTS: $([ -f "$_RETRO_FILE" ] && echo yes || echo no)"
@@ -198,7 +207,7 @@ The preamble above ran when the skill loaded. Read its flags; refer to them by n
 
 ### 3. Read the material
 
-Read, with the Read tool, in this order: `<ARTIFACT_DIR>/<MILESTONE>-CONTEXT.md` (goal, exit criteria, decisions locked during discuss), `<ARTIFACT_DIR>/<MILESTONE>-ROADMAP.md`, every `<ARTIFACT_DIR>/<MILESTONE>-S##-PLAN.md`, every `<ARTIFACT_DIR>/<MILESTONE>-S##-T##-SUMMARY.md` (Commits, Outcome, Deviations, Follow-ups, Verification and the `verification:` frontmatter key), and `PRIOR_RETRO` when it is not `none` (its `## Snapshot` block holds the metrics and recommendations to compare against).
+Read, with the Read tool, in this order: `<ARTIFACT_DIR>/<MILESTONE>-CONTEXT.md` (goal, exit criteria, decisions locked during discuss), `<ARTIFACT_DIR>/<MILESTONE>-ROADMAP.md`, every slice plan and every task summary listed between `MILESTONE_FILES_BEGIN` and `MILESTONE_FILES_END` (they can sit in `ARTIFACT_DIR` and flat) (Commits, Outcome, Deviations, Follow-ups, Verification and the `verification:` frontmatter key), and `PRIOR_RETRO` when it is not `none` (its `## Snapshot` block holds the metrics and recommendations to compare against).
 
 Do not read unrelated docs. `CHANGELOG.md` and `TODOS.md` are read in step 6, nothing else outside `.ytstack/`.
 
