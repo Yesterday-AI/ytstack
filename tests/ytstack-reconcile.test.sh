@@ -20,7 +20,9 @@
 #                      current_milestone is older than, or not, the newest
 #                      milestone in progress; names the first open slice.
 #   pointer --fix      sets current_milestone, active_slice, active_task: none
-#                      and last_updated in the frontmatter, nothing else.
+#                      and last_updated in the frontmatter (or the leading
+#                      key lines of a file without one), adds missing keys,
+#                      refuses a file with neither and writes nothing then.
 #   usage              exit 64; no .ytstack: exit 1
 #
 # Run: /bin/bash tests/ytstack-reconcile.test.sh   (exit 0 = all pass; macOS bash 3.2)
@@ -119,10 +121,14 @@ OUTP=$(bash "$ROOT/bin/ytstack-spec" -C "$R" impact --plan "$Y/M046-S02-T02-PLAN
 eq "an unfilled Spec impact does not pass ytstack-spec impact" 1 "$ECP"
 run "$R" skeletons
 eq "after --write the slice has task plans and is not listed again" "" "$OUT"
-echo mine > "$Y/M046-S03-T01-PLAN.md"; rm -f "$Y/M046-S02-T02-PLAN.md" "$Y/M046-S02-T03-PLAN.md"
-run "$R" skeletons --write
-eq "an existing plan is never overwritten" "mine" "$(cat "$Y/M046-S03-T01-PLAN.md")"
 rm -f "$Y"/M046-S0[23]-T0[123]-PLAN.md
+# The guard itself (review #88 item 8): the name of the plan to write is taken
+# by something the plan lookup does not see (here an empty directory).
+mkdir "$Y/M046-S03-T01-PLAN.md"
+run "$R" skeletons --write
+has "a taken name is kept, not written" "kept .ytstack/M046-S03-T01-PLAN.md: it exists" "$OUT"
+eq "and nothing is written into it" "" "$(ls -A "$Y/M046-S03-T01-PLAN.md")"
+rmdir "$Y/M046-S03-T01-PLAN.md"; rm -f "$Y"/M046-S0[23]-T0[123]-PLAN.md
 
 # a plan under milestones/M###/ (the nested layout) is found and written beside its slice plan
 mkdir -p "$Y/milestones/M049"
@@ -154,6 +160,24 @@ eq "afterwards the pointer is ok" "pointer: ok -- current_milestone M046" "$OUT"
 eq "and exits 0" 0 "$EC"
 run "$R" pointer --fix
 eq "--fix on an ok pointer changes nothing" "pointer: ok -- current_milestone M046" "$OUT"
+# review #88 item 7: STATE.md without frontmatter, and keys that are missing
+printf 'project: acme\nlast_updated: 2026-11-01T10:00:00Z\ncurrent_milestone: M044\nactive_slice: S01\nactive_task: T03\n\n# State\n\ncurrent_milestone: M044 is the old one\n' > "$Y/STATE.md"
+run "$R" pointer --fix
+eq "no frontmatter: the leading key lines are the pointer" "fixed: current_milestone M044 -> M046, active_slice S01 -> S02, active_task T03 -> none" "$OUT"
+has "and are written" "current_milestone: M046
+active_slice: S02
+active_task: none" "$(cat "$Y/STATE.md")"
+has "the body is untouched" "current_milestone: M044 is the old one" "$(cat "$Y/STATE.md")"
+printf -- '---\nproject: acme\ncurrent_milestone: M044\nlast_updated: 2026-11-01T10:00:00Z\n---\n\n# State\n' > "$Y/STATE.md"
+run "$R" pointer --fix
+eq "missing keys are added and said so" "fixed: current_milestone M044 -> M046, active_slice (missing) -> S02, active_task (missing) -> none" "$OUT"
+eq "inside the frontmatter" "---,project: acme,current_milestone: M046,last_updated:,active_slice: S02,active_task: none,---" \
+  "$(sed -n '1,/^---$/p;' "$Y/STATE.md" | sed -n '1,7p' | sed 's/^last_updated:.*/last_updated:/' | tr '\n' ',' | sed 's/,$//')"
+printf '# State\n\nnothing here\n' > "$Y/STATE.md"; cp "$Y/STATE.md" "$TMP/state.none"
+run "$R" pointer --fix
+eq "no pointer lines at all: refused" 1 "$EC"
+has "with a reason" "STATE.md has no frontmatter and no pointer lines" "$OUT"
+eq "and the file is unchanged" "$(cat "$TMP/state.none")" "$(cat "$Y/STATE.md")"
 for m in M045 M046; do roadmap "$m" done '- [x] S01 -- x'; done
 run "$R" pointer
 eq "no milestone in progress: nothing to point at" "pointer: no milestone in progress" "$OUT"

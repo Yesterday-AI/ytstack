@@ -25,11 +25,15 @@
 #            older than it, none, or closed (done, dropped,
 #            shipped-informally). Names the first open slice of the target
 #            ("- [ ] S##" in its roadmap). --fix sets current_milestone,
-#            active_slice, active_task (none) and last_updated in the
-#            frontmatter of STATE.md and touches nothing else.
+#            active_slice, active_task (none) and last_updated in the pointer
+#            block of STATE.md (its frontmatter, or without one the
+#            "key: value" lines it starts with), adds the keys missing there
+#            and touches nothing else. It reports what the file says after
+#            the write.
 #
-# Exit codes: 0 done; 10 pointer behind (without --fix); 1 no .ytstack or no
-# STATE.md for pointer; 64 usage.
+# Exit codes: 0 done; 10 pointer behind (without --fix); 1 no .ytstack, no
+# STATE.md, or a STATE.md without a pointer block for --fix (nothing is
+# written); 64 usage.
 
 set -uo pipefail
 
@@ -131,7 +135,8 @@ EOF
     printf '## Done signal\n\nRun `/ytstack:summarize-task` after execution to mark complete and advance STATE.md.\n'
   } > "$to.tmp.$$" || { rm -f "$to.tmp.$$"; return 1; }
   # Never over an existing plan: the link fails when the name is taken.
-  if ln "$to.tmp.$$" "$to" 2>/dev/null; then rm -f "$to.tmp.$$"; echo "wrote $(rel "$to")"
+  # A taken name of any kind (a directory would take the link inside it).
+  if [ ! -e "$to" ] && [ ! -L "$to" ] && ln "$to.tmp.$$" "$to" 2>/dev/null; then rm -f "$to.tmp.$$"; echo "wrote $(rel "$to")"
   else rm -f "$to.tmp.$$"; echo "kept $(rel "$to"): it exists"; fi
 }
 
@@ -154,15 +159,18 @@ cmd_skeletons() {
 
 # ---- pointer -------------------------------------------------------------------
 cmd_pointer() {
-  local fix=no sf="$YT_DIR/STATE.md" m s t target="" tslice rm now
+  local fix=no sf="$YT_DIR/STATE.md" m s t target="" tslice rm now head_block
   while [ $# -gt 0 ]; do
     case "$1" in --fix) fix=yes ;; *) bad_usage ;; esac
     shift
   done
   [ -f "$sf" ] || { echo "ytstack-reconcile: no STATE.md in $(rel "$YT_DIR")" >&2; return 1; }
-  m=$(sed -n 's/^current_milestone:[ ]*//p' "$sf" | head -1); m=${m:-none}
-  s=$(sed -n 's/^active_slice:[ ]*//p' "$sf" | head -1); s=${s:-none}
-  t=$(sed -n 's/^active_task:[ ]*//p' "$sf" | head -1); t=${t:-none}
+  # The pointer lines: the frontmatter, or without one the key lines the file
+  # starts with (up to the first line that is no "key: value").
+  head_block=$(pointer_block "$sf")
+  m=$(printf '%s\n' "$head_block" | sed -n 's/^current_milestone:[ ]*//p' | head -1); m=${m:-none}
+  s=$(printf '%s\n' "$head_block" | sed -n 's/^active_slice:[ ]*//p' | head -1)
+  t=$(printf '%s\n' "$head_block" | sed -n 's/^active_task:[ ]*//p' | head -1)
   while IFS= read -r rm; do
     [ -n "$rm" ] && [ "$(status_of "$rm")" = in-progress ] && target=$(basename "$rm" -ROADMAP.md)
   done <<EOF
@@ -181,20 +189,52 @@ EOF
   rm=$(yt_find_artifacts "$YT_DIR" "$target-ROADMAP.md" | head -1)
   tslice=$(sed -n 's/^- \[ \] \(S[0-9][0-9]\) .*/\1/p' "$rm" | head -1); tslice=${tslice:-none}
   if [ "$fix" = no ]; then
-    echo "pointer: behind -- current_milestone $m, active_slice $s; newest milestone in progress: $target, first open slice $tslice"
+    echo "pointer: behind -- current_milestone $m, active_slice ${s:-none}; newest milestone in progress: $target, first open slice $tslice"
     return 10
   fi
+  if [ -z "$head_block" ]; then
+    echo "ytstack-reconcile: STATE.md has no frontmatter and no pointer lines (current_milestone: ...) at its top; nothing was changed. Add them, or set the pointer by hand." >&2
+    return 1
+  fi
   now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  # Replace the keys inside the pointer block; add the missing ones at its end.
   awk -v m="$target" -v s="$tslice" -v now="$now" '
-    NR == 1 && $0 == "---" { fm = 1; print; next }
-    fm && $0 == "---" { fm = 0 }
-    fm && /^current_milestone:/ { print "current_milestone: " m; next }
-    fm && /^active_slice:/ { print "active_slice: " s; next }
-    fm && /^active_task:/ { print "active_task: none"; next }
-    fm && /^last_updated:/ { print "last_updated: " now; next }
+    function add() {
+      if (!c) print "current_milestone: " m
+      if (!sl) print "active_slice: " s
+      if (!tk) print "active_task: none"
+      if (!lu) print "last_updated: " now
+      blk = 0; done = 1
+    }
+    NR == 1 && $0 == "---" { fm = 1; blk = 1; print; next }
+    NR == 1 { blk = 1 }
+    blk && fm && $0 == "---" { add(); print; next }
+    blk && !fm && $0 !~ /^[A-Za-z_][A-Za-z0-9_]*:/ { add() }
+    blk && /^current_milestone:/ { print "current_milestone: " m; c = 1; next }
+    blk && /^active_slice:/ { print "active_slice: " s; sl = 1; next }
+    blk && /^active_task:/ { print "active_task: none"; tk = 1; next }
+    blk && /^last_updated:/ { print "last_updated: " now; lu = 1; next }
     { print }
+    END { if (blk && !done) add() }
   ' "$sf" > "$sf.tmp.$$" && mv "$sf.tmp.$$" "$sf" || { rm -f "$sf.tmp.$$"; echo "ytstack-reconcile: could not write $(rel "$sf")" >&2; return 1; }
-  echo "fixed: current_milestone $m -> $target, active_slice $s -> $tslice, active_task $t -> none"
+  # Report what the file now says, never what was meant to be written.
+  head_block=$(pointer_block "$sf")
+  [ "$(printf '%s\n' "$head_block" | sed -n 's/^current_milestone:[ ]*//p' | head -1)" = "$target" ] \
+    && [ "$(printf '%s\n' "$head_block" | sed -n 's/^active_slice:[ ]*//p' | head -1)" = "$tslice" ] \
+    && [ "$(printf '%s\n' "$head_block" | sed -n 's/^active_task:[ ]*//p' | head -1)" = none ] \
+    || { echo "ytstack-reconcile: STATE.md does not show the new pointer after the write; look at $(rel "$sf")" >&2; return 1; }
+  echo "fixed: current_milestone $m -> $target, active_slice ${s:-(missing)} -> $tslice, active_task ${t:-(missing)} -> none"
+}
+
+# pointer_block <STATE.md>: the frontmatter lines, or without frontmatter the
+# "key: value" lines the file starts with; nothing when it has neither.
+pointer_block() {
+  awk '
+    NR == 1 && $0 == "---" { fm = 1; next }
+    fm { if ($0 == "---") exit; print; next }
+    /^[A-Za-z_][A-Za-z0-9_]*:/ { print; next }
+    { exit }
+  ' "$1"
 }
 
 case "$CMD" in
