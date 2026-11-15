@@ -90,6 +90,11 @@ It is the highest class that may merge into this area without a person. No field
 
 - code | marker: (`code`) | lessons: .github/reviewers/code.md | bots: cursor, greptile-apps
 - tests | marker: (`tests`) | lessons: .github/reviewers/tests.md
+
+## Checks
+
+- component-levels | file: scripts/check-levels.mjs | guards: an atom imports no molecule; the import directions of .ytstack/spec/web.md
+- secret-scan | file: .github/workflows/secret-scan.yml | guards: no token reaches a pushed commit
 ```
 
 Paths are git pathspec globs relative to the repository root, one per line. Every section is optional. Git itself matches them, the way `bin/ytstack-spec lint` and `drift` read `paths`: `*` stays inside one directory, `**` crosses directories, and `**/name` also matches at the root.
@@ -143,6 +148,18 @@ A project that runs review agents of its own (a role per review goal, each with 
 A lesson is a change to the `lessons` file, and that is a rule change: it is proposed to a person and never written by an agent on its own.
 
 `bin/ytstack-risk reviewers` prints the section, one tab separated line per role: name, marker, lessons, bots.
+
+## Checks: what a reviewer can rely on
+
+A project that runs machine checks of its own (a guard script, a lint rule, a CI step, a test that pins a contract) lists them here, so that a reviewer knows what it does not have to read for and a new rule is not only told in a receipt. Without the section nothing changes.
+
+| Field | Required | Holds |
+|---|---|---|
+| name | yes | A lowercase slug, unique. |
+| `file` | yes | The file that is the check, or that runs it. It exists in the repository. |
+| `guards` | yes | What holds when the check passes, in one line; the rule itself stays in the area file or the source it names. |
+
+A pull request that adds a guard, or changes what one guards, adds or updates its line here in the same commits. `bin/ytstack-finish-lane route` prints a `checks:` line when the project keeps the section and a change edits CI (`.github/workflows/`, `.gitlab-ci.yml`) without touching `REVIEW.md`; a change to CI goes to a person anyway, and that person reads the line. `code-review` treats a guard added without its line as a finding.
 
 ## Escapes
 
@@ -281,7 +298,7 @@ The route is `unattended` only when all of this holds:
 3. The class (the higher of floor and stated risk) is not above the ceiling of the touched areas. A change that touches no area has the ceiling `none`.
 4. Every required lens has a newest line with `pass` that is valid for the head, from a reviewer other than the author, and its `reads` documents exist at the head. For `evidence: visual` the directory the line names holds a `MANIFEST` with at least one image; every listed image is there with the listed SHA-256, and its line states `url`, `viewport` and `shows`.
 
-The route reads the host only for the review records, and only with `--pr`; it says nothing about the host's gates. `finish-lane` reads the host's gates (checks, review threads, mergeability, the reviewed commit) as before, and merges on its own only when both hold and `merge_by` is `risk`.
+The route reads the host only for the review records, and only with `--pr`; it says nothing about the host's gates. `finish-lane` reads the host's gates (checks, review threads, mergeability, the reviewed commit) as before, and merges on its own only when both hold and `merge_by` is `risk`. Its own `route` (`bin/ytstack-finish-lane route`) adds the spec delta: a change to an area's paths without its area file or a source in the diff, without a plan that states the impact and without `Spec: none -- <reason>` in the worker's report is `person` (`docs/ux/spec-format.md`, "Before a merge").
 
 | `merge_by` | Who merges |
 |---|---|
@@ -291,7 +308,7 @@ The route reads the host only for the review records, and only with `--pr`; it s
 
 ## Checked mechanically
 
-`bin/ytstack-risk check` reads the `REVIEW.md` of the working tree. It fails on a section outside the five, a lens whose name is not a lowercase slug, a lens without `applies`, `reads` or `evidence`, a lens field outside the five, an `evidence` outside the two values, a `reads` document that does not exist, a lens name used twice, a `size` line that is not two numbers, an own reviewer whose name is not a lowercase slug or is used twice, one without `marker` or `lessons`, a marker another role has, a `lessons` file that does not exist, and an own reviewer field outside the three. It prints one line per problem (`REVIEW.md: <what is wrong>`) and exits 1; a clean policy and a project without `REVIEW.md` exit 0.
+`bin/ytstack-risk check` reads the `REVIEW.md` of the working tree. It fails on a section outside the six, a lens whose name is not a lowercase slug, a lens without `applies`, `reads` or `evidence`, a lens field outside the five, an `evidence` outside the two values, a `reads` document that does not exist, a lens name used twice, a `size` line that is not two numbers, an own reviewer whose name is not a lowercase slug or is used twice, one without `marker` or `lessons`, a marker another role has, a `lessons` file that does not exist, an own reviewer field outside the three, and a check whose name is not a lowercase slug or is used twice, one without `file` or `guards`, a `file` that does not exist and a check field outside the two. It prints one line per problem (`REVIEW.md: <what is wrong>`) and exits 1; a clean policy and a project without `REVIEW.md` exit 0.
 
 `bin/ytstack-spec lint` runs that check when `REVIEW.md` exists and counts each line as a failure. It also fails on an `auto_merge` outside the three values and on a `REVIEW.md` that `SPEC.md` does not link.
 

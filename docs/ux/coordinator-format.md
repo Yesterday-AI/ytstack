@@ -136,7 +136,7 @@ Outcome: <what holds now, one to three sentences, past tense>
 Commits: <git log --oneline <base>..HEAD, or "none">
 Uncommitted: <files changed and not committed, or "none">
 Checks run: <command> -- exit <n> at <short sha> in <environment>
-Spec: <area: file that changed | none -- reason>
+Spec: <area>: <file you edited> (<section>); ... | none -- <reason>
 Deviations: <or "none">
 Blockers: <or "none">
 Not checked: <what was not run or not looked at, and why; "nothing" only when that is true>
@@ -144,6 +144,8 @@ Next: <the next action for whoever dispatched this, in one line>
 ```
 
 `partial` and `blocked` are values of `Status:`, never a word in a paragraph. `Status: blocked` needs a `Blockers:` value other than `none`; `Status: complete` needs `Blockers: none`.
+
+`Spec:` is the **spec delta**: what the change did to the technical spec (`docs/ux/spec-format.md`). Either one entry per edited section, `<area>: <file> (<section>)` with the area file or the source it names, several joined by `;`, or `none -- <reason>` with a reason from the plan rule (restores the described behaviour, no behaviour or contract changes, not covered by an area). It is the worker's side of the plan's `## Spec impact`: the plan says what will change, the report what did. A bare `none` and prose without a path are no delta. `finish-lane` checks the delta against the diff before a merge without a person (`bin/ytstack-finish-lane route --report`).
 
 ## `questions/` -- what only the human can decide
 
@@ -310,6 +312,6 @@ The old session stays open as a relay until every listed worker has reported. Pe
 - `bin/ytstack-upkeep --worktrees`: the linked worktrees (not the main one, not the one it runs in) and local branches with the state of their pull request (an open one first, else the newest), the age of the last commit, uncommitted changes, unpushed commits and the lane of the main checkout's `LANES.md` that holds them, and the `git worktree remove` / `git branch -D` commands for those whose pull request is merged or closed, with no open one, nothing unpushed, clean, unlocked and unheld. It prints the commands and runs none.
 - `bin/ytstack-status --phases [--json]`: done, in review and total per milestone and in total, with each change since the last text report, its cause and the phases that joined or left (`docs/statusline.md`, "Progress per phase").
 - `bin/ytstack-questions check`: ids are unique and match the file name, `state` holds a listed value, `asked` and `answered` are set exactly when the state says so, an answered file has text under `## Answer`.
-- `bin/ytstack-brief check`: the report labels, the three `Status:` values and their consistency with `Blockers:`.
+- `bin/ytstack-brief check`: the report labels, the three `Status:` values and their consistency with `Blockers:`, and the form of the spec delta under `Spec:`.
 - `bin/ytstack-handover check`: the staged script of a human-only step (see `skills/handover-step/SKILL.md`).
 - `bin/ytstack-check --standing [<project dir>]`: every entry in `standing/` has a name of the form above with a date and time that exist, `given` as an existing ISO UTC time in the minute of its name, a `scope` and a body, and every `supersedes` names an earlier entry that exists (missing seconds count as `00`); `until` is an existing ISO UTC time after `given`, `until-condition`, `until-check` and `check` are one non-empty line when present, `kind` is `end` or absent, and an `end` names the entry it closes. Without a directory argument it resolves `.ytstack` like the skill preambles, user scope included.
