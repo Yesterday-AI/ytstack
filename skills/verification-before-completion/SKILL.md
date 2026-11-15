@@ -2,7 +2,7 @@
 name: verification-before-completion
 metadata:
   tier: core
-  version: 0.3.0
+  version: 0.3.1
 description: "Evidence before any done claim, through the vendored superpowers verification-before-completion procedure with the current task's verification command injected. Use before a commit, before a PR, before summarize-task, before telling the user that something works. Not a substitute for test-first work during implementation (test-driven-development)."
 allowed-tools:
   - Bash
@@ -37,7 +37,8 @@ if [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/STATE.md" ]; then
   _S=$(sed -n 's/^active_slice: *//p' "$_YT_DIR/STATE.md" | head -1)
   _T=$(sed -n 's/^active_task: *//p' "$_YT_DIR/STATE.md" | head -1)
 fi
-_TASK_PLAN="$_YT_DIR/$_M-$_S-$_T-PLAN.md"
+# The plan lives with its milestone: flat or milestones/M###/ (issue #70)
+if command -v yt_artifact_path >/dev/null 2>&1; then _TASK_PLAN=$(yt_artifact_path "$_YT_DIR" "$_M-$_S-$_T-PLAN.md"); else _TASK_PLAN="$_YT_DIR/$_M-$_S-$_T-PLAN.md"; fi
 _FENCE=$(printf '\140\140\140')
 _VERIFICATION=""
 if [ -f "$_TASK_PLAN" ]; then

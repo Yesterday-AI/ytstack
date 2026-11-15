@@ -3,7 +3,7 @@ name: plan-eng-review
 description: "Reviews the execution approach of a pitch or a sliced milestone for feasibility, architecture, data flow, edge cases, test coverage, performance and security. Use after plan-ceo-review on a pitch, or after slice-milestone and before plan-task on M###-S##-PLAN.md; also when the user says eng review, architecture review, lock the approach. Not for scope and ambition questions (plan-ceo-review)."
 metadata:
   tier: core
-  version: 1.0.2
+  version: 1.0.3
   upstream: "gstack v1.99.3.0 (plan-eng-review/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
@@ -133,9 +133,14 @@ fi
 # Milestone mode target: the current milestone's slice plans (flat or milestones/ layout).
 _SLICE_PLANS=""
 if [ "$_M" != none ] && [ -n "$_YT_DIR" ]; then
-  for _f in "$_YT_DIR/$_M"-S[0-9][0-9]-PLAN.md "$_YT_DIR"/milestones/"$_M"-S[0-9][0-9]-PLAN.md "$_YT_DIR"/milestones/*/"$_M"-S[0-9][0-9]-PLAN.md; do
-    [ -f "$_f" ] && _SLICE_PLANS="$_SLICE_PLANS$_f "
-  done
+  # Every layout the lib reads (flat, milestones/, backlog/ and one level below), one per name.
+  if command -v yt_find_artifacts >/dev/null 2>&1; then
+    _SLICE_PLANS=$(yt_find_artifacts "$_YT_DIR" "$_M-S[0-9][0-9]-PLAN.md" | awk -F/ 'NF && !s[$NF]++' | sort | tr '\n' ' ')
+  else
+    for _f in "$_YT_DIR/$_M"-S[0-9][0-9]-PLAN.md "$_YT_DIR"/milestones/"$_M"-S[0-9][0-9]-PLAN.md "$_YT_DIR"/milestones/*/"$_M"-S[0-9][0-9]-PLAN.md; do
+      [ -f "$_f" ] && _SLICE_PLANS="$_SLICE_PLANS$_f "
+    done
+  fi
 fi
 # Concept mode target: the office-hours pitch.
 _PITCH=""
@@ -148,7 +153,9 @@ elif [ -n "$_YT_DIR" ]; then
   [ -z "$_PITCH" ] && [ -f "$_YT_DIR/OFFICE-HOURS.md" ] && _PITCH="$_YT_DIR/OFFICE-HOURS.md"
 fi
 if [ -n "$_SLICE_PLANS" ]; then
-  _MODE=milestone; _REVIEW_FILE="$_YT_DIR/$_M-ENG-REVIEW.md"
+  # The review goes beside the milestone's files: flat or milestones/M###/ (issue #70)
+  if command -v yt_artifact_dir >/dev/null 2>&1; then _AD=$(yt_artifact_dir "$_YT_DIR" "$_M"); else _AD="$_YT_DIR"; fi
+  _MODE=milestone; _REVIEW_FILE="$_AD/$_M-ENG-REVIEW.md"
 elif [ -n "$_PITCH" ]; then
   _MODE=concept; _REVIEW_FILE="$_PITCH"
 else
@@ -165,7 +172,8 @@ for _f in DECISIONS KNOWLEDGE PROJECT; do
   [ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/$_f.md" ] && echo "$_f: $_YT_DIR/$_f.md"
 done
 if [ "$_M" != none ] && [ -n "$_YT_DIR" ]; then
-  for _f in "$_YT_DIR/$_M"-CONTEXT.md "$_YT_DIR/$_M"-ROADMAP.md; do
+  for _f in CONTEXT ROADMAP; do
+    if command -v yt_artifact_path >/dev/null 2>&1; then _f=$(yt_artifact_path "$_YT_DIR" "$_M-$_f.md"); else _f="$_YT_DIR/$_M-$_f.md"; fi
     [ -f "$_f" ] && echo "MILESTONE_DOC: $_f"
   done
 fi

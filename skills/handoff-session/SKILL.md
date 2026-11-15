@@ -3,7 +3,7 @@ name: handoff-session
 description: "Writes a hand-authored HANDOFF.md so the next session, machine or teammate continues without re-explanation. Use when the user says handoff, pause work, save context for later, or before switching machines, a long break or a deliberate context clear. Not for routine session ends (the SessionEnd hook writes an automatic handoff) and not for closing a task (summarize-task)."
 metadata:
   tier: task
-  version: 0.1.2
+  version: 0.1.3
   triggers:
     - handoff session
     - pause work
@@ -67,6 +67,8 @@ echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "PROJECT_NAME: $_PROJECT_NAME"
 echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE / $_ACTIVE_SLICE / $_ACTIVE_TASK"
 echo "BRANCH: $_BRANCH"
+# The milestone's files: flat, or the directory it already lives in (issue #70)
+if command -v yt_artifact_dir >/dev/null 2>&1; then echo "ARTIFACT_DIR: $(yt_artifact_dir "$_YT_DIR" "$_CURRENT_MILESTONE")"; else echo "ARTIFACT_DIR: $_YT_DIR"; fi
 ```
 
 ## Procedure
@@ -153,7 +155,7 @@ Written by the user via `/ytstack:handoff-session` at {ISO_TIMESTAMP}.
 1. Start a new Claude Code session in this project directory.
 2. SessionStart hook will auto-inject state from `STATE.md` -- read that first.
 3. Read this file (`HANDOFF.md`) for the in-flight context. For what applies now in the code you continue in, read `{YT_DIR}/spec/SPEC.md` and the area file it names; this handoff does not repeat it.
-4. Check latest `{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{ACTIVE_TASK}-PLAN.md` and corresponding `-SUMMARY.md` if it exists.
+4. Check latest `{ARTIFACT_DIR}/{CURRENT_MILESTONE}-{ACTIVE_SLICE}-{ACTIVE_TASK}-PLAN.md` and corresponding `-SUMMARY.md` if it exists.
 5. Run `/ytstack:resume-session` to get a synthesized briefing.
 6. Execute the "Next action" above.
 
@@ -161,7 +163,7 @@ Written by the user via `/ytstack:handoff-session` at {ISO_TIMESTAMP}.
 
 - Full dashboard: `{YT_DIR}/STATE.md`
 - What applies now: `{YT_DIR}/spec/SPEC.md` (omit this line when the project has no technical spec)
-- Milestone roadmap: `{YT_DIR}/{CURRENT_MILESTONE}-ROADMAP.md`
+- Milestone roadmap: `{ARTIFACT_DIR}/{CURRENT_MILESTONE}-ROADMAP.md`
 - Deferred items: `{YT_DIR}/REVIEW-NOTES.md`
 - Decision log: `{YT_DIR}/DECISIONS.md`
 ```

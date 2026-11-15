@@ -3,7 +3,7 @@ name: plan-ceo-review
 description: "Challenges premise, scope and ambition of a pitch or a milestone. Use right after office-hours on OFFICE-HOURS.md, or after plan-milestone and before slice-milestone on M###-CONTEXT.md and M###-ROADMAP.md; also when the user says CEO review, scope review, is this too big, is this too small. Not for technical feasibility (plan-eng-review)."
 metadata:
   tier: core
-  version: 1.0.2
+  version: 1.0.3
   upstream: "gstack v1.99.3.0 (plan-ceo-review/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
@@ -141,8 +141,10 @@ echo "CURRENT_MILESTONE: $_CURRENT_MILESTONE"
 echo "ACTIVE_SLICE: ${_ACTIVE_SLICE:-none}"
 
 # Mode detection: milestone plan first, then an office-hours pitch
-_CONTEXT_FILE="$_YT_DIR/$_CURRENT_MILESTONE-CONTEXT.md"
-_ROADMAP_FILE="$_YT_DIR/$_CURRENT_MILESTONE-ROADMAP.md"
+# Artifacts of the milestone: flat, or the directory it already lives in (issue #70)
+if command -v yt_artifact_dir >/dev/null 2>&1; then _AD=$(yt_artifact_dir "$_YT_DIR" "$_CURRENT_MILESTONE"); else _AD="$_YT_DIR"; fi
+_CONTEXT_FILE="$_AD/$_CURRENT_MILESTONE-CONTEXT.md"
+_ROADMAP_FILE="$_AD/$_CURRENT_MILESTONE-ROADMAP.md"
 _PITCH=""
 if [ -f "./OFFICE-HOURS.md" ]; then
   _PITCH="./OFFICE-HOURS.md"
@@ -151,7 +153,7 @@ elif [ -n "$_YT_DIR" ]; then
   _PITCH=$(ls -t "$_YT_DIR"/OFFICE-HOURS-*.md 2>/dev/null | head -1)
 fi
 if [ "$_CURRENT_MILESTONE" != "none" ] && [ -f "$_CONTEXT_FILE" ] && [ -f "$_ROADMAP_FILE" ]; then
-  _MODE=milestone; _REVIEW_FILE="$_YT_DIR/$_CURRENT_MILESTONE-CEO-REVIEW.md"
+  _MODE=milestone; _REVIEW_FILE="$_AD/$_CURRENT_MILESTONE-CEO-REVIEW.md"
 elif [ -n "$_PITCH" ] && [ -f "$_PITCH" ]; then
   _MODE=concept; _REVIEW_FILE="$_PITCH"
 else
