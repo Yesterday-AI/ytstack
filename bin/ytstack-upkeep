@@ -164,7 +164,7 @@ worktrees() {
   [ ! -f "$lanes" ] || held=$(awk -v tab="$TAB" '
     /^\|/ && ++n > 2 {
       split($0, c, "|"); for (i = 2; i <= 6; i++) gsub(/^[ \t]+|[ \t]+$/, "", c[i])
-      if (c[4] ~ /^(claimed|running|reported|in-review|ready)$/ && c[6] != "-" && c[6] != "") print c[6] tab c[2] " (" c[4] ")"
+      if (c[4] ~ /^(claimed|running|reported|in-review|ready|parked)$/ && c[6] != "-" && c[6] != "") print c[6] tab c[2] " (" c[4] ")"
     }' "$lanes")
   # info <branch> <age> <extra>: INFO, and ok=yes when the branch may go: its
   # pull request is merged or closed, none is open, no lane holds it, and its
@@ -314,7 +314,7 @@ $(awk -v tab="$TAB" '
       /^\|/ && ++n > 2 {
         split($0, c, "|")
         for (i = 2; i <= 11; i++) { gsub(/^[ \t]+|[ \t]+$/, "", c[i]); if (c[i] == "") c[i] = "-" }
-        if (c[4] ~ /^(claimed|running|reported|in-review|ready)$/) print c[2] tab c[4] tab c[5] tab c[11]
+        if (c[4] ~ /^(claimed|running|reported|in-review|ready|parked)$/) print c[2] tab c[4] tab c[5] tab c[11]
       }' "$YT_DIR/LANES.md")
 EOF
     # A stale lane (issue #84) is listed once: not again when it is listed above.

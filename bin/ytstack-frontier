@@ -72,7 +72,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT/hooks/lib/git-ctx.sh"
 
 COLS='Lane|Kind|Status|Claimed by|Branch|Worktree|PR|Reviewed head|Round|Next action'
-HELD='claimed|running|reported|in-review|ready'
+# parked (issue #83): its pull request waits open, for a cap or a person.
+HELD='claimed|running|reported|in-review|ready|parked'
 STATUSES="$HELD|merged|blocked|dropped"
 KINDS='implement|review|prepare'
 NL='

@@ -59,6 +59,7 @@
 #               threads    no unresolved review thread
 #               mergeable  open and without a conflict
 #               open-prs   with --max-open: at most N open pull requests
+#                          ready for review (drafts do not count)
 # merge       runs gates for --at SHA, merges only when all hold, pinned to
 #             that commit on the host's side, and reads the state back. No
 #             auto-merge, no administrator override. It does not read the
@@ -367,8 +368,10 @@ VIEW_JQ='
 # shortcut: the first 100 review threads; more than that fails the gate instead
 # of being paged through.
 # shellcheck disable=SC2016
-THREADS_QUERY='query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequests(states: OPEN) { totalCount } pullRequest(number: $number) { reviewThreads(first: 100) { totalCount pageInfo { hasNextPage } nodes { isResolved } } } } }'
-THREADS_JQ='.data.repository | "open\t\(.pullRequests.totalCount)",
+# open: the open pull requests that are ready for review (drafts do not count
+# toward a cap, issue #83), all open ones, and whether more than 100 are open.
+THREADS_QUERY='query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequests(states: OPEN, first: 100) { totalCount nodes { isDraft } } pullRequest(number: $number) { reviewThreads(first: 100) { totalCount pageInfo { hasNextPage } nodes { isResolved } } } } }'
+THREADS_JQ='.data.repository | "open\t\([.pullRequests.nodes[]? | select(.isDraft | not)] | length)\t\(.pullRequests.totalCount)\t\(.pullRequests.totalCount > 100)",
   (.pullRequest.reviewThreads | "threads\t\([ .nodes[] | select(.isResolved | not) ] | length)\t\(.totalCount)\t\(.pageInfo.hasNextPage)")'
 
 gate() { # <ok|FAIL> <gate> <detail>
@@ -403,7 +406,7 @@ gate_args() {
 # read_gates: one read of the host, one line per gate, the time of the read.
 # Returns 0 when every gate holds; sets HOST_HEAD.
 read_gates() {
-  local v g t short checks n open state m reviews newest unresolved total more count
+  local v g t short checks n open state m reviews newest unresolved total more count drafts
   v=$(gh pr view "$PR" --json state,headRefOid,mergeable,statusCheckRollup,reviews --jq "$VIEW_JQ") \
     && g=$(gh api graphql -f query="$THREADS_QUERY" -F owner='{owner}' -F repo='{repo}' -F number="$PR" --jq "$THREADS_JQ")
   # shellcheck disable=SC2181
@@ -455,9 +458,16 @@ EOF
   fi
 
   if [ -n "$MAX_OPEN" ]; then
-    count=$(rows "$g" open)
-    if is_int "$count" && [ "$count" -le "$MAX_OPEN" ]; then gate ok open-prs "$count open, limit $MAX_OPEN"
-    else gate FAIL open-prs "${count:-unknown} open, limit $MAX_OPEN"
+    IFS=$'\t' read -r count total more <<EOF
+$(rows "$g" open)
+EOF
+    drafts=""
+    if is_int "$count" && is_int "$total" && [ "$total" -gt "$count" ]; then
+      drafts=" ($((total - count)) draft$([ $((total - count)) -eq 1 ] || echo s) not counted)"
+    fi
+    if [ "$more" = true ]; then gate FAIL open-prs "$total open, only the first 100 were read; limit $MAX_OPEN"
+    elif is_int "$count" && [ "$count" -le "$MAX_OPEN" ]; then gate ok open-prs "$count open for review, limit $MAX_OPEN$drafts"
+    else gate FAIL open-prs "${count:-unknown} open for review, limit $MAX_OPEN$drafts"
     fi
   fi
 

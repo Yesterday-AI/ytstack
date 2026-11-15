@@ -300,7 +300,8 @@ has "it says so" "not in this checkout" "$OUT"
 # ---- 7. gates -----------------------------------------------------------------
 echo "# gates"
 G="$P"; SHA="$TIP"
-# host: a pull request at $SHA whose gates all hold, 3 open pull requests, one resolved thread
+# host: a pull request at $SHA whose gates all hold, 3 open pull requests ready
+# for review and one draft (issue #83: the cap counts the ready ones), one resolved thread
 host() {
   jq -n --arg h "$SHA" '{state: "OPEN", headRefOid: $h, mergeable: "MERGEABLE",
     statusCheckRollup: [
@@ -310,7 +311,7 @@ host() {
     reviews: [
       {author: {login: "rev"}, state: "COMMENTED", submittedAt: "2026-11-13T10:00:00Z", commit: {oid: $h},
        body: "Verdict: approved\r\nReviewed commit: \($h)"} ]}' > "$GH_FIX/view.json"
-  jq -n '{data: {repository: {pullRequests: {totalCount: 3},
+  jq -n '{data: {repository: {pullRequests: {totalCount: 4, nodes: [{isDraft: false}, {isDraft: true}, {isDraft: false}, {isDraft: false}]},
     pullRequest: {reviewThreads: {totalCount: 1, pageInfo: {hasNextPage: false}, nodes: [{isResolved: true}]}}}}}' > "$GH_FIX/graphql.json"
   rm -f "$GH_FIX"/*.fail "$GH_FIX/merge.queue" "$GH_FIX/log"
 }
@@ -334,7 +335,8 @@ has "the checks line counts them and names the commit" "ok   checks: 3 concluded
 has "the threads were read for this pull request" "-F number=7" "$(calls)"
 host; run "$G" gates --pr 7 --reviewed-head "${SHA:0:7}" --max-open 3
 eq "a short commit id and a limit that is just met: exit 0" 0 "$EC"
-has "the limit has its own line" "ok   open-prs: 3 open, limit 3" "$OUT"
+has "the limit has its own line, drafts not counted" "ok   open-prs: 3 open for review, limit 3 (1 draft not counted)" "$OUT"
+has "the query reads the drafts" "isDraft" "$(calls)"
 
 host; tweak view '.headRefOid = "ffffffffffffffffffffffffffffffffffffffff"'; gates
 only "the head moved after the review" head
@@ -375,7 +377,10 @@ host; tweak view '.state = "CLOSED"'; gates
 only "a closed pull request" mergeable
 host; gates --max-open 2
 only "too many open pull requests" open-prs
-has "count and limit are printed" "3 open, limit 2" "$OUT"
+has "count and limit are printed" "3 open for review, limit 2" "$OUT"
+host; tweak graphql '.data.repository.pullRequests |= (.totalCount = 140)'; gates --max-open 5
+only "more open pull requests than were read" open-prs
+has "says so" "140 open, only the first 100 were read" "$OUT"
 
 host; gates --verdict-pattern '^Verdict: approved$'
 eq "the newest review matches the verdict pattern: exit 0" 0 "$EC"
@@ -399,7 +404,7 @@ has "after the gate lines" "ok   head: ${SHA:0:7} is the reviewed commit" "$OUT"
 host; run "$G" merge --pr 7 --at "$SHA" --method rebase --max-open 5 --verdict-pattern 'approved'
 eq "method and gate options pass through" 0 "$EC"
 has "the method reaches gh" "pr merge 7 --rebase --match-head-commit $SHA" "$(calls)"
-has "the limit was checked" "ok   open-prs: 3 open, limit 5" "$OUT"
+has "the limit was checked" "ok   open-prs: 3 open for review, limit 5" "$OUT"
 host; tweak view '.headRefOid = "ffffffffffffffffffffffffffffffffffffffff"'; run "$G" merge --pr 7 --at "$SHA"
 eq "the head moved after the review: merge refuses" 1 "$EC"
 has "the gate is named" "FAIL head:" "$OUT"
