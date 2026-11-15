@@ -9,7 +9,9 @@
 #                   technical spec covers the planned files; Gates only when
 #                   the plan has some; Git only with --branch
 #   render --slice  goal and task list; per planned task its parts; a task
-#                   without a plan is named as not planned
+#                   without a plan gets the plan to write as its first step
+#   render --task   of a task the slice plan lists and no plan describes: a
+#                   plan-first brief, the task plan is the first deliverable
 #   render --kind   "## Kind" says what the worker may do: implement (the
 #                   default) commits with the prefix; review is read only, pins
 #                   the range from --head (a commit hash, required) and --base,
@@ -180,7 +182,7 @@ has "a plan under milestones/M###/ is found" '- `.ytstack/milestones/M002/M002-S
 # ---- 2. render --slice --------------------------------------------------------
 echo "# render --slice"
 R=$(new_repo slice)
-printf -- '---\nstatus: planned\n---\n\n# Slice Plan\n\n**Goal:** Token login works end to end\n\n## Tasks\n\n- [ ] T01 -- accept a token\n- [ ] T02 -- reject an expired token\n\n## Gates\n\n- [ ] G01 -- pilot customer agrees | decides: Kim | how: call | lapses: unknown\n\n## Done when\n\nAll tasks done.\n' > "$R/.ytstack/M001-S01-PLAN.md"
+printf -- '---\nstatus: planned\n---\n\n# Slice Plan\n\n**Goal:** Token login works end to end\n\n## Tasks\n\n- [ ] T01 -- accept a token\n- [ ] T02 -- reject an expired token in `src/auth/login.sh`\n\n## Gates\n\n- [ ] G01 -- pilot customer agrees | decides: Kim | how: call | lapses: unknown\n\n## Done when\n\nAll tasks done.\n' > "$R/.ytstack/M001-S01-PLAN.md"
 plan "$R/.ytstack/M001-S01-T01-PLAN.md" "Accept a token" yes
 run "$R" render --slice M001-S01 --branch ytstack/M001-S01
 eq "a slice with one planned and one unplanned task renders" 0 "$EC"
@@ -191,7 +193,8 @@ S=$(part Scope)
 has "Scope: the planned task's files under its label" '**T01**
 
 - Modify: `src/auth/login.sh:10-20`' "$S"
-has "Scope: the unplanned task is named as such" "**T02** -- not planned yet: run ytstack:plan-task first, or plan it yourself with exact files and a verification command before you write code" "$S"
+has "Scope: the unplanned task's plan is its first deliverable" "**T02** -- not planned yet: first write its plan \`.ytstack/M001-S01-T02-PLAN.md\` in the format of \`ytstack:plan-task\`" "$S"
+hasnt "nobody is told to plan it himself" "plan it yourself" "$OUT"
 C=$(part "Read for context")
 has "Context: the slice plan" '- `.ytstack/M001-S01-PLAN.md`' "$C"
 has "Context: the task plan" '- `.ytstack/M001-S01-T01-PLAN.md`' "$C"
@@ -204,12 +207,58 @@ has "Gates: the slice's gate" "G01 -- pilot customer agrees" "$G"
 has "Gates: the task's gate" "G01 -- sign-off" "$G"
 has "Git: one prefix per task" 'prefix `M001-S01-T##:`' "$(part Git)"
 
+# An unplanned task of a planned slice (issue #76): a plan-first brief whose
+# first deliverable is the task plan, then the implementation.
+run "$R" render --task M001-S01-T02 --branch ytstack/M001-S01
+eq "an unplanned task of a planned slice renders" 0 "$EC"
+eq "plan first: the brief marker is the first line (hooks/pre-tool-use-agent)" "# Brief: M001-S01-T02 (acme)" "$(printf '%s\n' "$OUT" | head -1)"
+O=$(part Outcome)
+has "plan first: the task line" "reject an expired token" "$O"
+has "plan first: the plan is the first deliverable" 'Your first deliverable is its plan: write `.ytstack/M001-S01-T02-PLAN.md`' "$O"
+has "plan first: in the format of plan-task" "Step 9 of \`$ROOT/skills/plan-task/SKILL.md\`" "$O"
+has "plan first: the sections of a task plan" '`## Files` with the exact paths' "$O"
+has "plan first: the plan is committed before the code" "it goes into your first commit, alone" "$O"
+hasnt "plan first: nobody is told to plan it himself" "plan it yourself" "$OUT"
+S=$(part Scope)
+has "plan first: Scope starts with the plan file" '`.ytstack/M001-S01-T02-PLAN.md` (the plan you write first), then the files that plan names under `## Files`.' "$S"
+has "plan first: the paths the slice plan names for the task" '- `src/auth/login.sh`' "$S"
+has "plan first: Verification comes from the plan the worker writes" 'The command your plan names under `## Verification`.' "$(part Verification)"
+has "plan first: Spec impact comes from that plan too" 'What your plan names under `## Spec impact`.' "$(part "Spec impact")"
+has "plan first: the slice plan is read" '- `.ytstack/M001-S01-PLAN.md`' "$(part "Read for context")"
+has "plan first: the commit prefix is the task" 'prefix `M001-S01-T02:`' "$(part Git)"
+run "$R" render --task M001-S01-T02 --kind review --head abc1234
+eq "plan first: a review of an unplanned task has nothing to review against: exit 1" 1 "$EC"
+run "$R" render --task M001-S01-T07
+eq "plan first: a task the slice plan does not list: exit 1" 1 "$EC"
+
 # granularity: slice -- the slice plan carries Files and Verification itself
 plan "$R/.ytstack/M002-S01-PLAN.md" "unused"
 printf '\n**Goal:** Whole slice in one plan\n\n## Tasks\n\n- [ ] T01 -- all of it\n' >> "$R/.ytstack/M002-S01-PLAN.md"
 run "$R" render --slice M002-S01
 hasnt "a slice plan with its own Files has no unplanned tasks" "not planned yet" "$OUT"
 has "and its own files are the scope" '- Create: `tests/login.test.sh`' "$(part Scope)"
+# review #88 item 9: a task of such a slice is not asked for a task plan
+run "$R" render --task M002-S01-T01
+eq "granularity slice: a task of a slice plan with its own Files renders" 0 "$EC"
+eq "granularity slice: the brief marker is the first line" "# Brief: M002-S01-T01 (acme)" "$(printf '%s\n' "$OUT" | head -1)"
+hasnt "granularity slice: no task plan is demanded" "first deliverable" "$OUT"
+has "granularity slice: the slice plan's files are the scope" '- Create: `tests/login.test.sh`' "$(part Scope)"
+has "granularity slice: the slice plan's verification" "bash tests/login.test.sh" "$(part Verification)"
+has "granularity slice: the task line is the outcome" "all of it" "$(part Outcome)"
+# Codex P2 on #88: only an open task of the slice plan gets a brief
+run "$R" render --task M002-S01-T99
+eq "granularity slice: a task the slice plan does not list: exit 1" 1 "$EC"
+printf -- '- [x] T02 -- done already\n' >> "$R/.ytstack/M002-S01-PLAN.md"   # the file ends in "## Tasks"
+run "$R" render --task M002-S01-T02
+eq "granularity slice: a ticked task: exit 1" 1 "$EC"
+
+# review #88 item 3: the plan-first brief names the area of the task line's paths
+mkdir -p "$R/.ytstack/spec"
+printf -- '---\nproject: acme\n---\n\n# spec\n' > "$R/.ytstack/spec/SPEC.md"
+printf -- '---\narea: auth\nstatus: planned\npaths:\n  - src/auth/**\n---\n' > "$R/.ytstack/spec/auth.md"
+run "$R" render --task M001-S01-T02
+has "plan first: the area file of the task line's paths is read" '- `.ytstack/spec/auth.md`' "$(part "Read for context")"
+rm -rf "$R/.ytstack/spec"
 
 # ---- 3. render --kind ---------------------------------------------------------
 echo "# render --kind"
@@ -443,13 +492,14 @@ Blockers: none
 Not checked: the CI run, it starts after the push
 Next: dispatch the verifier on abc1234'
 # chk <report text>: sets OUT and EC
-chk() { OUT=$(printf '%s\n' "$1" | bash "$BIN" check 2>&1); EC=$?; }
+# (from $TMP: in a project with a spec, check also reads its area files)
+chk() { OUT=$(cd "$TMP" && printf '%s\n' "$1" | bash "$BIN" check 2>&1); EC=$?; }
 
 chk "$GOOD"
 eq "a complete report passes" 0 "$EC"
 eq "and says so" "report ok" "$OUT"
 printf '%s\n' "$GOOD" > "$TMP/report.txt"
-OUT=$(bash "$BIN" check "$TMP/report.txt" 2>&1); eq "a report file is read like stdin" "report ok" "$OUT"
+OUT=$(bash "$BIN" -C "$TMP" check "$TMP/report.txt" 2>&1); eq "a report file is read like stdin" "report ok" "$OUT"
 
 for L in "Task" "Status" "Outcome" "Commits" "Uncommitted" "Checks run" "Spec" "Deviations" "Blockers" "Not checked" "Next"; do
   chk "$(printf '%s\n' "$GOOD" | grep -v "^$L:")"
@@ -469,6 +519,37 @@ chk "$(printf '%s\n' "$GOOD" | sed -e 's/^Status:.*/Status: blocked/' -e 's/^Blo
 eq "Status: blocked with a blocker passes, also one that starts with 'none'" "report ok" "$OUT"
 chk "$(printf '%s\n' "$GOOD" | sed -e 's/^Status:.*/Status: partial/' -e 's/^Blockers:.*/Blockers: None./')"
 eq "Status: partial passes with or without a blocker" "report ok" "$OUT"
+
+# The spec delta (issue #75): the edited spec section with its path, or
+# "none -- <reason>"; a bare "none" or prose is no delta.
+chk "$(printf '%s\n' "$GOOD" | sed 's#^Spec:.*#Spec: auth: .ytstack/spec/auth.md (Behavior); billing: docs/billing.md (Export)#')"
+eq "Spec: two edited sections with their paths pass" "report ok" "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed 's/^Spec:.*/Spec: none -- restores the described behaviour/')"
+eq "Spec: none with a reason passes" "report ok" "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed 's/^Spec:.*/Spec: none/')"
+eq "Spec: a bare none fails" 1 "$EC"
+eq "and says what it needs" 'Spec: "none" is no spec delta: name each edited section as "<area>: <file> (<section>)", or write "none -- <reason>"' "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed 's/^Spec:.*/Spec: updated the auth docs/')"
+eq "Spec: prose without an area and a path fails" 'Spec: "updated the auth docs" is no spec delta: name each edited section as "<area>: <file> (<section>)", or write "none -- <reason>"' "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed 's#^Spec:.*#Spec: auth: .ytstack/spec/auth.md; the rest is unchanged#')"
+eq "Spec: every entry needs an area and a path" 1 "$EC"
+chk "$(printf '%s\n' "$GOOD" | sed 's#^Spec:.*#Spec: auth: `.ytstack/spec/auth.md` (Behavior)#')"
+eq "Spec: a path in backticks is read like a bare one" "report ok" "$OUT"
+# review #88 item 1: in a project with a spec, the path is the area file or one of its sources
+SR=$(new_repo specchk); mkdir -p "$SR/.ytstack/spec" "$SR/docs"; echo d > "$SR/docs/auth.md"
+printf -- '---\nproject: acme\n---\n\n# spec\n' > "$SR/.ytstack/spec/SPEC.md"
+printf -- '---\narea: auth\nstatus: planned\npaths:\n  - src/auth/**\nsources:\n  - docs/auth.md\n---\n' > "$SR/.ytstack/spec/auth.md"
+# schk <spec value>: the report with that Spec: line, checked in the project
+schk() { OUT=$(printf '%s\n' "$GOOD" | sed "s#^Spec:.*#Spec: $1#" | bash "$BIN" -C "$SR" check 2>&1); EC=$?; }
+schk 'auth: src/auth/login.sh (Behavior)'
+eq "a code file is no spec edit" 'Spec: "auth: src/auth/login.sh" is neither .ytstack/spec/auth.md nor one of its sources' "$OUT"
+schk 'auth: .ytstack/spec/auth.md (Behavior); auth: `docs/auth.md` (Login)'
+eq "the area file and a source pass" "report ok" "$OUT"
+printf -- '---\narea: auth\nstatus: planned\npaths:\n  - src/auth/**\nsources:\n  - docs/Auth Guide.md\n---\n' > "$SR/.ytstack/spec/auth.md"
+schk 'auth: docs/Auth Guide.md (Login)'
+eq "a source with a space in its name is read whole" "report ok" "$OUT"
+schk 'billing: .ytstack/spec/billing.md (Behavior)'
+eq "an area the project does not have fails" 'Spec: "billing: .ytstack/spec/billing.md" names no area of this project (.ytstack/spec/billing.md does not exist)' "$OUT"
 
 chk "$(printf '%s\n' "$GOOD" | sed 's/^Not checked:.*/Not checked:   /')"
 eq "an empty Not checked fails" 1 "$EC"
@@ -545,10 +626,13 @@ SHAPE=$(part Report)
 eq "the shape names the eleven labels, in the order of the format document" \
   "Task,Status,Outcome,Commits,Uncommitted,Checks run,Spec,Deviations,Blockers,Not checked,Next," \
   "$(printf '%s\n' "$SHAPE" | sed -n 's/^\([A-Z][A-Za-z ]*\): <.*/\1/p' | tr '\n' ',')"
+has "the shape says the spec delta is a duty" 'is the spec delta' "$SHAPE"
+has "Spec impact: the duty to edit the area file" 'edit that section in the same commits' "$(part "Spec impact")"
 chk "$SHAPE"
 eq "the unfilled report shape does not pass" 'Checks run: no exit code in "<command> -- exit <n> at <short sha> in <environment>"
+Spec: "<area>: <file you edited> (<section>); ... | none -- <reason>" is no spec delta: name each edited section as "<area>: <file> (<section>)", or write "none -- <reason>"
 Status: "<complete | partial | blocked>" is not complete, partial or blocked' "$OUT"
-chk "$(printf '%s\n' "$SHAPE" | sed -e 's/exit <n>/exit 0/' -e 's/^Status:.*/Status: partial/')"
+chk "$(printf '%s\n' "$SHAPE" | sed -e 's/exit <n>/exit 0/' -e 's/^Status:.*/Status: partial/' -e 's/^Spec:.*/Spec: none -- no behaviour or contract changes/')"
 eq "with an exit code and a status filled in, its labels are complete" "report ok" "$OUT"
 OUT=$(bash "$BIN" check "$TMP/none.txt" 2>&1); eq "an unreadable report file: exit 64" 64 "$?"
 

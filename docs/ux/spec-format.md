@@ -159,6 +159,10 @@ A spec in user scope (`~/.ytstack/projects/<key>/spec/`) lies outside the reposi
 
 The summary records what was updated under `## Spec`: the area, the file and section, or `none` with the plan's reason.
 
+### Before a merge
+
+A dispatched worker states the spec delta in its report's `Spec:` line: the edited sections as `<area>: <file> (<section>)`, or `none -- <reason>` (`docs/ux/coordinator-format.md`, "The report"). `bin/ytstack-finish-lane route` checks it against the lane's diff before a merge without a person, so a lane that never ran `summarize-task` is still caught: each plan of the lane that belongs to the range and has a `## Spec impact` goes through `impact` on the commit range; every area whose paths the diff touches (a moved file with both paths) needs its area file or a source in the diff, a plan of the range that says `none -- <reason>` for the files of its commits, or the report's reason. A path the report names as edited is the area file or a source of that area, and in the diff; `bin/ytstack-brief check` checks the first half of that where it runs in the project. A `TODO` field in a plan's "Spec impact" (`TODO: ...`, `<area>: TODO ...`, `-- TODO`) fails `impact`: a placeholder is no statement. The word inside a filled line is no placeholder. A gap sends the change to a person.
+
 ### Drift
 
 `bin/ytstack-spec drift` compares, for every area that is not `planned`, the commits that touched its `paths` with the last commit that touched the area file or one of its `sources`. When code changed after that commit, it prints a **possible documentation impact**. That is a prompt to look, not a finding that the description is wrong: a refactoring changes paths and leaves the contract alone.

@@ -3,8 +3,10 @@
 #
 #   ytstack-spec lint                      format of .ytstack/spec/ (SPEC.md + area files)
 #   ytstack-spec drift [--exit-code]       areas whose paths changed after their description
-#   ytstack-spec impact --plan FILE [--grep ERE] [--base SHA]
+#   ytstack-spec impact --plan FILE [--grep ERE] [--base SHA [--head SHA]]
 #                                          a task's "## Spec impact" against what it changed
+#                                          (--head: only the commits base..head, not the
+#                                          working tree; for a lane's branch)
 #   ytstack-spec areas [--names] PATH...   which area describes a path (--names: the area names only)
 #
 # All commands take -C DIR first (default: $PWD).
@@ -12,7 +14,8 @@
 # Exit codes
 #   lint    0 clean, 2 warnings only, 1 failures (or no spec)
 #   drift   0 always; with --exit-code 2 when an area is listed
-#   impact  0 satisfied or "none", 1 not satisfied, 3 the plan states no impact,
+#   impact  0 satisfied or "none", 1 not satisfied (a TODO placeholder too),
+#           3 the plan states no impact,
 #           4 unverifiable: an area file lies outside the repository (user
 #           scope, ~/.ytstack/projects/<key>/) and no source of it changed;
 #           the line says whether the file was modified after the task's
@@ -49,7 +52,7 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 case "$CMD" in lint|drift|impact|areas) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 
 yt_git_ctx "$DIR"
@@ -306,18 +309,20 @@ EOF
 
 # ---- impact --------------------------------------------------------------------
 cmd_impact() {
-  local plan="" pat="" base="" body first line area f changed committed fails=0 unver=0 hit how s first_ct=""
+  local plan="" pat="" base="" head="" body first line area f changed committed fails=0 unver=0 hit how s first_ct=""
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || { echo "impact: $1 needs a value" >&2; return 64; }
     case "$1" in
       --plan) plan="$2" ;;
       --grep) pat="$2" ;;
       --base) base="$2" ;;
+      --head) head="$2" ;;
       *) echo "impact: unknown argument $1" >&2; return 64 ;;
     esac
     shift 2
   done
   [ -f "$plan" ] || { echo "impact: plan file '$plan' not found" >&2; return 64; }
+  [ -z "$head" ] || [ -n "$base" ] || { echo "impact: --head needs --base" >&2; return 64; }
 
   body=$(awk '
     /^```/ { fence = !fence }
@@ -328,6 +333,11 @@ cmd_impact() {
     echo "spec impact: not stated -- the plan has no '## Spec impact' section; state the impact in the summary"
     return 3
   fi
+  # A skeleton's placeholder (bin/ytstack-reconcile) is no statement yet: a
+  # field that is TODO ("TODO: ...", "<area>: TODO ...", "-- TODO ..."), not
+  # the word inside a filled line.
+  line=$(printf '%s\n' "$body" | grep -m1 -E '(^|^- |: |-- )TODO([[:space:]:]|$)')
+  if [ -n "$line" ]; then echo "FAIL placeholder (fill it in): $line"; return 1; fi
   first=$(printf '%s\n' "$body" | head -1)
   case "$first" in
     [Nn]one*|"- "[Nn]one*) echo "spec impact: ${first#- }"; return 0 ;;
@@ -339,8 +349,14 @@ cmd_impact() {
   # Paths come as NUL-delimited records (-z): the plain output quotes a name
   # with a space or a non-ASCII byte, and a quoted name never equals the path
   # a plan or an area file names.
-  committed=""
-  if [ "$YT_IS_GIT" = yes ]; then
+  committed=""; changed=""
+  if [ "$YT_IS_GIT" = yes ] && [ -n "$head" ]; then
+    # A range that need not be checked out (a lane read from the coordinating
+    # checkout): its commits only, the working tree belongs to somebody else.
+    # --no-renames: a renamed file counts with its old and its new path.
+    committed=$(git -C "$TOP" diff --no-renames --name-only -z "$base..$head" 2>/dev/null | nul_paths)
+    first_ct=$(git -C "$TOP" log --format='%ct %h' "$base..$head" 2>/dev/null | tail -1)
+  elif [ "$YT_IS_GIT" = yes ]; then
     if [ -n "$pat" ]; then
       committed=$(git -C "$TOP" log --no-merges -E --grep "$pat" --name-only -z --format= 2>/dev/null | nul_paths)
       first_ct=$(git -C "$TOP" log --no-merges -E --grep "$pat" --format='%ct %h' 2>/dev/null | tail -1)
@@ -350,8 +366,6 @@ cmd_impact() {
       first_ct=$(git -C "$TOP" log --format='%ct %h' "$base..HEAD" 2>/dev/null | tail -1)
     fi
     changed=$(git -C "$TOP" status --porcelain -z --untracked-files=all 2>/dev/null | status_paths)
-  else
-    changed=""
   fi
 
   # outside_when <file>: the file's modification time against the task's first

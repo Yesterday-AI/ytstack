@@ -1378,6 +1378,114 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 
 **Supersedes:** Narrows "2026-11-15: Standing entries end by `until` ...": the commands run only for merged entries.
 
+## 2026-11-15: The spec delta is the report's existing `Spec:` label, checked for its form (issue #75)
+
+**Context:** Lanes of a long coordinator run updated receipts and changelogs and never the area files their change made false. The brief listed the area files only as reading context, and the report's `Spec:` line accepted any text.
+
+**Options considered:**
+- A) A twelfth label `Spec delta:` beside `Spec:`.
+- B) Rename `Spec:` to `Spec delta:`.
+- C) Keep `Spec:` and give it a checked form: `<area>: <path> (<section>)` per edited section, joined by `;`, or `none -- <reason>`, with the brief stating the duty to edit the section.
+
+**Chose:** C.
+
+**Reason:** The label already says what the plan's `## Spec impact` promised, in the plan's own two forms (`summarize-task` records the same two forms under `## Spec`). A second label would hold the same fact twice; a rename breaks every report and fixture for no gain. What was missing was the duty in the brief and a check that a bare `none` or prose fails.
+
+**How to apply:**
+- The reasons after `none --` are the plan rule's: restores the described behaviour, no behaviour or contract changes, not covered by an area.
+- `bin/ytstack-brief check` checks the form only; whether the diff matches the delta is checked by `bin/ytstack-finish-lane route`.
+
+**Supersedes:** None.
+
+## 2026-11-15: A brief for an unplanned task makes the task plan its first deliverable (issue #76)
+
+**Context:** In a long coordinator run no lane planned its tasks. `ytstack-brief render` said "not planned yet: run ytstack:plan-task first, or plan it yourself", so lanes coded without Files, Verification or Spec impact.
+
+**Options considered:**
+- A) `render` runs `plan-task` inline before the brief.
+- B) A plan-first brief: the worker writes the task plan in `plan-task`'s format first, commits it alone, then implements what it names.
+- C) Refuse to render until the plan exists.
+
+**Chose:** B.
+
+**Reason:** A script cannot run a skill, and `plan-task` asks questions a coordinator answers poorly at dispatch time (A). C was the old behaviour for `--task` and is what coordinators routed around by writing briefs by hand. B keeps the dispatch on the rendered path and leaves a plan on disk that `summarize-task`, `ytstack-spec impact` and `finish-lane` can check.
+
+**How to apply:**
+- The plan goes beside the slice plan; the slice plan's backticked paths of the task line are hints, not the scope.
+- A review of an unplanned task still has no brief: there is nothing to review against.
+
+**Supersedes:** None.
+
+## 2026-11-15: `finish-lane`'s route checks the spec delta; a gap routes to a person (issue #75)
+
+**Context:** `summarize-task` checks a plan's spec impact, but lanes that skip it merged with no check at all. `finish-lane` read the receipt and the gates, never the spec.
+
+**Options considered:**
+- A) A separate `finish-lane` step `spec` the skill has to call.
+- B) Inside `ytstack-finish-lane route`: after `ytstack-risk route`, the spec delta; a gap is a `reason: spec` line and makes the route `person`.
+- C) Inside `ytstack-risk route`, for every caller.
+
+**Chose:** B.
+
+**Reason:** A step that can be skipped is the failure this issue reports. `route` is already the one call a merge without a person needs. `ytstack-risk` reads a policy at the base commit and stays a function of the diff and the review records; the worker's report is a lane artifact, which only `finish-lane` holds (C would make it read a file it has no record of).
+
+**How to apply:**
+- Plans first: a plan that states `## Spec impact` is checked with `ytstack-spec impact --base --head`, and the report cannot override it. Without one, an area the diff touches needs its area file or a source in the diff, or `Spec: none -- <reason>` in the report given with `--report`.
+- The area files are read from the coordinating checkout's working tree, not at the base commit; a change to an area file's frontmatter is a `person` floor anyway.
+- Under `merge_by: coordinator` a `reason: spec` line still sends the lane back to the worker.
+- No technical spec: `spec: no technical spec`, nothing changes.
+
+**Supersedes:** None.
+
+## 2026-11-15: The checks inventory is a `## Checks` section of `REVIEW.md`, not an area file (issue #75)
+
+**Context:** A guard that a lane added (component levels in CI) was described only in its receipt; reviewers had no place that says which machine checks they can rely on.
+
+**Options considered:**
+- A) `.ytstack/spec/checks.md` as an area file.
+- B) A sixth section `## Checks` in `REVIEW.md`: `<name> | file: <path> | guards: <text>`.
+
+**Chose:** B.
+
+**Reason:** An area file describes a part of the system with fixed sections, `paths` and a `status` (`docs/ux/spec-format.md`); an inventory of checks across areas has none of these, and `lint`, `drift` and `impact` would read it as an area. `REVIEW.md` is already the page of what reviewers go by, it is read at the base commit and its changes are `person`, so the inventory cannot be relaxed on the route it informs.
+
+**How to apply:**
+- The line says what holds; the rule itself stays in the area file or its source.
+- `ytstack-risk check` checks the form and that `file` exists. Whether a change adds a guard is the reviewer's judgment (`code-review`); `finish-lane` only notes a CI edit without an inventory change.
+- This repository keeps no `REVIEW.md` yet; its checks are listed in `checks-and-evals.md`.
+
+**Supersedes:** None.
+
+## 2026-11-15: `reconcile` writes task-plan skeletons and fixes the STATE pointer, after asking; the logic is `bin/ytstack-reconcile` (issue #76)
+
+**Context:** A project ran three milestones with no task plans, and `current_milestone` stayed two milestones behind while the lint warned at every start. `reconcile` did not touch either: it never wrote plans and never edited the pointer.
+
+**Options considered:**
+- A) A new skill (`ytstack-adopt-plan`).
+- B) Two classes of `reconcile`, one question each, with a script that lists without writing and writes only with `--write` / `--fix`.
+
+**Chose:** B.
+
+**Reason:** Both are leftovers of work that went past the loop, which is what `reconcile` is for, and its contract (ask per class, never delete, log every choice) is the one these edits need. The listing has to be exact (open milestones, slices with no task plan at all, the newest roadmap in progress), so it is a tested script and not prose.
+
+**How to apply:**
+- Only slices with no task plan at all are listed: a slice planned one task at a time is the normal loop, not a leftover.
+- A skeleton fills only what the slice plan says and marks the rest `TODO`; its Spec impact is not accepted by `ytstack-spec impact` until a person or `plan-task` fills it. Existing plans are never written over.
+- The pointer target is the newest roadmap with `status: in-progress`; a planned or backlog milestone is never made current here (the user picks, as after an external-plan mapping). `active_task` becomes `none`.
+- This narrows the rule "no edits to STATE.md pointer fields" of `reconcile` (Step 4, and the artifacts area) to: only through `pointer --fix`, after a yes.
+
+**Supersedes:** None.
+
+## 2026-11-15: The spec delta of a lane is checked per area, from the plans of its own range (PR #88 review)
+
+**Context:** An independent review of PR #88 found that one task plan with a "Spec impact" switched the area check off for the whole slice diff (a second area merged unchecked), that task plans of earlier work were checked against the lane's range (a false `person`), and that the report could name any changed file as a "spec edit".
+
+**Chose:** The check runs per area. Every area the diff touches (renames with both paths, as `ytstack-risk` reads a diff) needs its area file or a source in the diff, a plan of the range that says `none -- <reason>` for the files of its own commits, or the report's reason. A plan belongs to the range when it changed in it or a commit of its task is in it. A path the report names is the area file or a source of that area.
+
+**How to apply:** This replaces the first two "How to apply" points of "2026-11-15: `finish-lane`'s route checks the spec delta; a gap routes to a person (issue #75)": a plan of the range that names an area is still checked with `impact` and the report cannot override it, but a plan no longer stands in for areas its task did not touch.
+
+**Supersedes:** None. Narrows the entry named above.
+
 ## 2026-11-15: STALL detection lives in both watchers, owner liveness in `ytstack-frontier owner`; focus PRs are read every tick (issue #91)
 
 **Context:** Issue #91: in a coordinator run a PR sat for an hour with a blocking review and then a conflict while its lane ran a long local job and pushed nothing. PR watch reported the conflict among 15 other PRs on every tick, `ytstack-watch` prints only on change, so a PR on which nothing happens was as quiet as a healthy one. The coordinator relayed "merge main" and noticed the stall only after the operator escalated twice.
