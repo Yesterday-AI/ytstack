@@ -1237,3 +1237,24 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - The change shown is the one since the previous `--phases` run; a second run without a change shows none.
 
 **Supersedes:** None.
+
+## 2026-11-15: Lane liveness is part of `ytstack-frontier check`, worktree cleanup only prints commands, peers are list lines in `LANES.md` (issue #84)
+
+**Context:** Issue #84: in a four-day coordinator run lanes finished and nobody took them over overnight, 97 worktrees piled up, and after a compaction the coordinator sent a production request to the wrong session of another repository. `ytstack-upkeep` flagged only lanes held for more than 24 hours.
+
+**Options considered:**
+- A) A new command for liveness; `check` stays a format check.
+- B) `check` reads a well-formed table for stalled lanes, one `stale:` line each, exit 2 (format problems keep exit 1 and skip the liveness read).
+- For "the worker reported": a report file the worker writes, or what the files already show.
+- For peers: a second Markdown table in `LANES.md`, or list lines.
+
+**Chose:** B with N = 60 minutes (`--minutes`). A running row counts as reported when its row carries a pull request or its worktree no longer exists; silent when its branch had no commit for N minutes, counted from the claim when that is newer. A ready lane is stale when nobody claimed it for N minutes since a check first saw it ready; that first sight is kept outside the tree in `<state base>/repos/<repo key>/frontier-ready`. `ytstack-upkeep --worktrees` prints the inventory and the `git worktree remove` / `git branch -D` commands for merged or closed, clean, unlocked, unheld ones and runs none. Peers are `- <role> | <repository> | <address> | <last contact UTC>` lines under `## Peers`, keyed by role and repository.
+
+**Reason:** The issue names `check`, and the coordinator already runs it at a rotation and upkeep on a schedule; a separate exit code keeps upkeep and every caller able to tell a broken table from a slow lane. Workers do not push and leave no report on disk, so a pull request in the row and a removed worktree are the local traces a report leaves; anything else would need the host. 60 minutes is longer than one task commit of a worker and much shorter than the overnight gap of the issue. The first sight of a ready lane changes with every check and is no plan state, so it stays out of the tree like the other volatile state. Printing commands instead of running them keeps a removal with a person (`rm -r` and branch deletion of parallel sessions are irreversible), and a locked worktree is a running session on Claude Code. Every existing reader of `LANES.md` (finish-lane, lane-retro, upkeep, the preambles) takes every line that starts with `|` as a lane row; list lines are invisible to all of them.
+
+**How to apply:**
+- A `stale:` line is a prompt to read the branch and set the row, or to dispatch; no script releases a lane by itself.
+- A message to a session of another repository goes to the address under `## Peers`, and `peer set` runs after each contact.
+- A new reader of `LANES.md` reads the lanes table only from lines that start with `|`.
+
+**Supersedes:** None. Extends "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)".

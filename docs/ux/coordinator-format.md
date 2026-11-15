@@ -40,6 +40,19 @@ updated: 2026-11-13T10:42:00Z
 
 A lane that was never claimed has no row. `bin/ytstack-frontier` is the only writer besides a human: it changes one row per call, takes a lock for the write (the file `LANES.md.lock`, so that claims sent together do not lose a row) and rewrites `updated`. Cells contain no `|`. A held lane is released before it can be claimed again.
 
+### Peers
+
+The sessions in other repositories that the coordinator works with (a session that deploys, one that owns a shared service) are part of its state, so a compaction does not drop who is who. They stand in a `## Peers` section after the lanes table, one list line each:
+
+```markdown
+## Peers
+
+- prod deploy | Yesterday-AI/cloud | claude:6f1c2d0e-1b7a-4c55-9a1e-0c3d5e7f9a21 | 2026-11-15T09:12Z
+- review bot owner | acme/app | agent b7e2 | 2026-11-15T08:40Z
+```
+
+The cells are the role, the repository, the address (what the host gives to reach that session) and the UTC time of the last contact. Role and repository together name a peer. `ytstack-frontier peer set <role> --repo <owner/name> --address <address> [--contact <UTC>]` adds the line or replaces it, with the last contact now unless `--contact` gives one; `ytstack-frontier peer list` prints the lines tab separated. A message to another session goes to the address listed here, never to one remembered from the conversation, and `peer set` runs after every contact. The lines are list items, not table rows, so every reader of the lanes table leaves them alone.
+
 ## Blocking edges and the frontier
 
 A slice plan names what has to be finished before it can start, directly under its goal:
@@ -64,6 +77,19 @@ M004-S04	ready
 The list also reads the lanes table: a row with Status `merged` counts as done even while the roadmap checkbox is still open, and a row with Status `blocked` is listed as blocked with its next action. A lane that an open or asked question names under `blocks:` is blocked until the question is answered.
 
 A claim is written before the work is dispatched: `ytstack-frontier claim <lane> --by <worker>`. Claiming a lane that is already held fails and names the holder. That is what keeps a second message to a running lane from starting the same work twice. The coordinator dispatches again whenever the frontier changes, not once per milestone.
+
+### Lanes that stall
+
+`ytstack-frontier check [--minutes N]` reads a well-formed table for lanes that nobody moves, one line each, and exits 2 when it prints one:
+
+```
+stale: M004-S02: running, no commit on ytstack/M004-S02 for 95 minutes (since 2026-11-15T08:40Z)
+stale: M004-S03: running, but PR 12 is in its row: the worker reported; set the status
+stale: M004-S05: running, but its worktree .claude/worktrees/m004-s05 does not exist: the worker ended; read its branch and set the status
+stale: M004-S06: ready, nobody claimed it for 70 minutes (first seen 2026-11-15T09:00Z)
+```
+
+A `running` row is stale when its worker reported (a pull request in its row, or its worktree no longer exists) or when its branch had no commit for N minutes (default 60), counted from the claim when that is newer or the row names no branch. A `ready` lane of the frontier is stale when nobody claimed it for N minutes since a check first saw it ready; that first sight is kept outside the tree (`<state base>/repos/<repo key>/frontier-ready`, the base of `yt_state_base`). `bin/ytstack-upkeep` lists these lines under `lanes`. A stale line is a prompt to read the lane's branch and set its row, or to dispatch the ready lane; it never releases a lane by itself.
 
 ### Lesson lanes
 
@@ -210,6 +236,8 @@ Rotation at 2026-11-15T09:12Z. Lanes, frontier, questions and standing instructi
 - Running workers:
   - M004-S02 | impl-M004-S02 | address: agent a3f9c1 | worktree: .claude/worktrees/m004-s02 | branch: ytstack/M004-S02 | dispatched 2026-11-15T08:40Z
   - review-pr-43 | review-pr-43 | address: codex pid 81234, log /tmp/review-pr-43.log | worktree: .worktrees/review-pr-43 | branch: - | dispatched 2026-11-15T09:01Z
+- Peers:
+  - prod deploy | Yesterday-AI/cloud | claude:6f1c2d0e-1b7a-4c55-9a1e-0c3d5e7f9a21 | 2026-11-15T09:12Z
 ```
 
 | Line | Holds |
@@ -217,12 +245,15 @@ Rotation at 2026-11-15T09:12Z. Lanes, frontier, questions and standing instructi
 | `PR watch session:` | The old session's id as the PR watch stores it (`claude:<id>`, or the Codex thread id), or `none` when the PR watch is off. The successor runs `ytstack-pr-watch handover --from <id>` (`docs/pr-watch.md`). |
 | `Background watches:` | The command of every `ytstack-watch` the old session runs, so that the successor starts them again. `none` when there are none. |
 | `Running workers:` | One line per dispatched worker that has not reported: lane, name, address, worktree, branch, dispatch time. The address is what the host gave the dispatcher to reach the worker. A worker reports to the session that started it. |
+| `Peers:` | The lines of `ytstack-frontier peer list` (`LANES.md`, "Peers"): role, repository, address, last contact. `none` when there are none. The successor writes to these addresses, never to one from a summary. |
 
 The old session stays open as a relay until every listed worker has reported. Per report it runs `ytstack-brief check`, sets the row to `reported` and appends the report's labelled lines, with the UTC time, under `## Reports after the rotation` at the end of `HANDOFF.md`. It does nothing else. The successor leaves the rows of the listed workers alone until their reports are there, or until the person says the old session is closed.
 
 ## Checked mechanically
 
-- `bin/ytstack-frontier check`: `LANES.md` has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time.
+- `bin/ytstack-frontier check`: `LANES.md` has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time, every line under `## Peers` has four cells and a UTC time; then the lanes that stall ("Lanes that stall", exit 2).
+- `bin/ytstack-upkeep --worktrees`: the linked worktrees and local branches with the state of their newest pull request, the age of the last commit, uncommitted changes and the lane that holds them, and the `git worktree remove` / `git branch -D` commands for the merged or closed, clean, unlocked and unheld ones. It prints the commands and runs none.
+- `bin/ytstack-status --phases [--json]`: done, in review and total per milestone and in total, with each change of a total since the last report and its cause (`docs/statusline.md`, "Progress per phase").
 - `bin/ytstack-questions check`: ids are unique and match the file name, `state` holds a listed value, `asked` and `answered` are set exactly when the state says so, an answered file has text under `## Answer`.
 - `bin/ytstack-brief check`: the report labels, the three `Status:` values and their consistency with `Blockers:`.
 - `bin/ytstack-handover check`: the staged script of a human-only step (see `skills/handover-step/SKILL.md`).

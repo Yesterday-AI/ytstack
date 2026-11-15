@@ -6,7 +6,9 @@
 #   ytstack-frontier [-C DIR] claim <lane> --by <worker> [--kind implement|review|prepare] [--branch B] [--worktree W]
 #   ytstack-frontier [-C DIR] set <lane> [--status S] [--next TEXT] [--pr N] [--head SHA] [--round N] [--branch B] [--worktree W]
 #   ytstack-frontier [-C DIR] release <lane>
-#   ytstack-frontier [-C DIR] check
+#   ytstack-frontier [-C DIR] check [--minutes N]
+#   ytstack-frontier [-C DIR] peer set <role> --repo R --address A [--contact UTC]
+#   ytstack-frontier [-C DIR] peer list
 #
 # list     one line per slice of the milestone (default: current_milestone of
 #          STATE.md; with "none" the highest M###-ROADMAP.md that is not done,
@@ -31,7 +33,21 @@
 # set      changes the named cells of one existing row.
 # release  "Claimed by" becomes "-", the status "dropped" unless it is "merged".
 # check    LANES.md has the ten columns, unique lanes, listed Status and Kind
-#          values, and a claim time on every held lane.
+#          values, a claim time on every held lane, and four cells in every
+#          line under "## Peers". A well-formed file is then read for lanes
+#          that stall (issue #84), one "stale: <lane>: ..." line each:
+#            a running row whose worker reported (a PR in its row, or its
+#            worktree no longer exists), or whose branch had no commit for
+#            --minutes (default 60; counted from the claim when that is newer,
+#            or when the row has no branch);
+#            a ready lane of `list` that nobody claimed for --minutes since a
+#            check first saw it ready. That first sight is kept outside the
+#            tree: <state base>/repos/<repo key>/frontier-ready (yt_state_base).
+# peer     the sessions in other repositories this coordinator works with,
+#          one line each under "## Peers" in LANES.md:
+#            - <role> | <repository> | <address> | <last contact UTC>
+#          set adds the line of role and repository or replaces it (the last
+#          contact: --contact, else now), list prints them tab separated.
 #
 # LANES.md lives in the .ytstack directory of DIR (default: $PWD). A write
 # changes one row and the "updated:" line, under a lock, through a temporary
@@ -42,7 +58,9 @@
 #   claim    0 claimed; 1 refused (says who holds the lane since when)
 #   set      0; 1 the lane has no row, or nobody holds it and the status needs a holder
 #   release  0; 1 the lane has no row
-#   check    0 "lanes ok" or "no lanes file"; 1 one line per problem
+#   check    0 "lanes ok" or "no lanes file"; 1 one line per problem; 2 the
+#            file is well-formed and some lanes are stale
+#   peer     0
 #   64       usage, or a cell value with "|" or a newline
 
 set -uo pipefail
@@ -57,7 +75,7 @@ KINDS='implement|review|prepare'
 NL='
 '
 
-usage() { sed -n '5,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '5,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "ytstack-frontier: $*" >&2; exit 1; }
 # listed <value> <a|b|c>
 listed() { case "|$2|" in *"|$1|"*) return 0 ;; esac; return 1; }
@@ -72,7 +90,7 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD=list
 case "${1:-}" in
-  list|claim|set|release|check) CMD=$1; shift ;;
+  list|claim|set|release|check|peer) CMD=$1; shift ;;
   -h|--help|help) usage; exit 0 ;;
   ""|--*) ;;
   *) usage >&2; exit 64 ;;
@@ -172,6 +190,15 @@ open_table() {
   [ -f "$LANES" ] || return 1
   table_ok || die "$LANES has no lanes table in the documented format; run 'ytstack-frontier check'"
 }
+# new_table: LANES.md with the empty lanes table (under the lock).
+new_table() {
+  { printf -- '---\nupdated: -\n---\n\n# Lanes\n\n'
+    echo "| $(printf '%s' "$COLS" | sed 's/|/ | /g') |"
+    echo '|---|---|---|---|---|---|---|---|---|---|'
+  } > "$LANES.tmp" && mv "$LANES.tmp" "$LANES" || die "could not write $LANES"
+}
+# utc <epoch>: the UTC time to the minute (BSD date, then GNU and BusyBox)
+utc() { date -u -r "$1" +%Y-%m-%dT%H:%MZ 2>/dev/null || date -u -d "@$1" +%Y-%m-%dT%H:%MZ; }
 
 # ---- list ------------------------------------------------------------------------
 # open_milestone: the highest milestone whose roadmap is still open.
@@ -345,12 +372,7 @@ cmd_claim() {
   done
   [ -n "$by" ] && listed "${kind:-implement}" "$KINDS" || { usage >&2; return 64; }
   need_yt
-  if ! open_table; then
-    { printf -- '---\nupdated: -\n---\n\n# Lanes\n\n'
-      echo "| $(printf '%s' "$COLS" | sed 's/|/ | /g') |"
-      echo '|---|---|---|---|---|---|---|---|---|---|'
-    } > "$LANES.tmp" && mv "$LANES.tmp" "$LANES" || die "could not write $LANES"
-  fi
+  open_table || new_table
   YTF_C3=claimed; YTF_C4="$by $(date -u +%Y-%m-%dT%H:%MZ)"; YTF_C5=$branch; YTF_C6=$wt
   if get_row "$lane"; then
     if listed "$R_STATUS" "$HELD"; then
@@ -412,12 +434,24 @@ cmd_release() {
 
 # ---- check -----------------------------------------------------------------------
 cmd_check() {
-  [ $# -eq 0 ] || { usage >&2; return 64; }
+  local min=60 out
+  case "$#:${1:-}" in
+    0:) ;;
+    2:--minutes) case "$2" in ''|*[!0-9]*) usage >&2; return 64 ;; esac; min=$((10#$2)) ;;
+    *) usage >&2; return 64 ;;
+  esac
   [ -n "$YT_DIR" ] && [ -f "$LANES" ] || { echo "no lanes file"; return 0; }
   awk -v want="$COLS" -v statuses="$STATUSES" -v held="$HELD" -v kinds="$KINDS" '
     function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
     function listed(v, list) { return index("|" list "|", "|" v "|") > 0 }
     function p(msg) { print msg; bad = 1 }
+    $0 == "## Peers" { peers = 1; next }
+    peers && /^## / { peers = 0 }
+    peers && /^- / {
+      if (split($0, c, "|") != 4 || trim(c[4]) !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9](:[0-9][0-9])?Z$/)
+        p("line " NR ": peer line is not \"- <role> | <repository> | <address> | <last contact UTC>\"")
+      next
+    }
     !/^\|/ { next }
     ++n == 1 {
       h = $0; gsub(/[ \t]*\|[ \t]*/, "|", h)
@@ -438,10 +472,125 @@ cmd_check() {
     }
     END {
       if (!n) p("no lanes table")
-      if (bad) exit 1
-      print "lanes ok"
+      exit (bad ? 1 : 0)
+    }
+  ' "$LANES" || return 1
+  out=$(stale "$min")
+  [ -n "$out" ] || { echo "lanes ok"; return 0; }
+  printf '%s\n' "$out"
+  return 2
+}
+
+# stale <minutes>: one "stale:" line per lane that stalls (see the header).
+stale() {
+  local lim=$(($1 * 60)) now top lane st by br wt pr t since c f ready seen keep=""
+  now=$(date -u +%s)
+  top=${YT_MAIN_TOPLEVEL:-$YT_TOPLEVEL}
+  while IFS='	' read -r lane _ st by br wt pr _; do
+    [ "$st" = running ] || continue
+    if [ "$pr" != - ]; then
+      echo "stale: $lane: running, but PR $pr is in its row: the worker reported; set the status"; continue
+    fi
+    case "$wt" in /*) f=$wt ;; *) f="$top/$wt" ;; esac
+    if [ "$wt" != - ] && [ ! -d "$f" ]; then
+      echo "stale: $lane: running, but its worktree $wt does not exist: the worker ended; read its branch and set the status"; continue
+    fi
+    t=${by##* }; case "$t" in *T[0-9][0-9]:[0-9][0-9]Z) t="${t%Z}:00Z" ;; esac
+    since=$(yt_epoch "$t"); [ -n "$since" ] || continue
+    c=""
+    [ "$br" = - ] || [ "$YT_IS_GIT" != yes ] || c=$(git -C "$YT_TOPLEVEL" log -1 --format=%ct "$br" -- 2>/dev/null)
+    [ -z "$c" ] || [ "$c" -le "$since" ] || since=$c
+    [ $((now - since)) -gt "$lim" ] || continue
+    if [ "$br" = - ]; then echo "stale: $lane: running, no branch in its row, claimed $(((now - since) / 60)) minutes ago"
+    else echo "stale: $lane: running, no commit on $br for $(((now - since) / 60)) minutes (since $(utc "$since"))"; fi
+  done <<EOF
+$(lane_rows)
+EOF
+  # Ready lanes: the first time a check saw each one ready, outside the tree.
+  ready=$(cmd_list --ready 2>/dev/null) || ready=""
+  f="$(yt_state_base)/repos/${YT_REPO_KEY:-unknown}/frontier-ready"
+  [ -n "$ready" ] || [ -f "$f" ] || return 0
+  mkdir -p "${f%/*}" 2>/dev/null || return 0
+  for lane in $ready; do
+    seen=$(awk -F'\t' -v l="$lane" '$1 == l { print $2; exit }' "$f" 2>/dev/null)
+    case "$seen" in ''|*[!0-9]*) seen=$now ;; esac
+    keep="$keep$lane	$seen$NL"
+    [ $((now - seen)) -le "$lim" ] || echo "stale: $lane: ready, nobody claimed it for $(((now - seen) / 60)) minutes (first seen $(utc "$seen"))"
+  done
+  printf '%s' "$keep" > "$f.tmp" 2>/dev/null && mv "$f.tmp" "$f"
+}
+
+# ---- peers -----------------------------------------------------------------------
+# peer_lines: the lines under "## Peers", four tab separated cells each.
+peer_lines() {
+  awk '
+    $0 == "## Peers" { s = 1; next }
+    s && /^## / { exit }
+    s && /^- / {
+      n = split(substr($0, 3), c, "|"); out = ""
+      for (i = 1; i <= n; i++) { gsub(/^[ \t]+|[ \t]+$/, "", c[i]); out = out (i > 1 ? "\t" : "") c[i] }
+      print out
     }
   ' "$LANES"
+}
+
+cmd_peer() {
+  local role repo="" addr="" contact=""
+  case "${1:-}" in
+    list)
+      [ $# -eq 1 ] || { usage >&2; return 64; }
+      [ -n "$YT_DIR" ] && [ -f "$LANES" ] || return 0
+      peer_lines; return 0 ;;
+    set) shift ;;
+    *) usage >&2; return 64 ;;
+  esac
+  role="${1:-}"
+  case "$role" in ""|-*) usage >&2; return 64 ;; esac
+  cell "$role"; shift
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { usage >&2; return 64; }
+    cell "$2"
+    case "$1" in
+      --repo) repo=$2 ;;
+      --address) addr=$2 ;;
+      --contact) contact=$2 ;;
+      *) usage >&2; return 64 ;;
+    esac
+    shift 2
+  done
+  [ -n "$repo" ] && [ -n "$addr" ] || { usage >&2; return 64; }
+  [ -n "$contact" ] || contact=$(date -u +%Y-%m-%dT%H:%MZ)
+  case "$contact" in
+    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]Z|[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) ;;
+    *) echo "ytstack-frontier: --contact takes a UTC time (YYYY-MM-DDTHH:MMZ)" >&2; return 64 ;;
+  esac
+  need_yt
+  open_table || new_table
+  # The line of role and repository is replaced in place, a new one goes after
+  # the last peer line; without the section, it is appended to the file.
+  YTF_PEER="- $role | $repo | $addr | $contact" YTF_ROLE=$role YTF_REPO=$repo \
+    awk -v now="$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    { L[++n] = $0 }
+    END {
+      for (i = 1; i <= n; i++) {
+        if (L[i] == "## Peers") { sec = i; continue }
+        if (sec && L[i] ~ /^## /) break
+        if (sec && L[i] ~ /^- /) {
+          split(substr(L[i], 3), c, "|"); last = i
+          if (!hit && trim(c[1]) == ENVIRON["YTF_ROLE"] && trim(c[2]) == ENVIRON["YTF_REPO"]) { L[i] = ENVIRON["YTF_PEER"]; hit = 1 }
+        }
+      }
+      for (i = 1; i <= n; i++) {
+        if (i == 1 && L[i] == "---") { fm = 1; print L[i]; continue }
+        if (fm && L[i] == "---") { if (!stamped) print "updated: " now; fm = 0; print L[i]; continue }
+        if (fm && L[i] ~ /^updated:/) { print "updated: " now; stamped = 1; continue }
+        print L[i]
+        if (!hit && sec && i == (last ? last : sec)) { if (!last) print ""; print ENVIRON["YTF_PEER"] }
+      }
+      if (!sec) { print ""; print "## Peers"; print ""; print ENVIRON["YTF_PEER"] }
+    }
+  ' "$LANES" > "$LANES.tmp" && mv "$LANES.tmp" "$LANES" || die "could not write $LANES"
 }
 
 case "$CMD" in
@@ -450,4 +599,5 @@ case "$CMD" in
   set)     cmd_set "$@" ;;
   release) cmd_release "$@" ;;
   check)   cmd_check "$@" ;;
+  peer)    cmd_peer "$@" ;;
 esac

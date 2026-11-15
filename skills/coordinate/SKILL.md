@@ -161,6 +161,13 @@ else
 fi
 echo "FRONTIER_END"
 
+# Sessions in other repositories (LANES.md "## Peers"): write only to these addresses, `ytstack-frontier peer set` after each contact.
+echo "PEERS_BEGIN"
+_PEERS=""
+[ -n "$_YT_DIR" ] && [ -f "$_FRONTIER" ] && _PEERS=$(bash "$_FRONTIER" peer list 2>/dev/null)
+echo "${_PEERS:-no peers}"
+echo "PEERS_END"
+
 echo "QUESTIONS_BEGIN"
 _QN=0
 for _f in "$_YT_DIR"/questions/Q[0-9]*.md; do
@@ -263,7 +270,7 @@ An `asked` question is never asked again: name it as waiting since its time. Whe
 **Step 12 -- Rotate.** When the session has been compacted once (a summary stands where the conversation was, or `HANDOFF_AUTO` is from this session), or its context is large by the host's indicator, rotate now. Do not wait for a quiet moment, for workers to report or for checks to finish: under load there is none, and a second compaction costs more than a rotation. It is one step, done in this order without dispatching anything in between:
 
 1. Bring the rows' next actions up to date, run `ytstack-frontier check` and `ytstack-questions check`, and make sure the standing instructions hold every instruction given so far.
-2. Write `$_YT_DIR/HANDOFF.md` yourself in the format of `ytstack:handoff-session` (its Step 7), without its questions: the answers are in the files, and the handoff points at them. Its "In-flight work" carries the "Rotation" block of `docs/ux/coordinator-format.md`: `PR watch session:` with this session's id as the PR watch stores it (`echo "${CODEX_THREAD_ID:-claude:$CLAUDE_CODE_SESSION_ID}"`; `none` when `PR_WATCH` is `off`), `Background watches:` with the command of every `ytstack-watch` that runs in this session, and under `Running workers:` one line per worker that has not reported: lane, name, address (what the host gave you to reach it: the agent's id or name in Claude Code, another host's process id and log file), worktree, branch, dispatch time. Its "Next action": start `ytstack:coordinate` in a fresh session; its Step 3 runs `ytstack-pr-watch handover --from <PR watch session>`.
+2. Write `$_YT_DIR/HANDOFF.md` yourself in the format of `ytstack:handoff-session` (its Step 7), without its questions: the answers are in the files, and the handoff points at them. Its "In-flight work" carries the "Rotation" block of `docs/ux/coordinator-format.md`: `PR watch session:` with this session's id as the PR watch stores it (`echo "${CODEX_THREAD_ID:-claude:$CLAUDE_CODE_SESSION_ID}"`; `none` when `PR_WATCH` is `off`), `Background watches:` with the command of every `ytstack-watch` that runs in this session, and under `Running workers:` one line per worker that has not reported: lane, name, address (what the host gave you to reach it: the agent's id or name in Claude Code, another host's process id and log file), worktree, branch, dispatch time, and under `Peers:` the lines between `PEERS_BEGIN` and `PEERS_END` (`ytstack-frontier peer list`), so the successor writes to the right session of another repository. Its "Next action": start `ytstack:coordinate` in a fresh session; its Step 3 runs `ytstack-pr-watch handover --from <PR watch session>`.
 3. Tell the user in one line: start a fresh session with `ytstack:coordinate`, and leave this one open until the workers listed in the handoff have reported (a closed session ends its background workers on most hosts).
 4. From then on this session is a relay and nothing else. When one of its workers reports: `ytstack-brief check`, `ytstack-frontier set <lane> --status reported --next "<the report's Next line>"`, and append the report's labelled lines with the UTC time under `## Reports after the rotation` at the end of `HANDOFF.md`. It dispatches nothing, merges nothing, asks nothing and acts on no watch line or PR watch notice; the PR watch delivers to the successor after the handover anyway. When the last listed worker has reported, it says so in one line: the session can be closed.
 

@@ -3,6 +3,7 @@
 # .ytstack directory. Meant for a schedule: docs/recipes/recurring-upkeep.md.
 #
 #   ytstack-upkeep [-C DIR] [--question] [--open-days N] [--asked-days N] [--lane-hours N]
+#   ytstack-upkeep [-C DIR] --worktrees
 #
 # Prints one report for the project of DIR (default: $PWD): a first line with
 # the directory and the UTC time of the read, nine sections with a count and
@@ -16,8 +17,9 @@
 #                  asked; asked more than --asked-days days ago (default 7)
 #                  and not answered
 #   lanes          rows of LANES.md in a held status that were claimed more
-#                  than --lane-hours hours ago (default 24); the problems of
-#                  `ytstack-frontier check` instead when the table has some
+#                  than --lane-hours hours ago (default 24), and the "stale:"
+#                  lines of `ytstack-frontier check` (once per lane); the
+#                  problems of that check instead when the table has some
 #   runtime        the problems of `ytstack-runtime check`
 #   review policy  the problems of `ytstack-risk check`, when that script is
 #                  part of this installation (the spec lint repeats them; they
@@ -34,6 +36,17 @@
 #                  use them (yt_factory_notices in hooks/lib/git-ctx.sh: risk
 #                  routing, PR watch, the "Release" and "Signals" sections of
 #                  RUNTIME.md); listed, not counted: a setting is not a finding
+#
+# --worktrees prints, instead of the report, the linked worktrees and the
+# local branches without one (not the default branch) of DIR's repository
+# (issue #84): branch, pull request state (the newest pull request of the
+# branch, from one `gh pr list --state all`), age of the last commit,
+# uncommitted changes, and the lane of LANES.md that holds the branch. Then
+# "commands (not run): N" and the `git worktree remove` / `git branch -D`
+# commands for every one whose pull request is merged or closed, that has no
+# uncommitted changes, is not locked and no held lane names. It runs none of
+# them. Without the PR state (no gh or jq, a failed read) it prints none.
+# Exit 10 when it printed a command, 0 otherwise, 1 outside a git repository.
 #
 # It only reads. With --question, and only when something needs a look, it
 # writes ONE question file through `ytstack-questions new` ("Upkeep found N
@@ -52,17 +65,18 @@ set -uo pipefail
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$BIN/../hooks/lib/git-ctx.sh"
 
-usage() { sed -n '5p' "${BASH_SOURCE[0]}" | sed 's/^# *//'; }
+usage() { sed -n '5,6p' "${BASH_SOURCE[0]}" | sed 's/^# *//'; }
 bad_usage() { [ $# -eq 0 ] || echo "ytstack-upkeep: $*" >&2; usage >&2; exit 64; }
 die() { echo "ytstack-upkeep: $*" >&2; exit 1; }
 
-DIR="$PWD"; QUESTION=no; OPEN_DAYS=3; ASKED_DAYS=7; LANE_HOURS=24
+DIR="$PWD"; QUESTION=no; WORKTREES=no; OPEN_DAYS=3; ASKED_DAYS=7; LANE_HOURS=24
 MERGED_LIMIT=500  # merged pull requests one run lists (gh pages: one call per 100)
 MERGED_DAYS=14    # lookback before the first review-checks line (and without one)
 MERGED_MAX_DAYS=90  # the window never reaches further back than this
 while [ $# -gt 0 ]; do
   case "$1" in
     --question) QUESTION=yes; shift; continue ;;
+    --worktrees) WORKTREES=yes; shift; continue ;;
     -h|--help|help) usage; exit 0 ;;
     -C|--open-days|--asked-days|--lane-hours) [ $# -ge 2 ] || bad_usage "$1 needs a value" ;;
     *) bad_usage "unknown argument '$1'" ;;
@@ -83,7 +97,7 @@ done
 
 yt_git_ctx "$DIR"
 yt_resolve_yt_dir >/dev/null
-[ -n "$YT_DIR" ] || die "no .ytstack directory for $DIR"
+[ -n "$YT_DIR" ] || [ "$WORKTREES" = yes ] || die "no .ytstack directory for $DIR"
 
 NL='
 '
@@ -116,6 +130,86 @@ age() {
   e=$(yt_epoch "$t")
   [ -z "$e" ] || echo $((NOW - e))
 }
+
+# ---- --worktrees (issue #84) -------------------------------------------------------
+# q <text>: single-quoted for a shell
+q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+# since <epoch>: "N hours ago" below two days, "N days ago" above
+since() {
+  local s=$((NOW - $1))
+  if [ "$s" -lt $((2 * 86400)) ]; then echo "$((s / 3600)) hours ago"; else echo "$((s / 86400)) days ago"; fi
+}
+worktrees() {
+  local top=${YT_MAIN_TOPLEVEL:-$YT_TOPLEVEL} def prs="" note="" held="" path br lock wl="" bl="" cmds="" n=0 used=" " ct extra
+  [ "$YT_IS_GIT" = yes ] || die "$DIR is not a git repository"
+  def=$(git -C "$top" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null); def=${def#origin/}
+  [ -n "$def" ] || def=$(git -C "$top" symbolic-ref --quiet --short HEAD 2>/dev/null)
+  # The newest pull request per head branch: "<branch> <state> <number>"
+  if ! command -v gh >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+    note="PR state not read: gh or jq is not available"
+  elif ! prs=$(cd "$top" && gh pr list --state all --limit 500 --json number,state,headRefName 2>&1); then
+    note="PR state not read: $(printf '%s\n' "$prs" | sed -n 1p)"; prs=""
+  else
+    prs=$(printf '%s' "$prs" | jq -r 'group_by(.headRefName) | .[] | max_by(.number) | "\(.headRefName)\t\(.state | ascii_downcase)\t\(.number)"' 2>/dev/null) \
+      || { note="PR state not read: gh gave no JSON"; prs=""; }
+  fi
+  # Branches a held lane names: "<branch> <lane> (<status>)"
+  [ -z "$YT_DIR" ] || [ ! -f "$YT_DIR/LANES.md" ] || held=$(awk -v tab="$TAB" '
+    /^\|/ && ++n > 2 {
+      split($0, c, "|"); for (i = 2; i <= 6; i++) gsub(/^[ \t]+|[ \t]+$/, "", c[i])
+      if (c[4] ~ /^(claimed|running|reported|in-review|ready)$/ && c[6] != "-" && c[6] != "") print c[6] tab c[2] " (" c[4] ")"
+    }' "$YT_DIR/LANES.md")
+  # info <branch>: PR, held lane; sets ok=yes when the branch may go
+  info() {
+    local p l
+    p=$(printf '%s\n' "$prs" | awk -F'\t' -v b="$1" '$1 == b { print "PR #" $3 " " $2; exit }')
+    l=$(printf '%s\n' "$held" | awk -F'\t' -v b="$1" '$1 == b { print $2; exit }')
+    ok=no
+    case "$p" in *" merged"|*" closed") [ -n "$l" ] || ok=yes ;; esac
+    [ -n "$note" ] && p="PR state not read" || p=${p:-no pull request}
+    INFO="$p${2:+, last commit $2}${3:+, $3}${l:+, held by lane $l}"
+  }
+  while IFS="$TAB" read -r path br lock; do
+    [ -n "$path" ] || continue
+    n=$((n + 1)); [ "$n" -gt 1 ] || { used="$used$br "; continue; }  # the main worktree
+    used="$used$br "; extra=""
+    if [ ! -d "$path" ]; then extra="missing"
+    else
+      ct=$(git -C "$path" log -1 --format=%ct HEAD 2>/dev/null)
+      [ -z "$(git -C "$path" status --porcelain 2>/dev/null | sed -n 1p)" ] || extra="uncommitted changes"
+    fi
+    [ -z "$lock" ] || extra="${extra:+$extra, }locked"
+    info "$br" "${ct:+$(since "$ct")}" "$extra"
+    wl="$wl$path: ${br:-detached}, $INFO$NL"
+    if [ "$ok" = yes ] && [ -z "$extra" ]; then
+      cmds="$cmds  git -C $(q "$top") worktree remove $(q "$path")$NL"
+      [ -z "$br" ] || cmds="$cmds  git -C $(q "$top") branch -D $(q "$br")$NL"
+    fi
+  done <<EOF
+$(git -C "$top" worktree list --porcelain 2>/dev/null | awk -v tab="$TAB" '
+    /^worktree / { if (p != "") print p tab b tab l; p = substr($0, 10); b = ""; l = "" }
+    /^branch refs\/heads\// { b = substr($0, 19) }
+    /^locked/ { l = "locked" }
+    END { if (p != "") print p tab b tab l }')
+EOF
+  while IFS="$TAB" read -r br ct; do
+    [ -n "$br" ] && [ "$br" != "$def" ] || continue
+    case "$used" in *" $br "*) continue ;; esac
+    info "$br" "$(since "$ct")" ""
+    bl="$bl$br: $INFO$NL"
+    [ "$ok" = no ] || cmds="$cmds  git -C $(q "$top") branch -D $(q "$br")$NL"
+  done <<EOF
+$(git -C "$top" for-each-ref --format="%(refname:short)$TAB%(committerdate:raw)" refs/heads 2>/dev/null | sed 's/ [-+][0-9]*$//')
+EOF
+  REPORT="ytstack upkeep --worktrees: $top, read $READ"
+  section worktrees "$wl" "$note"
+  section branches "$bl"
+  printf '%s\n' "$REPORT"
+  [ -n "$cmds" ] || { echo "commands (not run): 0"; return 0; }
+  printf 'commands (not run): %s\n%s' "$(printf '%s' "$cmds" | awk 'END { print NR }')" "$cmds"
+  return 10
+}
+[ "$WORKTREES" = no ] || { worktrees; exit $?; }
 
 # ---- review policy (read first, reported last) -------------------------------------
 # bin/ytstack-risk came after this script; an installation may not have it.
@@ -188,7 +282,9 @@ section questions "$items"
 # the slices of one milestone, and a lane may be a task or a named piece.
 items=""
 if [ -f "$YT_DIR/LANES.md" ]; then
-  if out=$(tool ytstack-frontier check 2>&1); then
+  out=$(tool ytstack-frontier check 2>&1); ec=$?
+  # 2: well-formed, with stale lanes; those lines are items below.
+  if [ "$ec" -eq 0 ] || [ "$ec" -eq 2 ]; then
     while IFS="$TAB" read -r lane st by next; do
       [ -n "$lane" ] || continue
       a=$(age "${by##* }")
@@ -201,6 +297,14 @@ $(awk -v tab="$TAB" '
         for (i = 2; i <= 11; i++) { gsub(/^[ \t]+|[ \t]+$/, "", c[i]); if (c[i] == "") c[i] = "-" }
         if (c[4] ~ /^(claimed|running|reported|in-review|ready)$/) print c[2] tab c[4] tab c[5] tab c[11]
       }' "$YT_DIR/LANES.md")
+EOF
+    # A stale lane (issue #84) is listed once: not again when it is listed above.
+    while IFS= read -r l; do
+      case "$l" in stale:\ *) l=${l#stale: } ;; *) continue ;; esac
+      case "$NL$items" in *"$NL${l%%: *}: "*) continue ;; esac
+      items="$items$l$NL"
+    done <<EOF
+$out
 EOF
   else
     items=$(printf '%s\n' "$out" | sed 's/^/check: /')
