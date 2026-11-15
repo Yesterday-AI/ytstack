@@ -18,6 +18,11 @@
 #                     or an open or asked question that names the lane
 #            ready    the rest. A slice without a plan has no edges to read: it
 #                     waits for every slice before it; detail "unplanned".
+#          After the slices one line per lesson lane, "lesson-F###": an open
+#          or planned lesson of the signals ledger whose target is a check
+#          (docs/ux/signal-format.md, "Lessons"); detail its key. It is
+#          blocked while the lesson has no "## Files" or "## Verification"
+#          section. Without a milestone only the lesson lanes are listed.
 #          --ready prints the ready lanes only, one per line.
 # claim    adds the lane's row to LANES.md (created when missing) with status
 #          "claimed". Refused while the row is held, and for a blocked, dropped
@@ -177,7 +182,7 @@ open_milestone() {
 }
 
 cmd_list() {
-  local m="" ready="" any="" road slices fin=" " earlier="" s x lane state detail plan by b open
+  local m="" ready="" any="" road slices fin=" " earlier="" s x lane state detail plan by b open lessons
   while [ $# -gt 0 ]; do
     case "$1" in
       --ready) ready=1; shift ;;
@@ -187,16 +192,20 @@ cmd_list() {
     esac
   done
   need_yt
+  lessons=$(lesson_lanes)
   if [ -z "$m" ]; then
     m=$(sed -n 's/^current_milestone:[ ]*\([^ ]*\).*/\1/p' "$YT_DIR/STATE.md" 2>/dev/null | head -1)
     case "$m" in M[0-9][0-9][0-9]) ;; *) m=$(open_milestone) ;; esac
-    [ -n "$m" ] || die "no milestone: STATE.md names none and no M###-ROADMAP.md is open"
+    # Without a milestone the lesson lanes are still work that may start.
+    [ -n "$m" ] || [ -n "$lessons" ] || die "no milestone: STATE.md names none and no M###-ROADMAP.md is open"
   fi
-  road=$(yt_find_artifacts "$YT_DIR" "$m-ROADMAP.md" | head -1)
-  [ -n "$road" ] || die "no roadmap for $m: looked for $YT_DIR/$m-ROADMAP.md"
-
-  # "S01 x" for a checked slice, "S01" for an open one, in roadmap order
-  slices=$(awk '/^- \[[ xX]\] S[0-9][0-9]( |$)/ { print substr($0, 7, 3) (substr($0, 4, 1) == " " ? "" : " x") }' "$road")
+  slices=""
+  if [ -n "$m" ]; then
+    road=$(yt_find_artifacts "$YT_DIR" "$m-ROADMAP.md" | head -1)
+    [ -n "$road" ] || die "no roadmap for $m: looked for $YT_DIR/$m-ROADMAP.md"
+    # "S01 x" for a checked slice, "S01" for an open one, in roadmap order
+    slices=$(awk '/^- \[[ xX]\] S[0-9][0-9]( |$)/ { print substr($0, 7, 3) (substr($0, 4, 1) == " " ? "" : " x") }' "$road")
+  fi
   while read -r s x; do
     [ -n "$s" ] || continue
     if [ -n "$x" ] || { get_row "$m-$s" && [ "$R_STATUS" = merged ]; }; then fin="$fin$s "; fi
@@ -255,7 +264,55 @@ EOF
   done <<EOF
 $slices
 EOF
+
+  # Lesson lanes: an open lesson whose check is still to be built
+  # (docs/ux/signal-format.md, "Lessons"). No edge to a slice; the lesson's
+  # "## Files" and "## Verification" are its plan.
+  local id key file
+  while IFS='	' read -r id key file; do
+    [ -n "$id" ] || continue
+    lane="lesson-$id"; state=ready; detail=$key
+    get_row "$lane" || true
+    if [ "$R_STATUS" = merged ]; then state="done"; detail="merged, the lesson is not set fixed yet"
+    elif listed "$R_STATUS" "$HELD"; then state=claimed; detail=$R_BY
+    elif [ "$R_STATUS" = blocked ]; then state=blocked; detail="lane: $R_NEXT"
+    elif ! grep -q '^## Files' "$file" || ! grep -q '^## Verification' "$file"; then
+      state=blocked; detail="unplanned: the lesson has no ## Files or no ## Verification"
+    else
+      open=""
+      while read -r b qid; do
+        [ -n "$b" ] || continue
+        [ "$b" != "$lane" ] || open="$open${open:+, }question $qid"
+      done <<EOF
+$qblock
+EOF
+      [ -z "$open" ] || { state=blocked; detail=$open; }
+    fi
+    if [ -z "$ready" ]; then printf '%s\t%s\t%s\n' "$lane" "$state" "$detail"
+    elif [ "$state" = ready ]; then echo "$lane"; any=1
+    fi
+  done <<EOF
+$lessons
+EOF
   [ -z "$ready" ] || [ -n "$any" ]
+}
+
+# lesson_lanes: "<id> <key> <file>" (tab separated) per lesson that is open or
+# planned and whose target is a check: the check is still to be built.
+lesson_lanes() {
+  local f id key st kind target
+  [ -d "$YT_DIR/signals" ] || return 0
+  for f in "$YT_DIR"/signals/F[0-9][0-9][0-9]-*.md; do
+    [ -f "$f" ] || continue
+    kind=$(sed -n '2,20{s/^kind:[ ]*//p;}' "$f" | head -1)
+    [ "$kind" = lesson ] || continue
+    st=$(sed -n '2,20{s/^state:[ ]*//p;}' "$f" | head -1)
+    target=$(sed -n '2,20{s/^target:[ ]*//p;}' "$f" | head -1)
+    case "$st:$target" in open:check:*|planned:check:*) ;; *) continue ;; esac
+    id=$(sed -n '2,20{s/^id:[ ]*//p;}' "$f" | head -1)
+    key=$(sed -n '2,20{s/^key:[ ]*//p;}' "$f" | head -1)
+    printf '%s\t%s\t%s\n' "$id" "$key" "$f"
+  done
 }
 
 # ---- claim, set, release ---------------------------------------------------------

@@ -259,7 +259,7 @@ The round is the lane's `Round` cell plus one.
 
 | Round | What is reviewed | The brief |
 |---|---|---|
-| 1 | The whole change. Meant to be complete. | `ytstack-brief render --slice {REF} --kind review --head {SHA}` (`--task` for a task lane) |
+| 1 | The whole change. Meant to be complete. | `ytstack-brief render --slice {REF} --kind review --head {SHA}` (`--task` for a task lane, `--lesson F###` for a lesson lane `lesson-F###`) |
 | 2 | Only the fix, with the findings of round 1 appended. | the same with `--base {REVIEWED_HEAD} --head {SHA}` |
 | 3 | Nothing. No reviewer is dispatched. | a diagnosis for the human |
 

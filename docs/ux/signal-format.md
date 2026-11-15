@@ -147,12 +147,28 @@ What the states mean for a lesson:
 
 | `state` | Means |
 |---|---|
-| `open` | Recorded; the target is named but not in place yet: a check to build or a proposal waiting for a person. |
+| `open` | Recorded; the target is named but not in place yet: a check to build (a lesson lane, see below) or a proposal waiting for a person. |
 | `planned` | Its work is a task, a lane or a question; `ref` names it. |
 | `fixed` | The lesson lives at its target, and the file exists. A proposal is never `fixed`. |
 | `dismissed` | A person decided this class needs no lesson; the reason stands under "Assessment". |
 
 The open lessons are the `open` and the `planned` ones. `set <id> --target <target>` changes the target; `set <id> --state fixed` refuses while the target is a proposal or names a file that does not exist.
+
+A lesson whose check is still to be built (`open` or `planned`, target `check:`) is a **lesson lane** `lesson-<id>`: `bin/ytstack-frontier` lists it after the slices, and `bin/ytstack-brief render --lesson <id>` renders its brief (`docs/ux/coordinator-format.md`). Its plan is in the lesson itself, two sections after `## Next` in the form of a task plan; without them the frontier lists the lane as blocked:
+
+```markdown
+## Files
+
+- Create: `tests/export-order.test.sh`
+
+## Verification
+
+    bash tests/export-order.test.sh
+
+Fails on the state of 3c1d2e0 (the incident), passes now.
+```
+
+Whoever merges the lane sets the lesson `fixed`; until then the frontier lists the merged lane as done with "the lesson is not set fixed yet".
 
 `lesson new --incident <id>` writes the lesson's id into the incident record's `lesson:` line as well. `bin/ytstack-signals lesson list [--state <state>] [--since <time>]` prints one tab separated line per lesson: id, state, area, class, count, the sightings at or after `--since` (`-` without it), target, ref, reopens, title; without `--state` the open ones.
 

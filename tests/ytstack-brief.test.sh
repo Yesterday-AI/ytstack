@@ -344,6 +344,32 @@ run "$R" render --task M001-S01-T01 --kind review --lens 'UI kit' --head "$H7"
 eq "a lens name that is no lowercase slug: exit 64" 64 "$EC"
 
 # ---- 5. failures --------------------------------------------------------------
+echo "# render --lesson"
+# A lesson lane (M032): the lesson under signals/ is its plan.
+LR=$(new_repo lesson)
+printf 'main red twice\n' | bash "$ROOT/bin/ytstack-signals" -C "$LR" lesson new --area ci --class flaky-order --title "A test depends on the order of the suite" --target check:tests/order.test.sh >/dev/null
+L=$(ls "$LR"/.ytstack/signals/F001-*.md)
+run "$LR" render --lesson F001
+eq "a lesson without a Files section: exit 1" 1 "$EC"
+has "and says so" "no '## Files' section" "$OUT"
+printf '\n## Files\n\n- Create: `tests/order.test.sh`\n\n## Verification\n\n    bash tests/order.test.sh\n\nFails on 3c1d2e0, passes now.\n' >> "$L"
+run "$LR" render --lesson F001 --branch lesson/F001 --base main
+eq "render --lesson: exit 0" 0 "$EC"
+has "the title of the brief is the lane" "# Brief: lesson-F001 (acme)" "$OUT"
+has "the outcome names the lesson and its target" "Put the lesson F001 in place: A test depends on the order of the suite. It lives at \`check:tests/order.test.sh\`" "$(part Outcome)"
+has "the scope is the lesson's Files section" "- Create: \`tests/order.test.sh\`" "$(part Scope)"
+has "the verification is the lesson's" "bash tests/order.test.sh" "$(part Verification)"
+has "the commit prefix is the lane" "Commit each task with the prefix \`lesson-F001:\`" "$OUT"
+has "the lesson file is read for context" ".ytstack/signals/F001-" "$(part 'Read for context')"
+run "$LR" render --lesson F001 --kind review --head "$(git -C "$LR" rev-parse HEAD)"
+eq "a review brief of a lesson lane: exit 0" 0 "$EC"
+has "and asks for the class" "Risk:" "$OUT"
+run "$LR" render --lesson F009; eq "an unknown lesson: exit 1" 1 "$EC"
+printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$LR" new --source errors --kind errors --key errors:1 --title "An error" >/dev/null
+run "$LR" render --lesson F002; eq "a finding that is no lesson: exit 1" 1 "$EC"
+has "and says so" "F002 is no lesson" "$OUT"
+run "$LR" render --lesson 1; eq "a lesson id outside F###: exit 64" 64 "$EC"
+
 echo "# failures"
 run "$R" render --task M001-S01-T09
 eq "no plan: exit 1" 1 "$EC"
