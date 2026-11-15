@@ -196,15 +196,21 @@ the block under `Focus (read every tick):`, the other lines under `Others:`.
 A PR that is `action_required` (a red check, a conflict, a blocking review or
 an unresolved thread), not paused, and has had no new head or status for
 `stall_minutes` (15 by default) gets a mark on its line:
-`STALL 1: no new head or status for 16 min`, and `STALL 2` after the next
-window of the same length; then nothing more until the pause suggestion at
-24 hours. Each mark shows the line once, like any other change. When the
+`STALL 1: no new head or status for 16 min`, and `STALL 2` one full window
+after `STALL 1` was shown; then nothing more until the pause suggestion at
+24 hours. The first mark is always `STALL 1`, also when the first prompt comes
+after a longer silence, and a new head or status starts at `STALL 1` again
+(the step shown is kept per session, `meta` key `stall:<session>`). Each mark
+shows the line once, like any other change. When the
 watch's checkout (`--cwd` of the registration) is a checkout of the PR's
 repository and its `.ytstack/LANES.md` names the PR in a lane row, the mark
 ends with that lane's holder and its last sign of life, read from local files
 by `ytstack-frontier owner --pr N`: `lane M004-S03 held by impl-S03 (running),
 last commit 52 min ago on ytstack/M004-S03`. A blocking review followed by
-silence and a lane that is still working look the same without it. What a
+silence and a lane that is still working look the same without it. The hook
+makes one such call per checkout for all PRs it shows, all within 3 seconds;
+a checkout that fails or runs out of time names no lane, and the line is shown
+anyway. What a
 coordinator does with the two marks is in `skills/coordinate/SKILL.md`,
 Step 7. `bin/ytstack-watch --stall` prints the same two lines for a process
 that is not the PR watch.

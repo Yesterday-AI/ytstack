@@ -16,7 +16,7 @@ from unittest.mock import patch
 import test_findings
 from test_scope import cli
 from test_watch import snapshot, POLICY
-from prwatch import github, hooks, worker
+from prwatch import claude, github, hooks, worker
 from prwatch.state import register
 
 
@@ -93,8 +93,8 @@ class Stall(unittest.TestCase):
     observe = Focus.observe
     prompt = Focus.prompt
 
-    def checkout(self, origin='https://github.com/o/r.git'):
-        """A checkout of o/r whose LANES.md says lane M001-S01 (branch work/s01) holds PR 7."""
+    def checkout(self, origin='https://github.com/o/r.git', numbers=(7,)):
+        """A checkout of o/r whose LANES.md says lane M001-S<NN> (no branch) holds PR NN."""
         d = Path(self.tmp.name) / 'checkout'
         (d / '.ytstack').mkdir(parents=True)
         git = lambda *a: subprocess.run(['git', '-C', str(d), *a], check=True, capture_output=True)
@@ -105,8 +105,17 @@ class Stall(unittest.TestCase):
             '---\nupdated: 2026-11-15T10:00:00Z\n---\n\n# Lanes\n\n'
             '| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |\n'
             '|---|---|---|---|---|---|---|---|---|---|\n'
-            f'| M001-S01 | implement | running | w1 {claimed} | - | - | 7 | - | 1 | fix the review |\n')
+            + ''.join(f'| M001-S{n:02d} | implement | running | w{n} {claimed} | - | - | {n} | - | 1 | fix |\n'
+                      for n in numbers))
         return str(d)
+
+    def shown_earlier(self, minutes):
+        """Move the time each STALL step was shown back by `minutes`."""
+        key = 'stall:claude:abc'
+        row = self.db.execute('SELECT value FROM meta WHERE key=?', (key,)).fetchone()
+        state = {k: [v[0], v[1], v[2] - minutes * 60] for k, v in json.loads(row['value']).items()}
+        with self.db:
+            self.db.execute('UPDATE meta SET value=? WHERE key=?', (json.dumps(state), key))
 
     def stalled(self, number, minutes, cwd='/tmp'):
         with self.db:
@@ -117,8 +126,16 @@ class Stall(unittest.TestCase):
         self.age(number, minutes)
 
     def age(self, number, minutes):
+        """Let `minutes` pass since the last head or status change: the same stretch, so a STALL
+        step already shown for it stays on record."""
+        changed = time.time() - minutes * 60 - 5
         with self.db:
-            self.db.execute('UPDATE watches SET changed_at=? WHERE number=?', (time.time() - minutes * 60 - 5, number))
+            self.db.execute('UPDATE watches SET changed_at=? WHERE number=?', (changed, number))
+            row = self.db.execute("SELECT value FROM meta WHERE key='stall:claude:abc'").fetchone()
+            state = json.loads(row['value']) if row else {}
+            if f'o/r#{number}' in state:
+                state[f'o/r#{number}'][0] = changed
+                self.db.execute("UPDATE meta SET value=? WHERE key='stall:claude:abc'", (json.dumps(state),))
 
     def test_two_windows_with_the_lane_that_holds_the_pr(self):
         self.stalled(7, 14, self.checkout())
@@ -126,12 +143,75 @@ class Stall(unittest.TestCase):
         self.age(7, 16)
         text = self.prompt()
         self.assertRegex(text, r'o/r#7: action_required .*; STALL 1: no new head or status for 16 min; '
-                               r'lane M001-S01 held by w1 \(running\), claimed 1[78]\d min ago, no branch in its row')
+                               r'lane M001-S07 held by w7 \(running\), claimed 1[78]\d min ago, no branch in its row')
         self.assertIsNone(self.prompt(), 'once per window')
         self.age(7, 31)
-        self.assertIn('STALL 2: no new head or status for 31 min; lane M001-S01', self.prompt())
+        self.assertIsNone(self.prompt(), 'STALL 2 waits a full window after STALL 1 was shown')
+        self.shown_earlier(15)
+        self.assertIn('STALL 2: no new head or status for 31 min; lane M001-S07', self.prompt())
         self.age(7, 50)
+        self.shown_earlier(30)
         self.assertIsNone(self.prompt(), 'two windows only')
+
+    def test_a_long_silence_starts_with_stall_1(self):
+        # PR #92 review: a first look after 31 minutes must not skip the question to the lane.
+        self.stalled(7, 31)
+        text = self.prompt()
+        self.assertIn('STALL 1: no new head or status for 31 min', text)
+        self.assertNotIn('STALL 2', text)
+        self.assertIsNone(self.prompt())
+
+    def test_a_new_stretch_starts_at_stall_1_again(self):
+        self.stalled(7, 16)
+        self.prompt()
+        self.shown_earlier(15)
+        self.age(7, 31)
+        self.assertIn('STALL 2', self.prompt())
+        # same status, another head: a new stretch
+        snap = snapshot(); snap['pr']['mergeable'] = False; snap['head'] = 'head3'
+        self.observe(7, snap)
+        self.assertNotIn('STALL', self.prompt(), 'the new head is shown without a mark')
+        self.age(7, 16)
+        self.assertIn('STALL 1', self.prompt())
+
+    def test_fifteen_stalls_take_one_frontier_call(self):
+        numbers = range(7, 22)
+        d = self.checkout(numbers=numbers)
+        for n in numbers:
+            self.stalled(n, 0, d)
+        for n in numbers:
+            self.age(n, 16)
+        real = subprocess.run
+        calls = []
+        def run(args, *a, **k):
+            calls.append(args)
+            return real(args, *a, **k)
+        started = time.time()
+        with patch('prwatch.claude.subprocess.run', side_effect=run):
+            text = self.prompt()
+        self.assertEqual(text.count('STALL 1'), 15)
+        for n in numbers:
+            self.assertIn(f'o/r#{n}: action_required', text)
+            self.assertRegex(text, rf'STALL 1: [^\n]*; lane M001-S{n:02d} held by w{n} ')
+        self.assertEqual(sum('owner' in args for args in calls), 1, 'one ytstack-frontier call per checkout')
+        self.assertLess(time.time() - started, 5)
+
+    def test_a_failing_lookup_keeps_the_line(self):
+        self.stalled(7, 16, self.checkout())
+        with patch('prwatch.claude.owners', side_effect=UnicodeDecodeError('utf-8', b'x', 0, 1, 'bad')):
+            text = self.prompt()
+        self.assertIn('STALL 1: no new head or status for 16 min', text)
+        self.assertNotIn('lane M001', text)
+        self.assertIsNone(self.prompt(), 'shown once, not lost')
+
+    def test_the_lookup_has_one_time_budget(self):
+        self.stalled(7, 16, self.checkout())
+        def slow(args, *a, **k):
+            raise subprocess.TimeoutExpired(args, k.get('timeout'))
+        with patch('prwatch.claude.subprocess.run', side_effect=slow) as run:
+            text = self.prompt()
+        self.assertIn('STALL 1', text)
+        self.assertTrue(all(c.kwargs['timeout'] <= claude.OWNER_BUDGET for c in run.call_args_list))
 
     def test_without_a_lane_paused_or_switched_off(self):
         self.stalled(8, 16)
@@ -150,7 +230,7 @@ class Stall(unittest.TestCase):
         self.stalled(7, 16, self.checkout('https://github.com/o/other.git'))
         text = self.prompt()
         self.assertIn('STALL 1', text)
-        self.assertNotIn('lane M001-S01', text)
+        self.assertNotIn('lane M001', text)
 
 
 if __name__ == '__main__':

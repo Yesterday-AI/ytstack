@@ -22,6 +22,8 @@ STALE = 24 * 3600
 # Before that: a STALL mark after this many minutes, and once more after the next window
 # (policy `stall_minutes`, 0 = off; issue #91).
 STALL_MINUTES = 15
+# Seconds all lane lookups of one prompt may take together (the hook has 15 s).
+OWNER_BUDGET = 3
 FRONTIER = Path(__file__).resolve().parents[3] / 'bin/ytstack-frontier'
 
 
@@ -61,26 +63,50 @@ def stall_minutes(repo):
         return STALL_MINUTES
 
 
-def owner(w):
-    """The lane of LANES.md in the watch's checkout that holds the PR, with its last commit or
-    claim (`ytstack-frontier owner`), or ''. Only from a checkout of the PR's repository: a PR
-    number means nothing in another one. Local files only, no GitHub call."""
+def stall_key(session):
+    """The STALL step last shown to `session`: PR key -> [changed_at, step, shown at]. A step
+    advances by one per window after the previous one was shown, as in ytstack-watch."""
+    return f'stall:{session}'
+
+
+def owners(watches, budget=None):
+    """PR key -> the lane of LANES.md that holds it, with its last commit or claim
+    (`ytstack-frontier owner`): one call per checkout, all within `budget` seconds. Only from a
+    checkout of the PR's repository (a PR number means nothing in another one). Local files
+    only, no GitHub call; a checkout that fails or runs out of time names no lane."""
     from .hooks import REPO
-    cwd = w['cwd'] or ''
-    if not cwd or not FRONTIER.is_file():
-        return ''
-    try:
-        origin = subprocess.run(['git', '-C', cwd, 'remote', 'get-url', 'origin'],
-                                capture_output=True, text=True, timeout=3).stdout.strip()
-        match = REPO.fullmatch(origin)
-        if not match or match[1].lower() != w['repo'].lower():
-            return ''
-        p = subprocess.run(['bash', str(FRONTIER), '-C', cwd, 'owner', '--pr', str(w['number'])],
-                           capture_output=True, text=True, timeout=10)
-    except (OSError, subprocess.TimeoutExpired):
-        return ''
-    lines = p.stdout.strip().splitlines()
-    return lines[0] if p.returncode == 0 and lines else ''
+    deadline = time.monotonic() + (OWNER_BUDGET if budget is None else budget)
+    found, by_cwd = {}, {}
+    if not FRONTIER.is_file():
+        return found
+    for w in watches:
+        if w['cwd']:
+            by_cwd.setdefault(w['cwd'], []).append(w)
+    for cwd, ws in by_cwd.items():
+        try:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                break
+            origin = subprocess.run(['git', '-C', cwd, 'remote', 'get-url', 'origin'],
+                                    capture_output=True, text=True, timeout=left).stdout.strip()
+            match = REPO.fullmatch(origin)
+            ws = [w for w in ws if match and w['repo'].lower() == match[1].lower()]
+            left = deadline - time.monotonic()
+            if not ws or left <= 0:
+                continue
+            p = subprocess.run(['bash', str(FRONTIER), '-C', cwd, 'owner', '--pr',
+                                ','.join(str(w['number']) for w in ws)],
+                               capture_output=True, text=True, timeout=left)
+        except Exception:
+            continue
+        lines = p.stdout.splitlines() if p.returncode == 0 else []
+        for line in lines:
+            number, tab, rest = line.partition('\t')
+            if tab and number.isdigit():
+                found.update({f'{w["repo"]}#{w["number"]}': rest for w in ws if w['number'] == int(number)})
+            elif len(ws) == 1 and line:
+                found[f'{ws[0]["repo"]}#{ws[0]["number"]}'] = line
+    return found
 
 
 def _age(seconds):
@@ -105,6 +131,7 @@ def surface(db, session, now=None):
     if not watches and not notices and not gone:
         return None
     hinted, hints = _meta_dict(db, hint_key(session)), {}
+    steps, stalls = _meta_dict(db, stall_key(session)), {}
     # Each line with its fingerprint (ages excluded); only changed lines are injected (issues #61, #85).
     # A focus or STALL mark joins the fingerprint only when set: older fingerprints stay equal.
     current, due, focused, stalled, limits = {}, set(), set(), {}, {}
@@ -132,8 +159,17 @@ def surface(db, session, now=None):
         limit = limits[w['repo']]
         if (w['status'] == 'action_required' and not w['paused'] and limit and changed is not None
                 and limit <= now - changed < STALE):
+            # STALL 1 first, also after a long silence; STALL 2 a full window after STALL 1 was
+            # shown (PR #92 review). A new head or status starts at STALL 1 again.
+            prev = steps.get(key)
+            if not isinstance(prev, list) or len(prev) != 3 or prev[0] != changed:
+                stall, at = 1, now
+            elif prev[1] == 1 and now - prev[2] >= limit:
+                stall, at = 2, now
+            else:
+                stall, at = prev[1], prev[2]
+            stalls[key] = [changed, stall, at]
             # The lane (owner) is looked up only for a line that is shown.
-            stall = min(2, int((now - changed) // limit))
             stalled[key] = w
             mark += (('stall', stall),)
             line += f'; STALL {stall}: no new head or status for {int((now - changed) // 60)} min'
@@ -147,12 +183,17 @@ def surface(db, session, now=None):
                          f'{cli()} pause --repo {w["repo"]} --pr {w["number"]}')
         current[key] = ((w['paused'], w['status'], w['head'], w['detail']) + mark, line)
     fingerprints = {key: json.dumps(fp) for key, (fp, _) in current.items()}
+    shown = [key for key in current if key in due or seen.get(key) != fingerprints[key]]
+    # Lanes before the fingerprints are saved: a failed lookup must not lose the block.
+    try:
+        lanes = owners([stalled[key] for key in shown if key in stalled])
+    except Exception:
+        lanes = {}
+    text = {key: current[key][1] + (f'; {lanes[key]}' if key in lanes else '') for key in shown}
     with db:
         db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (surface_key(session), json.dumps(fingerprints)))
         db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (hint_key(session), json.dumps(hints)))
-    shown = [key for key in current if key in due or seen.get(key) != fingerprints[key]]
-    text = {key: current[key][1] + (f'; {lane}' if key in stalled and (lane := owner(stalled[key])) else '')
-            for key in shown}
+        db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (stall_key(session), json.dumps(stalls)))
     focus_lines = [text[key] for key in shown if key in focused]
     changed_lines = [text[key] for key in shown if key not in focused]
     closed_lines = [f'- {w["repo"]}#{w["number"]}: closed'
