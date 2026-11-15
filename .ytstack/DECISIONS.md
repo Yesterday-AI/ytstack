@@ -1143,3 +1143,24 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - `session-start` writes nothing; state a hook needs across events is written by a hook that already writes (here `version-notice`).
 
 **Supersedes:** None.
+
+## 2026-11-15: A lesson is a finding of `kind: lesson` in the signals ledger, with a target; a closed incident needs one (M032-S01, issue #53)
+
+**Context:** Issue #53: incidents of every class (a red `main`, a receipt that ticked a row too early, a defect only a review caught, a slip of a lane or of the coordinator) lost their lesson, because nothing recorded it and `lane-retro` samples only every fifth lane. Eight such incidents in one coordinator day in context-mcp, several of the same class. The issue asked for a record of incident, lesson and where it lives, so that repeats are visible, and named two places: the signals ledger or a dated `archive/<date>/incident-retro.md`.
+
+**Options considered:**
+- A) A new store (`ytstack-lessons`, `lessons/L###-<slug>.md`) with its own states and check.
+- B) A dated retro file per day under `archive/<date>/`, appended by every path.
+- C) A finding of a new `kind: lesson` in `signals/`, keyed by class, with one new frontmatter line `target`.
+
+**Chose:** C. Key `lesson:<area>:<class-slug>`, the area `production`, `ci`, `evidence`, `review` or `process`, the source the area. `target` is `check:<path>`, `knowledge:<path>[#anchor]`, `contract:<path>[#anchor]` or `proposal:<ref>`. `bin/ytstack-signals lesson new` records it (and with `--incident` writes the id into the record's new `lesson:` line), `lesson list [--since]` lists it. `check` fails on a closed incident whose `lesson` is `none` or names no lesson, on a lesson target in `AGENTS.md` or `CLAUDE.md`, and on a `fixed` lesson whose target is a proposal or a missing file. The dated record is the sighting: each incident of a class is one `### read <UTC>` block in its lesson, which `retro` counts per window.
+
+**Reason:** The ledger already does what the issue asks of the record: one file per class (the key), a count that rises on a repeat instead of a new file, a regression with `reopens:` when a fixed class comes back, states with a reference, a lock and a check. `review-lessons` uses the same shape for review escapes. A new store (A) would duplicate all of it. A dated file per day (B) groups by date, not by class, so a repeat is only visible to whoever reads every day; it also grows without a check.
+
+**How to apply:**
+- A lesson never lives in `AGENTS.md` or `CLAUDE.md`: a machine check first, a `KNOWLEDGE.md` entry or the lane contract only where no machine can check it.
+- A repeat of a class is `seen-again` on the open lesson; one after `fixed` is a regression, and its lesson needs a stronger target.
+- Only an incident record that is `closed` needs its lesson; an open or mitigated one may still be waiting for the root cause. A record written before lessons reads as `lesson: none`.
+- A person dismisses a class with `set <id> --state dismissed` and a reason; a lesson is not deleted.
+
+**Supersedes:** None. Extends the 2026-11-13 production findings entry (M027): the ledger also holds lessons.
