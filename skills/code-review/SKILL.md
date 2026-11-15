@@ -2,11 +2,12 @@
 name: code-review
 metadata:
   tier: task
-  version: 0.4.0
+  version: 0.5.0
 description: "Reviews the active task's commits with a fresh-context reviewer subagent and handles the feedback with technical rigor, through the vendored superpowers requesting-code-review and receiving-code-review procedures, with the task plan and commit range injected. Use after a task's commits exist and before summarize-task, before a merge or PR, or when the user says review this, code review, check my changes. Not for reviewing a plan (plan-eng-review) and not without commits for the task."
 allowed-tools:
   - Bash
   - Read
+  - Write
   - Edit
   - Agent
   - AskUserQuestion
@@ -157,6 +158,8 @@ Invariants touched: <none | area: the invariant or decision, in its own words>
 
 `risk` and `invariants` are the reviewer's `Risk:` and `Invariants touched:` values, unchanged, on this one line: no `;` inside a value, several rules joined with commas. You do not raise or lower them; `bin/ytstack-risk` takes the higher of the stated class and the floor. `by` is the reviewer's name, or `self`. A reviewer that left a label out is asked for it once. A line without `risk`, `invariants` or `by` reads as a round that states none of them, and the change goes to a person.
 
+**On the pull request as well.** When the branch has an open pull request on GitHub whose head is `HEAD_SHA` (`gh pr view --json number,headRefOid`), post the same line there as a review: a file with `Verdict: approved` or `Verdict: changes requested`, `Reviewed commit: {HEAD_SHA}`, `Round: {REVIEW_ROUND}`, the findings, and last the round line at the start of a line of its own, then `gh pr review <n> --comment --body-file <file>`. The host ties that review to `HEAD_SHA`, and `bin/ytstack-risk route --pr <n>` reads the line there first (`${CLAUDE_SKILL_DIR}/../../docs/ux/review-policy-format.md`, "Records on the host"). Do not push a commit only to carry the line in the plan: it moves the head away from the review, and a repository that counts only reviews on the current head no longer sees it. A head that differs from `HEAD_SHA`: post nothing and say so.
+
 **Lenses.** `lenses:` between `RISK_FLOOR_BEGIN` and `RISK_FLOOR_END` names the second reviews this kind of change requires. A lens has one question and the documents that answer it; the project defines it in `.ytstack/spec/REVIEW.md` (`${CLAUDE_SKILL_DIR}/../../docs/ux/review-policy-format.md`, "Lenses"). `lenses: none`: skip this paragraph. Otherwise, once the round is approved:
 
 1. Render one brief per lens. Never write it by hand:
@@ -174,7 +177,7 @@ Invariants touched: <none | area: the invariant or decision, in its own words>
    - Lens {lens}: {HEAD_SHA} -- {pass | fail | not run}; by: {lens}-{ACTIVE_TASK}; evidence: {directory} ({n} images)
    ```
 
-   `evidence: none` for a lens that stored none.
+   `evidence: none` for a lens that stored none. With an open pull request the lens lines go into one more review on it, as the round line did, with `Verdict: approved` as its first line when no lens failed and `Verdict: changes requested` when one did.
 
 `fail`: its findings are handled like blocking findings of the round. `not run` is recorded as it is and never as a pass; the change then goes to a person, who is told why. A lens is no round and does not count towards the two. After a fix a lens runs again only when the fix touched a path under its `applies`; a lens that fails a second time is diagnosed like a third round.
 

@@ -26,7 +26,7 @@ sources:
   - docs/ux/review-policy-format.md
   - docs/ux/runtime-format.md
   - docs/ux/signal-format.md
-verified_at: 851b2f4
+verified_at: aa66c09
 ---
 
 # checks-and-evals
@@ -58,7 +58,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 **`bin/ytstack-risk`: whether a change may merge without a person** (`docs/ux/review-policy-format.md`)
 
 - `floor --base <sha> --head <sha>` prints the lowest class of the tree difference (`low`, `normal` or `person`), one `reason:` per path and rule, the touched areas, their ceiling and the required lenses. It reads the policy at the base commit, never from the working tree; git matches the globs.
-- `route --plan <file> --base <sha> --head <sha> --author <worker>` exits 0 with `route: unattended` only when the floor is not `person`, the newest round line approves, states `risk` and `invariants: none`, names a reviewer other than the author and is valid for the head, the class is within the ceiling, and every required lens has a passing line with its evidence (for `evidence: visual` a `MANIFEST` whose hashes match). Every other case exits 10 with `route: person` and one reason per failed condition. `by: self` and a missing `--author` always route to a person.
+- `route [--plan <file>] [--pr <n> [--repo <owner/name>]] --base <sha> --head <sha> --author <worker>` exits 0 with `route: unattended` only when the floor is not `person`, the newest round line approves, states `risk` and `invariants: none`, names a reviewer other than the author and is valid for the head, the class is within the ceiling, and every required lens has a passing line with its evidence (for `evidence: visual` a `MANIFEST` whose hashes match). Every other case exits 10 with `route: person` and one reason per failed condition. `by: self` and a missing `--author` always route to a person. With `--pr` the round and lens lines come first from the bodies of the pull request's reviews (one `gh api` read; submitted, not dismissed, by an owner, member or collaborator), each taken for the `commit_id` the host tied its review to; the plan counts only when no review carries a line of that kind, and a `round:` line names the source. A line naming another commit than the host's, a review that requests changes and a failed read route to a person.
 - `check` validates `REVIEW.md`, its "Own reviewers" too (slug names, a unique `marker`, a `lessons` file that exists); `reviewers` prints the own reviewers tab separated; `manifest <dir>` writes hash and name of every image into the `MANIFEST` of an evidence directory.
 
 **`bin/ytstack-review-escapes`: review-bot findings the own reviewers missed** (`docs/ux/review-policy-format.md`, "Escapes")
@@ -87,7 +87,7 @@ Everything that tells a contributor whether a change is acceptable: the static c
 
 - `bin/ytstack-frontier`: `list` prints lane, state and detail per slice (done, claimed, blocked, ready); `claim` refuses a held lane and names the holder; `claim`, `set` and `release` change one row of `LANES.md` under a lock; `check` validates the file. The lock is the file `LANES.md.lock`, created by the shell under noclobber and not by `mkdir`, which is no lock on Ubuntu 26.04 (see `.ytstack/KNOWLEDGE.md`).
 - `bin/ytstack-questions`: `new`, `list`, `next`, `ask` (once), `answer` (refused without text under "Answer"), `check`.
-- `bin/ytstack-finish-lane`: one step per call (`leftovers`, `commit`, `push`, `open-pr`, `wait-head`, `body-check`, `gates`, `merge`, `route`); every gate is read from GitHub through `gh` at the moment of the call, and `merge` passes the reviewed commit to the host so that a moved head cannot be merged. `route --lane <ref>` reads the lane's worker (the author) and plan from `LANES.md` and runs `bin/ytstack-risk route`. `leftovers` and `commit` leave the evidence directory out. Its suite uses a stand-in for `gh` and a local bare remote.
+- `bin/ytstack-finish-lane`: one step per call (`leftovers`, `commit`, `push`, `open-pr`, `wait-head`, `body-check`, `gates`, `merge`, `route`); every gate is read from GitHub through `gh` at the moment of the call, and `merge` passes the reviewed commit to the host so that a moved head cannot be merged. `route --lane <ref> [--pr <n>]` reads the lane's worker (the author) and plan from `LANES.md` and runs `bin/ytstack-risk route`; with `--pr` it passes the pull request on, and a lane without a plan file is routed from the host's reviews. `leftovers` and `commit` leave the evidence directory out. Its suite uses a stand-in for `gh` and a local bare remote.
 - `bin/ytstack-handover`: `new` copies `skills/handover-step/template.sh`; `check` is the static verification of a staged script (syntax, unchanged helper block, no raw command, a confirmation of its own before every mutation, no pipe into a shell). The helpers hold the same rule when the script runs: one yes carries one change.
 - `bin/ytstack-watch`: polls pull requests through `gh` and prints a line only when head, checks, review or mergeability changed; `--once` prints the snapshot with its read time. `release --commit <sha>` runs `deployed` of "Release" until it names the commit (or `--timeout`, default 900 s), then `healthy` for the settle time, and ends with five receipt lines (`Target:`, `Commit:`, `Arrived:`, `Health:`, `Result:`) with read times. Exit 0 released or no health command, 2 not arrived, 3 unhealthy, 4 no "Release" section, 1 `RUNTIME.md` fails its check. It runs only those two commands and changes nothing.
 
@@ -182,7 +182,7 @@ Not covered by these checks: `claude plugin eval` (costs money). `bash tests/run
 ## Decisions that apply now
 
 - DECISIONS.md -- "2026-11-14: Kimi uses native plugin bootstrap and pending lifecycle context (M020)". Source of the offline Kimi CI checks and the separately run native suite.
-- DECISIONS.md -- "2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)". Source of `bin/ytstack-risk` and the lint rules for `auto_merge` and `REVIEW.md`.
+- DECISIONS.md -- "2026-11-13: Whether a person looks at a change is decided per change: a floor from the diff, the class an independent reviewer states, a ceiling per area, lenses per kind of change (M025)". Source of `bin/ytstack-risk` and the lint rules for `auto_merge` and `REVIEW.md`. Extended by "2026-11-15: The risk route reads the review round from the review on the host first; the plan is the fallback (M031-S02, issue #54)".
 - DECISIONS.md -- "2026-11-13: `RUNTIME.md` has three sections with a fixed line format, read only through `bin/ytstack-runtime` (M025-S01)"
 - DECISIONS.md -- "2026-11-13: After a merge the release is watched, not driven; upkeep is a script and a recipe, not a skill (M026)". Source of `release` and `bin/ytstack-upkeep`.
 - DECISIONS.md -- "2026-11-13: Production findings and incidents are skill work on read-only access; a mitigation is a handover script a person runs (M027)". Source of `bin/ytstack-signals`.
