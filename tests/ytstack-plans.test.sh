@@ -104,8 +104,17 @@ hasnt "rows --open: no dropped rows" "${TAB}dropped${TAB}" "$OUT"
 N=$(printf '%s\n' "$OUT" | grep -c .)
 eq "rows --open: 11 open rows" 11 "$N"
 
-run "$R" rows plans/ideas.md
+OUT=$(cd "$R" && bash "$BIN" rows plans/ideas.md 2>&1)
 has "rows PATH: an explicit file is listed even below 3 rows" "plans/ideas.md:3${TAB}open${TAB}-${TAB}Ideas${TAB}one" "$OUT"
+# A relative PATH is read from where the command was started (PR #66 review).
+OUT=$(cd "$R/plans" && bash "$BIN" rows ideas.md 2>&1); EC=$?
+has "rows PATH from a subdirectory: the file next to the caller" "plans/ideas.md:3${TAB}open${TAB}-${TAB}Ideas${TAB}one" "$OUT"
+OUT=$(cd "$R/plans" && bash "$BIN" rows sub/ 2>&1)
+has "rows DIR from a subdirectory" "plans/sub/teardown.md:5${TAB}open" "$OUT"
+OUT=$(cd "$R/plans/sub" && bash "$BIN" rows plans/ideas.md 2>&1)
+has "rows PATH not there from the caller: read from the repository root, as scan names it" "plans/ideas.md:3${TAB}open" "$OUT"
+OUT=$(bash "$BIN" -C "$R" rows "$R/plans/ideas.md" 2>&1)
+eq "rows with an absolute PATH and -C: relative to the repository in the output" "plans/ideas.md:3" "$(printf '%s\n' "$OUT" | head -1 | cut -f1)"
 
 eq "plan files unchanged" "$BEFORE" "$(sums "$R/plans")"
 
