@@ -354,9 +354,9 @@ $STATE_CONTEXT"
 # own limit lives in its hooks config. Above the guard the blocks shrink in
 # this order: the standing lines to the three newest, the factory lines to a
 # pointer, the minimal-code line to its pointer, the closing line to its
-# short form, the standing lines to a pointer, last the using-ytstack body to
-# what fits, cut at a line end, with a pointer to the file (issue #82: the
-# Next action comes before that body). The Next action excerpt (at most five
+# short form, then the using-ytstack body to what fits, cut at a line end,
+# with a pointer to the file (issue #82: the Next action comes before that
+# body), last the standing lines to a pointer (they outrank the body's tail). The Next action excerpt (at most five
 # lines of 600 characters), the operating checklist and the lines about the
 # checkout and a compaction are never cut. Still above the guard: a warning.
 _HOST="${YTSTACK_HOST_CONTEXT:-}"; _HOST_LEN=${#_HOST}
@@ -387,10 +387,6 @@ if over; then
   CLOSING_LINE="The files in $YT_DIR are the source of truth (STATE.md,${SPEC_HINT} DECISIONS.md, KNOWLEDGE.md), not the conversation."
   rebuild
 fi
-if over && [ -n "$STANDING_LINES" ]; then
-  STANDING_LINES="Standing instructions: $STANDING_N in force for role $_ROLE (cut for the cap): bin/ytstack-standing list, before you act."
-  rebuild
-fi
 if over; then
   _NOTE="(cut for the 10,000-char cap: read the rest in $USING_YTSTACK_FILE)"
   _KEEP=$(( ${#USING_SKILL} - (${#FULL_CONTEXT} - _HOST_LEN - 9500) - ${#_NOTE} - 2 ))
@@ -402,6 +398,10 @@ if over; then
 $_NOTE"
   rebuild
   _BODY_CUT=yes
+fi
+if over && [ -n "$STANDING_LINES" ]; then
+  STANDING_LINES="Standing instructions: $STANDING_N in force for role $_ROLE (cut for the cap): bin/ytstack-standing list, before you act."
+  rebuild
 fi
 if over; then
   echo "[ytstack session-start] injection is $(( ${#FULL_CONTEXT} - _HOST_LEN )) chars; Claude Code caps additionalContext at 10,000. Shorten skills/using-ytstack/SKILL.md." >&2
