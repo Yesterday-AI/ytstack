@@ -2,7 +2,7 @@
 # ytstack watch: polls pull requests on the host, and a release on its target,
 # outside the model.
 #
-#   ytstack-watch [-C DIR] --pr N[,N...] [--interval SECONDS] [--once]
+#   ytstack-watch [-C DIR] --pr N[,N...] [--focus N[,N...]] [--interval SECONDS] [--stall MINUTES] [--once]
 #   ytstack-watch release --commit SHA [--timeout SECONDS] [--interval SECONDS] [-C DIR]
 #     release only reads: it runs the "deployed" and "healthy" commands of
 #     RUNTIME.md. It deploys nothing and rolls nothing back.
@@ -27,6 +27,19 @@
 #          ends when every watched pull request is merged or closed. A finished
 #          pull request is not read again.
 #
+# --focus N[,N...]  pull requests to follow closely (with or without --pr):
+#          listed first and, while one of them is open, read every 20 seconds;
+#          the others are still read every --interval seconds.
+# --stall MINUTES   (default 15, 0 = off; not with --once) one line when an
+#          open pull request sat in an actionable state (checks red, a merge
+#          conflict, or changes requested on the head commit) for that long
+#          without a new head, and one more after the next window of the same
+#          length; a new head or a state that is no longer actionable starts
+#          the clock again. When LANES.md names the lane that holds it, the
+#          line ends with that lane's last commit (`ytstack-frontier owner`):
+#            2026-11-15T14:30:07Z #12 STALL 1: conflict, review changes_requested; no new head for 15 min (head a1b2c3d); lane M004-S03 held by impl-S03 (running), last commit 52 min ago on ytstack/M004-S03
+#          The clock starts when this process first saw the state.
+#
 # Output is plain text, one write per line, meant for a process that forwards
 # new lines to the model (a background shell, a monitor tool). The values are
 # host facts with their read time: act on them, do not store them in .ytstack/
@@ -39,7 +52,7 @@
 # Exit codes
 #   0   --once: every pull request was read; loop: all are merged or closed
 #   1   gh is missing; --once: a read failed; loop: three failed polls in a row
-#   64  usage (no --pr, a value that is no number, --interval below 20)
+#   64  usage (no --pr or --focus, a value that is no number, --interval below 20)
 #
 # ---- release ----
 # Follows one commit after a merge, from the "Release" section of RUNTIME.md in
@@ -84,12 +97,14 @@
 # Test only: YTSTACK_WATCH_SLEEP names a command that runs instead of `sleep`
 # (it gets the interval as its argument). tests/ytstack-watch.test.sh sets it
 # to move its fixtures on between polls. YTSTACK_WATCH_ATTEMPT_MAX replaces the
-# 30 seconds a call of release may take. Nothing else sets them.
+# 30 seconds a call of release may take. YTSTACK_WATCH_CLOCK names a command
+# that prints the epoch for the STALL clock. Nothing else sets them.
 
 set -uo pipefail
 
 MIN_INTERVAL=20
-DIR="$PWD"; PRS=""; INTERVAL=60; ONCE=no
+FOCUS_INTERVAL=20
+DIR="$PWD"; PRS=""; FOCUS=""; INTERVAL=60; STALL=15; ONCE=no
 
 usage() { sed -n '5,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 bad_usage() { [ $# -eq 0 ] || echo "ytstack-watch: $*" >&2; usage >&2; exit 64; }
@@ -236,21 +251,33 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --once) ONCE=yes; shift; continue ;;
     -h|--help|help) usage; exit 0 ;;
-    -C|--pr|--interval) [ $# -ge 2 ] || bad_usage "$1 needs a value" ;;
+    -C|--pr|--focus|--interval|--stall) [ $# -ge 2 ] || bad_usage "$1 needs a value" ;;
     *) bad_usage "unknown argument '$1'" ;;
   esac
   case "$1" in
     -C) DIR=$2 ;;
     --pr) PRS=$2 ;;
+    --focus) FOCUS=$2 ;;
     --interval) INTERVAL=$2 ;;
+    --stall) STALL=$2 ;;
   esac
   shift 2
 done
 
-case ",$PRS," in
-  ",,") bad_usage "--pr is required" ;;
-  *[!0-9,]*|*,,*) bad_usage "--pr takes pull request numbers separated by commas, got '$PRS'" ;;
-esac
+[ -n "$PRS$FOCUS" ] || bad_usage "--pr or --focus is required"
+for list in "$PRS" "$FOCUS"; do
+  case ",$list," in
+    ",,") ;;
+    *[!0-9,]*|*,,*) bad_usage "--pr and --focus take pull request numbers separated by commas, got '$list'" ;;
+  esac
+done
+# Focus first; a number in both lists is read once.
+ALL=""
+for n in $(printf '%s,%s' "$FOCUS" "$PRS" | tr ',' ' '); do
+  case " $ALL " in *" $n "*) ;; *) ALL="$ALL $n" ;; esac
+done
+case "$STALL" in ''|*[!0-9]*) bad_usage "--stall takes whole minutes, got '$STALL'" ;; esac
+STALL=$((10#$STALL))
 case "$INTERVAL" in ''|*[!0-9]*) bad_usage "--interval takes whole seconds, got '$INTERVAL'" ;; esac
 [ "$INTERVAL" -ge "$MIN_INTERVAL" ] 2>/dev/null \
   || bad_usage "--interval $INTERVAL is below the minimum of $MIN_INTERVAL seconds"
@@ -304,13 +331,40 @@ EOF
   [ -n "$MERGE" ] && [ -z "$extra" ] || { ERR="unexpected answer from gh: '$out'"; return 1; }
 }
 
+clock() { if [ -n "${YTSTACK_WATCH_CLOCK:-}" ]; then "$YTSTACK_WATCH_CLOCK"; else date -u +%s; fi; }
+FRONTIER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ytstack-frontier"
+# stall <n>: the STALL line of an open pull request whose actionable state
+# outlasted a window of --stall minutes on the same head (see the header).
+stall() {
+  local n=$1 why="" t k own
+  [ "$CHECKS" != red ] || why="checks red"
+  [ "$MERGE" != conflict ] || why="${why:+$why, }conflict"
+  [ "$REVIEW" != "changes_requested@$HEAD" ] || why="${why:+$why, }review changes_requested"
+  if [ "$ST" != open ] || [ -z "$why" ]; then STALL_AT[$n]=""; return 0; fi
+  t=$(clock)
+  if [ -z "${STALL_AT[$n]:-}" ] || [ "${STALL_HEAD[$n]}" != "$HEAD" ]; then
+    STALL_AT[$n]=$t; STALL_HEAD[$n]=$HEAD; STALL_N[$n]=0; return 0
+  fi
+  k=$((STALL_N[$n] + 1))
+  [ "$k" -le 2 ] && [ $((t - STALL_AT[$n])) -ge $((k * STALL * 60)) ] || return 0
+  STALL_N[$n]=$k
+  own=$(bash "$FRONTIER" -C "$PWD" owner --pr "$n" 2>/dev/null | head -1)
+  echo "$(now) #$n STALL $k: $why; no new head for $(((t - STALL_AT[$n]) / 60)) min (head $HEAD)${own:+; $own}"
+}
+
 # Indexed by pull request number (bash 3.2 has no associative arrays).
-LAST=(); MERGE_SEEN=(); FINISHED=()
-fails=0
+LAST=(); MERGE_SEEN=(); FINISHED=(); NEXT=(); STALL_AT=(); STALL_HEAD=(); STALL_N=()
+fails=0; elapsed=0
 while :; do
-  failed=no; left=0
-  for n in $(printf '%s' "$PRS" | tr ',' ' '); do
+  failed=no; left=0; focus_open=no
+  for n in $ALL; do
     [ -z "${FINISHED[$n]:-}" ] || continue
+    case ",$FOCUS," in
+      *",$n,"*) ;;
+      *) # not in focus: every --interval seconds of the loop's time
+        if [ "$ONCE" = no ] && [ "${NEXT[$n]:-0}" -gt "$elapsed" ]; then left=$((left + 1)); continue; fi
+        NEXT[$n]=$((elapsed + INTERVAL)) ;;
+    esac
     if ! read_pr "$n"; then
       failed=yes; left=$((left + 1))
       if [ "$ONCE" = yes ]; then echo "#$n error: $ERR read $(now)"; else echo "$(now) #$n error: $ERR"; fi
@@ -329,7 +383,13 @@ while :; do
       echo "$(now) #$n $cur"
     fi
     LAST[$n]=$cur
-    if [ "$ST" = open ]; then left=$((left + 1)); else FINISHED[$n]=1; fi
+    [ "$ONCE" = yes ] || [ "$STALL" -eq 0 ] || stall "$n"
+    if [ "$ST" = open ]; then
+      left=$((left + 1))
+      case ",$FOCUS," in *",$n,"*) focus_open=yes ;; esac
+    else
+      FINISHED[$n]=1
+    fi
   done
   if [ "$ONCE" = yes ]; then [ "$failed" = no ]; exit $?; fi
   if [ "$failed" = yes ]; then
@@ -342,5 +402,7 @@ while :; do
     fails=0
   fi
   [ "$left" -gt 0 ] || exit 0
-  "${YTSTACK_WATCH_SLEEP:-sleep}" "$INTERVAL"
+  nap=$INTERVAL; [ "$focus_open" = no ] || nap=$FOCUS_INTERVAL
+  "${YTSTACK_WATCH_SLEEP:-sleep}" "$nap"
+  elapsed=$((elapsed + nap))
 done
