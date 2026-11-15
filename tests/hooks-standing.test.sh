@@ -75,14 +75,14 @@ done
 eq "all seven flagged" 7 "$(lines "$SD/standing-flags")"
 eq "eight prompts counted" 8 "$(lines "$SD/prompts")"
 # more true positives, English and German (review of PR #87)
-for p in "Ab jetzt merge grüne PRs sofort." "Von nun an Status nur an Slice-Grenzen." "Grundsätzlich keine Force-Pushes." "Immer wenn ein Release rausgeht, starte den Watch." "Nie wieder ohne Review mergen." "Merk dir: der Dev-Cluster bleibt unangetastet." "Going forward, report only at slice boundaries." "Until further notice the PR limit is 15." "OK. Always run the full suite before a merge." "Please prioritise lane 7 over lane 3." "Lass PR 9 in Ruhe -- fass ihn nicht an."; do
+for p in "Ab jetzt merge grüne PRs sofort." "Von nun an Status nur an Slice-Grenzen." "Grundsätzlich keine Force-Pushes." "Immer wenn ein Release rausgeht, starte den Watch." "Nie wieder ohne Review mergen." "Merk dir: der Dev-Cluster bleibt unangetastet." "Going forward, report only at slice boundaries." "Until further notice the PR limit is 15." "OK. Always run the full suite before a merge." "Please prioritise lane 7 over lane 3." "Lass PR 9 in Ruhe -- fass ihn nicht an." "hold merges until 12:37" "bis 12:37 keine merges" "until the load test ends" "solange der Lasttest läuft" "No deploys while the load test runs." "Keine Merges bis der Lasttest durch ist."; do
   prompt "$p"; has "flagged: $p" "$OUT" "standing instruction"
 done
 # ordinary prompts that only contain a word such instructions use (false positives of 0.11)
 for p in "bis wann ist das fertig?" "Danke, bis später" "never mind, wrong lane" "schau mal, ob CI noch läuft während ich esse" "what happened while I was away?" "ist das immer noch rot?" "Prüf bitte, warum der Test nie grün wird" "nie gehört, was ist das?" "wie ist der stand?" "ok, mach weiter" "merge #87" "Kein Problem, danke." "The pipeline is evergreen and nobody minds." "Can you always tell me what you changed?"; do
   prompt "$p"; eq "not flagged: $p" "" "$OUT"
 done
-eq "only the true positives were flagged" 18 "$(lines "$SD/standing-flags")"
+eq "only the true positives were flagged" 24 "$(lines "$SD/standing-flags")"
 # the stop cases below start from the first seven flags
 head -7 "$SD/standing-flags" > "$SD/sf.tmp" && mv "$SD/sf.tmp" "$SD/standing-flags"
 

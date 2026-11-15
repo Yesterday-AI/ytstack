@@ -72,10 +72,14 @@ printf '%s\n' "$NOW" >> "$SD/prompts" 2>/dev/null || exit 0
 # line edge on both sides. LC_ALL=C keeps the umlaut bytes out of [:alnum:].
 B='(^|[^[:alnum:]])'
 E='([^[:alnum:]]|$)'
-EN="from now on|going forward|from here on|until further notice|don'?t touch|do not touch|hands off|prioriti[sz]e|leave [^.!?]{1,60} alone|remember to|keep in mind|no more [a-z]+ until"
-DE="ab jetzt|ab sofort|von nun an|von jetzt an|ab heute|bis auf weiteres|solange [^.!?]{1,60} nicht|grunds(ae|ä)tzlich|immer wenn|nie wieder|nie mehr|niemals|denk dran|denk daran|merk dir|priorisier[a-z]*|fass [^.!?]{1,60} nicht an|nicht anfassen|k(ue|ü)nftig|in zukunft"
-# always/never + a verb at the start of the prompt or of a clause (after . ! ? ; : or a dash), not "never mind".
-IMP='(^|[.!?;:]|--| - )[[:space:]]*(please[[:space:]]+)?(always|never)[[:space:]]+[a-z]+'
+# Temporary instructions (#73): a hold or prohibition with until/bis and a time
+# or a condition ("hold merges until 12:37", "bis 12:37 keine Merges", "no
+# deploys while the load test runs"), and until/solange opening a clause.
+EN="from now on|going forward|from here on|until further notice|don'?t touch|do not touch|hands off|prioriti[sz]e|leave [^.!?]{1,60} alone|remember to|keep in mind|no more [a-z]+ until|(hold|pause|freeze|block|stop|no|don'?t|do not|never)[^.!?]{0,40} (until|till|while) [a-z0-9]+"
+DE="ab jetzt|ab sofort|von nun an|von jetzt an|ab heute|bis auf weiteres|solange [^.!?]{1,60} (nicht|keine?)|grunds(ae|ä)tzlich|immer wenn|nie wieder|nie mehr|niemals|denk dran|denk daran|merk dir|priorisier[a-z]*|fass [^.!?]{1,60} nicht an|nicht anfassen|k(ue|ü)nftig|in zukunft|bis [0-9][0-9:.]*( uhr)?[^.!?]{0,30} (keine?|nicht|nichts)|(keine?|nicht|nichts)[^.!?]{0,40} (bis|solange|w(ae|ä)hrend) [a-z0-9]+"
+# At the start of the prompt or of a clause (after . ! ? ; : or a dash):
+# always/never + a verb (not "never mind"), until + a condition, solange + a clause.
+IMP='(^|[.!?;:]|--| - )[[:space:]]*(please[[:space:]]+)?((always|never)[[:space:]]+[a-z]+|until[[:space:]]+[a-z0-9]+|solange[[:space:]]+[a-z]+)'
 LOW=$(printf '%s' "$PROMPT" | tr '\n\r' '  ' | LC_ALL=C tr '[:upper:]' '[:lower:]')
 TRIM=$(printf '%s' "$LOW" | sed 's/[[:space:]]*$//')
 case "$TRIM" in
