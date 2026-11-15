@@ -654,11 +654,11 @@ yt_standing() {
 }
 
 # yt_standing_default_ref <toplevel> -> the ref of the default branch:
-# origin/HEAD, else origin/main, else main, else master ("" when none).
+# origin/HEAD, else origin/main, origin/master, main, master ("" when none).
 yt_standing_default_ref() {
   local r
   r=$(git -C "$1" symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null)
-  for r in $r refs/remotes/origin/main refs/heads/main refs/heads/master; do
+  for r in $r refs/remotes/origin/main refs/remotes/origin/master refs/heads/main refs/heads/master; do
     git -C "$1" rev-parse -q --verify "$r" >/dev/null 2>&1 && { printf '%s' "$r"; return 0; }
   done
   return 0
@@ -693,7 +693,8 @@ yt_standing_pending() {
 # yt_standing_fields <yt_dir> [<now as YYYYMMDDHHMMSS, UTC>] [pending] -> every
 # entry no other entry supersedes and not of kind end, newest first, TAB
 # separated:
-#   name given scope until until-condition until-check check summary state source
+#   name given scope until until-condition until-check check summary state source body
+# (body: the whole body on one line)
 # An empty value is "-". summary is the first sentence of the body (at most 160
 # characters). state is "expired" when `until` is at or before now, else
 # "active". source is "-" for the working tree; with "pending" as third
@@ -731,9 +732,9 @@ yt_standing_fields() {
     # 20261114T1225Z sorts before 20261114T122530Z.
     function out(  k) {
       k = substr(fn, 1, 8) substr(fn, 10, 4) (substr(fn, 14, 1) == "Z" ? "00" : substr(fn, 14, 2))
-      print k "\t" fn "\t" d(g) "\t" d(s) "\t" d(u) "\t" d(un) "\t" d(uc) "\t" d(uk) "\t" d(ck) "\t" d(kd) "\t" d(sm) "\t" src
+      print k "\t" fn "\t" d(g) "\t" d(s) "\t" d(u) "\t" d(un) "\t" d(uc) "\t" d(uk) "\t" d(ck) "\t" d(kd) "\t" d(sm) "\t" src "\t" d(bd)
     }
-    /^@@ytstack-entry@@/ { if (fn != "") out(); fn = substr($0, 18); src = fn; sub(/\t.*/, "", fn); sub(/^[^\t]*\t/, "", src); first = 1; infm = 0; g = s = u = un = uc = uk = ck = kd = sm = ""; next }
+    /^@@ytstack-entry@@/ { if (fn != "") out(); fn = substr($0, 18); src = fn; sub(/\t.*/, "", fn); sub(/^[^\t]*\t/, "", src); first = 1; infm = 0; g = s = u = un = uc = uk = ck = kd = sm = bd = ""; next }
     first { first = 0; if ($0 == "---") { infm = 1; next } }
     infm && /^---[ \t]*$/ { infm = 0; next }
     infm && /^given:/           { g = val("given") }
@@ -744,6 +745,7 @@ yt_standing_fields() {
     infm && /^until-check:/     { uk = val("until-check") }
     infm && /^check:/           { ck = val("check") }
     infm && /^kind:/            { kd = val("kind") }
+    !infm && NF && !/^---[ \t]*$/ { t = $0; gsub(/\t/, " ", t); bd = (bd == "" ? t : bd " " t) }
     !infm && sm == "" && NF {
       sm = $0; gsub(/\t/, " ", sm); sub(/^[ ]*([-*#>]+[ ]+)?/, "", sm)
       if (match(sm, /[.!?]( |$)/)) sm = substr(sm, 1, RSTART)
@@ -758,15 +760,16 @@ yt_standing_fields() {
         split(r[i], f, "\t"); b = n[i]; sub(/\.md$/, "", b)
         if ((b in sup) || f[10] == "end") continue
         st = (f[6] != "-" && length(key(f[6])) == 14 && key(f[6]) <= now) ? "expired" : "active"
-        print f[2] "\t" f[3] "\t" f[4] "\t" f[6] "\t" f[7] "\t" f[8] "\t" f[9] "\t" f[11] "\t" st "\t" f[12]
+        print f[2] "\t" f[3] "\t" f[4] "\t" f[6] "\t" f[7] "\t" f[8] "\t" f[9] "\t" f[11] "\t" st "\t" f[12] "\t" f[13]
       }
     }
   '
   return 0
 }
 
-# yt_standing_lines <yt_dir> <role> [<max lines>] -> the active entries that
-# apply to <role> as "- <name> (<scope>): <summary>", newest first, pending
+# yt_standing_lines <yt_dir> <role> [<max lines>] [full] -> the active entries
+# that apply to <role> as "- <name> (<scope>): <summary>" (with "full": the
+# whole body, for briefs, where a pending file is not on disk), newest first, pending
 # ones (yt_standing_pending) included and marked " [pending:<branch>]"; past
 # <max lines> one line "- ... <n> more: bin/ytstack-standing list". Roles
 # (docs/ux/coordinator-format.md, "Scope and roles"): coordinator gets every
@@ -774,7 +777,7 @@ yt_standing_fields() {
 # role at all. Role words in the scope: coordinator(s); lane(s), worker(s),
 # implementer(s); reviewer(s), review(s).
 yt_standing_lines() {
-  yt_standing_fields "$1" "" pending | awk -F '\t' -v role="${2:-coordinator}" -v max="${3:-0}" '
+  yt_standing_fields "$1" "" pending | awk -F '\t' -v role="${2:-coordinator}" -v max="${3:-0}" -v full="${4:-}" '
     function roles(s,  t, r) {
       t = " " tolower(s) " "; gsub(/[^a-z]+/, " ", t); r = ""
       if (t ~ / (coordinator|coordinators)( |$)/) r = r "c"
@@ -787,7 +790,8 @@ yt_standing_lines() {
     role != "coordinator" && rs != "" && index(rs, substr(role, 1, 1)) == 0 { next }
     { n++; if (max > 0 && n > max) { more++; next }
       b = $1; sub(/\.md$/, "", b)
-      print "- " b " (" $3 "): " ($8 == "-" ? "(no text)" : $8) ($10 ~ /^pending:/ ? " [" $10 "]" : "") }
+      t = (full == "full" && $11 != "-") ? $11 : $8
+      print "- " b " (" $3 "): " (t == "-" ? "(no text)" : t) ($10 ~ /^pending:/ ? " [" $10 "]" : "") }
     END { if (more) print "- ... " more " more: bin/ytstack-standing list" }
   '
   return 0

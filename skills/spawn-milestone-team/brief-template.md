@@ -1,5 +1,5 @@
 <!-- Skeleton of a worker brief. `bin/ytstack-brief render` fills the {{MARKERS}} from the plan and drops these comment lines. -->
-<!-- By hand: replace each marker with the named part of the plan (CONTRACT: the body of skills/minimal-code/SKILL.md; KIND and COMMIT_RULE: the sentences below for the lane's kind; STANDING: the active entries of .ytstack/standing/ whose scope names lanes, for a review reviewers, or no role, one line each, as `yt_standing_lines` prints them) and leave out a section whose marker has no value (Lens, Standing instructions, Gates, Git). The first line, "# Brief: <ref> (<project>)", is the marker hooks/pre-tool-use-agent looks for in a dispatch. -->
+<!-- By hand: replace each marker with the named part of the plan (CONTRACT: the body of skills/minimal-code/SKILL.md; KIND and COMMIT_RULE: the sentences below for the lane's kind; STANDING: the active entries of .ytstack/standing/ whose scope names lanes, for a review reviewers, or no role, pending ones included, one line each with the whole body, as `yt_standing_lines <dir> <role> 0 full` prints them) and leave out a section whose marker has no value (Lens, Standing instructions, Gates, Git). The first line, "# Brief: <ref> (<project>)", is the marker hooks/pre-tool-use-agent looks for in a dispatch. -->
 <!-- What stands in for a part the plan does not have: -->
 <!-- no-verification: No verification command in the plan. Stop and report this as a blocker. -->
 <!-- no-spec-impact: not stated in the plan -->
@@ -62,7 +62,7 @@ Other plans, summaries and the history in STATE.md are not needed for this task.
 
 {{STANDING}}
 
-The human gave these once and for all; they override the defaults of this brief. The full text of each is its file in `.ytstack/standing/`.
+The human gave these once and for all; they override the defaults of this brief. Each line is the whole instruction; one marked `pending` is recorded but its pull request is not merged yet, and it holds all the same.
 
 ## Verification
 

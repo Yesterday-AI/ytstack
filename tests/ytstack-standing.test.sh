@@ -263,16 +263,35 @@ has "a pending entry is in yt_standing_lines, marked" "keep-lanes-md-current (th
 L3=$( . "$ROOT/hooks/lib/git-ctx.sh"; yt_standing_lines "$M/.ytstack" lane )
 hasnt "the role filter applies to pending entries" "keep-lanes-md-current" "$L3"
 
+OUT=$(bash "$BIN" -C "$M" add "Review every lane once. A second review only for the fix." --scope "every lane" 2>&1)
+L4=$( . "$ROOT/hooks/lib/git-ctx.sh"; yt_standing_lines "$M/.ytstack" lane 0 full )
+has "full mode (the briefs) carries every sentence of a pending entry" "Review every lane once. A second review only for the fix. [pending:standing/$DAY]" "$L4"
+
+echo "# a repository whose default branch is master, without origin/HEAD"
+BAREM="$TMP/master.git"; git init -q --bare -b master "$BAREM"
+MM="$TMP/mm"; git init -q -b master "$MM"
+( cd "$MM" || exit 2
+  git config url."$BAREM".insteadOf https://github.com/acme/legacy.git
+  git remote add origin https://github.com/acme/legacy.git
+  mkdir .ytstack && printf 'x\n' > .ytstack/STATE.md && git add -A && git commit -qm seed && git push -q -u origin master ) >/dev/null 2>&1
+git -C "$MM" symbolic-ref -q refs/remotes/origin/HEAD >/dev/null && git -C "$MM" symbolic-ref -d refs/remotes/origin/HEAD
+rm -f "$GH_FIX/log" "$GH_FIX/list.out"
+OUT=$(bash "$BIN" -C "$MM" add "Never merge on Fridays." --scope "the coordinator" 2>&1); EC=$?
+eq "master repository: add exits 0" 0 "$EC"
+has "the PR targets master" "--base master --head standing/$DAY" "$(cat "$GH_FIX/log" 2>/dev/null)"
+
 echo "# an earlier day's pending branch: supersede it, push it first"
 ( cd "$M" || exit 2; git switch -q -c standing/20200101 origin/main; mkdir -p .ytstack/standing
   printf -- '---\ngiven: 2020-01-01T10:00:00Z\nscope: every lane\nsupersedes:\nuntil: 2020-01-02T00:00Z\n---\n\nHold merges.\n' > .ytstack/standing/20200101T1000Z-hold.md
   git add -A && git commit -qm old && git switch -q main ) >/dev/null 2>&1
 git --git-dir="$BARE" rev-parse -q --verify standing/20200101 >/dev/null && bad "fixture: the old branch is unpushed" || ok "fixture: the old branch is unpushed"
 git --git-dir="$BARE" branch -q -D "standing/$DAY" 2>/dev/null; git -C "$M" branch -q -D "standing/$DAY" 2>/dev/null
-git -C "$XDG_STATE_HOME/ytstack/repos"/*/standing-worktree switch -q --detach 2>/dev/null
+MKEY=$( . "$ROOT/hooks/lib/git-ctx.sh"; yt_git_ctx "$M"; printf '%s' "$YT_REPO_KEY" )
+git -C "$XDG_STATE_HOME/ytstack/repos/$MKEY/standing-worktree" switch -q --detach 2>/dev/null
 git -C "$M" branch -q -D "standing/$DAY" 2>/dev/null; git -C "$M" update-ref -d "refs/remotes/origin/standing/$DAY"
 OUT=$(bash "$BIN" -C "$M" end 20200101T1000Z-hold --reason "the window passed" 2>&1); EC=$?
 eq "end of an entry on an earlier day's pending branch: exit 0" 0 "$EC"
+[ "$EC" -eq 0 ] || printf '%s\n' "$OUT" | sed 's/^/    | /'
 has "the earlier unpushed branch was pushed first" "pushed the earlier standing branch standing/20200101" "$OUT"
 git --git-dir="$BARE" rev-parse -q --verify standing/20200101 >/dev/null && ok "and is on origin now" || bad "and is on origin now"
 has "the new day's branch carries the earlier entry" "20200101T1000Z-hold.md" "$(git --git-dir="$BARE" ls-tree --name-only "standing/$DAY" -- .ytstack/standing/)"

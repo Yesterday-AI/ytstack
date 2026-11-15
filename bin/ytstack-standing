@@ -140,7 +140,7 @@ cmd_list() {
     printf '; human prompts since: not counted (no coordinate session marker; the coordinate preamble writes it)\n'
   fi
 
-  while IFS="$(printf '\t')" read -r name given scope until ucond ucheck check summary state src; do
+  while IFS="$(printf '\t')" read -r name given scope until ucond ucheck check summary state src _body; do
     [ -n "$name" ] || continue
     pend=""; case "$src" in pending:*) pend=" (pending: ${src#pending:})" ;; esac
     why=$(norun "$name" "$src")
@@ -232,8 +232,13 @@ publish() {
   [ -n "$(git -C "$TOP" remote 2>/dev/null | head -1)" ] || die "no remote: use --here, or add origin"
   day=$(date -u +%Y%m%d); br="standing/$day"
   base="${A_BASE:-}"
-  [ -n "$base" ] || base=$(git -C "$TOP" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')
-  [ -n "$base" ] || base=main
+  if [ -z "$base" ]; then
+    # origin/HEAD is often missing in a clone made by hand: ask the remote,
+    # then fall back to the local refs (origin/main, origin/master, main, master).
+    base=$(git -C "$TOP" ls-remote --symref origin HEAD 2>/dev/null | sed -n 's#^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$#\1#p' | head -1)
+    [ -n "$base" ] || { base=$(yt_standing_default_ref "$TOP"); base=${base#refs/remotes/origin/}; base=${base#refs/heads/}; }
+    [ -n "$base" ] || die "no default branch found; pass --base <branch>"
+  fi
   git -C "$TOP" fetch -q origin "$base" 2>/dev/null || echo "ytstack-standing: fetch failed, using the local refs" >&2
   git -C "$TOP" fetch -q origin "$br:refs/remotes/origin/$br" 2>/dev/null || true
   yt_state_wt_dir >/dev/null

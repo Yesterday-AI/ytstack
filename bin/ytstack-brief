@@ -303,7 +303,7 @@ EOF
   # The standing instructions for this kind of lane (issue #74): the active
   # entries whose scope names lanes (a review: reviewers) or no role at all.
   x=lane; [ "$lane" != review ] || x=reviewer
-  B_STANDING=$(yt_standing_lines "$YT_DIR" "$x")
+  B_STANDING=$(yt_standing_lines "$YT_DIR" "$x" 0 full)
 
   # What the worker may do: the kind's fixed sentences, then its commit rule,
   # which the Git section repeats. The inserted values are a validated
