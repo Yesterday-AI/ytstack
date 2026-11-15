@@ -10,7 +10,7 @@
 #
 # list     one line per slice of the milestone (default: current_milestone of
 #          STATE.md; with "none" the highest M###-ROADMAP.md that is not done,
-#          dropped or shipped-informally): lane, state, detail, tab separated.
+#          dropped, shipped-informally or backlog): lane, state, detail, tab separated.
 #            done     "[x]" in the milestone roadmap, or a merged row in LANES.md
 #            claimed  a held row in LANES.md; detail: its "Claimed by" cell
 #            blocked  a "**Blocked by:**" entry of the slice plan is not done
@@ -178,7 +178,8 @@ open_table() {
 open_milestone() {
   yt_find_artifacts "$YT_DIR" 'M[0-9][0-9][0-9]-ROADMAP.md' | while IFS= read -r f; do
     case "$(sed -n 's/^status:[ ]*\([^ ]*\).*/\1/p' "$f" | head -1)" in
-      done|dropped|shipped-informally) ;;
+      # backlog: planned, but not to be worked on until it is made current.
+      done|dropped|shipped-informally|backlog) ;;
       *) basename "$f" -ROADMAP.md ;;
     esac
   done | sort -r | head -1
