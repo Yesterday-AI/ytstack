@@ -31,7 +31,7 @@ verification: passed
 
 ## Verification
 
-Command: `bin/ytstack-check; echo "check exit $?"; grep -c '—' QUICKSTART.md` -- `check exit 2`, `OK (with 9 warning[s])`, 0 `[fail]` lines; em-dash count `0`.
+Command: `bin/ytstack-check; echo "check exit $?"; grep -c "$(printf '\342\200\224')" QUICKSTART.md` -- `check exit 2`, `OK (with 9 warning[s])`, 0 `[fail]` lines; em-dash count `0`.
 
 Also run once: the `REVIEW.md` example in a throwaway fixture (`/tmp/m031-s04-fixture.sh`): `ytstack-risk check` exit 0, `review policy ok: 1 lens(es), 1 own reviewer(s)`; `ytstack-watch release` without a "Release" section exit 4. The dry route on this repository's PR #64 (`--pr 64 --base d39267c --head 6928c8c`): `route: person`, exit 10, with `round: none` and three `reason:` lines, the shape the guide describes.
 

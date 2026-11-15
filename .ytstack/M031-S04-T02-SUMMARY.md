@@ -31,6 +31,6 @@ verification: passed
 
 ## Verification
 
-Command: `bin/ytstack-check; echo "check exit $?"; grep -c '—' QUICKSTART.md` -- `check exit 2`, `OK (with 9 warning[s])`, 0 `[fail]` lines; em-dash count `0`. `claude plugin update --help` and `claude plugin marketplace --help` list `update`.
+Command: `bin/ytstack-check; echo "check exit $?"; grep -c "$(printf '\342\200\224')" QUICKSTART.md` -- `check exit 2`, `OK (with 9 warning[s])`, 0 `[fail]` lines; em-dash count `0`. `claude plugin update --help` and `claude plugin marketplace --help` list `update`.
 
 Not checked: an actual plugin update; command and link existence is checked in T03.
