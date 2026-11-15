@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-15T06:00:00Z
-current_milestone: none
+last_updated: 2026-11-15T12:00:00Z
+current_milestone: M034
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-11-15, M034):** M034 planned (M, 3 slices): the session's current todo item and n/m in each host's status line, optional herdr and terminal-title sinks. Research: `docs/research/2026-11-15-sticky-session-status.md`. Next action: run `ytstack:slice-milestone` for M034.
 
 **Status (2026-11-15, 0.11.0):** Release of M031 (PR #66, `5654d39`), M032 and M033 (PR #67, `763aed9`). Both PRs got an independent adversarial review before merge (6 and 8 findings, all fixed with tests). Issues #53, #54, #55, #61 are covered; #57 was in 0.10.0.
 
