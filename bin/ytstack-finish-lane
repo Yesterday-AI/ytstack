@@ -373,7 +373,8 @@ VIEW_JQ='
         .name, (if .status == "COMPLETED" then .conclusion else .status end) ]
     end | "check\t" + (map(tostring) | join("\t"))),
   (.headRefOid as $h | [ (.reviews // [])[] | select(.commit.oid == $h and .state != "PENDING") ] |
-    (group_by(.author.login)[] | max_by(.submittedAt) | "review\t\(.state)\t\(.author.login)"),
+    # A comment does not lift a changes request of the same reviewer (PR #92 review).
+    ([ .[] | select(.state != "COMMENTED") ] | group_by(.author.login)[] | max_by(.submittedAt) | "review\t\(.state)\t\(.author.login)"),
     (max_by(.submittedAt) // empty | "newest\t\(.author.login)", ((.body // "") | split("\n")[] | "body\t" + .)))
 '
 # shortcut: the first 100 review threads; more than that fails the gate instead

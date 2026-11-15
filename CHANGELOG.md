@@ -9,14 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Focus PRs and STALL lines** (issue #91): a pull request that sat in a
+  blocking review, a conflict or a red check with no new head for 15 minutes
+  now gets a `STALL 1` mark, and `STALL 2` after the next 15, instead of
+  looking like every other waiting PR. The mark names the lane that holds it
+  and that lane's last commit, from `LANES.md`
+  (`ytstack-frontier owner --pr N`, new), so "still working" and "gone" read
+  differently. Both watchers have it: the PR watch's status block (policy key
+  `stall_minutes`) and `ytstack-watch --stall MINUTES`. A PR other lanes wait
+  on can be a focus PR: `ytstack-pr-watch register --pr N --focus` reads it
+  every tick and lists it first; `ytstack-watch --focus N` reads it every 20
+  seconds. `coordinate` 0.6.3, Step 7: on `STALL 1` ask the lane once for an
+  ETA, on `STALL 2` release the lane and give the branch to a fresh worker
+  instead of relaying the same instruction again.
 - **Who decides** (issue #78): a coordinator decides what no plan line and
   no standing entry reserves, and records it in `DECISIONS.md`. A person
   gets only what `escalate:` in `PREFERENCES.md` lists (default: a rule or
   concept violation, a plan deviation, an irreversible or production step
   without a plan line, a secret, spend) and what is `reserved`; a plan line
   reserves only when it says verdict, approval or sign-off. The
-  `coordinate` preamble prints `ESCALATE`, Step 8 carries the default, and
-  the operating checklist has the rule as line 6.
+  `coordinate` preamble (0.7.1) prints `ESCALATE`, Step 8 carries the
+  default, and the operating checklist has the rule as line 6.
 - **Question class and context gate** (issue #78): question files carry
   `class: escalation|info` and `because:`. `ytstack-questions new --decides`
   needs `--because <item>` and refuses an item that is not on the list;
@@ -24,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refuses a question whose Context has no `Source:` or no `Purpose:` line.
   Files without `class` stay valid and read as escalation. `ytstack-upkeep
   --question` writes its report as `class: info`; `reassess-roadmap`,
-  `lesson` and `review-lessons` write theirs as `reserved`.
+  `lesson`, `review-lessons` and `handover-step` write theirs with an item.
 
 - **Progress per phase** (issue #81): `ytstack-status --phases [--json]`
   prints done, in review and total per milestone and in total. When a total
