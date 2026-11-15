@@ -1190,3 +1190,31 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - A non-interactive run is detected by the script, not left to the agent: `mode` prints `suggest` with a `note:` when `YTSTACK_NON_INTERACTIVE`, `OPENCLAW_SESSION`, `CLAUDE_AGENT_TEAM_MEMBER` or `CI` is set (PR #67 review).
 
 **Supersedes:** None.
+
+## 2026-11-15: The session's todo state is shown through each host's status line; herdr and the terminal title are optional sinks; no plugin UI module (M034 plan)
+
+**Context:** The maintainer wants every session's current todo item visible at all times, so that switching between sessions shows at once what each one does. Research (`docs/research/2026-11-15-sticky-session-status.md`): Claude Code's status line takes any number of lines and can read the session's task files; Kimi renders the first line only; Codex has built-in status items only (`task-progress`); herdr's `pane report-metadata` attaches a title and tokens to a pane; Claude Code also lets a plugin draw a band above the prompt through a JavaScript hooks module. tmux is not wanted; herdr is in use here but not everywhere.
+
+**Options considered:**
+- A) The host's status line as the generic surface, fed by one todo reader per host; herdr and the terminal title as optional sinks.
+- B) A plugin UI module (the band above the prompt): no wiring by the user, but Claude-only and the first JavaScript in ytstack.
+- C) herdr only.
+
+**Chose:** A. B stays open in the research note; C fails for everyone without herdr.
+
+**Reason:** Most CLIs have a status line; it is the one surface that works across hosts. A mod adds a runtime and a host-specific surface for one feature. herdr is the maintainer's setup, not the users'.
+
+**How to apply:**
+- ytstack ships the script, the hook and the instructions; it never edits a host's settings file (status line commands, `CLAUDE_CODE_ENABLE_TODO_TOOLS`, Codex `[tui]`).
+- A sink beyond the status line is off by default and switched on in `~/.ytstack/config`.
+- The first line of the todo segment carries the essentials, because some hosts render only one line.
+
+**Supersedes:** None. Extends the status line segment of 0.5.0 (issue #31).
+
+## 2026-11-15: A roadmap can be parked with `status: backlog`
+
+**Context:** The maintainer planned M034 and put it "on the backlog". With `current_milestone: none`, `ytstack-frontier` picks the highest roadmap that is not `done`, `dropped` or `shipped-informally`, so a parked milestone would have been dispatched.
+
+**Chose:** A roadmap status `backlog` (frontmatter and the global ROADMAP column): planned, kept, not picked by `ytstack-frontier` while no milestone is current. Making it current sets `status: planned` and `current_milestone` again.
+
+**Supersedes:** None. Extends the roadmap state values in `docs/ux/skill-structure.md`.

@@ -3,7 +3,7 @@ project: ytstack
 last_updated: 2026-11-14T13:58:34Z
 total_milestones: 24
 completed_milestones: 21
-current_milestone: none (M020 done 2026-11-14; M014 reserved; M011 and M013 absorbed into M019)
+current_milestone: none (M033 done 2026-11-15, released in 0.11.0; M034 planned and on the backlog; M014 reserved; M011 and M013 absorbed into M019)
 ---
 
 # ytstack Roadmap
