@@ -12,6 +12,9 @@ blocks: gate G01 (M024-S02, archived 2026-11-15)
 
 ## Context
 
+Source: gate G01 of M024 (`archive/2026-11-15/M024/M024-S02-PLAN.md`, line 28) and `STATE.md`
+Purpose: decide whether G01 closes once a context-mcp lane went fully through `finish-lane`, which the maintainer agreed to wait for
+
 Gate G01 (`archive/2026-11-15/M024/M024-S02-PLAN.md`, line 28): "The pipeline works against a real pull request host | decides: the operator | how: the first lane of a consumer project finished with it, receipt in that project | lapses: never". Evidence so far, all from context-mcp (meinKontext): a coordinator ran `coordinate` for days with dozens of subagent lanes and about 40 merged PRs on 2026-11-14 (issue #54); PR watch registration and delivery worked from 0.9.2 on (issue #61 comment); `review-lessons` turned a merged PR's finding into a reviewer checklist line; `ytstack-risk route` was adopted but routed every change to `person` until 0.11.0 read the round from the host. Not seen yet: a lane that went through `finish-lane` end to end with an `unattended` merge, and a receipt for it in that project.
 
 ## Options
