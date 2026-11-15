@@ -1507,3 +1507,19 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** This replaces the first two "How to apply" points of "2026-11-15: `finish-lane`'s route checks the spec delta; a gap routes to a person (issue #75)": a plan of the range that names an area is still checked with `impact` and the report cannot override it, but a plan no longer stands in for areas its task did not touch.
 
 **Supersedes:** None. Narrows the entry named above.
+
+## 2026-11-15: The open-PR cap limits opening, never a merge; origin's STATE.md is read only when the checkout is strictly behind and unedited (review of PR #94)
+
+**Context:** The independent review of PR #94 found two flaws. With closing a lane's pull request forbidden, an `open-prs` gate on `merge` deadlocks: at the cap nothing merges, so the count never falls. And `yt_behind_origin` replaced a diverged or locally edited `STATE.md` with origin's copy, and gave an empty pointer in user scope.
+
+**Options considered:**
+- Cap: keep it a merge gate and exclude the PR being merged; or move it to opening and dispatching.
+- Behind: read origin's copy whenever behind; or only when it is safe.
+
+**Chose:** The cap counts pull requests ready for review and limits what is opened and dispatched, never a merge (merging lowers the count). `ytstack-finish-lane open-pr --max-open N` opens a draft at the cap and says so; `gates` and `merge` have no cap. The lane is `parked`; `gh pr ready <N>` under the cap, `gh pr ready <N> --undo` takes a parked one out of the count; nothing is closed. Origin's `STATE.md` is read only when HEAD is an ancestor of `origin/<default>`, the range changed `STATE.md` and the working tree's copy equals HEAD's; diverged or edited with an origin change gives "N ahead, M behind" and the local file, without `--ff-only`. Without origin's copy (user scope, untracked) the behind logic stays out entirely.
+
+**Reason:** A gate that only a forbidden action can open is a deadlock. Origin's copy is only a better truth than the local one when the local one is an unedited ancestor.
+
+**How to apply:** While the ready-for-review count is at the cap, the coordinator dispatches no new implement lane.
+
+**Supersedes:** Narrows "2026-11-15: Hooks read a stale checkout from origin ..." (the behind conditions; "the `open-prs` gate counts pull requests ready for review" becomes the cap on opening).

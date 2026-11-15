@@ -73,9 +73,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`parked` lane status**: `ytstack-frontier set <lane> --status parked`
   holds a lane whose pull request waits open, for a cap or a person.
 - **A checkout behind origin is named** (issue #82): on the default branch
-  behind `origin/<default>` (local refs, no fetch), SessionStart and Stop say
+  strictly behind `origin/<default>` (local refs, no fetch), when origin
+  changed `STATE.md` and the local one has no edit, SessionStart and Stop say
   "N commit(s) behind" and read the pointer and Next action from origin's
-  `STATE.md`. STATE lint W10 names an active task whose `last_updated` is
+  `STATE.md`; a diverged or locally edited checkout keeps its own file and
+  SessionStart says "N ahead, M behind". STATE lint W10 names an active task whose `last_updated` is
   more than three days old (`YT_POINTER_STALE_DAYS`).
 - **A checks inventory in `REVIEW.md`** (issue #75): a `## Checks` section
   lists the machine checks a reviewer can rely on, one line each
@@ -104,12 +106,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   newest automatic one is listed as older.
 - `coordinate` 0.7.0: a hard gate against closing, reopening to retrigger or
   deleting the branch of a lane's pull request; Step 5 starts every round
-  with `ytstack-frontier check` and acts on each `stale:` line; Step 6 parks
-  a lane that waits for the cap; Step 12 names the compaction line. The
+  with `ytstack-frontier check` and acts on each `stale:` line; Step 6: a cap
+  on open pull requests counts those ready for review and limits opening and
+  dispatching, never a merge; Step 12 names the compaction line. The
   operating checklist has two more lines.
-- `finish-lane` 0.7.0: the same hard gate; the `open-prs` gate of
-  `ytstack-finish-lane` counts pull requests ready for review, drafts do not
-  count, and a lane waiting for it is `parked`.
+- `finish-lane` 0.7.0: the same hard gate. The cap moved from `gates` and
+  `merge` to `ytstack-finish-lane open-pr --max-open`, which opens a draft at
+  the cap (drafts do not count); the lane is `parked` until `gh pr ready`.
+  `gates --max-open` is gone: a gate that only closing could open would
+  deadlock.
 
 - **PR watch stays on your own PRs and says less** (issue #85).
   `ytstack-pr-watch register --all-open` registers only open PRs you authored
