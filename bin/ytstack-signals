@@ -2,13 +2,26 @@
 # ytstack signals: what production reported, recorded once, and the record of
 # an incident. Format: docs/ux/signal-format.md.
 #
-#   ytstack-signals [-C DIR] new --source NAME --key KEY --title TEXT [--kind KIND] [--read-at TIME] < sighting
+#   ytstack-signals [-C DIR] new --source NAME --key KEY --title TEXT [--kind KIND] [--target TARGET] [--read-at TIME] < sighting
 #   ytstack-signals [-C DIR] list [--state open|planned|fixed|dismissed|all]
-#   ytstack-signals [-C DIR] set <id> --state STATE [--ref REF] [< reason]
+#   ytstack-signals [-C DIR] set <id> [--state STATE] [--ref REF] [--target TARGET] [< reason]
 #   ytstack-signals [-C DIR] incident new --title TEXT [--severity TEXT]
 #   ytstack-signals [-C DIR] incident list [--state open|mitigated|closed|all]
+#   ytstack-signals [-C DIR] lesson new --area AREA --class SLUG --title TEXT --target TARGET [--incident ID] [--read-at TIME] < what happened
+#   ytstack-signals [-C DIR] lesson list [--state open|planned|fixed|dismissed|all] [--since TIME]
 #   ytstack-signals [-C DIR] review-checked OWNER/NAME#N [MERGE_SHA] [--at TIME] [--tally TALLY]
 #   ytstack-signals [-C DIR] check
+#
+# A lesson (kind lesson) is what an incident of any class taught: the key is
+# lesson:<area>:<class-slug> (area production, ci, evidence, review or
+# process), the source is the area, the sighting is what happened, and the
+# target is where the lesson lives: check:<path>, knowledge:<path>[#anchor],
+# contract:<path>[#anchor] or proposal:<ref>. A repeat of the class raises the
+# count; a repeat after the lesson was fixed is a regression. lesson new
+# --incident links the lesson into an incident record's "lesson:" line. lesson
+# list prints id, state, area, class, count, sightings since --since ("-"
+# without it), target, ref, reopens, title; without --state the open and the
+# planned ones.
 #
 # --kind review records a review-bot finding the project's own reviewers
 # missed (bin/ytstack-review-escapes): no "Signals" source is needed, the key
@@ -37,12 +50,16 @@
 #          ref, reopens, key, title (tab separated); without --state the open
 #          and the planned ones
 #   set    0 "<id> <state>"; 1 unknown id, dismissed without a reason on stdin,
-#          planned without a reference, or a state other than fixed while
-#          another finding with the key is newer or not fixed; 64 usage
+#          planned without a reference, a state other than fixed while
+#          another finding with the key is newer or not fixed, a --target on
+#          a finding that is no lesson, or a lesson set fixed while its target
+#          is a proposal or a path that does not exist; 64 usage
 #   incident new   0 the path of the new record; 1 no .ytstack directory, or a
 #                  record of that day with that title exists; 64 usage
 #   incident list  0; one line per record: id, state, opened, severity, title
 #                  (tab separated); without --state the ones that are not closed
+#   lesson new     as new; 1 also for an --incident that has no record; 64 usage
+#   lesson list    0; one line per lesson (see above)
 #   review-checked  with MERGE_SHA (and optionally --tally): 0 "checked <pr>", or "already <its line>"
 #                   when the pull request has a line; without: 0 and its line,
 #                   1 when it has none; 1 no .ytstack directory; 64 usage
@@ -57,8 +74,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT/hooks/lib/git-ctx.sh"
 
 STATES='open|planned|fixed|dismissed'
-KINDS='errors|performance|alerts|logs|review'
+KINDS='errors|performance|alerts|logs|review|lesson'
 ISTATES='open|mitigated|closed'
+AREAS='production|ci|evidence|review|process'
+TTYPES='check|knowledge|contract|proposal'
 WORD='letters, digits and . _ : / @ + = -'
 TAB=$'\t'
 NL='
@@ -68,9 +87,9 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '5,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '5,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "ytstack-signals: $*" >&2; exit 1; }
-case "$CMD" in new|list|set|incident|review-checked|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+case "$CMD" in new|list|set|incident|lesson|review-checked|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 # The resolver falls back to $PWD for a missing directory: refuse it here.
 [ -d "$DIR" ] || { echo "ytstack-signals: -C '$DIR' is not a directory" >&2; exit 64; }
 
@@ -104,9 +123,43 @@ review_key() {
   done
   return 0
 }
+# slug <value>: a lowercase slug (a-z, 0-9, -), starting with a letter or digit.
+slug() { case "$1" in ""|[!a-z0-9]*|*[!a-z0-9-]*) return 1 ;; esac; return 0; }
+# lesson_key <key>: lesson:<area>:<class-slug>, the area one of AREAS.
+lesson_key() {
+  local rest=${1#lesson:} area cls
+  [ "$rest" != "$1" ] || return 1
+  area=${rest%%:*}; cls=${rest#*:}
+  [ "$cls" != "$rest" ] && listed "$area" "$AREAS" && slug "$cls"
+}
+# target_ok <target>: <type>:<where>, the type one of TTYPES, the where one
+# word. Prints why not on stderr. AGENTS.md and CLAUDE.md are never a target.
+target_ok() {
+  local t=${1%%:*} w=${1#*:} p
+  case "$w" in ""|*[!A-Za-z0-9._:/@+=#-]*) w="" ;; esac
+  if [ "$w" = "" ] || [ "$w" = "$1" ] || ! listed "$t" "$TTYPES"; then
+    echo "ytstack-signals: --target takes <check|knowledge|contract|proposal>:<where>, the where one word of $WORD and #" >&2
+    return 1
+  fi
+  p=${w%%#*}; p=${p##*/}
+  case "$p" in
+    AGENTS.md|CLAUDE.md)
+      echo "ytstack-signals: a lesson never lives in $p: route it to a check, a KNOWLEDGE.md entry or the lane contract" >&2
+      return 1 ;;
+  esac
+  return 0
+}
+# target_path <target>: the file a check, knowledge or contract target names,
+# from the root of the checkout; nothing for a proposal.
+target_path() {
+  local w=${1#*:}
+  case "$1" in check:*|knowledge:*|contract:*) ;; *) return 0 ;; esac
+  w=${w%%#*}
+  case "$w" in /*) printf '%s\n' "$w" ;; *) printf '%s\n' "$YT_TOPLEVEL/$w" ;; esac
+}
 
 # rows: one line per finding file, in id order, tab separated, "-" for an empty
-# value: id state source kind count last_seen ref reopens key first_seen file title
+# value: id state source kind count last_seen ref reopens key first_seen file title target
 rows() {
   local f
   [ -n "$SDIR" ] || return 0
@@ -121,7 +174,7 @@ rows() {
       if (file == "") return
       printf "%s\t%s\t%s\t%s\t%s\t", v("id"), v("state"), v("source"), v("kind"), v("count")
       printf "%s\t%s\t%s\t%s\t%s\t", v("last_seen"), v("ref"), v("reopens"), v("key"), v("first_seen")
-      printf "%s\t%s\n", file, (title == "" ? "-" : title)
+      printf "%s\t%s\t%s\n", file, (title == "" ? "-" : title), v("target")
     }
     FNR == 1 { out(); file = FILENAME; split("", V); title = ""; fm = ($0 == "---"); next }
     fm && $0 == "---" { fm = 0; next }
@@ -231,7 +284,7 @@ edit() {
 
 # ---- new -----------------------------------------------------------------------
 cmd_new() {
-  local src="" key="" title="" kind="" at="" sighting block r n=0 f id slug reopens=none
+  local src="" key="" title="" kind="" at="" target="" sighting block r n=0 f id slug reopens=none tline=""
   local hit="" hst="" hcnt="" hlast="" hfile=""
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || { usage >&2; return 64; }
@@ -240,11 +293,24 @@ cmd_new() {
       --key)     key=$2 ;;
       --title)   title=$(oneline "$2") ;;
       --kind)    kind=$2 ;;
+      --target)  target=$2 ;;
       --read-at) at=$2 ;;
       *) usage >&2; return 64 ;;
     esac
     shift 2
   done
+  # A lesson carries where it lives; nothing else does.
+  if [ "$kind" = lesson ]; then
+    [ -n "$target" ] || { echo "ytstack-signals: a lesson needs --target: where the lesson lives" >&2; return 64; }
+    target_ok "$target" || return 64
+    lesson_key "$key" \
+      || { echo "ytstack-signals: a finding of kind lesson has the key lesson:<area>:<class-slug>, the area one of $AREAS" >&2; return 64; }
+    [ "$src" = "$(printf '%s' "$key" | cut -d: -f2)" ] \
+      || { echo "ytstack-signals: the source of a lesson is the area of its key" >&2; return 64; }
+    tline="target: $target$NL"
+  elif [ -n "$target" ]; then
+    echo "ytstack-signals: --target is for --kind lesson only" >&2; return 64
+  fi
   [ -n "$src" ] && [ -n "$key" ] && [ -n "$title" ] || { usage >&2; return 64; }
   case "$src" in
     [!a-z0-9]*|*[!a-z0-9-]*) echo "ytstack-signals: --source takes the name of a signal source: a lowercase slug (a-z, 0-9, -)" >&2; return 64 ;;
@@ -304,8 +370,8 @@ EOF
   slug=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed 's/--*/-/g; s/^-//' | cut -c1-48 | sed 's/-$//')
   f="$SDIR/$id-${slug:-finding}.md"
   TMPF="$f.tmp"
-  printf -- '---\nid: %s\nkey: %s\nsource: %s\nkind: %s\nstate: open\nfirst_seen: %s\nlast_seen: %s\ncount: 1\nref: none\nreopens: %s\n---\n\n# %s -- %s\n\n## What was seen\n\n%s\n\n## Assessment\n\n## Next\n' \
-    "$id" "$key" "$src" "$kind" "$at" "$at" "$reopens" "$id" "$title" "$block" > "$TMPF" && mv "$TMPF" "$f" || die "cannot write $f"
+  printf -- '---\nid: %s\nkey: %s\nsource: %s\nkind: %s\nstate: open\nfirst_seen: %s\nlast_seen: %s\ncount: 1\nref: none\nreopens: %s\n%s---\n\n# %s -- %s\n\n## What was seen\n\n%s\n\n## Assessment\n\n## Next\n' \
+    "$id" "$key" "$src" "$kind" "$at" "$at" "$reopens" "$tline" "$id" "$title" "$block" > "$TMPF" && mv "$TMPF" "$f" || die "cannot write $f"
   TMPF=""
   if [ "$reopens" = none ]; then echo "new $id $f"; else echo "regression $id $f"; fi
 }
@@ -328,19 +394,22 @@ cmd_list() {
 
 # ---- set -----------------------------------------------------------------------
 cmd_set() {
-  local id="${1:-}" st="" ref="" reason="" all r cur oldref key f other
+  local id="${1:-}" st="" ref="" target="" reason="" all r cur oldref key f other kind oldtarget p
   case "$id" in F[0-9][0-9][0-9]) shift ;; *) usage >&2; return 64 ;; esac
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || { usage >&2; return 64; }
     case "$1" in
-      --state) st=$2 ;;
-      --ref)   ref=$2 ;;
+      --state)  st=$2 ;;
+      --ref)    ref=$2 ;;
+      --target) target=$2 ;;
       *) usage >&2; return 64 ;;
     esac
     shift 2
   done
-  listed "$st" "$STATES" || { echo "ytstack-signals: --state takes one of: $STATES" >&2; return 64; }
+  [ -n "$st" ] || [ -n "$target" ] || { usage >&2; return 64; }
+  [ -z "$st" ] || listed "$st" "$STATES" || { echo "ytstack-signals: --state takes one of: $STATES" >&2; return 64; }
   [ -z "$ref" ] || word "$ref" || { echo "ytstack-signals: --ref takes one word of $WORD" >&2; return 64; }
+  [ -z "$target" ] || target_ok "$target" || return 64
   if [ "$st" = dismissed ]; then
     [ -t 0 ] || reason=$(oneline "$(cat)")
     [ -n "$reason" ] || die "dismissed needs a reason on stdin: why this is not a finding"
@@ -350,9 +419,22 @@ cmd_set() {
   all=$(rows)
   r=$(printf '%s\n' "$all" | awk -F'\t' -v id="$id" '$1 == id && !n++ { print }')
   [ -n "$r" ] || die "no finding $id in $SDIR"
-  IFS=$TAB read -r _ cur _ _ _ _ oldref _ key _ f _ <<EOF
+  IFS=$TAB read -r _ cur _ kind _ _ oldref _ key _ f _ oldtarget <<EOF
 $r
 EOF
+  [ -n "$st" ] || st=$cur
+  if [ -n "$target" ] && [ "$kind" != lesson ]; then die "$id is of kind $kind: only a lesson has a target"; fi
+  if [ "$kind" = lesson ] && [ "$st" = fixed ]; then
+    # A fixed lesson lives somewhere a session finds it: in a check, a knowledge entry or the contract.
+    [ -n "$target" ] || target=$oldtarget
+    case "$target" in
+      proposal:*) die "$id stays '$cur': its target $target is a proposal; a fixed lesson lives in a check, a knowledge entry or the contract (--target)" ;;
+      check:*|knowledge:*|contract:*)
+        p=$(target_path "$target")
+        [ -f "$p" ] || die "$id stays '$cur': its target names ${p#"$YT_TOPLEVEL"/}, which does not exist" ;;
+      *) die "$id has no valid target ('$target'); pass --target" ;;
+    esac
+  fi
   if [ "$st" = planned ] && [ -z "$ref" ]; then
     case "$oldref" in none|-) die "planned needs --ref: the task, quick task or question the finding became" ;; esac
   fi
@@ -364,6 +446,7 @@ EOF
   fi
   YTS_SET="state=$st"
   [ -z "$ref" ] || YTS_SET="$YTS_SET${NL}ref=$ref"
+  [ -z "$target" ] || YTS_SET="$YTS_SET${NL}target=$target"
   [ "$st" != dismissed ] || YTS_NOTE="- $(now) -- dismissed: $reason"
   edit "$f"
   echo "$id $st"
@@ -391,7 +474,7 @@ incident_new() {
   # A record is never overwritten: it is resumed.
   if [ -e "$f" ] || [ -L "$f" ]; then die "$f exists: resume that record, or give the new incident another title"; fi
   TMPF="$f.tmp"
-  printf -- '---\nid: %s\nstate: open\nopened: %s\nmitigated: none\nclosed: none\nseverity: %s\nroot_cause: none\n---\n\n# Incident -- %s\n\n## What is seen\n\n## Timeline\n\n- %s -- record opened\n\n## Hypotheses\n\n## Proposed mitigations\n\n## Decisions\n\n## After\n' \
+  printf -- '---\nid: %s\nstate: open\nopened: %s\nmitigated: none\nclosed: none\nseverity: %s\nroot_cause: none\nlesson: none\n---\n\n# Incident -- %s\n\n## What is seen\n\n## Timeline\n\n- %s -- record opened\n\n## Hypotheses\n\n## Proposed mitigations\n\n## Decisions\n\n## After\n' \
     "${at%%T*}-${slug:-incident}" "$at" "${sev:-unstated}" "$title" "$at" > "$TMPF" && mv "$TMPF" "$f" || die "cannot write $f"
   TMPF=""
   printf '%s\n' "$f"
@@ -440,6 +523,92 @@ cmd_incident() {
   case "$sub" in
     new)  incident_new "$@" ;;
     list) incident_list "$@" ;;
+    *) usage >&2; return 64 ;;
+  esac
+}
+
+# ---- lesson --------------------------------------------------------------------
+# link_incident <record> <id>: the lesson id into the record's "lesson:" line
+# (a comma separated list; "none" is replaced, a missing line is added at the
+# end of the frontmatter). Called under the lock.
+link_incident() {
+  TMPF="$1.tmp"
+  awk -v id="$2" '
+    NR == 1 && $0 == "---" { fm = 1; print; next }
+    fm && $0 == "---" { if (!done) print "lesson: " id; fm = 0; print; next }
+    fm && /^lesson:/ {
+      v = $0; sub(/^lesson:[ \t]*/, "", v); sub(/[ \t]+$/, "", v)
+      if (v == "" || v == "none") v = id
+      else if (index("," v ",", "," id ",") == 0) v = v "," id
+      print "lesson: " v; done = 1; next
+    }
+    { print }
+  ' "$1" > "$TMPF" && mv "$TMPF" "$1" || die "could not write $1"
+  TMPF=""
+}
+
+lesson_new() {
+  local area="" cls="" title="" target="" inc="" at="" rec="" out rc id
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { usage >&2; return 64; }
+    case "$1" in
+      --area)     area=$2 ;;
+      --class)    cls=$2 ;;
+      --title)    title=$2 ;;
+      --target)   target=$2 ;;
+      --incident) inc=$2 ;;
+      --read-at)  at=$2 ;;
+      *) usage >&2; return 64 ;;
+    esac
+    shift 2
+  done
+  [ -n "$area" ] && [ -n "$cls" ] && [ -n "$title" ] && [ -n "$target" ] || { usage >&2; return 64; }
+  listed "$area" "$AREAS" || { echo "ytstack-signals: --area takes one of: $AREAS" >&2; return 64; }
+  slug "$cls" || { echo "ytstack-signals: --class takes a lowercase slug (a-z, 0-9, -): the kind of mistake, not the place" >&2; return 64; }
+  if [ -n "$inc" ]; then
+    case "$inc" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-?*) ;; *) echo "ytstack-signals: --incident takes the id of an incident record (<YYYY-MM-DD>-<slug>)" >&2; return 64 ;; esac
+    rec="$IDIR/$inc.md"
+    [ -n "$IDIR" ] && [ -f "$rec" ] || die "no incident record $inc in ${IDIR:-.ytstack/incidents}"
+  fi
+  out=$(cmd_new --source "$area" --kind lesson --key "lesson:$area:$cls" --title "$title" --target "$target" ${at:+--read-at "$at"})
+  rc=$?
+  [ "$rc" -eq 0 ] || return "$rc"
+  printf '%s\n' "$out"
+  [ -n "$rec" ] || return 0
+  id=$(printf '%s\n' "$out" | awk '{ print $2; exit }')
+  lock
+  link_incident "$rec" "$id"
+  echo "linked $id $rec"
+}
+
+lesson_list() {
+  local want="" since="" r id st key cnt ref reo f title target area cls win
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || { usage >&2; return 64; }
+    case "$1" in
+      --state) listed "$2" "$STATES|all" || { usage >&2; return 64; }; want=$2 ;;
+      --since) is_utc "$2" || { echo "ytstack-signals: --since takes a UTC time like 2026-11-13T09:15:00Z" >&2; return 64; }; since=$2 ;;
+      *) usage >&2; return 64 ;;
+    esac
+    shift 2
+  done
+  rows | awk -F'\t' -v want="$want" '
+    $4 == "lesson" && (want == "all" || (want == "" ? ($2 != "fixed" && $2 != "dismissed") : $2 == want))
+  ' | while IFS=$TAB read -r id st _ _ cnt _ ref reo key _ f title target; do
+    area=$(printf '%s' "$key" | cut -d: -f2); cls=$(printf '%s' "$key" | cut -d: -f3-)
+    win=-
+    # The sightings kept in the file (the newest five) whose read time is not before --since.
+    [ -z "$since" ] || win=$(awk -v s="$since" '/^### read / && $3 >= s { n++ } END { print n + 0 }' "$f")
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$st" "$area" "$cls" "$cnt" "$win" "$target" "$ref" "$reo" "$title"
+  done
+}
+
+cmd_lesson() {
+  local sub="${1:-}"
+  [ $# -eq 0 ] || shift
+  case "$sub" in
+    new)  lesson_new "$@" ;;
+    list) lesson_list "$@" ;;
     *) usage >&2; return 64 ;;
   esac
 }
@@ -529,7 +698,7 @@ check_review_checks() {
 # are read from the root of the checkout.
 NI=0
 check_incidents() {
-  local f name bad=0 out line kind mid path full msg
+  local f name bad=0 out line kind mid path full msg lessons=""
   NI=0
   [ -n "$IDIR" ] && [ -d "$IDIR" ] || return 0
   set --
@@ -549,7 +718,7 @@ check_incidents() {
     function utc(v) { return v ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ }
     function unset(v) { return v == "none" }
     function when(k) { if (!unset(V[k]) && !utc(V[k])) p(k " \"" V[k] "\" is not \"none\" or a UTC time like 2026-11-13T09:15:00Z") }
-    function finish(   st, rc) {
+    function finish(   st, rc, ls, nl, LS, j) {
       if (name == "") return
       if (!hadfm) { p("no frontmatter"); return }
       if (fm) { p("the frontmatter is not closed"); return }
@@ -567,6 +736,11 @@ check_incidents() {
       if (rc == "") p("no root_cause; \"none\" until there is one")
       else if (st == "closed" && rc == "none") p("state closed, but root_cause is \"none\": name the task, or \"not pursued -- <reason>\"")
       else if (rc ~ /^not pursued/ && rc !~ /^not pursued -- [^ ]/) p("root_cause \"" rc "\" gives no reason: \"not pursued -- <reason>\"")
+      # What the incident taught: a record written before lessons has no line, which reads as "none".
+      ls = ("lesson" in V && V["lesson"] != "") ? V["lesson"] : "none"
+      if (ls != "none" && ls !~ /^F[0-9][0-9][0-9](,F[0-9][0-9][0-9])*$/) p("lesson \"" ls "\" is not \"none\" or finding ids like F007,F012")
+      else if (st == "closed" && ls == "none") p("state closed, but lesson is \"none\": record what it taught with ytstack-signals lesson new --incident " V["id"])
+      else if (ls != "none") { nl = split(ls, LS, ","); for (j = 1; j <= nl; j++) print "=lesson\t" name "\t-\t" LS[j] }
       if (order != "123456") p("the sections are not \"What is seen\", \"Timeline\", \"Hypotheses\", \"Proposed mitigations\", \"Decisions\" and \"After\", each once and in this order")
     }
     BEGIN { nk = split("changes effect risk undo script status", KEYS, " ") }
@@ -631,6 +805,12 @@ check_incidents() {
   while IFS= read -r line; do
     case "$line" in
       "") continue ;;
+      "=lesson$TAB"*)
+        IFS=$TAB read -r _ name _ mid <<EOF
+$line
+EOF
+        [ -n "$lessons" ] || lessons=$(rows | awk -F'\t' '$4 == "lesson" { printf " %s", $1 } END { print " " }')
+        case "$lessons" in *" $mid "*) ;; *) echo "$name: lesson $mid is not a recorded lesson (kind lesson under signals/)"; bad=1 ;; esac ;;
       "=script$TAB"*|"=receipt$TAB"*)
         IFS=$TAB read -r kind name mid path <<EOF
 $line
@@ -652,7 +832,7 @@ EOF
 # check_findings: the files under signals/. Sets NF; status 1 with a problem.
 NF=0
 check_findings() {
-  local f name n=0 bad=0
+  local f name n=0 bad=0 out="" line path full
   NF=0
   [ -n "$SDIR" ] && [ -d "$SDIR" ] || return 0
   set --
@@ -666,11 +846,26 @@ check_findings() {
     esac
   done
   if [ $# -gt 0 ]; then
-    awk -v states="$STATES" -v kinds="$KINDS" -v wordtext="$WORD" '
+    out=$(awk -v states="$STATES" -v kinds="$KINDS" -v wordtext="$WORD" -v areas="$AREAS" -v ttypes="$TTYPES" '
       function listed(v, list) { return index("|" list "|", "|" v "|") > 0 }
       function p(msg) { print name ": " msg; bad = 1 }
       function utc(v) { return v ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ }
       function word(v) { return v ~ "^[A-Za-z0-9._:/@+=-]+$" }
+      # lesson: the rules of a finding of kind lesson (key, source, target).
+      function lesson(   n, part, t, w, base) {
+        n = split(V["key"], part, ":")
+        if (n != 3 || part[1] != "lesson" || !listed(part[2], areas) || part[3] !~ /^[a-z0-9][a-z0-9-]*$/)
+          p("kind lesson, but key \"" V["key"] "\" is not lesson:<area>:<class-slug>, the area one of " areas)
+        else if (V["source"] != part[2]) p("kind lesson, but source \"" V["source"] "\" is not the area " part[2] " of its key")
+        t = V["target"]; w = substr(t, index(t, ":") + 1); sub(/:.*/, "", t)
+        if (index(V["target"], ":") < 2 || !listed(t, ttypes) || w !~ /^[A-Za-z0-9._:\/@+=#-]+$/) {
+          p("kind lesson, but target \"" V["target"] "\" is not <check|knowledge|contract|proposal>:<where>"); return
+        }
+        base = w; sub(/#.*/, "", base); sub(/^.*\//, "", base)
+        if (base == "AGENTS.md" || base == "CLAUDE.md") p("target \"" V["target"] "\": a lesson never lives in " base "; route it to a check, a KNOWLEDGE.md entry or the lane contract")
+        else if (V["state"] == "fixed" && t == "proposal") p("state fixed, but the target is a proposal; a fixed lesson lives in a check, a knowledge entry or the contract")
+        else if (V["state"] == "fixed") { sub(/#.*/, "", w); print "=tpath\t" name "\t" w }
+      }
       # finish: the rules one file can break on its own.
       function finish(   id) {
         if (name == "") return
@@ -683,6 +878,7 @@ check_findings() {
         if (V["source"] !~ /^[a-z0-9][a-z0-9-]*$/) p("source \"" V["source"] "\" is not a lowercase slug")
         if (!listed(V["kind"], kinds)) p("kind \"" V["kind"] "\" is not one of " kinds)
         else if (V["kind"] == "review" && V["key"] !~ /^review:[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*$/) p("kind review, but key \"" V["key"] "\" is not review:<role>:<class-slug>")
+        else if (V["kind"] == "lesson") lesson()
         if (!listed(V["state"], states)) p("state \"" V["state"] "\" is not one of " states)
         if (!utc(V["first_seen"])) p("first_seen \"" V["first_seen"] "\" is not a UTC time like 2026-11-13T09:15:00Z")
         if (!utc(V["last_seen"])) p("last_seen \"" V["last_seen"] "\" is not a UTC time like 2026-11-13T09:15:00Z")
@@ -744,7 +940,22 @@ check_findings() {
         }
         exit bad
       }
-    ' "$@" || bad=1
+    ' "$@") || bad=1
+    # What a file cannot show on its own: the target of a fixed lesson exists.
+    while IFS= read -r line; do
+      case "$line" in
+        "") continue ;;
+        "=tpath$TAB"*)
+          IFS=$TAB read -r _ name path <<EOF
+$line
+EOF
+          case "$path" in /*) full=$path ;; *) full="$YT_TOPLEVEL/$path" ;; esac
+          [ -f "$full" ] || { echo "$name: state fixed, but its target $path does not exist"; bad=1; } ;;
+        *) echo "$line" ;;
+      esac
+    done <<EOF
+$out
+EOF
   fi
   NF=$n
   return "$bad"
@@ -766,6 +977,7 @@ case "$CMD" in
   list)     cmd_list "$@" ;;
   set)      cmd_set "$@" ;;
   incident) cmd_incident "$@" ;;
+  lesson)   cmd_lesson "$@" ;;
   review-checked) cmd_review_checked "$@" ;;
   check)    cmd_check "$@" ;;
 esac

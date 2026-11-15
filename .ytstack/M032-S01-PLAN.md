@@ -3,9 +3,9 @@ milestone: M032
 slice: S01
 project: ytstack
 created: 2026-11-15T01:00:00Z
-status: planned
+status: in-progress
 task_count: 2
-completed_tasks: 0
+completed_tasks: 1
 ---
 
 # M032-S01 -- Slice Plan
@@ -16,7 +16,7 @@ completed_tasks: 0
 
 ## Tasks
 
-- [ ] T01 -- `bin/ytstack-signals`: `kind: lesson` (key `lesson:<area>:<class-slug>`, the source the area, a `target` line), `lesson new` (with `--incident` linking the lesson into the record's new `lesson:` line), `lesson list [--state] [--since]`, `set --target`, `set --state fixed` only for a target in place; `check` on lessons and on closed incidents without a lesson. Tests in `tests/ytstack-signals.test.sh`.
+- [x] T01 -- `bin/ytstack-signals`: `kind: lesson` (key `lesson:<area>:<class-slug>`, the source the area, a `target` line), `lesson new` (with `--incident` linking the lesson into the record's new `lesson:` line), `lesson list [--state] [--since]`, `set --target`, `set --state fixed` only for a target in place; `check` on lessons and on closed incidents without a lesson. Tests in `tests/ytstack-signals.test.sh`.
 - [ ] T02 -- `docs/ux/signal-format.md` ("Lessons", the incident's `lesson` field, "Checked mechanically"), the `artifacts` and `checks-and-evals` area files, a `DECISIONS.md` entry (lesson kind in the ledger instead of a new store or a dated retro file).
 
 ## Done when
