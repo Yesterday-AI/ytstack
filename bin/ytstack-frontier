@@ -20,7 +20,8 @@
 #                     waits for every slice before it; detail "unplanned".
 #          After the slices one line per lesson lane, "lesson-F###": an open
 #          or planned lesson of the signals ledger whose target is a check
-#          (docs/ux/signal-format.md, "Lessons"); detail its key. It is
+#          (docs/ux/signal-format.md, "Lessons"), unless it is planned with a
+#          ref other than "lesson-F###" (a task builds it); detail its key. It is
 #          blocked while the lesson has no "## Files" or "## Verification"
 #          section. Without a milestone only the lesson lanes are listed.
 #          --ready prints the ready lanes only, one per line.
@@ -298,9 +299,11 @@ EOF
 }
 
 # lesson_lanes: "<id> <key> <file>" (tab separated) per lesson that is open or
-# planned and whose target is a check: the check is still to be built.
+# planned and whose target is a check: the check is still to be built. A
+# planned lesson whose ref names something else than its own lane (a task, a
+# quick task) is built there, so it is no lane: it would be dispatched twice.
 lesson_lanes() {
-  local f id key st kind target
+  local f id key st kind target ref
   [ -d "$YT_DIR/signals" ] || return 0
   for f in "$YT_DIR"/signals/F[0-9][0-9][0-9]-*.md; do
     [ -f "$f" ] || continue
@@ -310,6 +313,10 @@ lesson_lanes() {
     target=$(sed -n '2,20{s/^target:[ ]*//p;}' "$f" | head -1)
     case "$st:$target" in open:check:*|planned:check:*) ;; *) continue ;; esac
     id=$(sed -n '2,20{s/^id:[ ]*//p;}' "$f" | head -1)
+    ref=$(sed -n '2,20{s/^ref:[ ]*//p;}' "$f" | head -1)
+    if [ "$st" = planned ]; then
+      case "$ref" in ""|none|"lesson-$id") ;; *) continue ;; esac
+    fi
     key=$(sed -n '2,20{s/^key:[ ]*//p;}' "$f" | head -1)
     printf '%s\t%s\t%s\n' "$id" "$key" "$f"
   done

@@ -193,6 +193,13 @@ run "$R" list; has "merged before the lesson is fixed: done, and says so" "lesso
 mkdir -p "$R/tests"; echo true > "$R/tests/order.test.sh"
 bash "$SIG" -C "$R" set F001 --state fixed >/dev/null
 run "$R" list; hasnt "a fixed lesson is no lane any more" "lesson-F001" "$OUT"
+printf 'x\n' | bash "$SIG" -C "$R" lesson new --area ci --class in-a-task --title "Built in a task" --target check:tests/t.test.sh >/dev/null
+bash "$SIG" -C "$R" set F004 --state planned --ref M010-S01-T02 >/dev/null
+printf 'y\n' | bash "$SIG" -C "$R" lesson new --area ci --class own-lane --title "Own lane" --target check:tests/o.test.sh >/dev/null
+bash "$SIG" -C "$R" set F005 --state planned --ref lesson-F005 >/dev/null
+run "$R" list
+hasnt "a planned lesson whose ref is a regular task is no lane (the task builds it)" "lesson-F004" "$OUT"
+has "a planned lesson whose ref is its own lane stays a lane" "lesson-F005" "$OUT"
 rm -rf "$R/.ytstack/signals" "$R/.ytstack/LANES.md" "$R/tests" "$R/.ytstack/M010-ROADMAP.md" "$R/.ytstack/M010-S01-PLAN.md"
 
 # ---- 2. claim -----------------------------------------------------------------

@@ -156,7 +156,7 @@ What the states mean for a lesson:
 
 The open lessons are the `open` and the `planned` ones. `set <id> --target <target>` changes the target; `set <id> --state fixed` refuses while the target is a proposal or names a file that does not exist.
 
-A lesson whose check is still to be built (`open` or `planned`, target `check:`) is a **lesson lane** `lesson-<id>`: `bin/ytstack-frontier` lists it after the slices, and `bin/ytstack-brief render --lesson <id>` renders its brief (`docs/ux/coordinator-format.md`). Its plan is in the lesson itself, two sections after `## Next` in the form of a task plan; without them the frontier lists the lane as blocked:
+A lesson whose check is still to be built (`open`, or `planned` with no ref or the ref `lesson-<id>`, target `check:`) is a **lesson lane** `lesson-<id>`. A lesson `planned` with another ref (a task `M###-S##-T##`, a quick task) is built there and is no lane, so it is not dispatched twice. `bin/ytstack-frontier` lists a lesson lane after the slices, and `bin/ytstack-brief render --lesson <id>` renders its brief (`docs/ux/coordinator-format.md`). Its plan is in the lesson itself, two sections after `## Next` in the form of a task plan; without them the frontier lists the lane as blocked:
 
 ```markdown
 ## Files
