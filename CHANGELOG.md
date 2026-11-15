@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A worker's report carries a spec delta** (issue #75): the brief's
+  "Spec impact" section now says that a change which makes a sentence of an
+  area file false edits that section in the same commits, and the report's
+  `Spec:` line names the edited sections (`<area>: <file> (<section>)`) or
+  says `none -- <reason>`. `ytstack-brief check` fails a bare `none` and prose
+  without an area and a path. `spawn-milestone-team` 0.5.1 (brief template).
+
 ## [0.11.0] - 2026-11-15
 
 ### Added

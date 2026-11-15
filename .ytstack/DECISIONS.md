@@ -1218,3 +1218,22 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **Chose:** A roadmap status `backlog` (frontmatter and the global ROADMAP column): planned, kept, not picked by `ytstack-frontier` while no milestone is current. Making it current sets `status: planned` and `current_milestone` again.
 
 **Supersedes:** None. Extends the roadmap state values in `docs/ux/skill-structure.md`.
+
+## 2026-11-15: The spec delta is the report's existing `Spec:` label, checked for its form (issue #75)
+
+**Context:** Lanes of a long coordinator run updated receipts and changelogs and never the area files their change made false. The brief listed the area files only as reading context, and the report's `Spec:` line accepted any text.
+
+**Options considered:**
+- A) A twelfth label `Spec delta:` beside `Spec:`.
+- B) Rename `Spec:` to `Spec delta:`.
+- C) Keep `Spec:` and give it a checked form: `<area>: <path> (<section>)` per edited section, joined by `;`, or `none -- <reason>`, with the brief stating the duty to edit the section.
+
+**Chose:** C.
+
+**Reason:** The label already says what the plan's `## Spec impact` promised, in the plan's own two forms (`summarize-task` records the same two forms under `## Spec`). A second label would hold the same fact twice; a rename breaks every report and fixture for no gain. What was missing was the duty in the brief and a check that a bare `none` or prose fails.
+
+**How to apply:**
+- The reasons after `none --` are the plan rule's: restores the described behaviour, no behaviour or contract changes, not covered by an area.
+- `bin/ytstack-brief check` checks the form only; whether the diff matches the delta is checked by `bin/ytstack-finish-lane route`.
+
+**Supersedes:** None.

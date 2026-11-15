@@ -66,6 +66,8 @@ Other plans, summaries and the history in STATE.md are not needed for this task.
 
 {{SPEC_IMPACT}}
 
+This is a duty, not background. When your change makes a sentence of an area file under "Read for context" false (behaviour, a contract, a guard, an error path, where it is implemented), edit that section in the same commits, or the source the area file names. The report's `Spec:` line names what you edited; an unchanged spec needs its reason there.
+
 ## Gates
 
 {{GATES}}
@@ -91,6 +93,7 @@ End with exactly this report: all eleven labels, in this order, each at the star
 - `Status:` is one of the three words and nothing else. `partial` and `blocked` are said there, never in a paragraph. `blocked` names what blocks under `Blockers:`; `complete` has `Blockers: none`.
 - One `Checks run:` line per check, with the raw exit code. No check ran: `Checks run: none -- <why>`.
 - `Uncommitted:` names every file you changed and did not commit.
+- `Spec:` is the spec delta: per section you edited `<area>: <file> (<section>)`, several joined by `;`, or `none -- <reason>` (restores the described behaviour, no behaviour or contract changes, not covered by an area). A bare `none` fails the check, and a change to behaviour, a contract or a guard without an edited section or a reason does not merge without a person.
 - Claim nothing that has no line here. What you did not run goes under `Not checked:`, not into `Outcome:`.
 
 ```
@@ -100,7 +103,7 @@ Outcome: <what holds now, one to three sentences, past tense>
 Commits: <git log --oneline <base>..HEAD, or "none">
 Uncommitted: <files changed and not committed, or "none">
 Checks run: <command> -- exit <n> at <short sha> in <environment>
-Spec: <area: file that changed | none -- reason>
+Spec: <area>: <file you edited> (<section>); ... | none -- <reason>
 Deviations: <or "none">
 Blockers: <or "none">
 Not checked: <what was not run or not looked at, and why; "nothing" only when that is true>

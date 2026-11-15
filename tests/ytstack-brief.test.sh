@@ -447,6 +447,20 @@ eq "Status: blocked with a blocker passes, also one that starts with 'none'" "re
 chk "$(printf '%s\n' "$GOOD" | sed -e 's/^Status:.*/Status: partial/' -e 's/^Blockers:.*/Blockers: None./')"
 eq "Status: partial passes with or without a blocker" "report ok" "$OUT"
 
+# The spec delta (issue #75): the edited spec section with its path, or
+# "none -- <reason>"; a bare "none" or prose is no delta.
+chk "$(printf '%s\n' "$GOOD" | sed 's#^Spec:.*#Spec: auth: .ytstack/spec/auth.md (Behavior); billing: docs/billing.md (Export)#')"
+eq "Spec: two edited sections with their paths pass" "report ok" "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed 's/^Spec:.*/Spec: none -- restores the described behaviour/')"
+eq "Spec: none with a reason passes" "report ok" "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed 's/^Spec:.*/Spec: none/')"
+eq "Spec: a bare none fails" 1 "$EC"
+eq "and says what it needs" 'Spec: "none" is no spec delta: name each edited section as "<area>: <file> (<section>)", or write "none -- <reason>"' "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed 's/^Spec:.*/Spec: updated the auth docs/')"
+eq "Spec: prose without an area and a path fails" 'Spec: "updated the auth docs" is no spec delta: name each edited section as "<area>: <file> (<section>)", or write "none -- <reason>"' "$OUT"
+chk "$(printf '%s\n' "$GOOD" | sed 's#^Spec:.*#Spec: auth: .ytstack/spec/auth.md; the rest is unchanged#')"
+eq "Spec: every entry needs an area and a path" 1 "$EC"
+
 chk "$(printf '%s\n' "$GOOD" | sed 's/^Not checked:.*/Not checked:   /')"
 eq "an empty Not checked fails" 1 "$EC"
 eq "and is named" "empty: Not checked" "$OUT"
@@ -522,10 +536,13 @@ SHAPE=$(part Report)
 eq "the shape names the eleven labels, in the order of the format document" \
   "Task,Status,Outcome,Commits,Uncommitted,Checks run,Spec,Deviations,Blockers,Not checked,Next," \
   "$(printf '%s\n' "$SHAPE" | sed -n 's/^\([A-Z][A-Za-z ]*\): <.*/\1/p' | tr '\n' ',')"
+has "the shape says the spec delta is a duty" 'is the spec delta' "$SHAPE"
+has "Spec impact: the duty to edit the area file" 'edit that section in the same commits' "$(part "Spec impact")"
 chk "$SHAPE"
 eq "the unfilled report shape does not pass" 'Checks run: no exit code in "<command> -- exit <n> at <short sha> in <environment>"
+Spec: "<area>: <file you edited> (<section>); ... | none -- <reason>" is no spec delta: name each edited section as "<area>: <file> (<section>)", or write "none -- <reason>"
 Status: "<complete | partial | blocked>" is not complete, partial or blocked' "$OUT"
-chk "$(printf '%s\n' "$SHAPE" | sed -e 's/exit <n>/exit 0/' -e 's/^Status:.*/Status: partial/')"
+chk "$(printf '%s\n' "$SHAPE" | sed -e 's/exit <n>/exit 0/' -e 's/^Status:.*/Status: partial/' -e 's/^Spec:.*/Spec: none -- no behaviour or contract changes/')"
 eq "with an exit code and a status filled in, its labels are complete" "report ok" "$OUT"
 OUT=$(bash "$BIN" check "$TMP/none.txt" 2>&1); eq "an unreadable report file: exit 64" 64 "$?"
 

@@ -42,7 +42,9 @@
 # check validates the eleven labels of the template's "Report" section: each
 # present at the start of a line and with a value, an exit code in every
 # "Checks run:" line, "Status:" one of complete, partial, blocked, and
-# consistent with "Blockers:" (blocked names one, complete has none). A report
+# consistent with "Blockers:" (blocked names one, complete has none), and
+# "Spec:" a spec delta: "none -- <reason>", or "<area>: <path>" per edited
+# section (a "(<section>)" may follow), several joined by ";". A report
 # that carries one of the four labels of a review (Risk, Severity, Reach,
 # Invariants touched) has to carry all four with a value, and "Risk:" is low,
 # normal or high. A report that carries "Lens:" or "Evidence:" has to carry
@@ -403,6 +405,14 @@ cmd_check() {
         else if (empty[i]) { print "empty: " L[i]; bad = 1 }
       }
       for (i = 1; i <= nc; i++) { print "Checks run: no exit code in \"" nocode[i] "\""; bad = 1 }
+      # The spec delta: "none -- <reason>", or one "<area>: <path>" entry per
+      # edited section, joined by ";".
+      sp = V["Spec"]
+      if (sp != "" && sp !~ /^[Nn]one -- [^ ]/) {
+        k = split(sp, E, ";"); fine = 1
+        for (i = 1; i <= k; i++) { e = E[i]; gsub(/^[ \t]+|[ \t]+$/, "", e); if (e !~ /^[a-z0-9][a-z0-9-]*: [^ <>|]+/) fine = 0 }
+        if (!fine) { print "Spec: \"" sp "\" is no spec delta: name each edited section as \"<area>: <file> (<section>)\", or write \"none -- <reason>\""; bad = 1 }
+      }
       s = V["Status"]; b = V["Blockers"]
       if (s != "" && s !~ /^(complete|partial|blocked)$/) { print "Status: \"" s "\" is not complete, partial or blocked"; bad = 1 }
       if (b != "") {
