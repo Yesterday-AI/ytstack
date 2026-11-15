@@ -8,7 +8,7 @@ sources:
   - docs/ux/skill-structure.md
   - docs/ux/askuserquestion-format.md
   - docs/ux/agent-structure.md
-verified_at: c5b405d
+verified_at: b448b13
 ---
 
 # skills
@@ -61,7 +61,7 @@ Read from `PREFERENCES.md` in the resolved `.ytstack` directory by `yt_prefs` in
 | `team` | `off`: `spawn-milestone-team` dispatches worktree subagents. `on`: it emits an Agent Teams instruction and requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. | `spawn-milestone-team` |
 | `merge_by` | `risk` (default): the coordinator merges when `bin/ytstack-risk route` says `unattended` and the host's gates hold, otherwise a person. `human`: always a person. `coordinator`: always the coordinator. A value outside the three reads as `human`. | `finish-lane` |
 | `evidence_dir` | Where a visual review stores its screenshots, default `.ytstack/evidence`, relative to the main checkout. | `visual-review`, `bin/ytstack-risk`, `bin/ytstack-finish-lane` |
-| `upstream_feedback` | What concerns ytstack itself (`docs/ux/upstream-feedback.md`). `suggest` (default): a draft checked by `bin/ytstack-upstream check`, shown to the person, nothing sent. `file`: searched, then filed or commented at Yesterday-AI/ytstack with `gh`; without a `gh` login it reads as `suggest`. `off`: nothing. Without the key, the last `upstream_feedback=` line of `~/.ytstack/config`; an invalid value reads as `suggest`. `using-ytstack` names the channel at every session start. | `using-ytstack`, `retro`, `lane-retro`, `lesson`, `bin/ytstack-upstream` |
+| `upstream_feedback` | What concerns ytstack itself (`docs/ux/upstream-feedback.md`). `suggest` (default): a draft checked by `bin/ytstack-upstream check`, shown to the person, nothing sent. `file`: searched, then filed or commented at Yesterday-AI/ytstack with `gh`; without a `gh` login, or in a non-interactive, CI or teammate session, it reads as `suggest`. `off`: nothing. Without the key, the last `upstream_feedback=` line of `~/.ytstack/config`; an invalid value reads as `suggest`. `using-ytstack` names the channel at every session start. | `using-ytstack`, `retro`, `lane-retro`, `lesson`, `bin/ytstack-upstream` |
 
 ### Non-interactive mode
 
