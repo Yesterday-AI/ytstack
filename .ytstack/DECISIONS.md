@@ -1258,3 +1258,20 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - The SessionStart injection keeps at most six lines and is the last block cut for the 10,000-character cap, after the Next action, the factory tools and the minimal-code line.
 
 **Supersedes:** None. Extends "2026-11-14: Standing instructions are one file per entry in `.ytstack/standing/` ..." with optional keys and a closing entry.
+
+## 2026-11-15: In coordinate mode the operating path is injected and checked by hooks that warn; a lint repeated in three sessions blocks once (issue #76)
+
+**Context:** A 12-hour coordinator run used almost none of ytstack's tooling: hand-written briefs, a `LANES.md` stale for a day, instructions in private memory, no release watch, a STATE pointer two milestones behind with a lint nobody acted on. Every rule was in the skill text; nothing on the path failed when it was skipped. Issue #75's correction names the same bypass of `ytstack-brief render`.
+
+**Options considered:**
+- A) More skill text.
+- B) In coordinate mode (the session marker): an ordered operating checklist injected at SessionStart and printed by the preamble; a PreToolUse hook on `Agent`, `Task`, `SendMessage` that warns on a prompt without a rendered brief; a Stop check for `LANES.md` and the STATE pointer that warns, and blocks once when the same finding came in N sessions in a row.
+- C) As B, but the PreToolUse hook denies a dispatch without a brief.
+
+**Chose:** B with N = 3 (`YT_LINT_STREAK_N`). The checklist lives once, between markers in `docs/ux/coordinator-format.md`; the hook and the preamble read it from there and a test compares them. The marker of a rendered brief is its first line `# Brief: <ref> (<project>)`, which `ytstack-brief render` already prints; no new line was added. `LANES.md` counts as stale when it changed more than five minutes before the newest dispatch or report of the session (a claim comes just before its dispatch). The counter is per repository out of tree (`<state base>/repos/<repo key>/coordinate-lints`); a session counts once, a clean stop resets it.
+
+**Reason:** A checklist that arrives with every compaction is read when the skill text is not. A deny (C) would also hit a research or lookup agent, which needs no brief; a warning on the path is enough to make the bypass visible. Blocking at once on a lint would stop a session for a pointer the human may want to keep for a day; three sessions in a row is a pattern, not a moment.
+
+**How to apply:** The hooks act only with the coordinate marker and read local files only. A coordinate session gets the checklist instead of the minimal-code line. Codex and Kimi are not covered (no ytstack hook on their subagent tools; no session id in a Kimi shell).
+
+**Supersedes:** None. Extends "2026-11-15: Coordinate mode is a session marker ..." with three more hook parts.

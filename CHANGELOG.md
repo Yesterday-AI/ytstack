@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   into the brief, and an optional `check:` command shows a broken instruction
   in the `coordinate` preamble. Commands of an entry run only there, bounded
   by a timeout.
+- **Coordinate mode keeps the operating path** (issue #76, part of #75): a
+  short ordered checklist (claim, render, dispatch; check, set; standing
+  entry; release watch) is injected at session start and after a compaction
+  and printed by the `coordinate` preamble, from one place in
+  `docs/ux/coordinator-format.md`. The new `hooks/pre-tool-use-agent` warns
+  when an `Agent` or long `SendMessage` prompt is no rendered brief. The Stop
+  hook warns when `LANES.md` lags the session's dispatches or the STATE
+  pointer is behind, and holds the stop once when that came three sessions in
+  a row.
 
 ### Changed
 
