@@ -289,7 +289,17 @@ check_fails() { # <label> <REVIEW.md body> <expected text>
   run "$C" check
   if [ "$EC" = 1 ]; then has "$1" "$3" "$OUT"; else bad "$1" "exit $EC, output: $OUT"; fi
 }
-check_fails "a section outside the five" '## Reviewers\n\n- somebody\n' "REVIEW.md: section '## Reviewers' is not one of Always a person, Never low, Lenses, Size, Own reviewers"
+check_fails "a section outside the six" '## Reviewers\n\n- somebody\n' "REVIEW.md: section '## Reviewers' is not one of Always a person, Never low, Lenses, Size, Own reviewers, Checks"
+# The checks inventory (issue #75): the machine checks a reviewer can rely on.
+printf '# Review policy\n\n## Checks\n\n- api-docs | file: docs/api.md | guards: every endpoint is documented\n- design | file: docs/design.md | guards: the tokens are the only colours\n' > "$C/.ytstack/spec/REVIEW.md"
+run "$C" check;               eq "a checks inventory passes" 0 "$EC"
+has "and its lines are counted" "review policy ok: 0 lens(es), 0 own reviewer(s), 2 check(s)" "$OUT"
+check_fails "a check whose file does not exist" '## Checks\n\n- levels | file: scripts/gone.sh | guards: import directions\n' "REVIEW.md: check levels: file scripts/gone.sh does not exist"
+check_fails "a check without file" '## Checks\n\n- levels | guards: import directions\n' "REVIEW.md: check levels has no file"
+check_fails "a check without guards" '## Checks\n\n- levels | file: docs/api.md\n' "REVIEW.md: check levels has no guards"
+check_fails "a check name that is no slug" '## Checks\n\n- Levels | file: docs/api.md | guards: x\n' "REVIEW.md: check name 'Levels' is not a lowercase slug"
+check_fails "a check defined twice" '## Checks\n\n- levels | file: docs/api.md | guards: x\n- levels | file: docs/api.md | guards: y\n' "REVIEW.md: check levels is defined twice"
+check_fails "a check field outside the two" '## Checks\n\n- levels | file: docs/api.md | guards: x | runs: ci\n' "REVIEW.md: check levels: field 'runs' is not file or guards"
 check_fails "an own reviewer without marker" '## Own reviewers\n\n- code | lessons: docs/api.md\n' "REVIEW.md: own reviewer code has no marker"
 check_fails "an own reviewer without lessons" '## Own reviewers\n\n- code | marker: `code`\n' "REVIEW.md: own reviewer code has no lessons"
 check_fails "a lessons file that does not exist" '## Own reviewers\n\n- code | marker: `code` | lessons: docs/gone.md\n' "REVIEW.md: own reviewer code: lessons docs/gone.md does not exist"
