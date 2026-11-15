@@ -1,0 +1,215 @@
+# STATE.md history (moved by ytstack:reconcile, 2026-11-15)
+
+Verbatim from `.ytstack/STATE.md` at 48da5fa: every earlier status paragraph, the old "Next action" log, "Completed milestones", "What ships in v0.1.0" and "Recent summaries". Nothing was reworded.
+
+**Status (2026-11-15, 0.11.0):** Release of M031 (PR #66, `5654d39`), M032 and M033 (PR #67, `763aed9`). Both PRs got an independent adversarial review before merge (6 and 8 findings, all fixed with tests). Issues #53, #54, #55, #61 are covered; #57 was in 0.10.0.
+
+**Status (2026-11-15, M032 + M033):** M032 DONE (3/3 slices, 6 tasks: `kind: lesson` in the signals ledger, skill `ytstack:lesson` called by `incident`, `systematic-debugging`, `finish-lane`, `coordinate`; lesson lanes in the frontier, open lessons in `coordinate` 0.5.0, repeats in `retro`). M033 DONE (1/1 slice, 4 tasks: `upstream_feedback`, `bin/ytstack-upstream`, `docs/ux/upstream-feedback.md`, "Upstream" in `retro`/`lane-retro`, `lesson` routes ytstack lessons upstream). Both on `m032-m033` on top of M031 (PR #66). Not run: evals `lesson`, `upstream-suggest`, `upstream-file`, `fresh-bugfix` (description of `systematic-debugging` changed). Next: merge #66, then this PR, release.
+
+**Status (2026-11-15, M031):** M031 DONE (5/5 slices, 15 tasks, built by parallel workers on `m031-s0N-*` branches and merged into `plan-m031`): `coordinate` 0.4.0 Step 7 "Run the factory tools" and one-step rotation with `ytstack-pr-watch handover`; `ytstack-risk route --pr` reads the round from the review on the host; session-start factory-tool notices and the `version-notice` prompt hook; QUICKSTART setup guide and upgrade checklist; `bin/ytstack-plans` with the external-plan question in `reconcile` and `adopt-brownfield`. Not run: evals `coordinator-resume`, `risk-route`, `external-plan`, `reconcile`, `adopt-brownfield` (at release). M032 (lesson loop, #53) in progress on `m032-lesson-loop`; M033 (#55) after it.
+
+**Status (2026-11-15, 0.10.0):** Release of issue #57 (PR #63, `38486b8`: `.ytstack/standing/` one file per instruction, `yt_standing`, `ytstack-check --standing`, `ytstack-risk` rule document, `coordinate` 0.3.0) and the main points of issue #61 (PRs #62, #64: skipped checks, head moved after own push, status block only on change, merge suggestion only after a bot finding). Open next: from #61 the "plugin updated, reload skills" notice and a one-step coordinator rotation; then plan the rest of #54, #53 and #55.
+
+**Status (2026-11-14, 0.9.2):** Patch release for the #54 field run (PR #59, `c737d84`): the PR watch CLI qualifies the current Claude session's bare id, `register` heals watches stored under it, `coordinate` 0.2.2 leaves `--session` out. The context-mcp coordinator needs a restart (its hooks are still 0.7.0), then `register --all-open` without `--session`.
+
+**Status (2026-11-14, 0.9.1):** Patch release for issue #54 point 2 (PR #56, `eaad9c3`): `ytstack-pr-watch register --all-open` for the session that owns a repository's PRs, `coordinate` 0.2.1 relies on the PR watch only with a fresh worker heartbeat, `migrate` step 5 (restart, then re-register). Open next: plan the rest of #54 (incl. the risk-route round-line finding and the setup guide), #53 (incident to lesson loop) and #55 (upstream feedback channel).
+
+**Status (2026-11-14, M030):** Done, merged (#51, `974888e`) and released as 0.9.0 together with Kimi Code support (M020, #49): `bin/ytstack-review-escapes`, `## Own reviewers` in `REVIEW.md`, signals `kind: review` with per-PR caught/escaped tallies, skill `review-lessons`, triggers after every merge (upkeep by merge date, PR watch merge notice, `finish-lane`), escape rate per role in `retro`. Pilot read on 30 merged context-mcp PRs: 8 bot findings, 2 caught, 6 escaped (5 on bookkeeping files). Not covered: an eval case and a live run of the skill (pilot in Yesterday-AI/context-mcp#1650).
+
+**Status (2026-11-14, M020):** M020 DONE (7/7) on `feat/kimi-code-support`, rebuilt directly on 0.8.0 (`41e5199`). The native Kimi manifest loads all 38 shared skills as `ytstack:<name>`; the helper provides static bootstrap plus pending startup/compaction context, shared handoff and supported-close journal behavior. The six gstack-derived skills stay self-contained; the earlier external-resolution design was removed. Verification: 26 macOS and 26 Linux suites, 16 Codex tests, two Kimi packaging and nine lifecycle tests, native Kimi 2.5.3 and official Linux 2.6.2 each 7/7, and Claude plugin validation. Headless SessionEnd #4380, web close, local macOS npm 2.6.2 and real-model selection limits are documented. Issue #30 remains open until its PR merges.
+
+**Status (2026-11-14, M029):** Optional PR watch merged (#45, `05f7fec`) and released as 0.8.0, including the GitHub-quota guard (reserve for agents, settled PRs every 5 minutes): the maintainer's local watcher ported into `tools/pr-watch/`, `bin/ytstack-pr-watch`, opt-in hooks for Claude Code and Codex (`pr_watch=on` in `~/.ytstack/config`), `docs/pr-watch.md`. All suites, checker, Codex tests and plugin validation pass. Not exercised: a real launchd install and real Codex delivery. After the release, the maintainer's live install moves over in one explicit step (unload the old LaunchAgent, `migrate --from ~/.agents/pr-watch --yes`, `install-worker --yes`, `enable`, remove the old hooks from `~/.claude/settings.json`, disable the old Codex plugin).
+
+**Status (2026-11-14, 0.7.0):** M022-M027 released as 0.7.0: #37 (`a410fff`: technical spec, bounded work, coordinator mode, the six Codex review fixes) and #38 (`ff34592`: risk gate, product per worktree, release watch, upkeep, signal intake, incidents, the workflow diagrams) on top of 0.6.0. Research notes on a published software factory and on mattpocock/skills under `docs/research/`; the status line research is issue #42. Decided: models work autonomously, no skill gets `disable-model-invocation`.
+
+**Status (2026-11-14):** M025 (risk gate and the product per worktree), M026 (release watch, upkeep) and M027 (signal intake, incidents) were built on the branch `risk-gate`, stacked on `spec-and-bounded-work`, from the research note `docs/research/2026-11-13-openai-software-factory.md`. Checked: 24 suites `ALL SUITES PASSED` on macOS bash 3.2, on `ubuntu:26.04` and on plain alpine (BusyBox only); checker without failure; 13 Codex tests OK; `claude plugin validate .` passed; eval run of the four new cases in `KNOWLEDGE.md` ("Eval runs"). Not run: any of it in a real session or against a real target (no change merged without a person, no real visual review, release watch or incident yet). No milestone is in flight. M022-M024 are merged into `main` with #37 (`a410fff`).
+
+**Status (2026-11-14, M028):** M028 DONE, merged (PRs #39 and #40 with the review fixes) and released as 0.6.0: the six gstack skills are ytstack's own self-contained adaptations (no gstack install, nothing registered in `~/.claude/skills/`), each with a `metadata.upstream` baseline, synced to gstack v1.99.3.0 with the new `bin/ytstack-gstack-diff`; the sync check is part of every release (AGENTS.md, CONTRIBUTING). 13 suites green, checker without failures, Codex tests OK, `claude plugin validate .` passed. Release check: `bin/ytstack-gstack-diff --stat` against the live upstream exit 0 (gstack v1.99.3.0 is the newest tag). The adapted skills have not yet run end to end in a real session. `current_milestone: none` on this branch because M022-M027 (open PRs #37/#38) and M020 (main checkout) are on other lines.
+
+**Status (2026-11-13):** M022 (technical spec, issue #36), M023 (bounded work, issue #35) and M024 (coordinator mode, issue #34) are built on the branch `spec-and-bounded-work` (worktree `.claude/worktrees/spec-and-bounded-work`, on top of `f4f54ab`), not pushed. What each milestone built: its `M###-CONTEXT.md` and `ROADMAP.md`; what applies now: `spec/SPEC.md`. Checked: 20 suites `ALL SUITES PASSED` on macOS bash 3.2 and in the Linux container, checker 27 warnings as on `main`, 13 Codex tests OK, `claude plugin validate .` passed, eval run 20 of 21 on the final tree (`KNOWLEDGE.md`, "Eval runs"). Not run: anything of coordinator mode against a real pull request host or in a real multi-lane run (gate G01 in `M024-S02-PLAN.md`), a live dispatch with a rendered brief, a live session on Codex. No milestone is in flight. This file is over its own size bound (lint W8, W9): its history moves out when the operator answers `ytstack:reconcile`.
+
+**Status (2026-11-11):** M021 DONE and merged as `b9daa42` (PR #32, issue #31 closed; review follow-up for ref selection and the `set -e` snippet in the next PR): `bin/ytstack-status` status line segment, optional `progress` block in the STATE frontmatter, `yt_progress_parse` + lint W7, upkeep in `summarize-task` / `quick-task`, `docs/statusline.md`. 13 suites green on macOS, checker 27 warnings as on `main`, `claude plugin validate .` passed. CI green on `main` (macOS and ubuntu). Released as 0.5.0 (manifests, badge and CHANGELOG in the follow-up PR; tag `v0.5.0` on its merge commit). M020 (Kimi adapter, issue #30) is planned in the main checkout and uncommitted there; it is the next pointer once both lines meet.
+
+**Previous status (2026-10-13, PR #23 correction):** Removed the generated Codex skill/hook copies and build tooling. Both hosts load the original 21 skills from skills/ and reuse the lifecycle scripts in hooks/. Codex-specific runtime instructions live only in codex/adapter.md, supplied at SessionStart or read explicitly without trusted hooks. The helper provides the existing script environment and resolves repository-root paths, including starts in subdirectories. All 13 integration tests pass, including both hosts' six vendor imports, lifecycle state/journal behavior, and the single-source package check. Fresh Codex discovery loads the 21 original skill files and three hooks without errors or warnings. The contract checker reports the same 109 baseline warnings, no failures. The interactive desktop walkthrough remains a manual follow-up. This supersedes the earlier generated-package implementation in this PR.
+
+**Status (2026-05-31, vendor drift audit + superpowers pull):** Audited both vendored subtrees for upstream breaking changes against the ytstack wrapper contract (wrappers inline the six wrapped SKILL.md verbatim via `` ```!cat ``; breaking surface = path-rename = silent empty `cat`, or procedure rewrite). **superpowers PULLED** `6efe32c -> 6fd4507`: all three wrapped SKILL.md (TDD, systematic-debugging, verification-before-completion) byte-identical upstream, zero ytstack-behavior change; only drumherum moved (README, tests, using-git-worktrees, finishing-a-development-branch). Merge `ca6675e` / squash `ad14900`; `bin/ytstack-check` = 0 fails (exit 2 = warnings-only). **NOTE: ca6675e is already on origin/main (pushed)** -- the push went out without an explicit push in-conversation (auto-mechanism or the still-present `thirsty-bhabha-a03490` worktree); flagged to the human. **gstack NOT pulled**, held at `aeea57f` (upstream `3bef43b` is a v1 restructure, ~1000 changed lines/file): methodology anchors all survive (no hard break), but a net-new `gbrain:` frontmatter `context_queries` block + `GSTACK_PLAN_MODE` is surface NOT covered by DECISIONS 2026-04-25 "Vendored-preamble drift accepted" (that decision only covers `|| true` shell, not frontmatter) -- revisit that decision before pulling gstack. KNOWLEDGE gotchas added (drift-audit method + gbrain). Hold-gstack is deliberately NOT yet a locked DECISIONS entry (left as a STATE/KNOWLEDGE fact pending the gbrain-strategy call). No version bump for the vendor refresh -- decided 2026-05-31, no ytstack-behavior change so it stays 0.1.6.
+
+**Status (2026-05-31, M015):** Fixed issue #22 via `systematic-debugging` (root cause empirically reproduced, not trusted from the report). The `post-tool-use-bash` hook is now **stub-once** (creates the draft `T##-SUMMARY.md` once on the first real `git commit`, never re-writes; matcher tightened to a real `git commit` after a command separator) and commit-to-task linking moved into `summarize-task` (greps `git log` for the `M###-S##-T##:` ref into a committed `## Commits` section). This kills the duplicate "Commits so far" lines + never-settling working tree that broke worktree/`spawn-milestone-team` dispatch. New regression test `tests/post-tool-use-bash.test.sh` (10 cases, all green). Version bumped 0.1.5 -> **0.1.6**. DECISIONS entry "post-tool-use-bash is stub-once" + KNOWLEDGE gotcha added. **SHIPPED:** committed (`1c1d612` fix, `77365f5` chore), pushed to `origin/main`, tagged **v0.1.6** (pushed), CHANGELOG.md created, **issue #22 CLOSED**. Cache caveat: live for users only after `/plugin update` to 0.1.6.
+
+**Prior status:** M012 DONE + RELEASED as **v0.1.5** (tagged + pushed). All 4 slices landed on `main` and pushed to origin. Executed via worktree-isolated swarm (3 general-purpose teammates in `Agent(isolation:'worktree')` + 1 verifier; the ytstack:implementer/verifier agent types crashed on spawn ON issue #20 itself -- live proof it was P0). Commits: `015f988` #19, `da41845` #20, `b7a5695` #21-RC1+#16, `2af326e` #21-RC2. Independently re-verified 2026-05-31: #19/#20/#21-RC2 behavior-tested; #21-RC1 bash+guard verified (frontmatter-write is prose, exercised only when the skill runs live). plan-eng-review locked 3 decisions: active_slice plan-task-owned + team-member-guarded; swarm commit discipline; ytstack encourages git worktree isolation (-> M013). **CACHE CAVEAT:** fixes go live for users after `/plugin update` to 0.1.5; in THIS session the cached 0.1.4 is still active (so #20 still reproduces here). **M012 numbering collision:** a prior uncommitted plan in the `claude/thirsty-bhabha-a03490` worktree had named the vendor-symlink work "M012" -- reserved as **M014** (separate, to be planned). Queued: M010, M011, M013, M014. See `M012-ROADMAP.md` + DECISIONS.md.
+
+**Prior status (full build cycle):** Full build cycle complete + post-M009 patches landing + plugin landscape architecture locked. 38/39 roadmap tasks done; 1 deferred (v0.1.0 tag + push -- user action). End-of-cycle review in progress. First interactive smoke-test of `init-project` done 2026-04-24 (partial; surfaced multiple items -- see REVIEW-NOTES). Three workflow infographics now in README as visual reference for upcoming brownfield + debug live-tests. Sibling-plugin landscape (`ystacks` catalog + `yastack` public + `ydstack` / `yastack-internal` subdirs) shipped 2026-04-25 (afternoon).
+
+**Post-M009 patches since 2026-04-23:** using-ytstack skill + session-start hook behavior-priming rewrite; 3 subagent definitions (architect / implementer / verifier); `docs/ux/agent-structure.md` contract; git init + initial scaffold commit; superpowers + gstack subtrees added.
+
+**Session 2026-04-24 additions:**
+- `docs/concept.md` (DRAFT, not yet user-approved) -- condensed reference paper synthesized from README + DECISIONS + methodology. README remains authoritative until explicit sign-off.
+- `.ytstack/VENDOR-INVENTORY.md` -- full inventory of 43 gstack skills + 14 superpowers skills, grounds future "what exists upstream?" questions.
+- `.claude/skills/check-consistency/SKILL.md` -- project-meta audit skill (NOT plugin-shipped). Runs 9 checks (skill-count drift, wrapped/native vs disk, hook inventory, artifact list, workflow refs, em-dash, skip-claims, and skill-description quality via semantic-selection hints). Note: the earlier "trigger-map coverage" and "banned-words" checks are retired per DECISIONS 2026-04-24 "Skill selection is semantic" + "drop banned-vocabulary list".
+- `CLAUDE.md` -- "Read first" pointer added (concept → DECISIONS → VENDOR-INVENTORY before architectural proposals).
+- `REVIEW-NOTES.md` -- 4+ new entries: pathname-confound, Denglisch-leak (policy: skills stay consistently English), greenfield-flow-first-skill-miss (open design point), skill-count-drift candidate for check-consistency.
+
+**Session 2026-04-25 additions:**
+- Three workflow infographics shipped: `docs/ytstack-greenfield-flow.{excalidraw,png}` (existing), `docs/ytstack-brownfield-flow.{excalidraw,png}` (new), `docs/ytstack-debugging-flow.{excalidraw,png}` (new). README Workflows section embeds all three via `<details>` blocks; greenfield is `<details open>` (default expanded) per DECISIONS 2026-04-25.
+- Tagline change: "Working memory for AI coding agents." → "An opinionated OS for AI coding agents. Plan like a PM, execute like a senior eng." -- README header + docs/concept.md §1.1 synced. See DECISIONS 2026-04-25.
+- Consistency check re-run 2026-04-25T00:22Z: 8 PASS, 1 WARN (2 meta-em-dashes in CLAUDE.md teaching phrases, not drift), 0 FAIL. Report at `.ytstack/CONSISTENCY-REPORT.md`.
+- KNOWLEDGE.md gains three lessons: Excalidraw esm.sh version pin (`@0.18.0`), dark mode is `appState.exportWithDarkMode = true` (not color-swap), GFM `<details open>` for default-expanded collapsibles.
+- GitHub repo metadata edits in flight (user-action): description aligned with new tagline; topics suggested `claude-code claude-code-plugin claude-code-skills ai-agents agentic-workflow anthropic developer-tools project-management tdd yesterday-ai` -- pending user save.
+
+**Session 2026-04-25 (afternoon) -- plugin landscape architecture:**
+- Locked 5-plugin family under `Yesterday-AI/ystacks` (private monorepo + catalog hybrid): `ytstack` (engineering), `ydstack` (daily-work), `yastack` (public agent core), `yastack-internal` (yesterday-bundle), `ycstack` (consulting separate-track).
+- Three new DECISIONS entries (2026-04-25, merged via PR #1): "Lifecycle-phase as the curation heuristic", "Marketplace consolidates on Yesterday-AI/ystacks (monorepo + catalog hybrid)" (supersedes 2026-04-24 §3.5), "Vendored-preamble drift accepted for wrapped skills".
+- README + QUICKSTART now show ystacks as primary install path; legacy self-marketplace path moved to a collapsed `<details>` block.
+- New repos shipped: `Yesterday-AI/ystacks` (private, monorepo + catalog) and `Yesterday-AI/yastack` (public, scaffold). Both have own minimal `.ytstack/` (PROJECT + DECISIONS + STATE) for dogfooding.
+- `agentic-foundation` identified as source pool for future ydstack + yastack skill migration (14 + 15 skills). Post-migration purpose of agentic-foundation undecided (archive vs repurpose).
+- Naming convention locked: `y{c}stack` (yt/yd/yc/ya) + `-internal` suffix for yesterday-bundles. yastack autonomy framing corrected to Levels-of-AGI 3-4 (Collaborator / Expert), not 4-5.
+- `docs/concept.md` §3.5 rewritten to reflect the new architecture (was deferred from PR #1 by design; landed in this STATE-refresh PR).
+- Two new milestones surface as next substantive work:
+  - **M010 Workflow Reorder + Brownfield-Without-.ytstack** -- covers the original M010 greenfield-reorder per DECISIONS 2026-04-24 PLUS adds the new "user runs ytstack inside an existing repo that has no `.ytstack/` yet" case as a third workflow alongside greenfield + brownfield-with-.ytstack.
+  - **M011 Post-Summarize Lifecycle** -- 5-skill cherry-pick across gstack (`ship`, `document-release`) and superpowers (`finishing-a-development-branch`, `requesting-code-review`, `receiving-code-review`). Scope locked 2026-04-25 after re-reading the comparison articles cited in `docs/concept.md`; full rationale in DECISIONS 2026-04-25 "M011 scope -- 5-skill cherry-pick from gstack + superpowers". Excludes `land-and-deploy`, `canary`, `qa` (different skill-class, deferred).
+
+  Both planned but not started; entries in `.ytstack/ROADMAP.md`.
+
+**Session 2026-04-25 (evening) -- marketplace split + service-plugin shipping:**
+- Marketplace architecture revised again -- split into TWO catalogs by visibility (DECISIONS 2026-04-25 "Marketplace architecture split into ystacks (public) + ystacks-internal (private)" -- merged via PR #3, supersedes the earlier same-day "monorepo + catalog hybrid" decision).
+  - `Yesterday-AI/ystacks` -- PUBLIC catalog, hosts ydstack as monorepo subdir, lists yastack + yopstack via github source.
+  - `Yesterday-AI/ystacks-internal` -- PRIVATE catalog (renamed from old ystacks), hosts yastack-internal + yopstack-internal as monorepo subdirs, lists ytstack (cross-listed while private) + service-plugins via github source. Has `allowCrossMarketplaceDependenciesOn: ["ystacks"]` so bundle plugins can dep on yastack/yopstack from public catalog.
+  - **Per-plugin own repos** for plugins with real architectural surface (ytstack, yastack, yopstack). Bundle plugins + skill collections (ydstack, yastack-internal, yopstack-internal) live as monorepo subdirs because no separate DECISIONS history needed.
+- New plugin: `Yesterday-AI/yopstack` (public) -- 4 ops-layer skills (`opentofu` migrated from yastack + 3 gstack-wrappers planned: `land-and-deploy`, `canary`, `setup-deploy`). yastack skill count adjusted 15 -> 14.
+- Six service-plugin PRs shipped + merged today, all to support yopstack-internal + yastack-internal bundle deps:
+  - `agent-calendar` (PR #48 + #49 follow-up that was closed) -- includes a sync-script-path fix in SKILL.md.
+  - `agent-services` (PR #89 + #90 follow-up that was closed).
+  - `cloud` (PR #17).
+  - `llm-gateway` (PR #55).
+  - `clawrag` (PR #103) -- noisy review: bugbot found 3 real upstream content bugs in scripts/. Two fixed in scope (`sources.sh` deleted -- redundant + had hardcoded dev API key); 1 deferred (`ingest.sh` `/tmp/clawrag_response.json` race). PR also went through a force-push squash (with `--force-with-lease`) after confused commit history -- lesson learned: ALWAYS `git pull main` before `git checkout -b new-branch`, otherwise diff-vs-current-main includes accidental reverts of others' work.
+  - `fleet` (PR #144) -- 3 skills (a2a-client, fleet-manager, self-diagnosis).
+- Initial scaffold attempt added explicit `"skills": ["./skills/<name>/"]` field to all manifests for "no leakage" safety, but reverted across-the-board after upstream issue [alirezarezvani/claude-skills#538](https://github.com/alirezarezvani/claude-skills/issues/538) showed real-world reliability problems with explicit `skills` field paths. Default auto-discovery is the safer pattern. Plus user noted: explicit `skills` field only replaces default `skills/` scan -- `bin/`, `commands/`, `agents/`, `hooks/` etc. are still auto-discovered regardless, so "pin skills explicitly" was never the right safety boundary against unwanted plugin content; naming-convention + code-review is.
+- Plus PR #4 (this PR's predecessor): one-line README install-section fix -- ystacks is PUBLIC, not "canonical" + no auth required for the public catalog.
+- Cross-repo consistency audit (Explore agent, end-of-day): 2 critical fixes landed (yastack `skills/README.md` count 15 -> 14; ytstack README install-section wording). All other audit dimensions clean: naming convention, no internal-name leakage in public ystacks, agentic-foundation migration mentions consistent, logo/assets consistent.
+- Bundle deps now fully resolvable: `yastack-internal` (yastack@ystacks + yopstack-internal + clawrag + agent-calendar -- all listed) and `yopstack-internal` (yopstack@ystacks + agent-services + cloud + llm-gateway -- all listed).
+- This PR (the one introducing this STATE block) also rewrites `docs/concept.md` §3.5 to reflect the post-split architecture. The earlier rewrite (PR #2) described the now-superseded monorepo+catalog hybrid; this version describes the two-marketplace split + per-plugin-own-repos model.
+
+```
+Progress:  [####################]  37/39 tasks (95%)
+M001 Foundation                  [######] 6/6  DONE
+M002 Lifecycle Hooks             [###]    3/3  DONE
+M003 Project-OS Skills           [#######] 7/7 DONE
+M004 Planning Cherry-Picks       [####]   4/4  DONE (vendor-add deferred)
+M005 Execution Cherry-Picks      [####]   4/4  DONE (vendor-add deferred)
+M006 Agent Teams Integration     [####]   4/4  DONE
+M007 Quality Gates               [###]    3/3  DONE
+M008 Publishing & Marketplace    [##..]   2/4  DONE (2 user-action)
+M009 Docs & Community            [####]   4/4  DONE
+```
+
+## Next action (as it stood before 2026-11-15)
+
+**Operator actions for M025 / M026 / M027:** the branch `risk-gate` sits on top of `spec-and-bounded-work` (pull request 37) and is reviewed after it. To use the risk gate in a project: set `auto_merge` on the areas where a change may merge without a person, optionally write `spec/REVIEW.md` (a `ui` lens that reads the design guidelines), fill the "Run" section of `RUNTIME.md`; nothing else changes, and a project that declares nothing sends every change to a person as before. **Then:** the first real lane through the route (`finish-lane`) and the first real visual review and incident are the evidence still missing.
+
+**Operator actions for M022 / M023 / M024:** review the branch `spec-and-bounded-work` and merge it (pull request or fast-forward); release; `/plugin update`. In each consumer project run `/ytstack:adopt-brownfield` once: it adds only `.ytstack/spec/`. Run `/ytstack:reconcile` here to move this file's history out. Merging meets the uncommitted M020 planning in the main checkout in `STATE.md`, `DECISIONS.md`, `ROADMAP.md` and `hooks/session-start`: keep both sides. **Then:** the first lane of a consumer project finished with `finish-lane` against GitHub closes gate G01 of M024-S02; M020 (Kimi adapter) continues in the main checkout.
+
+**Previous operator actions (M021):** `/plugin update` to 0.5.0, wire the snippet from `docs/statusline.md` into the status line script. Pulling `main` into the main checkout meets the uncommitted M020 planning in `STATE.md` and `DECISIONS.md`: keep both DECISIONS entries and the M020 pointer.
+
+**Previous status:** **M019 DONE -- delivered as 0.4.2 (0.4.0 -> 0.4.1 Codex-support merge of PR #23 -> 0.4.2 Linux `stat` fix), pushed, CI green on `f2a439c`, issues #18/#24/#25/#27 closed, installed plugin on 0.4.2, gstack v1.96.0.0 installed and live-validated (`tests/gstack-live.test.sh` 39/39).** The public catalog (`Yesterday-AI/skills`) pins no version, so it tracks `plugin.json`. No milestone open; M020 candidates are listed in ROADMAP. 0.4.0 bundles M010 (adopt-brownfield), M018 (ceremony dials, quick-task, reconcile, minimal-code, STATE lint, states, layouts) and M019 (`metadata:` frontmatter + trigger-only descriptions, `evals/` for `claude plugin eval` + CI, six lifecycle skills `code-review` / `finish-branch` / `grill` / `retro` / `ship` / `document-release`, worktree-subagent execution model with Agent Teams opt-in, Stop hook, no plugin dependencies). Clean clone at the release commit: 12 suites green, checker 0 fails, validate clean; evals 10/11 + re-run of the changed cases. **No milestone is open**: the modernisation programme from the 2026-11-07 research is complete; `ytstack:plan-milestone` for M020 when there is a next goal (candidates: live dogfooding of `spawn-milestone-team` 0.2.0 on a real milestone; PowerShell hook variants if a Windows consumer appears; per-worktree pointer if the orchestrator model needs it). **Operator actions:** `git push origin main --tags` (v0.2.0, v0.3.0, v0.4.0 are local), `gh issue close 24 25 27` (evidence posted), `/plugin update` to 0.4.0, gstack install one-liner (QUICKSTART) for the six gstack-backed skills, catalog sync in `Yesterday-AI/skills` (version 0.4.0, README skill table), skills.sh listing refresh.
+
+**Previous:** M018 DONE and M010 DONE (both now in 0.4.0).
+
+**Previous:** **M017 DONE -- released as 0.3.0 (tag local).** superpowers at v7.0.2 with Namespace notes; gstack removed from the tree and consumed as an installed, pinned (v1.96.0.0) dependency via `yt_gstack_ctx` + Skill-tool invocation, live-validated; SECURITY.md; #25 evidence posted. 11 suites / 533 cases green from a clean clone. **M010 (brownfield import) is being built by a worktree agent (`m010-brownfield`) and gets merged on report.** **Next here: M018** ceremony scaling + STATE lint + reconcile + YAGNI guard (`ytstack:plan-milestone`), then M019. **Operator actions:** `git push origin main --tags`, `gh issue close 24 25 27`, `/plugin update`, gstack install one-liner (QUICKSTART), catalog sync.
+
+**Previous:** **M016 DONE -- released as 0.2.0 (tag local).** 15/15 tasks: all eight hooks + 15 skill preambles on `hooks/lib/git-ctx.sh`, volatile state out of tree, HANDOFF.md user-owned, task-ref-gated stubs, configurable commit discovery, gitignore block, sentinels retired, `ytstack-check` resolver contract, 10 suites / 488 cases green (macOS bash 3.2 + Linux bash 5.3.9, clean clone), `claude plugin validate` clean, evidence on #24/#27. **Operator actions:** `git push origin main --tags`, `gh issue close 24 27`, `/plugin update`, catalog sync in `yesterday-public-plugins`. **Next:** M017 vendor strategy (`ytstack:plan-milestone`; DECISIONS 2026-11-07), then M010 brownfield (#18), M018 ceremony + YAGNI guard, M019 skill quality/evals/new skills. Operator instruction 2026-11-07: run the whole milestone through without per-task check-ins; push and issue-closing stay operator actions. Milestone shape: S01 hooks on `git-ctx.sh` + out-of-tree state (6), S02 skill preambles + commit discovery + gitignore + `ytstack-check` rules (5), S03 tests + docs + release 0.2.0 (4). Plans in `M016-S0{1,2,3}-PLAN.md`. Next: `ytstack:plan-task` for M016-S01-T01 (`hooks/lib/git-ctx.sh`), sequential execution recommended -- S02/S03 depend on the lib from S01, so `spawn-milestone-team` only pays off from S02 onwards. Then M017 (vendor strategy: superpowers -> v7.0.2, gstack de-vendored; closes #25), then M010 (brownfield, #18), M018, M019.
+
+**Status (2026-11-07, triage + research):** Deep research + audit of 17 local consumer repos written to `docs/research/2026-11-07-modernisierung-best-practices.md` (+ 5 note files under `docs/research/2026-11-07-notes/`). GitHub triage done: labels `P0/P1/P2/security/worktrees/hooks` created; #27 P0 (root cause: `CLAUDE_PROJECT_DIR` does not follow worktrees), #24 P1, #18 P1 (-> M010), #25 P2 (-> M017), #26 closed as duplicate of #27 (2026-11-07). Vendor hold on gstack `aeea57f` remains until M017.
+
+---
+
+**Issue #22 -- CLOSED, shipped as v0.1.6 (M015).** Fix committed (`1c1d612`/`77365f5`), pushed, tagged `v0.1.6`, issue closed. Only residual: `/plugin update` to 0.1.6 to make it live (cached older plugin still active in-session); cross-repo marketplace sync (`yesterday-public-plugins` catalog) if relevant -- separate authorization, out of this repo's scope.
+
+**Next queued:** M010 (brownfield = #18), M011 (post-summarize lifecycle), M013 (worktree mode), M014 (vendor symlink), agentic-foundation migration.
+
+---
+
+**M012 shipped (v0.1.5, pushed). Issues #16/#19/#20/#21 closed. Workflow infographics regenerated (premium hand-drawn) + pushed.** Remaining / queued:
+1. **`/plugin update`** to 0.1.5 in any active session to make the fixes live (cached 0.1.4 still active here).
+2. **Cross-repo marketplace sync** (NOT done -- needs separate authorization): the `ystacks-internal` catalog lists ytstack; confirm it picks up v0.1.5 (per the "Plugin-Marketplace-Aenderung = README-Update" rule). Out of this repo's scope.
+3. **M014 -- vendor symlink dereferencing for RemotePluginSync** (separate): uncommitted draft + README "Desktop + SSH" workaround live in the `claude/thirsty-bhabha-a03490` worktree; salvage or re-plan separately. Worktree intentionally left in place (holds the only copy).
+4. Queued milestones: M010 (brownfield = issue #18), M011 (post-summarize lifecycle), M013 (spawn-milestone-team worktree mode), M014 (vendor symlink). Plus agentic-foundation migration.
+
+---
+
+**Previously queued (still open, after M012):**
+
+**agentic-foundation skill migration** -- user-confirmed as next (2026-04-25 evening). 32 skills total to migrate: 14 -> ydstack, 14 -> yastack, 4 -> yopstack (incl. opentofu + 3 gstack-wrappers via vendor/gstack subtree-add). Eigene session pro plugin sinnvoll. Once migration completes, agentic-foundation goes obsolete (per user 2026-04-25 evening: "agentic-foundation wird obsolete sein -- baldigst").
+
+After migration: M010 + M011 are queued. M010 = Workflow Reorder + Brownfield-Without-.ytstack (unfinished from 2026-04-24). M011 = Post-Summarize Lifecycle (5-skill cherry-pick, scope locked).
+
+Background items still open:
+1. **Review DRAFT `docs/concept.md`** -- approve, amend, or reject. Until approved, README remains the sole source of truth. §3.5 was rewritten twice today (PR #2 wave + this PR -- now reflects the two-marketplace split + per-plugin-own-repos model).
+2. **Re-do init-project smoke-test in a neutral sandbox path** (avoid "ytstack" substring to isolate the directive-effect from pathname-confound -- see REVIEW-NOTES 2026-04-24).
+3. **Tag v0.1.0 + push tag** (M008 user-action). Command: `git tag -a v0.1.0 -m "v0.1.0: full build cycle complete + plugin landscape architecture locked" && git push origin v0.1.0`.
+4. **Live-test brownfield + debugging workflows** using the new infographics as visual reference. Was previous session's "Next action"; deferred behind the architecture work but still relevant.
+5. **Eventual public marketplace listing** (M008 deferred): when ytstack visibility flips from private to public, list it in the public ystacks catalog (today only listed in private ystacks-internal as cross-listed).
+6. **Skill content cleanup queue** (in `Yesterday-AI/ystacks-internal/.ytstack/STATE.md`): clawrag `ingest.sh` `/tmp` race condition + agent-calendar SKILL.md sync-script-path. Per user 2026-04-25 evening: skip upstream backports to agentic-foundation since the repo will become obsolete soon (skill migration absorbs all relevant content).
+
+GitHub repo topics + description -- DONE 2026-04-25 (user-action).
+
+**Full-cycle review.** See `.ytstack/REVIEW-NOTES.md` for the batch of items flagged during the build. Review categories:
+
+- Blockers before v0.1 publication (interactive-mode test, CI tool, git init, etc.)
+- UX issues to revisit (init-project fallbacks, sentinel cleanup, etc.)
+- Architecture decisions deferred
+- Cross-cutting concerns
+- Findings per milestone (M001, M002, M003)
+
+After review, remaining user-action to close M008:
+- T33 -- ~~Create GitHub repos~~ **done 2026-04-24**: `Yesterday-AI/ytstack` created (private, self-marketplaced; no separate marketplace repo per DECISIONS 2026-04-24).
+- T35 -- `git init` + initial commits + push: **done 2026-04-24**. Remaining: tag v0.1.0 + push tag.
+
+## Completed milestones
+
+All 9 milestones achieved. See ROADMAP.md for per-milestone detail.
+
+## What ships in v0.1.0
+
+**Skills (15):**
+
+- `init-project` (M001) -- bootstrap `.ytstack/` artifacts
+- `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `handoff-session`, `resume-session` (M003) -- Project-OS lifecycle
+- `plan-ceo-review`, `office-hours`, `plan-eng-review` (M004) -- gstack planning wrappers
+- `test-driven-development`, `systematic-debugging`, `verification-before-completion` (M005) -- superpowers execution wrappers
+- `spawn-milestone-team` (M006) -- Agent Teams dispatch
+- `using-ytstack` (post-M009) -- auto-injected directive that drives agent-side skill selection from natural-language intent. Adapted from superpowers' `using-superpowers` pattern.
+
+**Subagent definitions (3, post-M009):**
+
+- `agents/architect.md` -- plan-review, approve-to-implement gate (read-only). Used by `spawn-milestone-team` for the optional architect-lead role.
+- `agents/implementer.md` -- executes one slice via the `plan-task → TDD → verify → summarize` cycle. Bounded to slice scope.
+- `agents/verifier.md` -- evidence-before-assertions, runs plan's verification command from cold context, passes/fails task closure.
+
+These are referenced by `skills/spawn-milestone-team/SKILL.md` as the default teammate-role types. Previously the skill named them without providing definitions (gap surfaced during behavior-priming audit).
+
+**Hooks (8):**
+
+- `session-start` (M002) -- inject project state on startup/resume/clear/compact
+- `pre-compact` (M002) -- write HANDOFF.md before context compression
+- `session-end` (M002) -- finalize STATE.md, append session journal
+- `teammate-idle` (M006) -- keep teammates claiming open tasks
+- `task-created` (M006) -- scope-drift check against milestone roadmap
+- `task-completed` (M006) -- auto-draft T##-SUMMARY.md
+- `pre-tool-use-edit` (M007) -- scope + schema drift check before file edits
+- `post-tool-use-bash` (M007; stub-once since M015) -- creates a draft T##-SUMMARY.md once on a task's first commit; commit-to-task linking lives in `summarize-task`
+
+**Docs:**
+
+- `README.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `QUICKSTART.md`, `LICENSE`, `NOTICE`
+- `docs/ux/askuserquestion-format.md`, `writing-style.md`, `skill-structure.md`
+- `docs/references.md`, `docs/methodology.md`
+- `vendor/README.md`
+
+**Dogfood artifacts:** `.ytstack/PROJECT.md`, `ROADMAP.md`, `STATE.md`, `DECISIONS.md` (8 entries), `KNOWLEDGE.md`, `RUNTIME.md`, `PREFERENCES.md`, `REVIEW-NOTES.md` (~35 items)
+
+**Plugin config:** `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`
+
+
+## Recent summaries
+
+M003-M009 work tracked above. `ytstack:summarize-task` will format per-task summaries going forward.
