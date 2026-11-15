@@ -3,7 +3,7 @@ name: retro
 description: "Milestone retrospective fed with the milestone's task summaries, deviations and follow-ups plus the git history of the milestone window, written to M###-RETRO.md. Use after a milestone's last slice closed and reassess-roadmap ran, or when the user says retro, retrospective, what did we learn, lessons from this milestone. Not mid-milestone (reassess-roadmap) and not for closing a task (summarize-task)."
 metadata:
   tier: task
-  version: 1.1.0
+  version: 1.2.0
   upstream: "gstack v1.99.3.0 (retro/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
@@ -39,7 +39,7 @@ You MUST create a task for each of these items and complete them in order:
 5. **Gather metrics** -- one bash command, then the freshness guard
 6. **Shipping outcomes** -- merged PRs (only if `HAS_GH=yes`), CHANGELOG features, backlog (only if `TODOS=yes`)
 7. **Analyze** -- time, sessions, commit types, hotspots, sizes, focus, ship of the milestone, people, streaks
-8. **Milestone outcomes** -- exit criteria vs summaries, deviations, open follow-ups, plan completion; own reviewers vs bots (only if `OWN_REVIEWERS` is not `none`)
+8. **Milestone outcomes** -- exit criteria vs summaries, deviations, open follow-ups, plan completion; own reviewers vs bots (only if `OWN_REVIEWERS` is not `none`); incidents and repeats per class (only if `LESSONS` is above 0)
 9. **Compare with the prior retro** (only if `PRIOR_RETRO` is not `none`, or in `compare` mode) -- trends + recommendation follow-through
 10. **Ask before replacing** (only if `RETRO_EXISTS=yes`) -- replace or stop
 11. **Write `M###-RETRO.md`** -- frontmatter + report + snapshot, and show the report in the conversation
@@ -159,6 +159,9 @@ if [ -n "$_ROLES" ] && [ -n "$_SIG" ]; then
   bash "$_SIG" -C "$_PROJECT_DIR" list --state all 2>/dev/null | awk -F'\t' '$4 == "review"'
   echo "REVIEW_FINDINGS_END"
 fi
+# Lessons (M032): every incident of any class left one in the signals ledger; step 8 counts them per class for the window.
+echo "LESSONS: $([ -n "$_SIG" ] && [ -n "$_YT_DIR" ] && bash "$_SIG" -C "$_PROJECT_DIR" lesson list --state all 2>/dev/null | awk 'NF { n++ } END { print n + 0 }' || echo 0)"
+echo "SIGNALS_TOOL: ${_SIG:-unavailable}"
 ```
 
 ## Procedure
@@ -396,6 +399,18 @@ This is the part a calendar retro cannot give. From the material read in step 3:
   | --- | --- | --- | --- | --- | --- |
 
   Above the table: how many checked pull requests the window has, how many of them without a tally, and how many merged pull requests step 6 found, when it found any; a gap means pull requests had no escape check. A class whose count is 2 or more and that is still `open` without a question is a candidate for "3 Things to Improve". Put the table under `## Milestone Outcomes` and `"review_escapes": {"<role>": {"caught": <n>, "escaped": <n>}, ...}` into the snapshot.
+- **Incidents and lessons** (only if `LESSONS` is above 0). Read from the signals ledger (`docs/ux/signal-format.md`, "Lessons"): every incident of any class left a sighting on the lesson of its class. Run, with the window start of step 4 as a UTC time:
+
+  ```bash
+  bash "<SIGNALS_TOOL>" lesson list --state all --since <since, e.g. 2026-11-01T00:00:00Z>
+  ```
+
+  One line per lesson: id, state, area, class, count, sightings in the window, target, ref, reopens, title. Show the lessons with at least one sighting in the window, grouped by area, one row per class:
+
+  | Area | Class | Incidents in window | All time | Repeat | Where the lesson lives | State |
+  | --- | --- | --- | --- | --- | --- | --- |
+
+  `Repeat` is `yes` when the class counts 2 or more, or when the lesson reopens an earlier one (`reopens` is not `none`: the lesson that was in place did not hold). Above the table: the incidents in the window per area, and how many classes repeated. Only the newest five sightings of a class stay in its file, so a class with more in the window says "at least 5". A repeated class whose lesson is still a proposal or only a knowledge entry is a candidate for "3 Things to Improve" (name its id), and a reopened one is always one. Put `"lessons": {"incidents": <n>, "classes": <n>, "repeats": <n>, "open": <n>}` into the snapshot.
 
 ### 9. Compare with the prior retro
 
@@ -492,7 +507,7 @@ Rules for the file:
 
 - Size every section to its evidence. A section with nothing to say is cut, not padded. Keep `## Summary`, `## Milestone Outcomes`, `## 3 Things to Improve` and `## Snapshot` always.
 - `prs_merged` is `null` when hosting data was unavailable. `recommendations` is always present: one object per "3 Things to Improve" item with a one-word lowercase category and the item text verbatim; `[]` when there are none, never padded.
-- Add `"backlog": {...}` only when `TODOS=yes`, and `"review_escapes": {...}` only when `OWN_REVIEWERS` is not `none`.
+- Add `"backlog": {...}` only when `TODOS=yes`, `"review_escapes": {...}` only when `OWN_REVIEWERS` is not `none`, and `"lessons": {...}` only when `LESSONS` is above 0.
 - After writing, show the report (everything above `## Snapshot`) in the conversation.
 
 **Tone.** Encouraging but candid, no coddling. Specific and concrete, always anchored in commits or summaries. No generic praise ("great job"): say what was good and why. Praise sounds like something you would say in a 1:1. Growth suggestions sound like investment advice ("worth your time because..."), not "you failed at". Never compare teammates against each other negatively. Tables and code blocks for data, prose for narrative. If the test ratio is under 20%, flag it as a growth area.

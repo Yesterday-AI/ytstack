@@ -285,6 +285,20 @@ STANDING_ENTRIES_END"
       has "$s: bare fixture -> PR watch off" "$OUT" "PR_WATCH: off"
       has "$s: bare fixture -> no release section" "$OUT" "RELEASE: no"
       has "$s: bare fixture -> no signal sources" "$OUT" "SIGNALS: 0"
+      # the open lessons (M032): counted in the status, a proposal for the daily question, a check for a lane
+      has "$s: bare fixture -> no open lesson" "$OUT" "LESSONS: 0 open (0 proposals, 0 checks to build)"
+      printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area ci --class flaky-order --title "Order" --target check:tests/order.sh >/dev/null
+      printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area process --class asked-twice --title "Asked twice" --target proposal:Q001 >/dev/null
+      run_pre "$P" "$WT"
+      has "$s: two open lessons, one of each" "$OUT" "LESSONS: 2 open (1 proposals, 1 checks to build)"
+      has "$s: and listed" "$OUT" "F002	open	process	asked-twice	1	-	proposal:Q001"
+      rm -rf "$WT/.ytstack/signals"
+      awk '/^\*\*Step 5 --/ { p = 1 } /^\*\*Step 6 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF -- '--lesson F###' \
+        && ok "$s: Step 5 renders the brief of a lesson lane" || bad "$s: Step 5 renders the brief of a lesson lane"
+      awk '/^\*\*Step 8 --/ { p = 1 } /^\*\*Step 9 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF 'daily question' \
+        && ok "$s: Step 8 asks a lesson proposal with the daily question" || bad "$s: Step 8 asks a lesson proposal with the daily question"
+      awk '/^\*\*Step 11 --/ { p = 1 } /^\*\*Step 12 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF 'LESSONS' \
+        && ok "$s: Step 11 names the open lessons in the status" || bad "$s: Step 11 names the open lessons in the status"
       own_reviewers_on
       printf '# Runtime\n\n## Release\n\n- deployed: echo abc1234\n\n## Signals\n\n- errors | read: echo none\n- latency | read: echo none\n' > "$WT/.ytstack/RUNTIME.md"
       mkdir -p "$TMP/home/.ytstack"; echo "pr_watch=on" > "$TMP/home/.ytstack/config"
@@ -361,6 +375,15 @@ REVIEWERS_END"
       has "$s: a declared role is listed" "$OUT" "code	(\`code\`)	.github/reviewers/code.md"
       has "$s: one checked pull request" "$OUT" "CHECKED_PRS: 1"
       rm -rf "$WT/.ytstack/signals"; own_reviewers_off ;;
+    retro)
+      # incidents and repeats per class (M032): the count of lessons decides whether step 8 reads them
+      has "$s: no lesson -> LESSONS 0" "$OUT" "LESSONS: 0"
+      has "$s: the signals script is found" "$OUT" "SIGNALS_TOOL: $ROOT/skills/$s/../../bin/ytstack-signals"
+      printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area ci --class flaky-order --title "Order" --target check:tests/order.sh >/dev/null
+      run_pre "$P" "$WT"
+      has "$s: one lesson -> LESSONS 1" "$OUT" "LESSONS: 1"
+      grep -qF 'lesson list --state all --since' "$ROOT/skills/$s/SKILL.md" && ok "$s: step 8 counts the lessons of the window" || bad "$s: step 8 counts the lessons of the window"
+      rm -rf "$WT/.ytstack/signals" ;;
     lesson)
       # the ledger and the questions (M032): every lesson in every state, the open incidents
       has "$s: the signals script is found" "$OUT" "SIGNALS_TOOL: $ROOT/bin/ytstack-signals"
