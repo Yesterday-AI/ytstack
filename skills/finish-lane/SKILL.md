@@ -3,7 +3,7 @@ name: finish-lane
 description: "Takes a delegated lane from the worker's report to a pull request merged at the reviewed commit, with every gate read from the host. Use in the coordinating session when a lane reported and its work has to become a merged pull request, or when the user says finish the lane, land this lane, get this lane merged. Not for the session's own branch (finish-branch), not for a release (ship) and not for the worker of the lane."
 metadata:
   tier: task
-  version: 0.5.0
+  version: 0.6.0
 allowed-tools:
   - Bash
   - Read
@@ -17,7 +17,7 @@ allowed-tools:
 A lane is finished when its pull request is merged at the commit an independent review looked at. Between the worker's report and that merge lie a handful of steps. Each is one call of `bin/ytstack-finish-lane`, which prints what it did or what it read and refuses instead of assuming. Whether a person has to make the merge is decided per change, from the class its reviewer stated and from what the project declared (`docs/ux/review-policy-format.md`). After the merge the release is watched. This skill is for the session that dispatched the lane, not for the worker.
 
 <HARD-GATE>
-Do NOT commission a review before `wait-head` passed. Do NOT call a lane ready on anything but a `gates` read made in this run. Do NOT merge unless `MERGE_BY` is `coordinator`, or it is `risk` and a `route` call of this run printed `route: unattended` for the reviewed commit. Do NOT merge at all when a standing instruction reserves the merge. Do NOT record a class or a lens verdict that its reviewer did not report. Do NOT deploy, restart, revert or roll back anything on the target.
+Do NOT commission a review before `wait-head` passed. Do NOT call a lane ready on anything but a `gates` read made in this run. Do NOT merge unless `MERGE_BY` is `coordinator`, or it is `risk` and a `route` call of this run printed `route: unattended` for the reviewed commit. Do NOT merge at all when a standing instruction reserves the merge. Do NOT record a class or a lens verdict that its reviewer did not report. Do NOT deploy, restart, revert or roll back anything on the target. Do NOT close the lane's pull request, reopen it to retrigger checks or delete its branch: a lane that waits for the cap is `parked` with its pull request open, a check reruns with `gh run rerun`.
 This applies to EVERY lane regardless of how small the diff is.
 </HARD-GATE>
 
@@ -352,7 +352,7 @@ The route speaks about the change, not about the host: the checks, the threads a
 "${CLAUDE_SKILL_DIR}/../../bin/ytstack-finish-lane" -C {WT} gates --pr {N} --reviewed-head {SHA} --verdict-pattern '^Verdict: approved'
 ```
 
-Add `--max-open {n}` when a standing instruction or the plan caps the open pull requests, and `--allow-no-checks` only when the project states that this repository runs no checks. The output is one line per gate (`ok` or `FAIL`) and a last line `read <UTC time>`. Keep both for the report.
+Add `--max-open {n}` when a standing instruction or the plan caps the open pull requests (the gate counts the ones ready for review; drafts do not count), and `--allow-no-checks` only when the project states that this repository runs no checks. The output is one line per gate (`ok` or `FAIL`) and a last line `read <UTC time>`. Keep both for the report.
 
 All hold: `ytstack-frontier set {REF} --status ready --next "merge at {SHA}"`. Otherwise the failing gate says what happens next:
 
@@ -363,7 +363,7 @@ All hold: `ytstack-frontier set {REF} --status ready --next "merge at {SHA}"`. O
 | `review` | changes are requested on this head, or the posted verdict is missing | Open findings go to the worker. A missing verdict means Step 7 did not happen on this head. |
 | `threads` | a review thread is unresolved | It is answered and resolved by whoever owns it: the worker for a finding in its code, the human for a question to them. You resolve no thread you did not open. |
 | `mergeable` | a conflict with the base, or the host has not decided | Conflict: the worker integrates the base; the head moves, so the fix round follows. Undecided: read again. |
-| `open-prs` | more pull requests are open than the cap | Finish others first. The lane stays where it is. |
+| `open-prs` | more pull requests are ready for review than the cap | Finish others first. The lane waits as `parked` (`"${CLAUDE_SKILL_DIR}/../../bin/ytstack-frontier" set {REF} --status parked --next "wait for the cap"`) with its pull request open; none is closed to make room. |
 
 ### Step 11: Merge or hand over
 
