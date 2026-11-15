@@ -104,6 +104,32 @@ has "behind: the pointer origin has" "$OUT" "M050 / S01 / T02"
 case "$OUT" in *"M042-S03-T07 is still the active task"*) bad "behind: no reminder for the stale local pointer";; *) ok "behind: no reminder for the stale local pointer";; esac
 OUT=$(fire "$MAIN"); eq "behind: said once per origin head" "" "$OUT"
 SID=c1; OUT=$(fire "$MAIN"); has "behind: said in a coordinate session too" "$OUT" "behind origin/main"
+# PR #94 review: origin's copy only when strictly behind, origin changed it and there is no local edit
+printf 'current_milestone: M044\nactive_slice: S01\nactive_task: T01\n' > "$MAIN/.ytstack/STATE.md"
+SID=b2; OUT=$(fire "$MAIN"); has "behind with a local edit: the local pointer" "$OUT" "M044-S01-T01 is still the active task"
+case "$OUT" in *"behind origin"*) bad "and no behind message";; *) ok "and no behind message";; esac
+( cd "$MAIN" && git commit -qam "local pointer" ) >/dev/null 2>&1
+SID=b3; OUT=$(fire "$MAIN"); has "diverged: the local pointer" "$OUT" "M044-S01-T01 is still the active task"
+case "$OUT" in *"behind origin"*|*"ff-only"*) bad "diverged: no ff-only message";; *) ok "diverged: no ff-only message";; esac
+
+echo "# user scope behind origin: no behind logic (PR #94 review)"
+UH="$TMP/uhome"; U="$TMP/u"; mkdir -p "$UH"; git init -q --bare "$TMP/u.git"
+( mkdir -p "$U" && cd "$U" || exit 2; git init -q && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false
+  echo a > a && git add a && git commit -qm a && git branch -M main && git remote add origin "$TMP/u.git" && git push -q -u origin main
+  echo b > b && git add b && git commit -qm b && git push -q origin main && git checkout -q --detach HEAD~1 && git branch -q -f main HEAD && git checkout -q main ) >/dev/null 2>&1
+UK=$(HOME="$UH" bash -c '. "$1/hooks/lib/git-ctx.sh"; yt_git_ctx "$2"; printf %s "$YT_REPO_KEY"' _ "$ROOT" "$U")
+mkdir -p "$UH/.ytstack/projects/$UK"; printf 'current_milestone: M042\nactive_slice: S03\nactive_task: T07\n' > "$UH/.ytstack/projects/$UK/STATE.md"
+OUT=$(printf '{"session_id":"u1","cwd":%s,"hook_event_name":"Stop"}' "$(jstr "$U")" | HOME="$UH" XDG_STATE_HOME="$XDG_STATE_HOME" bash "$HOOK" 2>/dev/null)
+has "user scope: the ordinary reminder" "$OUT" "M042-S03-T07 is still the active task"
+case "$OUT" in *"behind"*|*" /  / "*) bad "user scope: no empty origin pointer";; *) ok "user scope: no empty origin pointer";; esac
+
+echo "# old session dirs that only held stop-said are pruned (PR #94 review)"
+SHM="$XDG_STATE_HOME/ytstack/sessions"
+mkdir -p "$SHM/old1" "$SHM/oldc"; : > "$SHM/old1/stop-said"; : > "$SHM/oldc/stop-said"; : > "$SHM/oldc/coordinate"
+touch -t 202001010000 "$SHM/old1/stop-said" "$SHM/oldc/stop-said"
+SID=fresh2; printf 'current_milestone: M042\nactive_slice: S09\nactive_task: T09\n' > "$WT/.ytstack/STATE.md"; OUT=$(fire "$WT"); has "a new session's reminder" "$OUT" "M042-S09-T09"
+eq "an old stop-said-only dir is gone" no "$([ -d "$SHM/old1" ] && echo yes || echo no)"
+eq "an old dir with a coordinate marker stays" yes "$([ -d "$SHM/oldc" ] && echo yes || echo no)"
 
 echo
 echo "$PASS passed, $FAIL failed"

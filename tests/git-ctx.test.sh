@@ -456,13 +456,30 @@ BC=$(new_repo bo-clone); mkdir -p "$BC/.ytstack"
   git remote add origin "$BO"; git push -q -u origin main
   printf 'current_milestone: M007\n' > .ytstack/STATE.md; git commit -qam next; git push -q origin main
   git checkout -q --detach HEAD~1 && git branch -q -f main HEAD && git checkout -q main ) >/dev/null 2>&1
-bo() { ( . "$LIB"; yt_behind_origin "$1" "$1/.ytstack"; printf '%s|%s|%s' "$YT_BEHIND_N" "$YT_BEHIND_REF" "$YT_BEHIND_STATE" ); }
-eq "behind: one commit behind origin/main, STATE read from it" "1|origin/main|current_milestone: M007" "$(bo "$BC")"
+# bo <dir> [yt dir] -> behind|ahead|ref|changed|origin STATE when it is to be read
+bo() { ( . "$LIB"; yt_behind_origin "$1" "${2:-$1/.ytstack}"; printf '%s|%s|%s|%s|%s' "$YT_BEHIND_N" "$YT_AHEAD_N" "$YT_BEHIND_REF" "$YT_BEHIND_CHANGED" "$YT_BEHIND_STATE" ); }
+eq "behind: strictly behind, origin changed STATE.md: read from origin" "1|0|origin/main|yes|current_milestone: M007" "$(bo "$BC")"
+printf 'current_milestone: M009\n' > "$BC/.ytstack/STATE.md"
+eq "behind: a local edit of STATE.md: the local file stays" "1|0|origin/main|yes|" "$(bo "$BC")"
+( cd "$BC" && git commit -qam local ) >/dev/null 2>&1
+eq "behind: diverged (a local commit): counted, the local file stays" "1|1|origin/main|yes|" "$(bo "$BC")"
+( cd "$BC" && git checkout -q --detach HEAD~1 && git branch -q -f main HEAD && git checkout -q main ) >/dev/null 2>&1
+eq "behind: user scope (.ytstack outside the checkout): nothing" "0|0||no|" "$(bo "$BC" "$TMP/elsewhere/.ytstack")"
 ( cd "$BC" && git checkout -q -b side ) >/dev/null 2>&1
-eq "behind: another branch is not the default branch" "0||" "$(bo "$BC")"
+eq "behind: another branch is not the default branch" "0|0||no|" "$(bo "$BC")"
 ( cd "$BC" && git checkout -q main && git merge -q --ff-only origin/main ) >/dev/null 2>&1
-eq "behind: up to date" "0||" "$(bo "$BC")"
-eq "behind: no origin" "0||" "$(bo "$(new_repo bo-plain)")"
+eq "behind: up to date" "0|0||no|" "$(bo "$BC")"
+BU=$(new_repo bo-unrel); ( cd "$BU" || exit 2; mkdir .ytstack; git branch -M main; printf 'current_milestone: M001\n' > .ytstack/STATE.md; git add -A; git commit -qm s
+  git init -q --bare "$TMP/bu.git"; git remote add origin "$TMP/bu.git"; git push -q -u origin main
+  echo y > y; git add y; git commit -qm unrelated; git push -q origin main
+  git checkout -q --detach HEAD~1 && git branch -q -f main HEAD && git checkout -q main ) >/dev/null 2>&1
+eq "behind: origin did not change STATE.md: the local file stays" "1|0|origin/main|no|" "$(bo "$BU")"
+BN=$(new_repo bo-untracked); ( cd "$BN" || exit 2; git branch -M main; git init -q --bare "$TMP/bn.git"; git remote add origin "$TMP/bn.git"; git push -q -u origin main
+  echo y > y; git add y; git commit -qm unrelated; git push -q origin main
+  git checkout -q --detach HEAD~1 && git branch -q -f main HEAD && git checkout -q main
+  mkdir .ytstack; printf 'current_milestone: M001\n' > .ytstack/STATE.md ) >/dev/null 2>&1
+eq "behind: an untracked STATE.md (origin has none): nothing" "0|0||no|" "$(bo "$BN")"
+eq "behind: no origin" "0|0||no|" "$(bo "$(new_repo bo-plain)")"
 
 echo
 echo "$PASS passed, $FAIL failed"

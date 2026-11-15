@@ -120,19 +120,20 @@ if [ ! -f "$STATE_FILE" ]; then
 fi
 
 # A checkout on the default branch behind origin/<default> (local refs, no
-# fetch; issue #82): its STATE.md is stale, so pointer and Next action come
-# from origin's copy, and the line says how far behind it is.
+# fetch; issue #82). Strictly behind, origin changed STATE.md and no local
+# edit: pointer and Next action come from origin's copy and the STATE lint
+# waits. Diverged or locally edited while origin changed it: the local file
+# is read and the line says so. Otherwise (user scope, untracked STATE.md,
+# origin did not touch it): nothing.
 STATE_TEXT=$(cat "$STATE_FILE" 2>/dev/null)
 BEHIND_LINE=""
-YT_BEHIND_N=0
+YT_BEHIND_STATE=""
 [ "$YT_IS_GIT" != yes ] || yt_behind_origin "$YT_TOPLEVEL" "$YT_DIR"
-if [ "${YT_BEHIND_N:-0}" -gt 0 ]; then
-  if [ -n "$YT_BEHIND_STATE" ]; then
-    STATE_TEXT="$YT_BEHIND_STATE"
-    BEHIND_LINE="Checkout: $YT_BEHIND_N commit(s) behind $YT_BEHIND_REF (local refs, not fetched). Pointer and Next action are read from $YT_BEHIND_REF; the other files here are older, so the STATE lint waits. Bring the checkout up to date first: git merge --ff-only $YT_BEHIND_REF."
-  else
-    BEHIND_LINE="Checkout: $YT_BEHIND_N commit(s) behind $YT_BEHIND_REF (local refs, not fetched); the files here are older. Bring the checkout up to date first: git merge --ff-only $YT_BEHIND_REF."
-  fi
+if [ -n "$YT_BEHIND_STATE" ]; then
+  STATE_TEXT="$YT_BEHIND_STATE"
+  BEHIND_LINE="Checkout: $YT_BEHIND_N commit(s) behind $YT_BEHIND_REF (local refs, not fetched). Pointer and Next action are read from $YT_BEHIND_REF; the other files here are older, so the STATE lint waits. Bring the checkout up to date first: git merge --ff-only $YT_BEHIND_REF."
+elif [ "${YT_BEHIND_CHANGED:-no}" = yes ]; then
+  BEHIND_LINE="Checkout: $YT_AHEAD_N ahead, $YT_BEHIND_N behind $YT_BEHIND_REF (local refs, not fetched), and $YT_BEHIND_REF changed STATE.md: the local STATE.md is read as it is here. Merge $YT_BEHIND_REF before you trust the pointer."
 fi
 
 # Extract frontmatter fields from STATE.md
@@ -174,7 +175,7 @@ IN_PROGRESS_N=${IN_PROGRESS_N:-0}
 # STATE pointer lint + ceremony dials (M018): read-only, both from the lib.
 yt_state_lint "$YT_DIR" >/dev/null
 LINT_LINES=""
-if [ "${YT_STATE_WARN_COUNT:-0}" -gt 0 ] && [ "${YT_BEHIND_N:-0}" -eq 0 ]; then
+if [ "${YT_STATE_WARN_COUNT:-0}" -gt 0 ] && [ -z "$YT_BEHIND_STATE" ]; then
   LINT_LINES="STATE lint ($YT_STATE_WARN_COUNT):
 $(printf '%s\n' "$YT_STATE_WARNINGS" | head -5 | sed 's/^/- /')
 A malformed pointer stops plan-task and summarize-task: fix STATE.md first. Size and history findings do not block; ytstack:reconcile moves history out with your consent."

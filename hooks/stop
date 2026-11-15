@@ -168,9 +168,10 @@ rotate_msg
 
 # ---- 1. task reminder (issue #82) ---------------------------------------------------
 # Once per session and pointer (<session dir>/stop-said holds what was said).
-# On the default branch behind origin/<default> (local refs, no fetch) the
-# local STATE.md is stale: one message with the count and origin's pointer
-# instead, also in coordinate mode. A coordinate session holds no task: no
+# On the default branch strictly behind origin/<default> (local refs, no
+# fetch), when origin changed STATE.md and the local one has no edit
+# (yt_behind_origin), the local STATE.md is stale: one message with the count
+# and origin's pointer instead, also in coordinate mode. A coordinate session holds no task: no
 # reminder. A pointer older than YT_POINTER_STALE_DAYS is the STATE lint's
 # line W10 (SessionStart), not a message on every stop.
 said() { # said <key>: 0 when this session said it already; records it otherwise
@@ -178,7 +179,15 @@ said() { # said <key>: 0 when this session said it already; records it otherwise
   case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) return 1 ;; esac
   f="$(yt_session_home)/$sid/stop-said"
   grep -qxF -- "$1" "$f" 2>/dev/null && return 0
-  mkdir -p "${f%/*}" 2>/dev/null && printf '%s\n' "$1" >> "$f" 2>/dev/null
+  if [ ! -d "${f%/*}" ]; then
+    # A new session dir: prune the dirs of old sessions that only ever held
+    # stop-said (14 days untouched); a coordinate session's dir stays.
+    find "$(yt_session_home)" -mindepth 2 -maxdepth 2 -name stop-said -mtime +14 2>/dev/null | while IFS= read -r o; do
+      [ "$(ls -A "${o%/*}" 2>/dev/null)" = stop-said ] && rm -f "$o" && rmdir "${o%/*}" 2>/dev/null
+    done
+    mkdir -p "${f%/*}" 2>/dev/null || return 1
+  fi
+  printf '%s\n' "$1" >> "$f" 2>/dev/null
   return 1
 }
 task_msg() {
@@ -190,7 +199,7 @@ task_msg() {
   get_field() { sed -n "s/^$1: *//p" 2>/dev/null | head -1; }
   if [ "$YT_IS_GIT" = yes ]; then
     yt_behind_origin "$YT_TOPLEVEL" "$ytd"
-    if [ "${YT_BEHIND_N:-0}" -gt 0 ]; then
+    if [ -n "$YT_BEHIND_STATE" ]; then
       said "behind:$(git -C "$YT_TOPLEVEL" rev-parse -q --verify "refs/remotes/$YT_BEHIND_REF" 2>/dev/null)" && return 0
       ptr="$(printf '%s\n' "$YT_BEHIND_STATE" | get_field current_milestone) / $(printf '%s\n' "$YT_BEHIND_STATE" | get_field active_slice) / $(printf '%s\n' "$YT_BEHIND_STATE" | get_field active_task)"
       MSG="ytstack: this checkout ($YT_TOPLEVEL) is $YT_BEHIND_N commit(s) behind $YT_BEHIND_REF (local refs, not fetched): its STATE.md is stale. $YT_BEHIND_REF points at $ptr. Bring it up to date (git merge --ff-only $YT_BEHIND_REF) before acting on the pointer."

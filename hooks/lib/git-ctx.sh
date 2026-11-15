@@ -708,22 +708,36 @@ yt_standing_default_ref() {
   return 0
 }
 
-# yt_behind_origin <toplevel> [yt_dir] (issue #82): is the checkout on the
+# yt_behind_origin <toplevel> <yt_dir> (issue #82): is the checkout on the
 # default branch and behind origin's copy of it? Local refs only, no fetch.
-# Sets YT_BEHIND_N (0 when not on the default branch, without an origin ref,
-# or not behind), YT_BEHIND_REF (origin/<branch>) and, for a <yt_dir> inside
-# the checkout, YT_BEHIND_STATE: STATE.md as that ref has it ("" without one).
+# Only for a <yt_dir> inside the checkout whose STATE.md origin has; else
+# (user scope, an untracked STATE.md) everything stays 0 / "".
+#   YT_BEHIND_N, YT_AHEAD_N  commits HEAD..origin/<branch> and back
+#   YT_BEHIND_REF            origin/<branch>
+#   YT_BEHIND_CHANGED        yes when origin changed STATE.md since the
+#                            merge base, else no
+#   YT_BEHIND_STATE          origin's STATE.md, only when that is the one to
+#                            read: strictly behind (not diverged), origin
+#                            changed it, and the working tree's STATE.md is
+#                            HEAD's (no local edit)
 yt_behind_origin() {
-  local top="$1" ytd="${2:-}" r cur n
-  YT_BEHIND_N=0; YT_BEHIND_REF=""; YT_BEHIND_STATE=""
+  local top="$1" ytd="${2:-}" r cur n a rel txt
+  YT_BEHIND_N=0; YT_AHEAD_N=0; YT_BEHIND_REF=""; YT_BEHIND_CHANGED=no; YT_BEHIND_STATE=""
+  case "$ytd" in "$top"/*) rel="${ytd#"$top"/}/STATE.md" ;; *) return 0 ;; esac
   r=$(yt_standing_default_ref "$top")
   case "$r" in refs/remotes/origin/*) ;; *) return 0 ;; esac
   cur=$(git -C "$top" symbolic-ref -q --short HEAD 2>/dev/null)
   [ -n "$cur" ] && [ "$cur" = "${r#refs/remotes/origin/}" ] || return 0
   n=$(git -C "$top" rev-list --count "HEAD..$r" 2>/dev/null)
   case "$n" in ''|0|*[!0-9]*) return 0 ;; esac
-  YT_BEHIND_N=$n; YT_BEHIND_REF="origin/$cur"
-  case "$ytd" in "$top"/*) YT_BEHIND_STATE=$(git -C "$top" show "$r:${ytd#"$top"/}/STATE.md" 2>/dev/null) ;; esac
+  txt=$(git -C "$top" show "$r:$rel" 2>/dev/null)
+  [ -n "$txt" ] || return 0
+  a=$(git -C "$top" rev-list --count "$r..HEAD" 2>/dev/null); case "$a" in ''|*[!0-9]*) a=0 ;; esac
+  YT_BEHIND_N=$n; YT_AHEAD_N=$a; YT_BEHIND_REF="origin/$cur"
+  git -C "$top" diff --quiet "HEAD...$r" -- "$rel" 2>/dev/null || YT_BEHIND_CHANGED=yes
+  if [ "$a" -eq 0 ] && [ "$YT_BEHIND_CHANGED" = yes ] && git -C "$top" diff --quiet HEAD -- "$rel" 2>/dev/null; then
+    YT_BEHIND_STATE="$txt"
+  fi
   return 0
 }
 
