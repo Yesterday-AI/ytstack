@@ -16,7 +16,7 @@
     <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-0A0A0A">
     <img alt="Codex" src="https://img.shields.io/badge/Codex-plugin-0A0A0A">
     <img alt="Kimi Code" src="https://img.shields.io/badge/Kimi%20Code-plugin-0A0A0A">
-    <img alt="skills" src="https://img.shields.io/badge/skills-39-FC4E14">
+    <img alt="skills" src="https://img.shields.io/badge/skills-40-FC4E14">
     <img alt="hooks" src="https://img.shields.io/badge/hooks-9-FC4E14">
   </p>
 
@@ -24,7 +24,7 @@
     <tr>
       <td align="center"><strong>1</strong><br/>install</td>
       <td align="center"><strong>0</strong><br/>separate runtimes</td>
-      <td align="center"><strong>39</strong><br/>curated skills</td>
+      <td align="center"><strong>40</strong><br/>curated skills</td>
       <td align="center"><strong>MIT</strong><br/>open source</td>
     </tr>
   </table>
@@ -146,6 +146,7 @@ SessionStart hook injects `STATE.md` + the `using-ytstack` directive before your
   -> "what did the bots catch" -> ytstack:review-lessons    (escapes of the own reviewers, a proposed line)
   -> "what does prod report"   -> ytstack:signal-intake     (findings under .ytstack/signals/, read only)
   -> "production is down"      -> ytstack:incident          (record, mitigations you run, cause afterwards)
+  -> "learn from this"         -> ytstack:lesson            (class, a check first, recorded; repeats count)
 ```
 
 Continuing an open task:
@@ -246,7 +247,7 @@ Start a new session. With trusted hooks, ytstack supplies its runtime context
 automatically. Without hooks, first ask Codex to read the installed plugin's
 `codex/adapter.md`, then select `$ytstack:using-ytstack` in the skill picker.
 On local hosts with hook support, review and trust the plugin hooks for automatic
-startup context, compaction handoff, and session journaling. All supported hosts load the same 39 skill files. Worktree subagents, Claude Agent Teams and edit/commit hooks remain
+startup context, compaction handoff, and session journaling. All supported hosts load the same 40 skill files. Worktree subagents, Claude Agent Teams and edit/commit hooks remain
 Claude-only; Codex and Kimi use the sequential task flow and explicit verification.
 See [Codex setup and compatibility](docs/codex.md) for local development,
 hook-free usage, and validation.
@@ -260,7 +261,7 @@ Install a reviewed local checkout from Kimi's plugin manager, then reload:
 /plugins reload
 ```
 
-Use `/new` for a fresh session and `/plugins info ytstack` to check 39 skills and
+Use `/new` for a fresh session and `/plugins info ytstack` to check 40 skills and
 five lifecycle hooks. Invoke skills as `/skill:ytstack:<name>`. Kimi combines the
 static sessionStart skill with pending context consumed once through
 UserPromptSubmit; SessionStart hook stdout is not a context channel.
@@ -352,6 +353,7 @@ ytstack's milestone / slice / task loop is the default, not a mandate. These key
 | `autonomy` | `loop`, `step` | `loop` chains plan-task -> TDD -> verify -> summarize inside a slice without asking (stops at slice boundaries and HARD-GATEs); `step` returns control after each skill |
 | `quick_lane` | `on`, `off` | one-sentence changes ("rename X", "bump Y", "fix the off-by-one in Z") go through `ytstack:quick-task`: a `Q###-PLAN/SUMMARY` pair under `.ytstack/quick/`, TDD + verification, no pitch, no review, no pointer change |
 | `minimal_code` | `on`, `off` | the SessionStart hook injects the pointer to `ytstack:minimal-code`, the work contract: smallest complete change (reach before size, six-rung YAGNI ladder, never-cut list, `shortcut:` markers) and smallest sufficient evidence (run what the plan names, as often as it says) |
+| `upstream_feedback` | `suggest`, `file`, `off` | what concerns ytstack itself: `suggest` drafts an issue and asks you; `file` searches, then files or comments at Yesterday-AI/ytstack (public, so opt-in); `off` sends nothing. Falls back to `upstream_feedback=` in `~/.ytstack/config` |
 | `merge_by` | `risk`, `human`, `coordinator` | who merges a finished lane: `risk` lets the coordinator merge when `bin/ytstack-risk route` says `unattended` and the host's gates hold, otherwise you; `human` always you; `coordinator` always the coordinator. A value outside the three reads as `human` |
 | `evidence_dir` | a path, default `.ytstack/evidence` | where a visual review stores its screenshots and their `MANIFEST` |
 
@@ -412,7 +414,7 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 
 Ships:
 
-- 39 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), six adapted from gstack and synced with upstream (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`), review and production (`visual-review`, `review-lessons`, `signal-intake`, `incident`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
+- 40 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), six adapted from gstack and synced with upstream (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`), review and production (`visual-review`, `review-lessons`, `signal-intake`, `incident`, `lesson`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
 - 9 Claude Code hooks (SessionStart / PreCompact / SessionEnd / Stop / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers + STATE lint + lifecycle hints.
 - A status line segment (`bin/ytstack-status`): project progress from an optional `progress` block in `STATE.md`, or the active slice's task count, plus the current task. See [`docs/statusline.md`](./docs/statusline.md).
 - An optional PR watch (`bin/ytstack-pr-watch`, off until `enable`): tells the session that opened a pull request about red CI, unresolved bot review threads and merge conflicts, through hooks for Claude Code and Codex and a 60-second background worker. See [`docs/pr-watch.md`](./docs/pr-watch.md).
@@ -434,7 +436,7 @@ ytstack/
 ├── hooks/                       9 hook scripts + pr-watch (opt-in) + hooks.json + lib/git-ctx.sh (shared resolver)
 ├── kimi/                        Kimi runtime adapter
 ├── tools/pr-watch/              PR watch engine (Python 3.9+, stdlib only), driven by bin/ytstack-pr-watch
-├── skills/                      39 skill packages shared by all hosts
+├── skills/                      40 skill packages shared by all hosts
 ├── bin/                         ytstack-check (contracts), ytstack-spec (technical spec: lint, drift, impact), ytstack-brief (brief for a dispatched worker, report check), ytstack-frontier (lanes, claims, what may start), ytstack-plans (a plan outside .ytstack/ the frontier cannot see), ytstack-finish-lane (a lane to a merged pull request), ytstack-risk (whether a change merges without a person), ytstack-review-escapes (review-bot findings the own reviewers missed), ytstack-runtime (the product per worktree, RUNTIME.md), ytstack-handover (staged script for a human-only step), ytstack-questions (questions for the human), ytstack-watch (pull request changes, release watch), ytstack-upkeep (what needs a look, for a schedule), ytstack-signals (production findings, incident records), ytstack-gstack-diff (upstream changes of the adapted gstack skills), ytstack-status (status line segment), ytstack-pr-watch (opt-in PR watch), ytstack-codex, ytstack-kimi, dev-reinstall
 ├── tests/                       27 shell test suites + run-all.sh (--linux via Docker), pr_watch/ (unittest), Kimi unittest suites
 ├── vendor/                      read-only subtree: superpowers v7.0.2 (the six gstack skills are adapted under skills/, not vendored)
@@ -480,7 +482,7 @@ ytstack/
 
 ## Issues and support
 
-Found a bug, hit a rough edge, or want a skill that does not exist yet? Open an issue at [Yesterday-AI/ytstack/issues](https://github.com/Yesterday-AI/ytstack/issues).
+Found a bug, hit a rough edge, or want a skill that does not exist yet? Open an issue at [Yesterday-AI/ytstack/issues](https://github.com/Yesterday-AI/ytstack/issues). Agents do this for you per `upstream_feedback` (`docs/ux/upstream-feedback.md`).
 
 - **Bug** -- use the bug-report template. Name the skill or hook, the session that triggered it, what you expected, and what happened.
 - **Feature / new skill** -- use the feature-request template. Trace it to a real session (see [CONTRIBUTING.md](./CONTRIBUTING.md) "Speculative features"); "might be useful" is not a problem statement.

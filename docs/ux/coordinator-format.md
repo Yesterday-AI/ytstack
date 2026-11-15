@@ -11,7 +11,7 @@ All files live in the project's `.ytstack/` directory and are user-owned like ev
 
 ## `LANES.md` -- who works on what
 
-A lane is one unit of delegated work: by default one slice (`M004-S02`), where a plan needs it one task (`M004-S02-T03`) or a named piece outside the milestone plan (`review-pr-12`). `STATE.md` stays the pointer of the session's own position and links this file; the table does not live in `STATE.md`.
+A lane is one unit of delegated work: by default one slice (`M004-S02`), where a plan needs it one task (`M004-S02-T03`), a lesson whose check is still to be built (`lesson-F012`, see below) or a named piece outside the milestone plan (`review-pr-12`). `STATE.md` stays the pointer of the session's own position and links this file; the table does not live in `STATE.md`.
 
 ```markdown
 ---
@@ -64,6 +64,17 @@ M004-S04	ready
 The list also reads the lanes table: a row with Status `merged` counts as done even while the roadmap checkbox is still open, and a row with Status `blocked` is listed as blocked with its next action. A lane that an open or asked question names under `blocks:` is blocked until the question is answered.
 
 A claim is written before the work is dispatched: `ytstack-frontier claim <lane> --by <worker>`. Claiming a lane that is already held fails and names the holder. That is what keeps a second message to a running lane from starting the same work twice. The coordinator dispatches again whenever the frontier changes, not once per milestone.
+
+### Lesson lanes
+
+Every incident ends with a lesson (`docs/ux/signal-format.md`, "Lessons"). A lesson whose target is a check that nobody built yet, `open` or `planned`, is work that may start like a slice. The frontier lists it after the slices of the milestone, also when no milestone is open:
+
+```
+lesson-F012	ready	lesson:ci:flaky-order
+lesson-F014	blocked	unplanned: the lesson has no ## Files or no ## Verification
+```
+
+The lesson carries its own plan: a `## Files` and a `## Verification` section after `## Next`. Without them the lane is blocked until the lesson step or the coordinator writes them. A question that names `lesson-F012` under `blocks:` blocks it like a slice. The brief comes from `ytstack-brief render --lesson F012` (with `--kind review --head <sha>` for its review); the lane goes through `finish-lane` like any other. After the merge the coordinator sets the lesson `fixed` (`ytstack-signals set F012 --state fixed`); until then the frontier lists the merged lane as done, with a reminder.
 
 ## Lane kinds
 

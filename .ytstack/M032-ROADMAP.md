@@ -3,9 +3,9 @@ milestone: M032
 project: ytstack
 size: M
 created: 2026-11-15T00:45:00Z
-status: planned
+status: done
 total_slices: 3
-completed_slices: 0
+completed_slices: 3
 ---
 
 # M032 Roadmap
@@ -18,9 +18,9 @@ completed_slices: 0
 
 Slice detail lives in per-slice `M032-S##-PLAN.md` files, created by `ytstack:slice-milestone`.
 
-- [ ] S01 -- Incident and lesson records with class, target and count, and a check that every incident has a lesson with a target.
-- [ ] S02 -- The shared lesson step, called by `incident`, `systematic-debugging`, `finish-lane` and `coordinate`.
-- [ ] S03 -- Open lessons in `coordinate`'s status and the frontier, repeats per class in `retro`.
+- [x] S01 -- Incident and lesson records with class, target and count, and a check that every incident has a lesson with a target.
+- [x] S02 -- The shared lesson step, called by `incident`, `systematic-debugging`, `finish-lane` and `coordinate`.
+- [x] S03 -- Open lessons in `coordinate`'s status and the frontier, repeats per class in `retro`.
 
 ## Run order
 

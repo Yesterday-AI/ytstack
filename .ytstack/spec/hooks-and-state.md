@@ -10,7 +10,7 @@ sources:
   - docs/statusline.md
   - docs/pr-watch.md
   - docs/kimi.md
-verified_at: 7ac1dfb
+verified_at: c5b405d
 ---
 
 # hooks-and-state
@@ -31,7 +31,7 @@ The lifecycle hooks under `hooks/` and the shared library `hooks/lib/git-ctx.sh`
 - `yt_resolve_yt_dir` finds the `.ytstack` directory: `<toplevel>/.ytstack` first (scope `project`), else `~/.ytstack/projects/<repo-key>` (scope `user`), else none. A linked worktree uses its own copy, not the main checkout's.
 - Volatile state lives outside the tree under `<base>/repos/<repo-key>/worktrees/<worktree-key>/sessions/<session-id>/`. `yt_state_base` defines the order of candidate bases. A missing session id becomes `nosession`.
 - If the base cannot be created, the state directory falls back to `<toplevel>/.ytstack/.local` when the checkout has a `.ytstack`, else to a per-user temp directory. `yt_ensure_gitignore` adds the ignore line for that fallback. Skills call it, hooks do not.
-- `yt_pref` reads one key from `PREFERENCES.md` (`key: value` or `key=value`; quotes and a trailing comment are stripped). `yt_prefs` reads the ceremony dials and sets `YT_PREF_MERGE_BY` (default `risk`) and `YT_PREF_EVIDENCE_DIR` (default `.ytstack/evidence`). An invalid value is replaced by its default and reported in `YT_PREF_WARNINGS`; an invalid `merge_by` is replaced by `human`, so that a typo never merges without a person.
+- `yt_pref` reads one key from `PREFERENCES.md` (`key: value` or `key=value`; quotes and a trailing comment are stripped). `yt_prefs` reads the ceremony dials and sets `YT_PREF_MERGE_BY` (default `risk`) and `YT_PREF_EVIDENCE_DIR` (default `.ytstack/evidence`). An invalid value is replaced by its default and reported in `YT_PREF_WARNINGS`; an invalid `merge_by` is replaced by `human`, so that a typo never merges without a person. `yt_upstream_feedback` (called by `yt_prefs`) sets `YT_PREF_UPSTREAM_FEEDBACK` from `PREFERENCES.md`, else from the last `upstream_feedback=` line of `~/.ytstack/config`, else `suggest`, and `YT_PREF_UPSTREAM_FEEDBACK_FROM` (`preferences`, `config`, `default`); an invalid value reads as `suggest`, so that a typo never publishes. `hooks/session-start` injects nothing for it; the injected `using-ytstack` names the channel.
 - `yt_epoch` turns an ISO time into seconds with BSD `date -j`, GNU `date -d`, or, for BusyBox, `date -d` on the form `YYYY-MM-DD HH:MM:SS`.
 - `yt_brownfield_signals` counts up to six signs of an existing codebase and names which file would feed which artifact. The comment above the function lists the counted signals and the hint-only ones.
 - `yt_commit_ref_pattern` renders a task's commit pattern from `commit_ref_pattern` in `PREFERENCES.md`, or from the default. `yt_task_commits` lists commits whose subject matches it. When none match, it falls back to the commits on the current branch after the merge-base with the default branch, and reports which source it used.

@@ -2,8 +2,8 @@
 name: systematic-debugging
 metadata:
   tier: core
-  version: 0.1.1
-description: "Root-cause debugging through the vendored superpowers systematic-debugging procedure, with findings routed into KNOWLEDGE.md and DECISIONS.md. Use when hitting a bug, a failing test, flaky behaviour or any unexpected output, before proposing a fix. Not for a one-line fix with an obvious, already-known cause (quick-task)."
+  version: 0.2.0
+description: "Root-cause debugging through the vendored superpowers systematic-debugging procedure, with the lesson recorded through ytstack:lesson and decisions routed into DECISIONS.md. Use when hitting a bug, a failing test, flaky behaviour or any unexpected output, before proposing a fix. Not for a one-line fix with an obvious, already-known cause (quick-task)."
 allowed-tools:
   - Bash
   - Read
@@ -53,7 +53,7 @@ HARD-GATE: none. Debugging may happen before ytstack is initialized.
 **A test that fails only sometimes.** Do not rerun it until it is green, and do not skip it. Raise the reproduction rate first: run it in a loop, alone and inside the full suite, with the same seed and with a changed one, and pin the randomness, the clock and the order. Then run the same test on the base commit. If it flakes there too, the flake is not this change's defect: it becomes a tracked follow-up with the reproduction rate and the conditions, and the required check on the current commit still has to turn green before the change is called done. If it fails only with the change, it is a defect of the change and goes through the root-cause procedure below. Where the vendored text and this paragraph differ, this paragraph applies.
 
 After the vendored procedure completes:
-- If `HAS_YTSTACK=yes` and the root cause reveals a project-level pattern (e.g. "config race between env-vars and config.json reads that will recur elsewhere"), append to `KNOWLEDGE.md` under `## Gotchas` or `## Lessons learned`.
+- Once the root cause is known, always: invoke `ytstack:lesson`. Hand it what happened and the cause in two sentences, with the commit and the failing check, the area (`production` for an incident record or a production finding, `ci` for a red check, `review` for a defect a review found, `evidence` or `process` otherwise), the incident record's id when the debugging started from one, and that this session may change code within the task's files: the regression test the fix needs is usually the lesson's check (`check:<test path>`), and it is `fixed` once that test passes on the fix. A project-level pattern no test can see (e.g. "config race between env-vars and config.json reads that will recur elsewhere") becomes the lesson's `KNOWLEDGE.md` entry through that skill, not a line written here, and never a line in `AGENTS.md` or `CLAUDE.md`.
 - If the root cause forces an architectural decision (e.g. "we must enforce X pattern across all future modules"), append to `DECISIONS.md` in append-only format.
 - If the root cause relates to an active task, reference it in the task-plan body so future sessions see the context.
 

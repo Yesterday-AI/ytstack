@@ -216,6 +216,24 @@ for v in human coordinator risk; do
 done
 printf 'merge_by: robot\nevidence_dir: shots/\n' > "$MP/PREFERENCES.md"
 eq "merge_by: invalid -> human + warning; evidence_dir without the trailing slash" "human|shots|merge_by: 'robot' is not human|coordinator|risk (using human)" "$(merge_pref "$MP")"
+# upstream_feedback (M033, docs/ux/upstream-feedback.md): PREFERENCES first, then ~/.ytstack/config, then suggest
+up_pref() { ( . "$LIB"; HOME="$UH"; yt_prefs "$1" >/dev/null; printf '%s|%s|%s' "$YT_PREF_UPSTREAM_FEEDBACK" "$YT_PREF_UPSTREAM_FEEDBACK_FROM" "${YT_PREF_WARNINGS:-}" ); }
+UP="$TMP/upprefs"; UH="$TMP/uphome"; mkdir -p "$UP" "$UH/.ytstack"
+eq "upstream_feedback: default suggest" "suggest|default|" "$(up_pref "$UP")"
+for v in suggest file off; do
+  printf 'upstream_feedback: %s\n' "$v" > "$UP/PREFERENCES.md"; eq "upstream_feedback: $v from PREFERENCES" "$v|preferences|" "$(up_pref "$UP")"
+done
+rm -f "$UP/PREFERENCES.md"
+printf 'pr_watch=on\nupstream_feedback=off\nupstream_feedback = file  # all my projects\n' > "$UH/.ytstack/config"
+eq "upstream_feedback: the last line of ~/.ytstack/config" "file|config|" "$(up_pref "$UP")"
+printf 'upstream_feedback: off\n' > "$UP/PREFERENCES.md"
+eq "upstream_feedback: PREFERENCES wins over the config" "off|preferences|" "$(up_pref "$UP")"
+printf 'upstream_feedback: always\n' > "$UP/PREFERENCES.md"
+eq "upstream_feedback: invalid in PREFERENCES -> suggest + warning" "suggest|preferences|upstream_feedback: 'always' is not suggest|file|off (using suggest)" "$(up_pref "$UP")"
+rm -f "$UP/PREFERENCES.md"; printf 'upstream_feedback=yes\n' > "$UH/.ytstack/config"
+eq "upstream_feedback: invalid in the config -> suggest + warning" "suggest|config|upstream_feedback: 'yes' is not suggest|file|off (using suggest)" "$(up_pref "$UP")"
+rm -rf "$UH/.ytstack"
+eq "upstream_feedback: no config file -> suggest" "suggest|default|" "$(up_pref "$UP")"
 eq "pref: absent file -> default"            task "$(pref "$PY" granularity task)"
 eq "pref: absent file, no default -> empty"  ""   "$(pref "$PY" granularity)"
 eq "prefs: defaults without file"            "task|loop|on|on|" "$(prefs "$PY")"

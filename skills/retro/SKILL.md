@@ -3,7 +3,7 @@ name: retro
 description: "Milestone retrospective fed with the milestone's task summaries, deviations and follow-ups plus the git history of the milestone window, written to M###-RETRO.md. Use after a milestone's last slice closed and reassess-roadmap ran, or when the user says retro, retrospective, what did we learn, lessons from this milestone. Not mid-milestone (reassess-roadmap) and not for closing a task (summarize-task)."
 metadata:
   tier: task
-  version: 1.1.0
+  version: 1.3.0
   upstream: "gstack v1.99.3.0 (retro/, commit 1d3c63c53)"
 allowed-tools:
   - Bash
@@ -39,12 +39,13 @@ You MUST create a task for each of these items and complete them in order:
 5. **Gather metrics** -- one bash command, then the freshness guard
 6. **Shipping outcomes** -- merged PRs (only if `HAS_GH=yes`), CHANGELOG features, backlog (only if `TODOS=yes`)
 7. **Analyze** -- time, sessions, commit types, hotspots, sizes, focus, ship of the milestone, people, streaks
-8. **Milestone outcomes** -- exit criteria vs summaries, deviations, open follow-ups, plan completion; own reviewers vs bots (only if `OWN_REVIEWERS` is not `none`)
+8. **Milestone outcomes** -- exit criteria vs summaries, deviations, open follow-ups, plan completion; own reviewers vs bots (only if `OWN_REVIEWERS` is not `none`); incidents and repeats per class (only if `LESSONS` is above 0)
 9. **Compare with the prior retro** (only if `PRIOR_RETRO` is not `none`, or in `compare` mode) -- trends + recommendation follow-through
 10. **Ask before replacing** (only if `RETRO_EXISTS=yes`) -- replace or stop
 11. **Write `M###-RETRO.md`** -- frontmatter + report + snapshot, and show the report in the conversation
 12. **Propose lessons** -- KNOWLEDGE / DECISIONS entries, ask once, write what the user accepts
-13. **Report + return** -- paths, entry counts, next-step suggestion, no auto-chaining
+13. **Upstream** -- what of this milestone concerns ytstack itself, handled per `UPSTREAM_FEEDBACK`, recorded under `## Upstream`
+14. **Report + return** -- paths, entry counts, upstream lines, next-step suggestion, no auto-chaining
 
 ## Process Flow
 
@@ -62,6 +63,7 @@ digraph retro {
     "RETRO exists?" [shape=diamond];
     "Write M###-RETRO.md" [shape=box];
     "Ask: lessons" [shape=diamond];
+    "Upstream per setting" [shape=box];
     "Report" [shape=doublecircle];
 
     "Start" -> "Milestone + summaries?";
@@ -76,7 +78,8 @@ digraph retro {
     "RETRO exists?" -> "Write M###-RETRO.md" [label="no / replace"];
     "RETRO exists?" -> "Report" [label="keep"];
     "Write M###-RETRO.md" -> "Ask: lessons";
-    "Ask: lessons" -> "Report";
+    "Ask: lessons" -> "Upstream per setting";
+    "Upstream per setting" -> "Report";
 }
 ```
 
@@ -159,6 +162,14 @@ if [ -n "$_ROLES" ] && [ -n "$_SIG" ]; then
   bash "$_SIG" -C "$_PROJECT_DIR" list --state all 2>/dev/null | awk -F'\t' '$4 == "review"'
   echo "REVIEW_FINDINGS_END"
 fi
+# Lessons (M032): every incident of any class left one in the signals ledger; step 8 counts them per class for the window.
+echo "LESSONS: $([ -n "$_SIG" ] && [ -n "$_YT_DIR" ] && bash "$_SIG" -C "$_PROJECT_DIR" lesson list --state all 2>/dev/null | awk 'NF { n++ } END { print n + 0 }' || echo 0)"
+echo "SIGNALS_TOOL: ${_SIG:-unavailable}"
+# Upstream feedback (M033): the effective setting; the rules are docs/ux/upstream-feedback.md.
+_UP="${CLAUDE_SKILL_DIR}/../../bin/ytstack-upstream"; [ -f "$_UP" ] || _UP=$(command -v ytstack-upstream 2>/dev/null)
+_UPM=""; [ -n "$_UP" ] && _UPM=$(bash "$_UP" -C "$_PROJECT_DIR" mode 2>/dev/null | sed -n 's/^mode: //p')
+echo "UPSTREAM_FEEDBACK: ${_UPM:-unavailable}"
+echo "UPSTREAM_TOOL: ${_UP:-unavailable}"
 ```
 
 ## Procedure
@@ -396,6 +407,18 @@ This is the part a calendar retro cannot give. From the material read in step 3:
   | --- | --- | --- | --- | --- | --- |
 
   Above the table: how many checked pull requests the window has, how many of them without a tally, and how many merged pull requests step 6 found, when it found any; a gap means pull requests had no escape check. A class whose count is 2 or more and that is still `open` without a question is a candidate for "3 Things to Improve". Put the table under `## Milestone Outcomes` and `"review_escapes": {"<role>": {"caught": <n>, "escaped": <n>}, ...}` into the snapshot.
+- **Incidents and lessons** (only if `LESSONS` is above 0). Read from the signals ledger (`docs/ux/signal-format.md`, "Lessons"): every incident of any class left a sighting on the lesson of its class. Run, with the window start of step 4 as a UTC time:
+
+  ```bash
+  bash "<SIGNALS_TOOL>" lesson list --state all --since <since, e.g. 2026-11-01T00:00:00Z>
+  ```
+
+  One line per lesson: id, state, area, class, count, sightings in the window, target, ref, reopens, title. Show the lessons with at least one sighting in the window, grouped by area, one row per class:
+
+  | Area | Class | Incidents in window | All time | Repeat | Where the lesson lives | State |
+  | --- | --- | --- | --- | --- | --- | --- |
+
+  `Repeat` is `yes` when the class counts 2 or more, or when the lesson reopens an earlier one (`reopens` is not `none`: the lesson that was in place did not hold). Above the table: the incidents in the window per area, and how many classes repeated. Only the newest five sightings of a class stay in its file, so a class with more in the window says "at least 5". A repeated class whose lesson is still a proposal or only a knowledge entry is a candidate for "3 Things to Improve" (name its id), and a reopened one is always one. Put `"lessons": {"incidents": <n>, "classes": <n>, "repeats": <n>, "open": <n>}` into the snapshot.
 
 ### 9. Compare with the prior retro
 
@@ -481,6 +504,9 @@ created: <ISO-8601 UTC timestamp>
 ## 3 Habits for the Next Milestone
 <each adoptable in under 5 minutes; at least one team-oriented when there is a team>
 
+## Upstream
+<filled in step 13: what of this milestone concerns ytstack itself, and what happened to it>
+
 ## Snapshot
 
 ```json
@@ -490,9 +516,9 @@ created: <ISO-8601 UTC timestamp>
 
 Rules for the file:
 
-- Size every section to its evidence. A section with nothing to say is cut, not padded. Keep `## Summary`, `## Milestone Outcomes`, `## 3 Things to Improve` and `## Snapshot` always.
+- Size every section to its evidence. A section with nothing to say is cut, not padded. Keep `## Summary`, `## Milestone Outcomes`, `## 3 Things to Improve`, `## Upstream` and `## Snapshot` always.
 - `prs_merged` is `null` when hosting data was unavailable. `recommendations` is always present: one object per "3 Things to Improve" item with a one-word lowercase category and the item text verbatim; `[]` when there are none, never padded.
-- Add `"backlog": {...}` only when `TODOS=yes`, and `"review_escapes": {...}` only when `OWN_REVIEWERS` is not `none`.
+- Add `"backlog": {...}` only when `TODOS=yes`, `"review_escapes": {...}` only when `OWN_REVIEWERS` is not `none`, and `"lessons": {...}` only when `LESSONS` is above 0.
 - After writing, show the report (everything above `## Snapshot`) in the conversation.
 
 **Tone.** Encouraging but candid, no coddling. Specific and concrete, always anchored in commits or summaries. No generic praise ("great job"): say what was good and why. Praise sounds like something you would say in a 1:1. Growth suggestions sound like investment advice ("worth your time because..."), not "you failed at". Never compare teammates against each other negatively. Tables and code blocks for data, prose for narrative. If the test ratio is under 20%, flag it as a growth area.
@@ -527,20 +553,32 @@ Show the drafted entries as a numbered list. In `YTSTACK_NON_INTERACTIVE: true` 
 - B: ask one yes/no question per entry, in order, each re-grounded with the entry text; write the yes entries.
 - C: write nothing.
 
-Then add a `## Lessons recorded` line to `RETRO_FILE` (before `## Snapshot`) naming what went where.
+Then add a `## Lessons recorded` line to `RETRO_FILE` (before `## Upstream`) naming what went where.
 
-### 13. Report + return
+### 13. Upstream
 
-Report per the Terminal State below.
+The project's lessons went into its own files in step 12. This step is about ytstack itself: a skill, hook or script of the plugin that misled, failed or was missing, a workaround built around one, a ytstack tool that ran against a real host for the first time. The channel and its rules: `${CLAUDE_SKILL_DIR}/../../docs/ux/upstream-feedback.md`; read its "The steps" and "The rules" before acting.
+
+From the material of steps 3 to 8 (deviations caused by a tool surprise, workarounds in summaries, follow-ups and "3 Things to Improve" that name a ytstack skill or script), list the observations that concern ytstack, one per line with its kind (`bug`, `gap`, `proposal`, `evidence`) and the evidence (summary, commit, count). Nothing qualifies, or the project is ytstack itself (its own artifacts are the place): write "Nothing this milestone concerns ytstack itself." under `## Upstream` and go on. Otherwise, by `UPSTREAM_FEEDBACK`:
+
+- `off`: write `upstream_feedback: off` and the list under `## Upstream`, send nothing, suggest nothing.
+- `suggest` or `unavailable`: per observation, search, draft with `"<UPSTREAM_TOOL>" draft`, fill it, run `check` until `draft ok`. Send nothing. Each line under `## Upstream` ends with `suggested: <draft path>` (and `matches #<n>` when the search found the same behaviour).
+- `file`: per observation, search, draft, fill, `check`, then `gh issue create` or, for a match, `gh issue comment`, as the document says. Each line ends with `filed #<n>` or `commented #<n>`. A draft that does not pass `check` is not sent: the line ends with `not sent: <the check's line>`.
+
+In `YTSTACK_NON_INTERACTIVE: true` mode nothing is sent under any setting: the lines end with `suggested: <draft path>` and the report lists them under "Waiting on a person".
+
+### 14. Report + return
+
+Report per the Terminal State below. The upstream part is one line per observation: under `file` the link ("Filed Yesterday-AI/ytstack#61: <title>"), under `suggest` the title and the draft path with "this concerns ytstack itself; file it at Yesterday-AI/ytstack?".
 
 ## Terminal State
 
 The terminal state is one of:
 
-- Returning control to the user with `RETRO_FILE` written, the number of KNOWLEDGE and DECISIONS entries added, and a next-step suggestion: `ytstack:plan-milestone` for the next milestone, or `ytstack:ship` when the milestone is to be released.
+- Returning control to the user with `RETRO_FILE` written, the number of KNOWLEDGE and DECISIONS entries added, the upstream lines (filed, commented, suggested or none), and a next-step suggestion: `ytstack:plan-milestone` for the next milestone, or `ytstack:ship` when the milestone is to be released.
 - Returning control to the user with the existing `RETRO_FILE` kept (user chose B at the replace gate).
 - Exiting without action (HARD-GATE: no milestone, no summaries, or a stale window).
 
-Nothing is committed by this skill; the user commits the retro and the lesson entries.
+Nothing is committed by this skill; the user commits the retro and the lesson entries. The only thing it sends anywhere is an issue or a comment at Yesterday-AI/ytstack under `upstream_feedback: file`.
 
 Do NOT auto-invoke `ytstack:plan-milestone`, `ytstack:ship`, `ytstack:reassess-roadmap` or any other skill. The ONLY skills you may invoke after this one are: none (suggest, never chain). If something else seems needed, STOP and ask the user.

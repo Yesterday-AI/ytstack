@@ -36,7 +36,7 @@ MAIN="$TMP/main"; mkdir -p "$MAIN/.ytstack"
   echo seed > f.txt; git add -A; git commit -qm "M999-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL fixture; exit 2; }
 WT="$TMP/wt"; git -C "$MAIN" worktree add -q -b wt-branch "$WT" >/dev/null 2>&1 || { echo FATAL worktree; exit 2; }
 
-SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill coordinate finish-lane handover-step lane-retro visual-review signal-intake incident review-lessons"
+SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill coordinate finish-lane handover-step lane-retro visual-review signal-intake incident review-lessons lesson"
 
 # Brownfield fixture (M010, issue #18): existing docs, no .ytstack -> >= 2 signals
 BF="$TMP/brown"; mkdir -p "$BF/docs/adr"
@@ -80,6 +80,24 @@ ext_plan_checks() {
   run_pre "$P" "$WT"
   has "$s: a recorded answer -> not offered again" "$OUT" "EXTERNAL_PLAN_OFFER: no"
   rm -rf "$WT/plans" "$WT/.ytstack/PREFERENCES.md"
+}
+
+# upstream_checks: the upstream feedback setting (M033, docs/ux/upstream-feedback.md);
+# uses $s and $P of the loop below. Only suggest and off: file would ask the gh of this machine.
+upstream_checks() {
+  run_pre "$P" "$WT"
+  has "$s: upstream_feedback defaults to suggest" "$OUT" "UPSTREAM_FEEDBACK: suggest"
+  case "$OUT" in *"UPSTREAM_TOOL: "*/bin/ytstack-upstream*) ok "$s: the upstream script is found" ;; *) bad "$s: the upstream script is found" "$(printf '%s\n' "$OUT" | grep UPSTREAM_TOOL)" ;; esac
+  printf 'upstream_feedback: off\n' > "$WT/.ytstack/PREFERENCES.md"
+  run_pre "$P" "$WT"
+  has "$s: PREFERENCES off -> off" "$OUT" "UPSTREAM_FEEDBACK: off"
+  rm -f "$WT/.ytstack/PREFERENCES.md"
+  mkdir -p "$TMP/home/.ytstack"; printf 'upstream_feedback=off\n' > "$TMP/home/.ytstack/config"
+  run_pre "$P" "$WT"
+  has "$s: ~/.ytstack/config off -> off" "$OUT" "UPSTREAM_FEEDBACK: off"
+  rm -f "$TMP/home/.ytstack/config"
+  grep -qF 'docs/ux/upstream-feedback.md' "$ROOT/skills/$s/SKILL.md" && ok "$s: names the channel's rules" || bad "$s: names the channel's rules"
+  grep -q '^## Upstream\|Upstream:' "$ROOT/skills/$s/SKILL.md" && ok "$s: ends with an Upstream part" || bad "$s: ends with an Upstream part"
 }
 
 PD="$TMP/plugin-data"
@@ -142,7 +160,18 @@ for s in $SKILLS; do
         run_pre "$P" "$WT"
         has "$s: the declared roles are named" "$OUT" "OWN_REVIEWERS: code"
         has "$s: the review findings are listed" "$OUT" "review:code:missing-null-guard"
-        rm -rf "$WT/.ytstack/signals"; own_reviewers_off ;;
+        rm -rf "$WT/.ytstack/signals"; own_reviewers_off
+        # incidents and repeats per class (M032): the count of lessons decides whether step 8 reads them.
+        # (This block sat in a second `retro)` branch of the outer case, which never ran.)
+        run_pre "$P" "$WT"
+        has "$s: no lesson -> LESSONS 0" "$OUT" "LESSONS: 0"
+        has "$s: the signals script is found" "$OUT" "SIGNALS_TOOL: $ROOT/skills/$s/../../bin/ytstack-signals"
+        printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area ci --class flaky-order --title "Order" --target check:tests/order.sh >/dev/null
+        run_pre "$P" "$WT"
+        has "$s: one lesson -> LESSONS 1" "$OUT" "LESSONS: 1"
+        grep -qF 'lesson list --state all --since' "$ROOT/skills/$s/SKILL.md" && ok "$s: step 8 counts the lessons of the window" || bad "$s: step 8 counts the lessons of the window"
+        rm -rf "$WT/.ytstack/signals"
+        upstream_checks ;;
       esac
       # Concept mode picks the newest pitch, also in a checkout path with a space (PR #39 review).
       case "$s" in plan-ceo-review|plan-eng-review)
@@ -285,6 +314,20 @@ STANDING_ENTRIES_END"
       has "$s: bare fixture -> PR watch off" "$OUT" "PR_WATCH: off"
       has "$s: bare fixture -> no release section" "$OUT" "RELEASE: no"
       has "$s: bare fixture -> no signal sources" "$OUT" "SIGNALS: 0"
+      # the open lessons (M032): counted in the status, a proposal for the daily question, a check for a lane
+      has "$s: bare fixture -> no open lesson" "$OUT" "LESSONS: 0 open (0 proposals, 0 checks to build)"
+      printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area ci --class flaky-order --title "Order" --target check:tests/order.sh >/dev/null
+      printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area process --class asked-twice --title "Asked twice" --target proposal:Q001 >/dev/null
+      run_pre "$P" "$WT"
+      has "$s: two open lessons, one of each" "$OUT" "LESSONS: 2 open (1 proposals, 1 checks to build)"
+      has "$s: and listed" "$OUT" "F002	open	process	asked-twice	1	-	proposal:Q001"
+      rm -rf "$WT/.ytstack/signals"
+      awk '/^\*\*Step 5 --/ { p = 1 } /^\*\*Step 6 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF -- '--lesson F###' \
+        && ok "$s: Step 5 renders the brief of a lesson lane" || bad "$s: Step 5 renders the brief of a lesson lane"
+      awk '/^\*\*Step 8 --/ { p = 1 } /^\*\*Step 9 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF 'daily question' \
+        && ok "$s: Step 8 asks a lesson proposal with the daily question" || bad "$s: Step 8 asks a lesson proposal with the daily question"
+      awk '/^\*\*Step 11 --/ { p = 1 } /^\*\*Step 12 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF 'LESSONS' \
+        && ok "$s: Step 11 names the open lessons in the status" || bad "$s: Step 11 names the open lessons in the status"
       own_reviewers_on
       printf '# Runtime\n\n## Release\n\n- deployed: echo abc1234\n\n## Signals\n\n- errors | read: echo none\n- latency | read: echo none\n' > "$WT/.ytstack/RUNTIME.md"
       mkdir -p "$TMP/home/.ytstack"; echo "pr_watch=on" > "$TMP/home/.ytstack/config"
@@ -361,6 +404,22 @@ REVIEWERS_END"
       has "$s: a declared role is listed" "$OUT" "code	(\`code\`)	.github/reviewers/code.md"
       has "$s: one checked pull request" "$OUT" "CHECKED_PRS: 1"
       rm -rf "$WT/.ytstack/signals"; own_reviewers_off ;;
+    lane-retro)
+      upstream_checks ;;
+    lesson)
+      # the ledger and the questions (M032): every lesson in every state, the open incidents
+      has "$s: the signals script is found" "$OUT" "SIGNALS_TOOL: $ROOT/bin/ytstack-signals"
+      has "$s: the questions script is found" "$OUT" "QUESTIONS_TOOL: $ROOT/bin/ytstack-questions"
+      has "$s: no KNOWLEDGE.md in the fixture" "$OUT" "KNOWLEDGE: none"
+      has "$s: no lesson yet" "$OUT" "LESSONS_BEGIN
+LESSONS_END"
+      printf 'red twice\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area ci --class flaky-order --title "Order dependent test" --target check:tests/order.sh >/dev/null
+      bash "$ROOT/bin/ytstack-signals" -C "$WT" incident new --title "Export down" >/dev/null
+      run_pre "$P" "$WT"
+      has "$s: a lesson is listed with area, class and target" "$OUT" "F001	open	ci	flaky-order	1	-	check:tests/order.sh"
+      has "$s: an open incident is listed" "$OUT" "unstated	Export down"
+      rm -rf "$WT/.ytstack/signals" "$WT/.ytstack/incidents"
+      upstream_checks ;;
     visual-review)
       # the evidence of a visual review (M025) is read from the main checkout, also from a worktree
       has "$s: worktree -> no Run section in the bare fixture" "$OUT" "RUN_SECTION: no"
@@ -394,6 +453,29 @@ REVIEWERS_END"
       has "$s: main -> manual handoff timestamp read" "$OUT" "MANUAL_HANDOFF_TS: 2026-01-01T00:00:00Z" ;;
   esac
 done
+
+# ---- the lesson step (M032, issue #53) -----------------------------------------
+# The four paths end with ytstack:lesson: they invoke it in their procedure and
+# their Terminal State allows it, so that no path can skip it.
+echo "# the lesson step in its callers"
+for s in incident systematic-debugging finish-lane coordinate; do
+  F="$ROOT/skills/$s/SKILL.md"
+  grep -qF 'invoke `ytstack:lesson`' "$F" && ok "$s: invokes ytstack:lesson" || bad "$s: invokes ytstack:lesson"
+  if [ "$s" = systematic-debugging ]; then
+    # a thin wrapper: the step lives in its invocation notes, it has no Terminal State
+    awk '/^## ytstack invocation notes/ { p = 1; next } /^## / { p = 0 } p' "$F" | grep -qF 'ytstack:lesson' \
+      && ok "$s: the invocation notes name the lesson step" || bad "$s: the invocation notes name the lesson step"
+  else
+    awk '/^## Terminal State/ { p = 1 } p' "$F" | grep -qF '`ytstack:lesson`' \
+      && ok "$s: the Terminal State allows ytstack:lesson" || bad "$s: the Terminal State allows ytstack:lesson"
+  fi
+done
+awk '/^### Step 10: Record the lesson/ { p = 1; next } /^### / { p = 0 } p' "$ROOT/skills/incident/SKILL.md" | grep -qF -- '--incident' \
+  && ok "incident: the lesson step passes the record for --incident" || bad "incident: the lesson step passes the record for --incident"
+awk '/^### Step 14: Lesson/ { p = 1; next } /^### / { p = 0 } p' "$ROOT/skills/finish-lane/SKILL.md" | grep -qF 'ytstack:lesson' \
+  && ok "finish-lane: Step 14 is the lesson" || bad "finish-lane: Step 14 is the lesson"
+awk '/^\*\*Step 7 --/ { p = 1 } /^\*\*Step 8 --/ { p = 0 } p' "$ROOT/skills/coordinate/SKILL.md" | grep -qF 'a red `main`' \
+  && ok "coordinate: Step 7 runs the lesson on a red main" || bad "coordinate: Step 7 runs the lesson on a red main"
 
 # ---- technical spec in the preambles (M022) ----------------------------------
 # One area `core` over f.txt and cr.txt (the file the code-review case committed

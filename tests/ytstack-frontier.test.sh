@@ -164,6 +164,47 @@ run "$R" list
 eq "no open milestone: exit 1" 1 "$EC"
 has "and says so" "no milestone" "$OUT"
 
+# ---- lesson lanes (M032): an open lesson whose check is still to be built ------
+echo "# lesson lanes"
+SIG="$ROOT/bin/ytstack-signals"
+printf 'main red twice\n' | bash "$SIG" -C "$R" lesson new --area ci --class flaky-order --title "Order dependent test" --target check:tests/order.test.sh >/dev/null
+printf 'a receipt ticked early\n' | bash "$SIG" -C "$R" lesson new --area evidence --class receipt-early --title "Receipt before the run" --target proposal:Q003 >/dev/null
+printf 'missing gotcha\n' | bash "$SIG" -C "$R" lesson new --area process --class env-gotcha --title "A gotcha" --target knowledge:.ytstack/KNOWLEDGE.md >/dev/null
+run "$R" list
+eq "without a milestone the lesson lanes are listed; one without a plan is blocked" "0 lesson-F001${TAB}blocked${TAB}unplanned: the lesson has no ## Files or no ## Verification with content" "$EC $OUT"
+F1=$(ls "$R"/.ytstack/signals/F001-*.md)
+printf '\n## Files\n\n## Verification\n\n' >> "$F1"
+run "$R" list
+eq "empty ## Files and ## Verification are no plan (ytstack-brief would refuse the brief)" "0 lesson-F001${TAB}blocked${TAB}unplanned: the lesson has no ## Files or no ## Verification with content" "$EC $OUT"
+printf '\n## Files\n\n- Create: `tests/order.test.sh`\n\n## Verification\n\n    bash tests/order.test.sh\n' >> "$F1"
+run "$R" list
+eq "a lesson with a check target and its plan is ready; proposals and knowledge entries are no lanes" "lesson-F001${TAB}ready${TAB}lesson:ci:flaky-order" "$OUT"
+run "$R" --ready; eq "--ready names the lesson lane" "0 lesson-F001" "$EC $OUT"
+roadmap "$R" M010 in-progress "- S01"
+plan "$R" M010-S01 none
+run "$R" list
+eq "with a milestone the lesson lanes follow the slices" "M010-S01${TAB}ready
+lesson-F001${TAB}ready${TAB}lesson:ci:flaky-order" "$OUT"
+mkdir -p "$R/.ytstack/questions"
+printf -- '---\nid: Q009\nstate: open\ndecides: the operator\nblocks: lesson-F001\n---\n\n# Q009 -- z\n' > "$R/.ytstack/questions/Q009-z.md"
+run "$R" list; has "a question that names the lesson lane blocks it" "lesson-F001${TAB}blocked${TAB}question Q009" "$OUT"
+rm -r "$R/.ytstack/questions"
+run "$R" claim lesson-F001 --by impl-lesson; eq "a lesson lane is claimed like any lane" 0 "$EC"
+run "$R" list; has "and then listed as claimed" "lesson-F001${TAB}claimed${TAB}impl-lesson" "$OUT"
+run "$R" set lesson-F001 --status merged
+run "$R" list; has "merged before the lesson is fixed: done, and says so" "lesson-F001${TAB}done${TAB}merged, the lesson is not set fixed yet" "$OUT"
+mkdir -p "$R/tests"; echo true > "$R/tests/order.test.sh"
+bash "$SIG" -C "$R" set F001 --state fixed >/dev/null
+run "$R" list; hasnt "a fixed lesson is no lane any more" "lesson-F001" "$OUT"
+printf 'x\n' | bash "$SIG" -C "$R" lesson new --area ci --class in-a-task --title "Built in a task" --target check:tests/t.test.sh >/dev/null
+bash "$SIG" -C "$R" set F004 --state planned --ref M010-S01-T02 >/dev/null
+printf 'y\n' | bash "$SIG" -C "$R" lesson new --area ci --class own-lane --title "Own lane" --target check:tests/o.test.sh >/dev/null
+bash "$SIG" -C "$R" set F005 --state planned --ref lesson-F005 >/dev/null
+run "$R" list
+hasnt "a planned lesson whose ref is a regular task is no lane (the task builds it)" "lesson-F004" "$OUT"
+has "a planned lesson whose ref is its own lane stays a lane" "lesson-F005" "$OUT"
+rm -rf "$R/.ytstack/signals" "$R/.ytstack/LANES.md" "$R/tests" "$R/.ytstack/M010-ROADMAP.md" "$R/.ytstack/M010-S01-PLAN.md"
+
 # ---- 2. claim -----------------------------------------------------------------
 echo "# claim"
 R=$(new_repo claim M004)

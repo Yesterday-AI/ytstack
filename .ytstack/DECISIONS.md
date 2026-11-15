@@ -1144,3 +1144,49 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - `session-start` writes nothing; state a hook needs across events is written by a hook that already writes (here `version-notice`).
 
 **Supersedes:** None.
+
+## 2026-11-15: A lesson is a finding of `kind: lesson` in the signals ledger, with a target; a closed incident needs one (M032-S01, issue #53)
+
+**Context:** Issue #53: incidents of every class (a red `main`, a receipt that ticked a row too early, a defect only a review caught, a slip of a lane or of the coordinator) lost their lesson, because nothing recorded it and `lane-retro` samples only every fifth lane. Eight such incidents in one coordinator day in context-mcp, several of the same class. The issue asked for a record of incident, lesson and where it lives, so that repeats are visible, and named two places: the signals ledger or a dated `archive/<date>/incident-retro.md`.
+
+**Options considered:**
+- A) A new store (`ytstack-lessons`, `lessons/L###-<slug>.md`) with its own states and check.
+- B) A dated retro file per day under `archive/<date>/`, appended by every path.
+- C) A finding of a new `kind: lesson` in `signals/`, keyed by class, with one new frontmatter line `target`.
+
+**Chose:** C. Key `lesson:<area>:<class-slug>`, the area `production`, `ci`, `evidence`, `review` or `process`, the source the area. `target` is `check:<path>`, `knowledge:<path>[#anchor]`, `contract:<path>[#anchor]` or `proposal:<ref>`. `bin/ytstack-signals lesson new` records it (and with `--incident` writes the id into the record's new `lesson:` line), `lesson list [--since]` lists it. `check` fails on a closed incident whose `lesson` is `none` or names no lesson, on a lesson target in `AGENTS.md` or `CLAUDE.md`, and on a `fixed` lesson whose target is a proposal or a missing file. The dated record is the sighting: each incident of a class is one `### read <UTC>` block in its lesson, which `retro` counts per window.
+
+**Reason:** The ledger already does what the issue asks of the record: one file per class (the key), a count that rises on a repeat instead of a new file, a regression with `reopens:` when a fixed class comes back, states with a reference, a lock and a check. `review-lessons` uses the same shape for review escapes. A new store (A) would duplicate all of it. A dated file per day (B) groups by date, not by class, so a repeat is only visible to whoever reads every day; it also grows without a check.
+
+**How to apply:**
+- A lesson never lives in `AGENTS.md` or `CLAUDE.md`: a machine check first, a `KNOWLEDGE.md` entry or the lane contract only where no machine can check it.
+- A repeat of a class is `seen-again` on the open lesson; one after `fixed` is a regression, and its lesson needs a stronger target.
+- Only an incident record that is `closed` needs its lesson; an open or mitigated one may still be waiting for the root cause. A record written before lessons reads as `lesson: none`.
+- A person dismisses a class with `set <id> --state dismissed` and a reason; a lesson is not deleted.
+- A closed record with no `lesson:` line at all is a legacy record from before this entry: `check` lists it as a warning and passes. Only `lesson: none`, which `incident new` writes, fails on a closed record (PR #67 review; refines the bullet above that read a missing line as `none`).
+- A target path under `.ytstack/` resolves against the resolved `.ytstack` directory (project or user scope), every other path against the checkout (PR #67 review).
+
+**Supersedes:** None. Extends the 2026-11-13 production findings entry (M027): the ledger also holds lessons.
+
+## 2026-11-15: Feedback about ytstack itself goes through one channel with a setting; a script checks the body, the agent posts (M033-S01, issue #55)
+
+**Context:** Issue #55: the only guidance on feeding experience back was one paragraph in `using-ytstack`, for bugs only and only as a suggestion. Experience reports (#54), proposals from real runs (#53) and field evidence happened only because a person told every session to write them. The milestone's discuss phase locked the default: `suggest`, because filing publishes text to a public repository.
+
+**Options considered:**
+- A) A longer paragraph in `using-ytstack` with all rules, no script.
+- B) A script that searches, drafts and posts (`ytstack-upstream file`).
+- C) A setting `upstream_feedback` read with the other preferences, the rules in `docs/ux/upstream-feedback.md`, a script that prints the effective mode, drafts and checks a body and never posts; the agent searches and posts with `gh`.
+
+**Chose:** C. `upstream_feedback: suggest | file | off` in `PREFERENCES.md`, else the last `upstream_feedback=` line of `~/.ytstack/config`, else `suggest`; an invalid value reads as `suggest`. `bin/ytstack-upstream mode` reads it through `yt_upstream_feedback` and prints `suggest` for `file` without a `gh` login. `check` fails on a placeholder left, no evidence, no recorded search, an email address, a token-looking string and a home directory path. `retro` and `lane-retro` end with an "Upstream" section, `lesson` routes a ytstack class to the channel; a non-interactive run sends nothing.
+
+**Reason:** `using-ytstack` is injected in full at every session start and this repository's injection sits near the 10,000-character cap, so the rules cannot live there (A). A script that posts (B) would publish without a step where the agent reads the search result and decides between a new issue and a comment on an existing one, which is judgement, and it would make a test suite able to publish. With C the part a machine can see is checked before anything is public, and the part only a reader can judge (is this the same behaviour, is this name private) stays with the agent, as the document says.
+
+**How to apply:**
+- A new rule a machine can check goes into `ytstack-upstream check` and its suite; a rule of judgement goes into the document.
+- A skill that ends with experience about ytstack points at the document and does not repeat its steps.
+- Nothing is posted from a non-interactive run or a dispatched worker; their drafts wait for a person.
+- The project's own bugs and lessons never go upstream; work in the ytstack repository uses its own artifacts.
+- `check` is stricter than the token rule of `bin/ytstack-handover`, because a draft is published: known secret shapes, token runs across `/` and `+`, every home path form, a login in a GitHub noreply address, and the `--title` that is posted (PR #67 review).
+- A non-interactive run is detected by the script, not left to the agent: `mode` prints `suggest` with a `note:` when `YTSTACK_NON_INTERACTIVE`, `OPENCLAW_SESSION`, `CLAUDE_AGENT_TEAM_MEMBER` or `CI` is set (PR #67 review).
+
+**Supersedes:** None.

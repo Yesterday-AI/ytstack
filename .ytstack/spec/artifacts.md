@@ -20,7 +20,7 @@ sources:
   - docs/ux/signal-format.md
   - docs/statusline.md
   - docs/ux/external-plans.md
-verified_at: 8399866
+verified_at: c5b405d
 ---
 
 # artifacts
@@ -42,13 +42,13 @@ The `.ytstack/` artifact model: the Markdown files that hold a project's memory 
 
 | File | Created by | Changed afterwards by |
 |---|---|---|
-| `PROJECT.md`, `PREFERENCES.md` | `init-project` or `adopt-brownfield` | the user; the only skill edit is one `external_plans: <dir> mapped\|declined <date>` line in `PREFERENCES.md` per answered external plan (`reconcile`, `adopt-brownfield`, `docs/ux/external-plans.md`) |
+| `PROJECT.md`, `PREFERENCES.md` | `init-project` or `adopt-brownfield` (both templates write `upstream_feedback: suggest`) | the user; the only skill edit is one `external_plans: <dir> mapped\|declined <date>` line in `PREFERENCES.md` per answered external plan (`reconcile`, `adopt-brownfield`, `docs/ux/external-plans.md`) |
 | `RUNTIME.md` | `init-project` or `adopt-brownfield`, with the headings "Run", "Release" and "Signals" and one line of free text each | the user; key lines in the three sections follow `docs/ux/runtime-format.md` and are read only through `bin/ytstack-runtime`; `adopt-brownfield` writes a key line only for a command a document or script of the project states and names that source. "Release" is run by `bin/ytstack-watch release`, "Signals" by `signal-intake` and `incident` |
 | `spec/REVIEW.md` | a person (optional), linked from `SPEC.md` | a person; five sections (Always a person, Never low, Lenses, Size, Own reviewers); a change to it always goes to a person |
 | `evidence/<lane>/<short sha>/<lens>/` with `MANIFEST` (`evidence_dir` of `PREFERENCES.md`) | `visual-review`, in the main checkout of the repository; `bin/ytstack-risk manifest` writes hash and name per image | -- ; a process record; committing it is the project's choice |
-| `signals/F###-<slug>.md` | `bin/ytstack-signals new` (from `signal-intake`; `--kind review` from `review-lessons` for an escaped review-bot finding) | `bin/ytstack-signals new` (a second sighting: count, last seen), `set` (state, ref); format `docs/ux/signal-format.md` |
+| `signals/F###-<slug>.md` | `bin/ytstack-signals new` (from `signal-intake`; `--kind review` from `review-lessons` for an escaped review-bot finding; `lesson new` from `lesson` for what an incident of any class taught, key `lesson:<area>:<class-slug>` and a `target`) | `bin/ytstack-signals new` (a second sighting: count, last seen), `set` (state, ref, a lesson's target); format `docs/ux/signal-format.md` |
 | `signals/review-checks` | `bin/ytstack-signals review-checked` | the same command, one line appended per merged pull request whose escape check ran; never rewritten |
-| `incidents/<date>-<slug>.md` | `bin/ytstack-signals incident new` (from `incident`) | `incident`: facts with read times, the timeline (append-only), hypotheses, mitigations with their handover scripts, the person's decisions in own words |
+| `incidents/<date>-<slug>.md` | `bin/ytstack-signals incident new` (from `incident`) | `incident`: facts with read times, the timeline (append-only), hypotheses, mitigations with their handover scripts, the person's decisions in own words; `lesson new --incident` writes the `lesson:` line, which a closed record needs |
 | `DECISIONS.md` | `init-project` or `adopt-brownfield` | appends by `plan-ceo-review`, `plan-eng-review`, `systematic-debugging`, `code-review`, `retro`, `grill`, `reassess-roadmap` |
 | `KNOWLEDGE.md` | `init-project` or `adopt-brownfield` | appends by `systematic-debugging`, `test-driven-development`, `code-review`, `retro` |
 | `STATE.md` | `init-project` or `adopt-brownfield` | see "STATE.md" |
@@ -59,7 +59,7 @@ The `.ytstack/` artifact model: the Markdown files that hold a project's memory 
 | `M###-S##-PLAN.md` | `slice-milestone`; the external plan mapping (`**Source:**` with `path:line` and the row id, every task line with its pointer) | `summarize-task` (checkbox, count, `status`), `plan-eng-review`, `hooks/task-completed` (checkbox) |
 | `M###-S##-T##-PLAN.md` | `plan-task` | notes by `test-driven-development` and `systematic-debugging` |
 | `M###-S##-T##-SUMMARY.md` | `summarize-task`; a draft stub by `hooks/post-tool-use-bash`; an auto summary by `hooks/task-completed` | `summarize-task` replaces a stub; `reconcile` may mark it `closed: abandoned` |
-| `M###-RETRO.md` | `retro` | -- |
+| `M###-RETRO.md` | `retro`; its `## Upstream` section says what of the milestone concerns ytstack itself and what happened to it (`docs/ux/upstream-feedback.md`) | -- |
 | `quick/Q###-PLAN.md`, `quick/Q###-SUMMARY.md` | `quick-task` | `quick-task` (`status`) |
 | `codebase/{stack,architecture,conventions,concerns}.md`, `backlog/README.md` | `adopt-brownfield` | refreshed by deleting the file and running the skill again |
 | `spec/SPEC.md`, `spec/<area>.md` | `init-project` (every area `planned`), `adopt-brownfield` (pointer-only over existing documents; also for a project that has `.ytstack/` and no spec) | the task that changes the area, in its own commits; `reassess-roadmap` sets `verified_at` when it answers the drift report |
@@ -68,7 +68,7 @@ The `.ytstack/` artifact model: the Markdown files that hold a project's memory 
 | `questions/Q###-<slug>.md` | `bin/ytstack-questions new` (from `coordinate`, `reassess-roadmap`, `review-lessons` (a proposed line for a role file, `blocks:` the finding), and from `bin/ytstack-upkeep --question`, which keeps at most one open or asked file titled `Upkeep found ...`) | the agent fills Context, Options, Recommendation; `ask` and `answer` change the state; the answer text is the human's |
 | `standing/<YYYYMMDDTHHMMZ>-<slug>.md`, `STANDING.md` | `coordinate`, when the human gives an instruction that holds beyond the task: a new file with `given`, `scope`, `supersedes` (`docs/ux/coordinator-format.md`); appended to `STANDING.md` only where no `standing/` exists | an entry is never edited; a newer one supersedes it by name, readers skip it; `STANDING.md` alone stays valid, also as an index, and is read beside the directory |
 | `handover/<date>-<slug>.sh` and its receipt | `handover-step` through `bin/ytstack-handover new`; the receipt by the script when the human runs it | a script that ran is not edited |
-| `retro/LANES-<date>.md` | `lane-retro` | appended on a second run of the same day |
+| `retro/LANES-<date>.md` | `lane-retro`, with a `## Upstream` section like the retro's | appended on a second run of the same day |
 | `archive/<date>/`, `archive/INDEX.md`, `RECONCILE-<date>.md` | `reconcile` | -- |
 | `ROADMAP.md` (all milestones), `REVIEW-NOTES.md` | no skill and no hook creates them | skills edit the milestone rows of `ROADMAP.md` when a `status` changes |
 

@@ -1,6 +1,6 @@
 # Signal format
 
-What production says has to reach the plan, and it has to arrive once. This document fixes two records. A finding is one file per thing a signal source of the project reported and an intake judged worth acting on. An incident record is one file per incident: what was seen, what was tried and who decided what. The sources are the `read` commands under "Signals" in `RUNTIME.md` (`docs/ux/runtime-format.md`). The script is `bin/ytstack-signals`; the skills that use it are `signal-intake` and `incident`.
+What production says has to reach the plan, and it has to arrive once. This document fixes two records. A finding is one file per thing a signal source of the project reported and an intake judged worth acting on. An incident record is one file per incident: what was seen, what was tried and who decided what. A lesson is a finding too: what an incident of any class taught and where that now lives (see "Lessons"). The sources are the `read` commands under "Signals" in `RUNTIME.md` (`docs/ux/runtime-format.md`). The script is `bin/ytstack-signals`; the skills that use it are `signal-intake`, `incident`, `review-lessons` and `lesson`.
 
 All files live in the project's `.ytstack/` directory and are user-owned like every artifact there.
 
@@ -54,7 +54,7 @@ Pick up with `systematic-debugging`; then `ytstack-signals set F007 --state plan
 | `id` | `F` and three digits. Equal to the start of the file name, unique. |
 | `key` | The stable identity of the finding at its source: an issue id, a normalised error signature, a route name. The intake chooses it. One word of letters, digits and `. _ : / @ + = -`. By convention it starts with the source name and a colon (`errors:4812`, `latency:/api/export`), so that two sources never share one. |
 | `source` | The name of the signal source, as "Signals" declares it. |
-| `kind` | `errors`, `performance`, `alerts` or `logs`: the kind of the source; `review` for a review-bot finding the own reviewers missed (see "Review escapes"). |
+| `kind` | `errors`, `performance`, `alerts` or `logs`: the kind of the source; `review` for a review-bot finding the own reviewers missed (see "Review escapes"); `lesson` for what an incident taught (see "Lessons"). |
 | `state` | `open`, `planned`, `fixed` or `dismissed`, see below. |
 | `first_seen`, `last_seen` | The read times of the first and of the newest sighting, UTC with seconds. |
 | `count` | How many intake runs saw it. Not the number of events at the source. |
@@ -122,6 +122,58 @@ The tally counts the `fixed` bot findings of the pull request per role: `<role>=
 
 The skill that writes both is `review-lessons`; the loop from a merge to a proposed line for a role file is `docs/ux/review-policy-format.md`, "The lessons loop". It passes the merge time of the pull request as `--read-at`, so a sighting's time is the time the escape merged.
 
+### Lessons
+
+Every incident of any class ends with a lesson: a production outage, a red check on `main`, a receipt that claimed too much, a defect only a review caught, a slip of an agent or of the coordinator. The lesson is a finding of `kind: lesson`, written by the skill `lesson` (`skills/lesson/SKILL.md`), which `incident`, `systematic-debugging`, `finish-lane` and `coordinate` call at their end.
+
+```
+bin/ytstack-signals lesson new --area <area> --class <class-slug> --title <text> --target <target> [--incident <id>] [--read-at <time>] < what happened
+```
+
+- **The key** is `lesson:<area>:<class-slug>`. The area says where it happened: `production`, `ci`, `evidence` (receipts, measurements, claims of done), `review` or `process` (a slip of an agent or a coordinator). The class is a lowercase slug for the kind of mistake, not for the place: `flaky-order`, `receipt-before-run`, `missing-watcher`. The source is the area. One class is one finding: the next incident of the class raises `count`, and one after the lesson was `fixed` is a `regression` that reopens it, which says the lesson did not hold.
+- **The sighting** is what happened, in one to a few lines: the incident in the recorder's words, with the commit, the check or the pull request it concerns. The newest five stay; their `### read` times are what `lesson list --since` counts for a retro.
+- **The target** is a frontmatter line only lessons have: where the lesson lives.
+
+| `target` | The lesson lives in |
+|---|---|
+| `check:<path>` | a machine check: a test, a guard in a script, a CI step or an alert, in the file `<path>` |
+| `knowledge:<path>[#<anchor>]` | an entry in the project's `KNOWLEDGE.md` |
+| `contract:<path>[#<anchor>]` | the lane contract: the file a dispatched worker reads as its rules (in ytstack itself `skills/minimal-code/SKILL.md`; in a project a role file of `REVIEW.md` or what its briefs name) |
+| `proposal:<ref>` | nowhere yet: a person decides; `<ref>` is the question (`Q012`) |
+
+A `<path>` is read from the root of the checkout, except one that starts with `.ytstack/`: it names a file in the project's `.ytstack` directory wherever that lives, also in user scope (`~/.ytstack/projects/<key>/`), so `knowledge:.ytstack/KNOWLEDGE.md#<anchor>` works in both. The same holds for the script and receipt paths of an incident record.
+
+A machine check comes first. A knowledge entry or the contract only where no machine can check it. A lesson never lives in `AGENTS.md`, `CLAUDE.md` or `CLAUDE.local.md` (in any case, in any directory): the script refuses that target, and the check fails on it.
+
+What the states mean for a lesson:
+
+| `state` | Means |
+|---|---|
+| `open` | Recorded; the target is named but not in place yet: a check to build (a lesson lane, see below) or a proposal waiting for a person. |
+| `planned` | Its work is a task, a lane or a question; `ref` names it. |
+| `fixed` | The lesson lives at its target, and the file exists. A proposal is never `fixed`. |
+| `dismissed` | A person decided this class needs no lesson; the reason stands under "Assessment". |
+
+The open lessons are the `open` and the `planned` ones. `set <id> --target <target>` changes the target; `set <id> --state fixed` refuses while the target is a proposal or names a file that does not exist.
+
+A lesson whose check is still to be built (`open`, or `planned` with no ref or the ref `lesson-<id>`, target `check:`) is a **lesson lane** `lesson-<id>`. A lesson `planned` with another ref (a task `M###-S##-T##`, a quick task) is built there and is no lane, so it is not dispatched twice. `bin/ytstack-frontier` lists a lesson lane after the slices, and `bin/ytstack-brief render --lesson <id>` renders its brief (`docs/ux/coordinator-format.md`). Its plan is in the lesson itself, two sections after `## Next` in the form of a task plan; without them the frontier lists the lane as blocked:
+
+```markdown
+## Files
+
+- Create: `tests/export-order.test.sh`
+
+## Verification
+
+    bash tests/export-order.test.sh
+
+Fails on the state of 3c1d2e0 (the incident), passes now.
+```
+
+Whoever merges the lane sets the lesson `fixed`; until then the frontier lists the merged lane as done with "the lesson is not set fixed yet".
+
+`lesson new --incident <id>` writes the lesson's id into the incident record's `lesson:` line as well. `bin/ytstack-signals lesson list [--state <state>] [--since <time>]` prints one tab separated line per lesson: id, state, area, class, count, the sightings at or after `--since` (`-` without it), target, ref, reopens, title; without `--state` the open ones.
+
 ## `incidents/` -- the record of an incident
 
 One file per incident: `.ytstack/incidents/<YYYY-MM-DD>-<slug>.md`, the day it was opened in UTC. The record is what a session resumes from: an incident outlives a context, and a summary of a conversation is not a record.
@@ -135,6 +187,7 @@ mitigated: 2026-11-13T09:52:10Z
 closed: none
 severity: all customers, no orders possible
 root_cause: none
+lesson: F014
 ---
 
 # Incident -- Checkout returns 502
@@ -180,6 +233,7 @@ root_cause: none
 | `opened`, `mitigated`, `closed` | UTC times with seconds, or `none`. `open`: only `opened` is set. `mitigated`: `mitigated` is set, `closed` is not. `closed`: `closed` is set; `mitigated` stays `none` when the incident ended without a mitigation. |
 | `severity` | As the person stated it, in their terms, or `unstated`. Nobody else grades an incident. |
 | `root_cause` | `none`, then the reference of the task that found the cause (`M005-S01-T02`). A closed record needs that reference or `not pursued -- <reason>`. |
+| `lesson` | `none`, then the id of the lesson the incident taught (`F014`), several comma separated (`F014,F016`); written by `lesson new --incident`. A closed record needs one. A record written before lessons has no line: `check` warns about it once it is closed (a legacy record) and does not fail. |
 
 The six sections stand in this order:
 
@@ -207,7 +261,7 @@ A mitigation is one list line:
 
 Every mitigation is a staged script for a person, made with `bin/ytstack-handover new` and verified with `bin/ytstack-handover check` (`skills/handover-step/SKILL.md`). Paths are written from the root of the repository. A ` | ` inside a value stays part of it: a new field starts only where `<word>: ` follows the bar.
 
-`bin/ytstack-signals incident new --title <text> [--severity <text>]` writes the skeleton (the frontmatter, the six headings, the first timeline line) and prints the path. It refuses when a record of that day with that title exists: an incident is resumed, not opened twice. `bin/ytstack-signals incident list [--state <state>]` prints one tab separated line per record: id, state, opened, severity, title; without `--state` the ones that are not closed. Everything after the skeleton is written by the skill `incident`, with the file tools.
+`bin/ytstack-signals incident new --title <text> [--severity <text>]` writes the skeleton (the frontmatter with `lesson: none`, the six headings, the first timeline line) and prints the path. It refuses when a record of that day with that title exists: an incident is resumed, not opened twice. `bin/ytstack-signals incident list [--state <state>]` prints one tab separated line per record: id, state, opened, severity, title; without `--state` the ones that are not closed. Everything after the skeleton is written by the skill `incident`, with the file tools.
 
 ## Checked mechanically
 
@@ -216,11 +270,13 @@ Every mitigation is a staged script for a person, made with `bin/ytstack-handove
 - a file in `incidents/` whose name is not `<YYYY-MM-DD>-<slug>.md`, an `id` that differs from the file name, a file without frontmatter
 - a `state` outside the three values, an `opened` that is not a UTC time, a `mitigated` or `closed` that is neither `none` nor a UTC time, and times that contradict the state
 - a record without `severity`, a closed record whose `root_cause` is `none`, a `not pursued` without a reason
+- a closed record whose `lesson` is `none`, a `lesson` that is not `none` or finding ids, and an id that names no finding of `kind: lesson`. A closed record with no `lesson:` line at all was written before lessons existed: `check` lists it as a `warning:` line (a legacy record) and the exit stays as it is; `lesson new --incident <id>` adds the line
 - a body that does not have the six sections, each once and in order
 - a list line under "Proposed mitigations" that does not start with `M<n> -- `, an id used twice, a missing field, a `status` outside the four forms
 - a mitigation that is not `declined` and whose script does not exist or does not pass `bin/ytstack-handover check`, and a `carried out` whose receipt does not exist
 - a file in `signals/` whose name is not `F###-<slug>.md`, an id that differs from the file name or is used by two files, a file without frontmatter
 - a `key` or a `ref` that is not one word of the listed characters, a `source` that is not a lowercase slug, a `kind` or a `state` outside the listed values, a finding of `kind: review` whose key is not `review:<role>:<class-slug>`
+- a lesson whose key is not `lesson:<area>:<class-slug>` with a listed area, whose source is not that area, whose `target` is missing or not `<type>:<where>`, or names `AGENTS.md`, `CLAUDE.md` or `CLAUDE.local.md` in any case; a `fixed` lesson whose target is a proposal or a file that does not exist
 - a line of `review-checks` that is not `<owner/name>#<n> <merge sha> <UTC time>`, and a pull request that has two lines
 - `first_seen` or `last_seen` that is not a UTC time with seconds, a `count` that is not a number from 1
 - a `planned` finding whose `ref` is `none`, a `dismissed` finding without a reason under "Assessment"
@@ -229,4 +285,4 @@ Every mitigation is a staged script for a person, made with `bin/ytstack-handove
 
 It prints one line per problem, starting with the file name, and exits 1. It exits 0 with `signals ok: <n> finding(s), <m> incident(s)`, and with `no signals` in a project that has neither directory.
 
-What stays a judgment: whether a line is a finding or noise, whether two lines are the same finding (the choice of the key), and whether a sighting holds a value that must not be committed. In an incident record: whether a fact is one, whether a hypothesis follows from the facts, and whether "Decisions" holds only what a person said. The check reads the form of a mitigation line, not whether its script is the right one.
+What stays a judgment: which class an incident belongs to and whether a machine could check its lesson, whether a line is a finding or noise, whether two lines are the same finding (the choice of the key), and whether a sighting holds a value that must not be committed. In an incident record: whether a fact is one, whether a hypothesis follows from the facts, and whether "Decisions" holds only what a person said. The check reads the form of a mitigation line, not whether its script is the right one.

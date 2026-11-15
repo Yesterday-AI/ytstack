@@ -328,6 +328,8 @@ Agent fires `ytstack:incident`. Mitigation first, cause afterwards:
 3. It reads the receipt and the signals again. When you say the mitigation holds, the record turns `mitigated`.
 4. The root cause goes to `systematic-debugging`, with the record as its input.
 
+**Every incident leaves a lesson.** When production went down, `main` went red, a review caught a defect or an agent slipped, the skill that handled it ends with `ytstack:lesson`. It names the class (`ci: flaky-order`) and puts the lesson where a machine checks it (a test, a guard, a CI step, an alert), or else into `KNOWLEDGE.md`, never as one more rule in `AGENTS.md`. It records the lesson once per class under `.ytstack/signals/`, so the second time the same thing happens you see a count of 2, not a fresh surprise. A check nobody built yet becomes a lane the coordinator dispatches; a rule change comes to you as a question. When the lesson concerns ytstack itself, it goes upstream per `upstream_feedback` (`suggest` by default: the agent drafts an issue and asks you; `docs/ux/upstream-feedback.md`).
+
 Format of both records: `docs/ux/signal-format.md`.
 
 ## When review bots catch what your reviewers missed

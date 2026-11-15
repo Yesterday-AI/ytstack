@@ -1,0 +1,234 @@
+#!/usr/bin/env bash
+# ytstack upstream: the helper of the feedback channel to Yesterday-AI/ytstack.
+# The channel and its rules: docs/ux/upstream-feedback.md.
+#
+#   ytstack-upstream [-C DIR] mode
+#   ytstack-upstream draft --kind bug|gap|proposal|evidence --title TEXT [--host NAME] [--out FILE]
+#   ytstack-upstream check [--title TEXT] FILE
+#
+# mode   prints the effective setting of `upstream_feedback` for the project
+#        in DIR (default: $PWD): `mode:` suggest | file | off, `set:` the value
+#        and where it came from (preferences | config | default), `gh:` yes |
+#        no | not checked, `repo:`, `rules:` (the path of the channel's
+#        rules in this plugin). gh is asked (`gh auth status`) only for
+#        file; without gh or a login the mode is suggest and a `note:` says
+#        why. In a session nobody answers in (YTSTACK_NON_INTERACTIVE,
+#        OPENCLAW_SESSION, CLAUDE_AGENT_TEAM_MEMBER or CI set) file is
+#        suggest, gh is not asked, and a `note:` names the variable. An
+#        invalid value prints a `warning:` line. Exit 0; 64 usage.
+# draft  writes an issue body with TODO lines for what the agent has to fill,
+#        the ytstack version, the host and the OS, and prints `path:` and
+#        `title:`. Default path under $TMPDIR (/tmp when $TMPDIR lies in a git checkout); an --out inside a checkout exits 64. Exit 0;
+#        1 the file exists; 64 usage. Never calls gh.
+# check  the rules a machine can see before anything is posted, on every line
+#        of FILE and on the --title (the title that gets posted). Exit 0
+#        `draft ok` (and a `note:` without --title); 1 one line per problem
+#        (or a missing file); 64 usage.
+#
+# Nothing here posts. The agent posts with gh after check passed.
+
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+. "$HERE/hooks/lib/git-ctx.sh"
+REPO="Yesterday-AI/ytstack"
+
+DIR="$PWD"
+if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+
+usage() { sed -n '5,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+# in_checkout DIR: DIR (existing or not yet) lies inside a git work tree.
+in_checkout() {
+  local d="$1"
+  while [ -n "$d" ] && [ ! -d "$d" ]; do d=$(dirname "$d"); done
+  [ -n "$d" ] && git -C "$d" rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+case "$CMD" in mode|draft|check) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+[ -d "$DIR" ] || { echo "ytstack-upstream: -C '$DIR' is not a directory" >&2; exit 64; }
+
+# noninteractive: the name of the first variable that marks a session nobody
+# answers in (a headless run, an OpenClaw session, a teammate, CI); "0",
+# "false" and "no" do not count. Status 1 without one.
+noninteractive() {
+  local n v
+  for n in YTSTACK_NON_INTERACTIVE OPENCLAW_SESSION CLAUDE_AGENT_TEAM_MEMBER CI; do
+    v=${!n:-}
+    case "$v" in ""|0|false|FALSE|False|no) ;; *) echo "$n"; return 0 ;; esac
+  done
+  return 1
+}
+
+cmd_mode() {
+  local gh=not\ checked mode ni=""
+  yt_git_ctx "$DIR"
+  yt_resolve_yt_dir >/dev/null
+  YT_PREF_WARNINGS=""
+  yt_upstream_feedback "${YT_DIR:-}"
+  mode=$YT_PREF_UPSTREAM_FEEDBACK
+  # Such a session never posts: file reads as suggest, gh is not asked.
+  if [ "$mode" != off ] && ni=$(noninteractive); then mode=suggest; fi
+  if [ "$mode" = file ]; then
+    if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then gh=yes; else gh=no; mode=suggest; fi
+  fi
+  echo "mode: $mode"
+  echo "set: $YT_PREF_UPSTREAM_FEEDBACK ($YT_PREF_UPSTREAM_FEEDBACK_FROM)"
+  echo "gh: $gh"
+  echo "repo: $REPO"
+  echo "rules: $HERE/docs/ux/upstream-feedback.md"
+  [ "$gh" != no ] || echo "note: file needs a signed-in gh (gh auth status); suggesting instead"
+  [ -z "$ni" ] || echo "note: a non-interactive or teammate session ($ni is set) never posts; the draft waits for a person"
+  [ -z "$YT_PREF_WARNINGS" ] || printf '%s\n' "$YT_PREF_WARNINGS" | sed 's/^/warning: /'
+  return 0
+}
+
+host() {
+  if [ -n "${CLAUDECODE:-}" ]; then echo claude-code
+  elif [ -n "${CODEX_THREAD_ID:-}${CODEX_SANDBOX:-}${CODEX_HOME:-}" ]; then echo codex
+  elif [ -n "${KIMI_PLUGIN_ROOT:-}${KIMI_CODE_HOME:-}" ]; then echo kimi
+  else echo unknown; fi
+}
+
+cmd_draft() {
+  local kind="" title="" h="" out="" ver slug dir
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --kind) kind="${2:-}"; shift 2 || shift ;;
+      --title) title="${2:-}"; shift 2 || shift ;;
+      --host) h="${2:-}"; shift 2 || shift ;;
+      --out) out="${2:-}"; shift 2 || shift ;;
+      *) usage >&2; return 64 ;;
+    esac
+  done
+  case "$kind" in bug|gap|proposal|evidence) ;; *) echo "ytstack-upstream: --kind is bug, gap, proposal or evidence" >&2; return 64 ;; esac
+  [ -n "$title" ] || { echo "ytstack-upstream: --title is required" >&2; return 64; }
+  h=${h:-$(host)}
+  ver=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$HERE/.claude-plugin/plugin.json" 2>/dev/null | head -1)
+  if [ -z "$out" ]; then
+    slug=$(printf '%s' "$title" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-' | sed 's/--*/-/g; s/^-//; s/-$//' | cut -c1-40)
+    dir="${TMPDIR:-/tmp}"
+    # A TMPDIR inside a git checkout would put the unscrubbed draft into it.
+    in_checkout "$dir" && dir=/tmp
+    out="${dir%/}/ytstack-upstream-$(date -u +%Y%m%dT%H%M%SZ)-${slug:-draft}.md"
+  elif in_checkout "$(dirname "$out")"; then
+    echo "ytstack-upstream: $out is inside a git checkout; drafts live outside it (default: \$TMPDIR)" >&2; return 64
+  fi
+  [ ! -e "$out" ] || { echo "ytstack-upstream: $out exists; pick another --out" >&2; return 1; }
+  {
+    printf 'Kind: %s\n\n## What happened\n\n' "$kind"
+    printf 'TODO: one observation in your own words. No names of people or customers, no private repository names unless the person allowed them.\n\n'
+    printf '## Evidence\n\nTODO: versions, the commands with their output, counts. Paths relative or with ~/, commits short.\n\n'
+    printf '## Proposal\n\nTODO: what would have prevented it, or "none".\n\n'
+    printf -- '---\nytstack %s | host %s | %s\n' "${ver:-unknown}" "$h" "$(uname -s)"
+    printf 'Searched: TODO: the gh issue list --search query and what it found (no match, or #<n>)\n'
+  } > "$out" || { echo "ytstack-upstream: cannot write $out" >&2; return 1; }
+  echo "path: $out"
+  echo "title: $title"
+}
+
+cmd_check() {
+  local f="" title="" has_title=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --title) [ $# -ge 2 ] || { usage >&2; return 64; }; title=$2; has_title=1; shift 2 ;;
+      *) [ -z "$f" ] || { usage >&2; return 64; }; f=$1; shift ;;
+    esac
+  done
+  [ -n "$f" ] || { usage >&2; return 64; }
+  [ -f "$f" ] || { echo "ytstack-upstream: no file $f" >&2; return 1; }
+  YTUP_TITLE="$title" YTUP_HAS_TITLE="$has_title" awk '
+    function problem(t) { bad++; print t }
+    function rep(c, n,   s) { s = ""; while (n-- > 0) s = s c; return s }
+    # tokenrun(run): a run of [A-Za-z0-9+/=_-] that looks like a secret. A
+    # commit SHA (hex of one case, up to 40 digits) is fine; longer hex is not.
+    # A run of 32 or more that mixes upper case, lower case and digits is,
+    # unless a part between / _ - is a lowercase word (a path, a slug).
+    function tokenrun(r,   n, k, S) {
+      if (length(r) < 32) return 0
+      if (r ~ /^[0-9a-f]+$/ || r ~ /^[0-9A-F]+$/) return length(r) > 40
+      if (r !~ /[A-Z]/ || r !~ /[a-z]/ || r !~ /[0-9]/) return 0
+      n = split(r, S, /[\/_-]/)
+      for (k = 1; k <= n; k++) if (S[k] ~ /^[a-z][a-z][a-z]+$/) return 0
+      return 1
+    }
+    # secret(v): a secret of a known shape, or a token-looking run. Stricter
+    # than the rule of bin/ytstack-handover: a draft is published.
+    function secret(v,   i, c, run) {
+      for (i = 1; i <= nshape; i++) if (v ~ SHAPE[i]) return 1
+      if (tolower(v) ~ /aws_secret_access_key[ \t"]*[=:]/) return 1
+      v = v " "; run = ""
+      for (i = 1; i <= length(v); i++) {
+        c = substr(v, i, 1)
+        if (c ~ /[A-Za-z0-9+\/=_-]/) { run = run c; continue }
+        if (tokenrun(run)) return 1
+        run = ""
+      }
+      return 0
+    }
+    # homepath(v): /Users/<name> or /home/<name> (not after a host or ~),
+    # /Users/Shared excepted, or C:\Users\<name>.
+    function homepath(v,   rest, pre, name) {
+      rest = v
+      while (match(rest, /\/(Users|home)\/[A-Za-z0-9._-]+/)) {
+        pre = (RSTART > 1) ? substr(rest, RSTART - 1, 1) : ""
+        name = substr(rest, RSTART, RLENGTH); sub(/^\/(Users|home)\//, "", name)
+        if (pre !~ /[A-Za-z0-9._~-]/ && name != "Shared") return 1
+        rest = substr(rest, RSTART + RLENGTH)
+      }
+      return v ~ /[A-Za-z]:\\+Users\\+[A-Za-z0-9._-]/
+    }
+    # email(v): an address that names a person. Only a bare noreply@ or
+    # no-reply@ is none; <id>+<login>@users.noreply.github.com names the login.
+    # A git@ SSH remote and a user@host:path target are no address.
+    function email(v,   addr) {
+      while (match(v, /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z][A-Za-z]+/)) {
+        addr = tolower(substr(v, RSTART, RLENGTH)); v = substr(v, RSTART + RLENGTH)
+        if (addr ~ /^git@/ || substr(v, 1, 1) == ":") continue
+        if (addr !~ /^no-?reply@/) return 1
+      }
+      return 0
+    }
+    # scan(v, at): the rules every line and the title follow.
+    function scan(v, at) {
+      if (email(v)) problem(at "an email address; leave people out, or ask the person")
+      if (secret(v)) problem(at "a token-looking string; never paste a secret")
+      if (homepath(v)) problem(at "a home directory path names a person; write ~/ or a relative path")
+    }
+    BEGIN {
+      # Known shapes (no {n}: not every awk has intervals). AWS key ids, GitHub,
+      # OpenAI/Anthropic style sk-, Slack, GitLab and npm tokens, PEM keys.
+      SHAPE[++nshape] = "(AKIA|ASIA)" rep("[0-9A-Z]", 16)
+      SHAPE[++nshape] = "gh[pousr]_" rep("[A-Za-z0-9]", 20)
+      SHAPE[++nshape] = "github_pat_" rep("[A-Za-z0-9_]", 20)
+      SHAPE[++nshape] = "(^|[^A-Za-z0-9])sk-" rep("[A-Za-z0-9_-]", 20)
+      SHAPE[++nshape] = "xox[abpors]-" rep("[A-Za-z0-9-]", 10)
+      SHAPE[++nshape] = "glpat-" rep("[A-Za-z0-9_-]", 20)
+      SHAPE[++nshape] = "npm_" rep("[A-Za-z0-9]", 30)
+      SHAPE[++nshape] = "-----BEGIN [A-Z ]*PRIVATE KEY-----"
+      if (ENVIRON["YTUP_HAS_TITLE"] != "") scan(ENVIRON["YTUP_TITLE"], "title: ")
+    }
+    { sub(/\r$/, ""); at = "line " NR ": " }
+    index($0, "```") == 1 { fence = !fence }
+    !fence && /^## / { sec = substr($0, 4) }
+    sec == "Evidence" && $0 !~ /^## / && $0 ~ /[^ \t]/ && $0 !~ /^---/ { evidence++ }
+    !fence && /^---/ { sec = "" }
+    # The placeholders draft writes start a line (or the Searched: value); a
+    # TODO: inside a sentence, a quote or a fenced block is the evidence.
+    !fence && /^(Searched:[ \t]*)?TODO:/ { problem(at "still a TODO: write it, or delete the line") }
+    /^Searched:/ { v = $0; sub(/^Searched:[ \t]*/, "", v); if (v != "" && v !~ /^TODO:/) searched = 1 }
+    { scan($0, at) }
+    END {
+      if (!evidence) problem("Evidence is empty: versions, commands, counts")
+      if (!searched) problem("no Searched: line with the search for existing issues")
+      if (bad) exit 1
+      print "draft ok"
+      if (ENVIRON["YTUP_HAS_TITLE"] == "") print "note: no --title: the title is not checked; pass the issue title with --title"
+      exit 0
+    }' "$f"
+}
+
+case "$CMD" in
+  mode) cmd_mode ;;
+  draft) cmd_draft "$@" ;;
+  check) cmd_check "$@" ;;
+esac

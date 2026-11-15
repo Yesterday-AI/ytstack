@@ -1,13 +1,15 @@
 ---
 project: ytstack
 slug: ytstack
-last_updated: 2026-11-15T02:30:00Z
-current_milestone: M032
+last_updated: 2026-11-15T04:00:00Z
+current_milestone: none
 active_slice: none
 active_task: none
 ---
 
 # State
+
+**Status (2026-11-15, M032 + M033):** M032 DONE (3/3 slices, 6 tasks: `kind: lesson` in the signals ledger, skill `ytstack:lesson` called by `incident`, `systematic-debugging`, `finish-lane`, `coordinate`; lesson lanes in the frontier, open lessons in `coordinate` 0.5.0, repeats in `retro`). M033 DONE (1/1 slice, 4 tasks: `upstream_feedback`, `bin/ytstack-upstream`, `docs/ux/upstream-feedback.md`, "Upstream" in `retro`/`lane-retro`, `lesson` routes ytstack lessons upstream). Both on `m032-m033` on top of M031 (PR #66). Not run: evals `lesson`, `upstream-suggest`, `upstream-file`, `fresh-bugfix` (description of `systematic-debugging` changed). Next: merge #66, then this PR, release.
 
 **Status (2026-11-15, M031):** M031 DONE (5/5 slices, 15 tasks, built by parallel workers on `m031-s0N-*` branches and merged into `plan-m031`): `coordinate` 0.4.0 Step 7 "Run the factory tools" and one-step rotation with `ytstack-pr-watch handover`; `ytstack-risk route --pr` reads the round from the review on the host; session-start factory-tool notices and the `version-notice` prompt hook; QUICKSTART setup guide and upgrade checklist; `bin/ytstack-plans` with the external-plan question in `reconcile` and `adopt-brownfield`. Not run: evals `coordinator-resume`, `risk-route`, `external-plan`, `reconcile`, `adopt-brownfield` (at release). M032 (lesson loop, #53) in progress on `m032-lesson-loop`; M033 (#55) after it.
 

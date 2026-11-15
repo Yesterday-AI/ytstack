@@ -18,6 +18,12 @@
 #                     or an open or asked question that names the lane
 #            ready    the rest. A slice without a plan has no edges to read: it
 #                     waits for every slice before it; detail "unplanned".
+#          After the slices one line per lesson lane, "lesson-F###": an open
+#          or planned lesson of the signals ledger whose target is a check
+#          (docs/ux/signal-format.md, "Lessons"), unless it is planned with a
+#          ref other than "lesson-F###" (a task builds it); detail its key. It is
+#          blocked while the lesson has no "## Files" or "## Verification"
+#          section. Without a milestone only the lesson lanes are listed.
 #          --ready prints the ready lanes only, one per line.
 # claim    adds the lane's row to LANES.md (created when missing) with status
 #          "claimed". Refused while the row is held, and for a blocked, dropped
@@ -55,6 +61,8 @@ usage() { sed -n '5,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "ytstack-frontier: $*" >&2; exit 1; }
 # listed <value> <a|b|c>
 listed() { case "|$2|" in *"|$1|"*) return 0 ;; esac; return 1; }
+# has_body FILE NAME: the "## NAME" section exists and holds a non-blank line.
+has_body() { awk -v h="## $2" '$0 == h || index($0, h " ") == 1 { f = 1; next } /^## / { f = 0 } f && NF { n = 1 } END { exit !n }' "$1"; }
 # cell <value>: refuse what would break the table
 cell() {
   case "$1" in *"|"*|*"$NL"*) echo "ytstack-frontier: a cell value must not contain '|' or a newline" >&2; exit 64 ;; esac
@@ -177,7 +185,7 @@ open_milestone() {
 }
 
 cmd_list() {
-  local m="" ready="" any="" road slices fin=" " earlier="" s x lane state detail plan by b open
+  local m="" ready="" any="" road slices fin=" " earlier="" s x lane state detail plan by b open lessons
   while [ $# -gt 0 ]; do
     case "$1" in
       --ready) ready=1; shift ;;
@@ -187,16 +195,20 @@ cmd_list() {
     esac
   done
   need_yt
+  lessons=$(lesson_lanes)
   if [ -z "$m" ]; then
     m=$(sed -n 's/^current_milestone:[ ]*\([^ ]*\).*/\1/p' "$YT_DIR/STATE.md" 2>/dev/null | head -1)
     case "$m" in M[0-9][0-9][0-9]) ;; *) m=$(open_milestone) ;; esac
-    [ -n "$m" ] || die "no milestone: STATE.md names none and no M###-ROADMAP.md is open"
+    # Without a milestone the lesson lanes are still work that may start.
+    [ -n "$m" ] || [ -n "$lessons" ] || die "no milestone: STATE.md names none and no M###-ROADMAP.md is open"
   fi
-  road=$(yt_find_artifacts "$YT_DIR" "$m-ROADMAP.md" | head -1)
-  [ -n "$road" ] || die "no roadmap for $m: looked for $YT_DIR/$m-ROADMAP.md"
-
-  # "S01 x" for a checked slice, "S01" for an open one, in roadmap order
-  slices=$(awk '/^- \[[ xX]\] S[0-9][0-9]( |$)/ { print substr($0, 7, 3) (substr($0, 4, 1) == " " ? "" : " x") }' "$road")
+  slices=""
+  if [ -n "$m" ]; then
+    road=$(yt_find_artifacts "$YT_DIR" "$m-ROADMAP.md" | head -1)
+    [ -n "$road" ] || die "no roadmap for $m: looked for $YT_DIR/$m-ROADMAP.md"
+    # "S01 x" for a checked slice, "S01" for an open one, in roadmap order
+    slices=$(awk '/^- \[[ xX]\] S[0-9][0-9]( |$)/ { print substr($0, 7, 3) (substr($0, 4, 1) == " " ? "" : " x") }' "$road")
+  fi
   while read -r s x; do
     [ -n "$s" ] || continue
     if [ -n "$x" ] || { get_row "$m-$s" && [ "$R_STATUS" = merged ]; }; then fin="$fin$s "; fi
@@ -255,7 +267,62 @@ EOF
   done <<EOF
 $slices
 EOF
+
+  # Lesson lanes: an open lesson whose check is still to be built
+  # (docs/ux/signal-format.md, "Lessons"). No edge to a slice; the lesson's
+  # "## Files" and "## Verification" are its plan.
+  local id key file
+  while IFS='	' read -r id key file; do
+    [ -n "$id" ] || continue
+    lane="lesson-$id"; state=ready; detail=$key
+    get_row "$lane" || true
+    if [ "$R_STATUS" = merged ]; then state="done"; detail="merged, the lesson is not set fixed yet"
+    elif listed "$R_STATUS" "$HELD"; then state=claimed; detail=$R_BY
+    elif [ "$R_STATUS" = blocked ]; then state=blocked; detail="lane: $R_NEXT"
+    elif ! has_body "$file" Files || ! has_body "$file" Verification; then
+      # Empty sections count as missing: ytstack-brief refuses a brief without a scope.
+      state=blocked; detail="unplanned: the lesson has no ## Files or no ## Verification with content"
+    else
+      open=""
+      while read -r b qid; do
+        [ -n "$b" ] || continue
+        [ "$b" != "$lane" ] || open="$open${open:+, }question $qid"
+      done <<EOF
+$qblock
+EOF
+      [ -z "$open" ] || { state=blocked; detail=$open; }
+    fi
+    if [ -z "$ready" ]; then printf '%s\t%s\t%s\n' "$lane" "$state" "$detail"
+    elif [ "$state" = ready ]; then echo "$lane"; any=1
+    fi
+  done <<EOF
+$lessons
+EOF
   [ -z "$ready" ] || [ -n "$any" ]
+}
+
+# lesson_lanes: "<id> <key> <file>" (tab separated) per lesson that is open or
+# planned and whose target is a check: the check is still to be built. A
+# planned lesson whose ref names something else than its own lane (a task, a
+# quick task) is built there, so it is no lane: it would be dispatched twice.
+lesson_lanes() {
+  local f id key st kind target ref
+  [ -d "$YT_DIR/signals" ] || return 0
+  for f in "$YT_DIR"/signals/F[0-9][0-9][0-9]-*.md; do
+    [ -f "$f" ] || continue
+    kind=$(sed -n '2,20{s/^kind:[ ]*//p;}' "$f" | head -1)
+    [ "$kind" = lesson ] || continue
+    st=$(sed -n '2,20{s/^state:[ ]*//p;}' "$f" | head -1)
+    target=$(sed -n '2,20{s/^target:[ ]*//p;}' "$f" | head -1)
+    case "$st:$target" in open:check:*|planned:check:*) ;; *) continue ;; esac
+    id=$(sed -n '2,20{s/^id:[ ]*//p;}' "$f" | head -1)
+    ref=$(sed -n '2,20{s/^ref:[ ]*//p;}' "$f" | head -1)
+    if [ "$st" = planned ]; then
+      case "$ref" in ""|none|"lesson-$id") ;; *) continue ;; esac
+    fi
+    key=$(sed -n '2,20{s/^key:[ ]*//p;}' "$f" | head -1)
+    printf '%s\t%s\t%s\n' "$id" "$key" "$f"
+  done
 }
 
 # ---- claim, set, release ---------------------------------------------------------

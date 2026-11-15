@@ -443,6 +443,7 @@ mitigated: none
 closed: none
 severity: all customers, no orders
 root_cause: none
+lesson: none
 ---
 
 # Incident -- Checkout returns 502
@@ -485,9 +486,14 @@ run "$D" incident list --state closed; has "incident list --state closed" "$TODA
 run "$D" incident list --state all;    eq "incident list --state all" 3 "$(printf '%s\n' "$OUT" | grep -c .)"
 run "$D" incident list --state fixed;  eq "incident list --state with an unknown state: exit 64" 64 "$EC"
 edit "$R" '$d'
-run "$D" check; eq "open, mitigated and closed records pass the check" "signals ok: 0 finding(s), 3 incident(s)" "$OUT"
+run "$D" check; eq "a closed record without a lesson fails the check" "1 $TODAY-search-is-slow.md: state closed, but lesson is \"none\": record what it taught with ytstack-signals lesson new --incident $TODAY-search-is-slow" "$EC $OUT"
+feed "the search index was rebuilt during peak hours" "$D" lesson new --area production --class rebuild-at-peak --title "Index rebuild ran at peak" --target proposal:Q001 --incident "$TODAY-search-is-slow"
+eq "lesson new --incident records the lesson and links it" "new F001 $D/.ytstack/signals/F001-index-rebuild-ran-at-peak.md
+linked F001 $I/$TODAY-search-is-slow.md" "$OUT"
+eq "the record's lesson line names it" "F001" "$(field "$I/$TODAY-search-is-slow.md" lesson)"
+run "$D" check; eq "open, mitigated and closed records pass the check" "signals ok: 1 finding(s), 3 incident(s)" "$OUT"
 see "$D" errors:1
-run "$D" check; eq "findings and incidents are counted side by side" "signals ok: 1 finding(s), 3 incident(s)" "$OUT"
+run "$D" check; eq "findings and incidents are counted side by side" "signals ok: 2 finding(s), 3 incident(s)" "$OUT"
 
 # ---- 10. check: incident records, each defect on its own -----------------------
 echo "# check: incident defects"
@@ -548,7 +554,22 @@ defect "closed without a root cause" "$INAME: state closed, but root_cause is \"
 inc; edit "$R" 's/^state: .*/state: closed/; s/^closed: .*/closed: 2026-11-13T12:00:00Z/; s/^root_cause: .*/root_cause: not pursued/'
 defect "not pursued without a reason" "$INAME: root_cause \"not pursued\" gives no reason"
 inc; edit "$R" 's/^state: .*/state: closed/; s/^closed: .*/closed: 2026-11-13T12:00:00Z/; s/^root_cause: .*/root_cause: not pursued -- the provider confirmed an outage on their side/'
-passes "closed without a mitigation, the cause not pursued with a reason"
+defect "closed without a lesson" "$INAME: state closed, but lesson is \"none\""
+feed "the provider went down" "$D" lesson new --area production --class no-provider-alert --title "Provider outage seen by customers first" --target check:ops/alerts.yml --incident "${INAME%.md}"
+run "$D" check
+eq "closed without a mitigation, the cause not pursued with a reason, a lesson recorded" "0 signals ok: 1 finding(s), 1 incident(s)" "$EC $OUT"
+inc; edit "$R" 's/^lesson: .*/lesson: F042/'
+defect "a lesson that is not recorded" "$INAME: lesson F042 is not a recorded lesson"
+inc; see "$D" errors:1; edit "$R" 's/^lesson: .*/lesson: F001/'
+defect "a lesson that names a finding of another kind" "$INAME: lesson F001 is not a recorded lesson"
+inc; edit "$R" 's/^lesson: .*/lesson: the flaky test/'
+defect "a lesson that is no finding id" "$INAME: lesson \"the flaky test\" is not \"none\" or finding ids"
+inc; edit "$R" '/^lesson: /d'
+passes "a record written before lessons (no lesson line) passes while it is open"
+inc; edit "$R" '/^lesson: /d; s/^state: .*/state: closed/; s/^closed: .*/closed: 2026-11-13T12:00:00Z/; s/^root_cause: .*/root_cause: M005-S01-T02/'
+run "$D" check
+eq "a closed record written before lessons (no lesson line): a warning, exit 0" "0 $INAME: warning: closed without a lesson: line (a record from before lessons); add one with ytstack-signals lesson new --incident ${INAME%.md}
+signals ok: 0 finding(s), 1 incident(s)" "$EC $OUT"
 inc; edit "$R" 's/^severity: .*/severity:/'
 defect "a record without severity" "$INAME: no severity"
 inc; edit "$R" '/^## Hypotheses$/d'
@@ -581,13 +602,142 @@ defect "a mitigation without one of its fields" "$INAME: M1: no risk"
 inc; script restart; mitigation proposed; edit "$R" 's/ | undo: none needed/ | undo: kubectl get pods | grep checkout, then nothing/'
 passes "a bar inside a value stays part of the value"
 inc; script restart; mitigation proposed; edit "$R" 's/^- M1 -- /- /'
-defect "a mitigation line without its id" "$INAME: line 23: a mitigation line starts with \"- M<n> -- <what it is>\""
+defect "a mitigation line without its id" "$INAME: line 24: a mitigation line starts with \"- M<n> -- <what it is>\""
 inc; script restart; mitigation proposed; mitigation proposed
 defect "a mitigation id used twice" "$INAME: M1 stands twice"
 inc; script restart; mitigation proposed; edit "$R" 's/^## Proposed mitigations$/&\
 \
 Smallest reversible one first./'
 passes "free text beside the mitigation lines"
+
+# ---- lessons: kind lesson, a target, a count per class ------------------------
+echo "# lesson"
+project lesson
+feed "main went red: test_export failed after test_import ran first" "$D" lesson new --area ci --class flaky-order \
+  --title "A test depends on the order of the suite" --target check:tests/order.test.sh --read-at "$T1"
+L="$S/F001-a-test-depends-on-the-order-of-the-suite.md"
+eq "lesson new records a finding of kind lesson" "0 new F001 $L" "$EC $OUT"
+eq "its frontmatter carries the area as source and the target" "id: F001
+key: lesson:ci:flaky-order
+source: ci
+kind: lesson
+state: open
+first_seen: $T1
+last_seen: $T1
+count: 1
+ref: none
+reopens: none
+target: check:tests/order.test.sh" "$(sed -n '2,12p' "$L")"
+has "the sighting is what happened" "    main went red: test_export failed after test_import ran first" "$(cat "$L")"
+feed "red again, same class" "$D" lesson new --area ci --class flaky-order --title "Another wording" --target knowledge:.ytstack/KNOWLEDGE.md --read-at 2026-11-14T08:00:00Z
+eq "a repeat of the class raises the count instead of a new record" "seen-again F001 $L" "$OUT"
+eq "count 2" 2 "$(field "$L" count)"
+eq "the target of a repeat stays (set --target changes it)" "check:tests/order.test.sh" "$(field "$L" target)"
+run "$D" check; eq "lessons pass the check" "signals ok: 1 finding(s), 0 incident(s)" "$OUT"
+run "$D" lesson list
+eq "lesson list: id, state, area, class, count, window, target, ref, reopens, title" "F001${TAB}open${TAB}ci${TAB}flaky-order${TAB}2${TAB}-${TAB}check:tests/order.test.sh${TAB}none${TAB}none${TAB}A test depends on the order of the suite" "$OUT"
+run "$D" lesson list --since 2026-11-14T00:00:00Z
+eq "--since counts the sightings in the window" 1 "$(printf '%s' "$OUT" | cut -f6)"
+run "$D" set F001 --state fixed
+eq "fixed while the check does not exist: exit 1" 1 "$EC"
+has "and names the path" "tests/order.test.sh, which does not exist" "$OUT"
+mkdir -p "$D/tests"; echo 'true' > "$D/tests/order.test.sh"
+run "$D" set F001 --state fixed; eq "fixed once the check exists" "0 F001 fixed" "$EC $OUT"
+run "$D" lesson list; eq "a fixed lesson is not open" "" "$OUT"
+run "$D" lesson list --state fixed; has "lesson list --state fixed" "F001${TAB}fixed" "$OUT"
+feed "red a third time" "$D" lesson new --area ci --class flaky-order --title "The order lesson did not hold" --target check:tests/order.test.sh
+eq "a repeat after the lesson was fixed is a regression" "regression F002 $S/F002-the-order-lesson-did-not-hold.md" "$OUT"
+eq "it reopens the fixed lesson" "F001" "$(field "$S/F002-the-order-lesson-did-not-hold.md" reopens)"
+feed "the receipt ticked a row before the run finished" "$D" lesson new --area evidence --class receipt-before-run --title "A receipt claimed a run that had not ended" --target proposal:Q003
+eq "a proposal is a valid target of an open lesson" "new F003 $S/F003-a-receipt-claimed-a-run-that-had-not-ended.md" "$OUT"
+run "$D" set F003 --state fixed; eq "a proposal never makes a lesson fixed: exit 1" 1 "$EC"
+has "and says why" "is a proposal" "$OUT"
+mkdir -p "$D/.ytstack"; printf '# Knowledge\n\n## Gotchas\n' > "$D/.ytstack/KNOWLEDGE.md"
+run "$D" set F003 --state fixed --target knowledge:.ytstack/KNOWLEDGE.md#receipts
+eq "set --target with fixed in one call" "0 F003 fixed" "$EC $OUT"
+eq "the target is rewritten" "knowledge:.ytstack/KNOWLEDGE.md#receipts" "$(field "$S/F003-a-receipt-claimed-a-run-that-had-not-ended.md" target)"
+run "$D" set F002 --target check:tests/order2.test.sh; eq "set --target alone keeps the state" "0 F002 open" "$EC $OUT"
+see "$D" errors:7
+run "$D" set F004 --target check:x.sh; eq "--target on a finding that is no lesson: exit 1" 1 "$EC"
+run "$D" check; eq "the ledger passes the check" "signals ok: 4 finding(s), 0 incident(s)" "$OUT"
+N0=$(ls "$S" | grep -c .)
+feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target knowledge:AGENTS.md
+eq "a lesson in AGENTS.md is refused: exit 64" 64 "$EC"; has "and says where it goes instead" "never lives in AGENTS.md" "$OUT"
+feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target contract:docs/CLAUDE.md#rules
+eq "a lesson in CLAUDE.md is refused, also with a path and an anchor: exit 64" 64 "$EC"
+feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target knowledge:agents.md
+eq "a lesson in agents.md (lower case) is refused: exit 64" 64 "$EC"
+feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target contract:sub/CLAUDE.local.md#x
+eq "a lesson in CLAUDE.local.md is refused: exit 64" 64 "$EC"; has "and names the file" "never lives in CLAUDE.local.md" "$OUT"
+feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target tests/x.sh;        eq "a target without a type: exit 64" 64 "$EC"
+feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target rule:tests/x.sh;   eq "a target of an unknown type: exit 64" 64 "$EC"
+feed "x" "$D" lesson new --area ci --class rule --title "A rule";                            eq "no --target: exit 64" 64 "$EC"
+feed "x" "$D" lesson new --area deploy --class rule --title "A rule" --target check:x.sh;    eq "an area outside the five: exit 64" 64 "$EC"
+feed "x" "$D" lesson new --area ci --class "Flaky Order" --title "A rule" --target check:x.sh; eq "a class that is no slug: exit 64" 64 "$EC"
+feed "x" "$D" lesson new --area ci --class rule --title "A rule" --target check:x.sh --incident 2026-11-13-nothing
+eq "an --incident without a record: exit 1" 1 "$EC"
+feed "x" "$D" new --source ci --kind lesson --key lesson:ci:rule --title "A rule"
+eq "new --kind lesson without --target: exit 64" 64 "$EC"
+feed "x" "$D" new --source review --kind lesson --key lesson:ci:rule --title "A rule" --target check:x.sh
+eq "new --kind lesson whose source is not the area: exit 64" 64 "$EC"
+feed "x" "$D" new --source errors --kind errors --key errors:2 --title "Other" --target check:x.sh
+eq "--target on another kind: exit 64" 64 "$EC"
+run "$D" lesson;      eq "lesson without a command: exit 64" 64 "$EC"
+run "$D" lesson list --since yesterday; eq "--since that is no UTC time: exit 64" 64 "$EC"
+eq "none of the refused calls wrote a file" "$N0" "$(ls "$S" | grep -c .)"
+L3="$S/F003-a-receipt-claimed-a-run-that-had-not-ended.md"
+edit "$L3" 's/^target: .*/target: proposal:Q003/'
+defect "a fixed lesson whose target is a proposal" "F003-a-receipt-claimed-a-run-that-had-not-ended.md: state fixed, but the target is a proposal"
+edit "$L3" 's|^target: .*|target: knowledge:.ytstack/GONE.md|'
+defect "a fixed lesson whose target does not exist" "F003-a-receipt-claimed-a-run-that-had-not-ended.md: state fixed, but its target .ytstack/GONE.md does not exist"
+edit "$L3" 's/^target: .*/target: knowledge:AGENTS.md/'
+defect "a lesson in AGENTS.md" "a lesson never lives in AGENTS.md"
+edit "$L3" 's/^target: .*/target: knowledge:docs\/Claude.md/'
+defect "a lesson in Claude.md (any case, any directory)" "a lesson never lives in Claude.md"
+edit "$L3" 's/^target: .*/target: contract:claude.local.md/'
+defect "a lesson in claude.local.md" "a lesson never lives in claude.local.md"
+edit "$L3" '/^target: /d'
+defect "a lesson without a target" "kind lesson, but target \"\" is not"
+edit "$L3" 's/^reopens: none/&\
+target: knowledge:.ytstack\/KNOWLEDGE.md/; s/^key: .*/key: lesson:receipts/'
+defect "a lesson key outside the form" "kind lesson, but key \"lesson:receipts\" is not lesson:<area>:<class-slug>"
+edit "$L3" 's/^key: .*/key: lesson:ci:receipt-before-run/'
+defect "a lesson whose source is not its area" "kind lesson, but source \"evidence\" is not the area ci of its key"
+edit "$L3" 's/^key: .*/key: lesson:evidence:receipt-before-run/'
+run "$D" check; eq "repaired, the ledger passes again" "signals ok: 4 finding(s), 0 incident(s)" "$OUT"
+
+# User scope: the .ytstack directory is ~/.ytstack/projects/<key>, outside the
+# checkout. A target under .ytstack/ names a file there. HOME is temporary.
+echo "# lesson in user scope"
+UH="$TMP/uhome"; U="$TMP/uscope"; mkdir -p "$UH" "$U"
+( cd "$U" && git init -q -b main && git config user.email t@t.t && git config user.name t ) >/dev/null 2>&1
+UKEY=$(HOME="$UH" bash -c '. "$1/hooks/lib/git-ctx.sh"; yt_git_ctx "$2"; printf %s "$YT_REPO_KEY"' _ "$ROOT" "$U")
+UD="$UH/.ytstack/projects/$UKEY"; mkdir -p "$UD"
+runu() { OUT=$(printf 'x\n' | HOME="$UH" bash "$BIN" -C "$U" "$@" 2>&1); EC=$?; }
+runu lesson new --area process --class env-gotcha --title "A gotcha" --target knowledge:.ytstack/KNOWLEDGE.md#env
+eq "user scope: lesson new writes under ~/.ytstack/projects/<key>" "0 new F001 $UD/signals/F001-a-gotcha.md" "$EC $OUT"
+runu set F001 --state fixed
+eq "user scope: fixed while KNOWLEDGE.md is missing: exit 1" 1 "$EC"
+printf '# Knowledge\n\n## env\n' > "$UD/KNOWLEDGE.md"
+runu set F001 --state fixed
+eq "user scope: a .ytstack/ target resolves against the user-scope directory" "0 F001 fixed" "$EC $OUT"
+runu check
+eq "user scope: check resolves it the same way" "0 signals ok: 1 finding(s), 0 incident(s)" "$EC $OUT"
+
+echo "# set inserts a missing frontmatter line"
+project lessonset
+feed "x" "$D" lesson new --area ci --class no-target-line --title "No target line" --target check:tests/a.sh
+L="$S/F001-no-target-line.md"; edit "$L" '/^target: /d'
+run "$D" set F001 --target check:tests/b.sh
+eq "set --target on a lesson without a target line: exit 0" "0 F001 open" "$EC $OUT"
+eq "and the line is written" "check:tests/b.sh" "$(field "$L" target)"
+eq "inside the frontmatter, once" 1 "$(sed -n '2,/^---$/p' "$L" | grep -c '^target: ')"
+run "$D" check; eq "the ledger passes the check" "0 signals ok: 1 finding(s), 0 incident(s)" "$EC $OUT"
+edit "$L" '13{/^---$/d;}'; BEFORE=$(cat "$L")
+run "$D" set F001 --target check:tests/c.sh
+eq "a frontmatter that is not closed: set fails loudly" 1 "$EC"
+has "and says why" "the frontmatter must be closed" "$OUT"
+eq "and leaves the file as it was" "$BEFORE" "$(cat "$L")"
 
 # ---- review escapes: kind review and the checked pull requests -----------------
 echo "# kind review"

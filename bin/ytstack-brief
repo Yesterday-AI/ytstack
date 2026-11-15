@@ -4,7 +4,13 @@
 #   ytstack-brief [-C DIR] render --task M###-S##-T## [--kind KIND] [--branch NAME] [--base NAME]
 #   ytstack-brief [-C DIR] render --slice M###-S##   [--kind KIND] [--branch NAME] [--base NAME]
 #   ytstack-brief [-C DIR] render --task|--slice REF --kind review --head SHA [--base SHA] [--lens NAME]
+#   ytstack-brief [-C DIR] render --lesson F### [--kind KIND] [--branch NAME] [--base NAME] [--head SHA]
 #   ytstack-brief check [FILE]             validate a worker's report (FILE or stdin)
+#
+# --lesson renders the brief of a lesson lane (lesson-F###) from the lesson
+# under signals/ (docs/ux/signal-format.md, "Lessons"): its title, its
+# "## Assessment" and its target are the outcome, its "## Files" and
+# "## Verification" the scope and the check; the commit prefix is the lane.
 #
 # render prints one Markdown brief on stdout, built from the plan files under
 # the .ytstack directory of DIR (default: $PWD): outcome, kind, scope, what to
@@ -61,7 +67,7 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '2,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "ytstack-brief: $*" >&2; exit 1; }
 
 # section <file> <heading>: body of "## <heading>" without the blank lines
@@ -183,7 +189,7 @@ cmd_render() {
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || { usage >&2; return 64; }
     case "$1" in
-      --task|--slice) kind=${1#--}; ref=$2 ;;
+      --task|--slice|--lesson) kind=${1#--}; ref=$2 ;;
       --kind) lane=$2 ;;
       --branch) branch=$2 ;;
       --base) base=$2 ;;
@@ -195,7 +201,7 @@ cmd_render() {
     shift 2
   done
   case "$kind:$ref" in
-    task:M[0-9][0-9][0-9]-S[0-9][0-9]-T[0-9][0-9]|slice:M[0-9][0-9][0-9]-S[0-9][0-9]) ;;
+    task:M[0-9][0-9][0-9]-S[0-9][0-9]-T[0-9][0-9]|slice:M[0-9][0-9][0-9]-S[0-9][0-9]|lesson:F[0-9][0-9][0-9]) ;;
     *) usage >&2; return 64 ;;
   esac
   case "$lane" in
@@ -218,8 +224,16 @@ cmd_render() {
   yt_git_ctx "$DIR"
   yt_resolve_yt_dir >/dev/null
   TOP="$YT_TOPLEVEL"
-  plan=$(find_plan "$ref")
-  [ -n "$plan" ] || die "no plan for $ref: looked for ${YT_DIR:-$TOP/.ytstack}/$ref-PLAN.md"
+  if [ "$kind" = lesson ]; then
+    plan=""
+    for x in "${YT_DIR:-$TOP/.ytstack}/signals/$ref"-*.md; do [ -f "$x" ] && plan=$x && break; done
+    [ -n "$plan" ] || die "no lesson $ref: looked for ${YT_DIR:-$TOP/.ytstack}/signals/$ref-<slug>.md"
+    [ "$(sed -n '2,20{s/^kind:[ ]*//p;}' "$plan" | head -1)" = lesson ] || die "$ref is no lesson (kind lesson) in $(rel "$plan")"
+    ref="lesson-$ref"
+  else
+    plan=$(find_plan "$ref")
+    [ -n "$plan" ] || die "no plan for $ref: looked for ${YT_DIR:-$TOP/.ytstack}/$ref-PLAN.md"
+  fi
 
   PLANS="$plan"; ALL_FILES=""
   B_REF="$ref"; B_COMMIT_PREFIX="$ref"
@@ -227,7 +241,13 @@ cmd_render() {
   B_KIND=""; B_COMMIT_RULE=""; B_LENS=""
   [ -z "$lens" ] || lens_section "$lens" "$head" "$ref"
 
-  if [ "$kind" = task ]; then
+  if [ "$kind" = lesson ]; then
+    # The lesson is the plan: what happened, why the target, where it lives.
+    x=$(sed -n 's/^# F[0-9][0-9][0-9] -- //p' "$plan" | head -1)
+    B_OUTCOME="Put the lesson ${ref#lesson-} in place: $x. It lives at \`$(sed -n '2,20{s/^target:[ ]*//p;}' "$plan" | head -1)\`; the check fails on what happened and passes now."
+    B_OUTCOME=$(para "$B_OUTCOME" "$(section "$plan" Assessment)")
+    add "" "$plan"
+  elif [ "$kind" = task ]; then
     B_OUTCOME=$(para "$(field "$plan" Summary)" "$(section "$plan" "What this does")")
     add "" "$plan"
   else

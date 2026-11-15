@@ -3,7 +3,7 @@ name: using-ytstack
 description: "Establishes how agents find and invoke ytstack skills. Requires Skill-tool invocation before any response when a ytstack skill applies. Auto-injected by the SessionStart hook. Not meant for direct user invocation."
 metadata:
   tier: core
-  version: 0.2.2
+  version: 0.3.1
   kind: directive
 user-invocable: false
 ---
@@ -46,7 +46,7 @@ Skills you might need (consult each skill's description, not this list, for the 
 - Execution discipline: `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `quick-task` (one-sentence changes when PREFERENCES `quick_lane` is on)
 - Review + release: `code-review` (after a task's commits, before summarize-task), `finish-branch` (merge / PR / keep once the slice is closed on paper), `ship` (release flow: tests, review, version, changelog, PR), `retro` (after a milestone closes), `document-release` (changelog + release notes for a version), `grill` (question an idea between office-hours and plan-milestone)
 - Orchestration: `spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`, `visual-review` (a lens reviewer of a UI change), `review-lessons` (after a merge: bot findings the own reviewers missed)
-- Production: `signal-intake` (record what production reports), `incident` (production is broken now: mitigation before cause, before `systematic-debugging`)
+- Production: `signal-intake` (record what production reports), `incident` (production is broken now: mitigation before cause, before `systematic-debugging`), `lesson` (the end of every incident of any class: a check first, never a rule in AGENTS.md)
 
 The selection mechanism is **semantic, not phrase-based**. New user phrasings (different language, paraphrase, domain-specific vocabulary) should still trigger the right skill as long as the intent is covered by a description.
 
@@ -96,9 +96,9 @@ digraph using_ytstack {
 
 Follow its Checklist exactly. Create TodoWrite entries per item. Don't improvise steps. The skill's Terminal State section tells you what to do next -- respect it; don't auto-invoke the suggested follow-up skill unless the user explicitly asks for it, or the project's `PREFERENCES.md` says `autonomy: loop` (the default), in which case the execution skills inside a slice (plan-task -> test-driven-development -> verification-before-completion -> summarize-task) chain without asking and stop at the slice boundary.
 
-## Reporting ytstack issues
+## Feeding ytstack upstream
 
-If a ytstack skill, hook, or artifact misbehaves (the wrong skill fires, a hook errors, an artifact gets mangled), surface it to the human and suggest filing an issue at https://github.com/Yesterday-AI/ytstack/issues. Do not silently work around a ytstack bug -- a one-line report keeps the stack sharp.
+A ytstack skill, hook or script misbehaved, was missing or needed a workaround, or a retro or lesson found something about ytstack itself: that goes to https://github.com/Yesterday-AI/ytstack/issues per `upstream_feedback`. `ytstack-upstream mode` prints it (`suggest`: draft and ask; `file`: search, then file or comment; `off`) and the path of the rules; a non-interactive or teammate session gets `suggest` and never posts. Never work around a ytstack bug silently.
 
 ## Summary
 
