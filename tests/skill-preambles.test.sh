@@ -14,6 +14,10 @@
 # Run: /bin/bash tests/skill-preambles.test.sh   (exit 0 = all pass)
 
 set -uo pipefail
+# grep -q at the end of a pipe stops reading at the first match; the writer then
+# dies of SIGPIPE and pipefail fails the pipe (reliably on Linux, by chance on
+# macOS). grep_q reads its input to the end.
+grep_q() { grep "$@" >/dev/null; }
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 
 PASS=0; FAIL=0
@@ -322,11 +326,11 @@ STANDING_ENTRIES_END"
       has "$s: two open lessons, one of each" "$OUT" "LESSONS: 2 open (1 proposals, 1 checks to build)"
       has "$s: and listed" "$OUT" "F002	open	process	asked-twice	1	-	proposal:Q001"
       rm -rf "$WT/.ytstack/signals"
-      awk '/^\*\*Step 5 --/ { p = 1 } /^\*\*Step 6 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF -- '--lesson F###' \
+      awk '/^\*\*Step 5 --/ { p = 1 } /^\*\*Step 6 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep_q -F -- '--lesson F###' \
         && ok "$s: Step 5 renders the brief of a lesson lane" || bad "$s: Step 5 renders the brief of a lesson lane"
-      awk '/^\*\*Step 8 --/ { p = 1 } /^\*\*Step 9 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF 'daily question' \
+      awk '/^\*\*Step 8 --/ { p = 1 } /^\*\*Step 9 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep_q -F 'daily question' \
         && ok "$s: Step 8 asks a lesson proposal with the daily question" || bad "$s: Step 8 asks a lesson proposal with the daily question"
-      awk '/^\*\*Step 11 --/ { p = 1 } /^\*\*Step 12 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF 'LESSONS' \
+      awk '/^\*\*Step 11 --/ { p = 1 } /^\*\*Step 12 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep_q -F 'LESSONS' \
         && ok "$s: Step 11 names the open lessons in the status" || bad "$s: Step 11 names the open lessons in the status"
       own_reviewers_on
       printf '# Runtime\n\n## Release\n\n- deployed: echo abc1234\n\n## Signals\n\n- errors | read: echo none\n- latency | read: echo none\n' > "$WT/.ytstack/RUNTIME.md"
@@ -359,7 +363,7 @@ PY
       for want in 'ytstack-pr-watch handover --from' 'PR watch session:' 'Running workers:' 'address' 'relay' 'Reports after the rotation'; do
         grep -qF -- "$want" "$TMP/step12.md" && ok "$s: Step 12 names $want" || bad "$s: Step 12 names $want"
       done
-      awk '/^\*\*Step 3 --/ { p = 1 } /^\*\*Step 4 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep -qF 'ytstack-pr-watch handover --from' \
+      awk '/^\*\*Step 3 --/ { p = 1 } /^\*\*Step 4 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" | grep_q -F 'ytstack-pr-watch handover --from' \
         && ok "$s: Step 3 runs the handover for a rotation" || bad "$s: Step 3 runs the handover for a rotation"
       grep -qF '## Rotation' "$ROOT/docs/ux/coordinator-format.md" && ok "$s: coordinator-format documents the rotation block" || bad "$s: coordinator-format documents the rotation block"
       # every command of the Procedure, not only Step 7
@@ -374,7 +378,7 @@ PY
           case "$1" in -C) shift 2 ;; -*|'<'*) break ;; *) sub="$1"; break ;; esac
         done
         if [ -z "$sub" ]; then ok "$s: $tool exists"; continue; fi
-        sed -n '1,40p' "$ROOT/bin/$tool" | grep -qw -- "$sub" && ok "$s: $tool $sub is in its usage" || bad "$s: $tool $sub is in its usage"
+        sed -n '1,40p' "$ROOT/bin/$tool" | grep_q -w -- "$sub" && ok "$s: $tool $sub is in its usage" || bad "$s: $tool $sub is in its usage"
       done < "$TMP/step7.cmds" ;;
     finish-lane)
       # who merges (M025): risk unless PREFERENCES says otherwise; a typo reads as human
@@ -463,18 +467,18 @@ for s in incident systematic-debugging finish-lane coordinate; do
   grep -qF 'invoke `ytstack:lesson`' "$F" && ok "$s: invokes ytstack:lesson" || bad "$s: invokes ytstack:lesson"
   if [ "$s" = systematic-debugging ]; then
     # a thin wrapper: the step lives in its invocation notes, it has no Terminal State
-    awk '/^## ytstack invocation notes/ { p = 1; next } /^## / { p = 0 } p' "$F" | grep -qF 'ytstack:lesson' \
+    awk '/^## ytstack invocation notes/ { p = 1; next } /^## / { p = 0 } p' "$F" | grep_q -F 'ytstack:lesson' \
       && ok "$s: the invocation notes name the lesson step" || bad "$s: the invocation notes name the lesson step"
   else
-    awk '/^## Terminal State/ { p = 1 } p' "$F" | grep -qF '`ytstack:lesson`' \
+    awk '/^## Terminal State/ { p = 1 } p' "$F" | grep_q -F '`ytstack:lesson`' \
       && ok "$s: the Terminal State allows ytstack:lesson" || bad "$s: the Terminal State allows ytstack:lesson"
   fi
 done
-awk '/^### Step 10: Record the lesson/ { p = 1; next } /^### / { p = 0 } p' "$ROOT/skills/incident/SKILL.md" | grep -qF -- '--incident' \
+awk '/^### Step 10: Record the lesson/ { p = 1; next } /^### / { p = 0 } p' "$ROOT/skills/incident/SKILL.md" | grep_q -F -- '--incident' \
   && ok "incident: the lesson step passes the record for --incident" || bad "incident: the lesson step passes the record for --incident"
-awk '/^### Step 14: Lesson/ { p = 1; next } /^### / { p = 0 } p' "$ROOT/skills/finish-lane/SKILL.md" | grep -qF 'ytstack:lesson' \
+awk '/^### Step 14: Lesson/ { p = 1; next } /^### / { p = 0 } p' "$ROOT/skills/finish-lane/SKILL.md" | grep_q -F 'ytstack:lesson' \
   && ok "finish-lane: Step 14 is the lesson" || bad "finish-lane: Step 14 is the lesson"
-awk '/^\*\*Step 7 --/ { p = 1 } /^\*\*Step 8 --/ { p = 0 } p' "$ROOT/skills/coordinate/SKILL.md" | grep -qF 'a red `main`' \
+awk '/^\*\*Step 7 --/ { p = 1 } /^\*\*Step 8 --/ { p = 0 } p' "$ROOT/skills/coordinate/SKILL.md" | grep_q -F 'a red `main`' \
   && ok "coordinate: Step 7 runs the lesson on a red main" || bad "coordinate: Step 7 runs the lesson on a red main"
 
 # ---- technical spec in the preambles (M022) ----------------------------------
