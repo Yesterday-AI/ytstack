@@ -7,7 +7,7 @@
 #   ytstack-frontier [-C DIR] set <lane> [--status S] [--next TEXT] [--pr N] [--head SHA] [--round N] [--branch B] [--worktree W]
 #   ytstack-frontier [-C DIR] release <lane>
 #   ytstack-frontier [-C DIR] check [--minutes N]
-#   ytstack-frontier [-C DIR] owner --pr N
+#   ytstack-frontier [-C DIR] owner --pr N[,N...] [--pr N...]
 #   ytstack-frontier [-C DIR] peer set <role> --repo R --address A [--contact UTC]
 #   ytstack-frontier [-C DIR] peer list
 #
@@ -51,7 +51,12 @@
 #          with the clock of check: the holder, the status and the age of the
 #          last commit on its branch, or of the claim when that is newer:
 #            lane M004-S03 held by impl-S03 (running), last commit 52 min ago on ytstack/M004-S03
+#          A held row wins over a dropped or merged one with the same PR.
+#          With several PRs (comma separated or --pr repeated) each line
+#          starts with the number and a tab; PRs without a row are left out.
 #          The PR watch and ytstack-watch put it into their STALL lines.
+# claim    on a released row keeps branch and worktree unless given:
+#          --worktree <new> sets a fresh worker's worktree, --worktree - clears it.
 # peer     the sessions in other repositories this coordinator works with,
 #          one line each under "## Peers" in LANES.md:
 #            - <role> | <repository> | <address> | <last contact UTC>
@@ -69,7 +74,7 @@
 #   release  0; 1 the lane has no row
 #   check    0 "lanes ok" or "no lanes file"; 1 one line per problem; 2 the
 #            file is well-formed and some lanes are stale
-#   owner    0; 1 no lanes file or no row with that pull request
+#   owner    0; 1 no lanes file or no row with any of the pull requests
 #   peer     0
 #   64       usage, or a cell value with "|" or a newline
 
@@ -572,15 +577,37 @@ EOF
 
 # ---- owner -----------------------------------------------------------------------
 cmd_owner() {
-  local n row lane st by br since c now
-  [ $# -eq 2 ] && [ "$1" = --pr ] || { usage >&2; return 64; }
-  case "$2" in ''|*[!0-9]*) usage >&2; return 64 ;; esac
-  n=$((10#$2))
+  local list="" n rows row found=no
+  while [ $# -gt 0 ]; do
+    [ "$1" = --pr ] && [ $# -ge 2 ] || { usage >&2; return 64; }
+    case ",$2," in *[!0-9,]*|*,,*) usage >&2; return 64 ;; esac
+    list="$list${list:+,}$2"; shift 2
+  done
+  [ -n "$list" ] || { usage >&2; return 64; }
   [ -n "$YT_DIR" ] && [ -f "$LANES" ] || return 1
-  row=$(lane_rows | awk -F'\t' -v n="$n" '$7 == n || $7 == "#" n { print; exit }')
-  [ -n "$row" ] || return 1
+  rows=$(lane_rows)
+  for n in $(printf '%s' "$list" | tr ',' ' '); do
+    n=$((10#$n))
+    # A held row first, else the first row that names the PR.
+    row=$(printf '%s\n' "$rows" | awk -F'\t' -v n="$n" -v held="$HELD" '
+      $7 == n || $7 == "#" n {
+        if (index("|" held "|", "|" $3 "|")) { print; f = 1; exit }
+        if (first == "") first = $0
+      }
+      END { if (!f && first != "") print first }')
+    [ -n "$row" ] || continue
+    found=yes
+    # Several PRs: each line starts with its number and a tab.
+    case "$list" in *,*) printf '%s\t' "$n" ;; esac
+    owner_line "$row"
+  done
+  [ "$found" = yes ]
+}
+# owner_line <row>: the lane, its holder and status, and its last sign of life
+owner_line() {
+  local lane st by br since c now
   IFS='	' read -r lane _ st by br _ <<EOF
-$row
+$1
 EOF
   if [ "$by" = - ]; then echo "lane $lane ($st), nobody holds it"; return 0; fi
   now=$(date -u +%s); since=$(claimed_at "$by"); c=$(last_commit "$br")

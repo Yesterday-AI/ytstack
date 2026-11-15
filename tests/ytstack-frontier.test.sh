@@ -493,6 +493,32 @@ run "$R" owner --pr x;                            eq "owner --pr takes a number:
 run "$R" owner;                                   eq "owner without --pr: exit 64" 64 "$EC"
 mkdir -p "$TMP/bare"
 run "$TMP/bare" owner --pr 12;                    eq "owner without .ytstack: exit 1" "1 " "$EC $OUT"
+# PR #92 review: a held row wins over a dropped one with the same PR; several PRs in one call;
+# a fresh worker's claim takes a new worktree (or clears it) and keeps the branch
+O=$(new_repo owner M001); OL="$O/.ytstack/LANES.md"
+{ printf -- '---\nupdated: 2026-11-15T10:00:00Z\n---\n\n# Lanes\n\n'
+  echo '| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |'
+  echo '|---|---|---|---|---|---|---|---|---|---|'
+  echo '| review-pr-30 | review | dropped | - | - | - | 30 | - | 1 | - |'
+  echo "| M001-S02 | implement | running | w2 $(utc 600) | - | wt/old | 30 | - | 1 | fix |"
+  echo "| M001-S03 | implement | running | w3 $(utc 1200) | - | - | #31 | - | 1 | fix |"
+} > "$OL"
+run "$O" owner --pr 30
+like "the held row wins over a dropped row with the same PR" "^lane M001-S02 held by w2 \(running\), " "$OUT"
+run "$O" owner --pr 30 --pr 31,99
+eq "several PRs: exit 0" 0 "$EC"
+eq "one line per PR with a row" 2 "$(printf '%s\n' "$OUT" | grep -c .)"
+like "each led by the number and a tab (30)" "^30${TAB}lane M001-S02 held by w2 \(running\), claimed 1[01] min ago, no branch in its row\$" "$OUT"
+like "each led by the number and a tab (31, written #31)" "^31${TAB}lane M001-S03 held by w3 \(running\), claimed 2[01] min ago, no branch in its row\$" "$OUT"
+run "$O" owner --pr 98,99
+eq "several PRs, none with a row: exit 1, nothing printed" "1 " "$EC $OUT"
+run "$O" owner --pr 30,x;                         eq "a list with no number: exit 64" 64 "$EC"
+run "$O" release M001-S02
+run "$O" claim M001-S02 --by w9 --branch work/s02 --worktree wt/fresh
+has "a re-claim sets the fresh worker's worktree" "| work/s02 | wt/fresh | 30 |" "$(grep '^| M001-S02 ' "$OL")"
+run "$O" release M001-S02
+run "$O" claim M001-S02 --by w10 --worktree -
+has "--worktree - clears it, the branch stays" "| work/s02 | - | 30 |" "$(grep '^| M001-S02 ' "$OL")"
 sed 's/| running | w1/| working | w1/' "$L" > "$L.x" && mv "$L.x" "$L"
 run "$R" check
 eq "a format problem: exit 1, liveness not read" "1" "$EC"
