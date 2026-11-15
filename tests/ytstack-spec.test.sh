@@ -289,6 +289,20 @@ eq "--head: the range BASE..HEAD of another branch counts its own commits" 0 "$E
 git -C "$R" show HEAD:.ytstack/spec/auth.md > "$R/.ytstack/spec/auth.md.tmp" && mv "$R/.ytstack/spec/auth.md.tmp" "$R/.ytstack/spec/auth.md"
 run "$R" impact --plan "$P" --head "$LX"
 eq "--head without --base: usage error" 64 "$EC"
+# review #88 item 4: a rename counts for its origin too (--no-renames, as ytstack-risk reads a diff)
+( cd "$R" && git checkout -q -b lane-mv "$LH" && git mv docs/auth.md docs/auth-v2.md && git commit -qm "lane: move the source" && git checkout -q - ) >/dev/null 2>&1
+LM=$(git -C "$R" rev-parse lane-mv)
+run "$R" impact --plan "$P" --base "$LH" --head "$LM"
+eq "--head: a source renamed away counts as changed" 0 "$EC"
+has "and is named by its old path" "auth: docs/auth.md changed (committed)" "$OUT"
+# review #88 item 8: a placeholder is no impact
+plan "- auth: TODO section -- TODO what changes"
+run "$R" impact --plan "$P" --base "$BASE"
+eq "a TODO placeholder in Spec impact fails, even when the area changed" 1 "$EC"
+has "and says so" "FAIL placeholder (fill it in): - auth: TODO section -- TODO what changes" "$OUT"
+plan "none -- TODO"
+run "$R" impact --plan "$P" --base "$BASE"
+eq "a TODO reason after none fails too" 1 "$EC"
 
 # Filenames git quotes in its plain output (a space, a non-ASCII byte) are
 # compared as the real names: the records are read NUL-delimited.

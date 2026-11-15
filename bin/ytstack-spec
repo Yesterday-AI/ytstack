@@ -14,7 +14,8 @@
 # Exit codes
 #   lint    0 clean, 2 warnings only, 1 failures (or no spec)
 #   drift   0 always; with --exit-code 2 when an area is listed
-#   impact  0 satisfied or "none", 1 not satisfied, 3 the plan states no impact,
+#   impact  0 satisfied or "none", 1 not satisfied (a TODO placeholder too),
+#           3 the plan states no impact,
 #           4 unverifiable: an area file lies outside the repository (user
 #           scope, ~/.ytstack/projects/<key>/) and no source of it changed;
 #           the line says whether the file was modified after the task's
@@ -332,6 +333,9 @@ cmd_impact() {
     echo "spec impact: not stated -- the plan has no '## Spec impact' section; state the impact in the summary"
     return 3
   fi
+  # A skeleton's placeholder (bin/ytstack-reconcile) is no statement yet.
+  line=$(printf '%s\n' "$body" | grep -m1 'TODO')
+  if [ -n "$line" ]; then echo "FAIL placeholder (fill it in): $line"; return 1; fi
   first=$(printf '%s\n' "$body" | head -1)
   case "$first" in
     [Nn]one*|"- "[Nn]one*) echo "spec impact: ${first#- }"; return 0 ;;
@@ -347,7 +351,8 @@ cmd_impact() {
   if [ "$YT_IS_GIT" = yes ] && [ -n "$head" ]; then
     # A range that need not be checked out (a lane read from the coordinating
     # checkout): its commits only, the working tree belongs to somebody else.
-    committed=$(git -C "$TOP" diff --name-only -z "$base..$head" 2>/dev/null | nul_paths)
+    # --no-renames: a renamed file counts with its old and its new path.
+    committed=$(git -C "$TOP" diff --no-renames --name-only -z "$base..$head" 2>/dev/null | nul_paths)
     first_ct=$(git -C "$TOP" log --format='%ct %h' "$base..$head" 2>/dev/null | tail -1)
   elif [ "$YT_IS_GIT" = yes ]; then
     if [ -n "$pat" ]; then
