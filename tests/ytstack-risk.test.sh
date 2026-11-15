@@ -551,17 +551,19 @@ chmod +x "$FAKE/gh"
 command -v jq >/dev/null 2>&1 || bad "jq is there for the stand-in gh"
 hrt() { OUT=$(PATH="$FAKE:$PATH" GH_FIX="$GH_FIX" bash "$BIN" -C "$R" route --base "$FROM" --head "$H" "$@" 2>&1); EC=$?; }
 # reviews <review>...: the fixture, one review per argument as
-# "<id>|<commit>|<state>|<author_association>|<body>"; submitted in that order.
+# "<id>|<commit>|<state>|<author_association>|<body>[|<login>]"; submitted in
+# that order. The login is reviewer-bot unless given.
 reviews() {
-  local r n=0 id c st as body
+  local r n=0 id c st as body login
   printf '[' > "$GH_FIX/reviews.json"
   for r in "$@"; do
-    IFS='|' read -r id c st as body <<EOF
+    IFS='|' read -r id c st as body login <<EOF
 $r
 EOF
     n=$((n + 1)); [ "$n" = 1 ] || printf ',' >> "$GH_FIX/reviews.json"
     jq -n --argjson id "$id" --arg c "$c" --arg st "$st" --arg as "$as" --arg body "$(printf '%b' "$body")" --arg t "2026-11-14T10:0${n}:00Z" \
-      '{id: $id, node_id: "PRR_x", user: {login: "reviewer-bot", type: "User"}, body: $body, state: $st,
+      --arg login "${login:-reviewer-bot}" \
+      '{id: $id, node_id: "PRR_x", user: {login: $login, type: "User"}, body: $body, state: $st,
         html_url: "https://github.com/acme/app/pull/7#pullrequestreview-\($id)", author_association: $as,
         submitted_at: $t, commit_id: $c}' >> "$GH_FIX/reviews.json"
   done
@@ -603,6 +605,17 @@ hrt --pr 7 --author worker-1
 only_reason "the newest review with a round line counts" "reason: review -- the newest round line says 'changes requested', not approved"
 reviews "11|$H|CHANGES_REQUESTED|OWNER|$(body "$(round "$GOOD")")"; hrt --pr 7 --author worker-1
 only_reason "a review that requests changes on the host" "reason: review -- host review 11 requests changes"
+# A reviewer's newest review is the state that counts on the host, record line
+# or not (PR #66 review).
+reviews "11|$H|COMMENTED|MEMBER|$(body "$(round "$GOOD")")" "12|$H|CHANGES_REQUESTED|OWNER|Please fix the login check first."
+hrt --pr 7 --author worker-1
+only_reason "a later review that requests changes, without a record line" "reason: review -- host review 12 by reviewer-bot requests changes"
+reviews "10|$H|CHANGES_REQUESTED|OWNER|Please fix the login check first.|other-bot" "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD")")"
+hrt --pr 7 --author worker-1
+only_reason "an earlier review of another reviewer that still requests changes" "reason: review -- host review 10 by other-bot requests changes"
+reviews "10|$H|CHANGES_REQUESTED|OWNER|Please fix the login check first." "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD")")"
+hrt --pr 7 --author worker-1
+unattended "a later review of the same reviewer supersedes its request for changes"
 reviews "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD" base)")"; hrt --pr 7 --author worker-1
 only_reason "a line that names another commit than the host's" "reason: review -- host review 11 names '$(s7 base)', the host tied it to $(s7 "$H"): which commit it reviewed is ambiguous"
 reviews "11|$H|COMMENTED|OWNER|$(body "$(round "$GOOD")")"; hrt --pr 7 --author review-1

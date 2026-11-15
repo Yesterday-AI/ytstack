@@ -51,8 +51,9 @@
 #         review last. The newest such line counts; the plan only when no
 #         review has one (--plan is then optional). A host line must name the
 #         commit the host tied its review to, and its validity is computed
-#         from that commit. A review that requests changes, a line that
-#         names another commit and a read that fails all route to a person.
+#         from that commit. A review that requests changes and is the newest
+#         review of its reviewer (record line or not), a line that names
+#         another commit and a read that fails all route to a person.
 #         With --pr one more line follows lenses:
 #           round: host review <id> by <login> on <sha> | plan | none
 # check   validates .ytstack/spec/REVIEW.md of the working tree.
@@ -625,14 +626,17 @@ record_fields() {
 # ---- the records on the host -----------------------------------------------------
 # The reviews of the pull request, one line per record line in a review body:
 #   <commit_id> TAB <login> TAB <review id> TAB <submitted_at> TAB <state> TAB <line>
-# Only reviews that are submitted and not dismissed, by somebody with write
-# access to the repository (owner, member, collaborator): anybody else can post
-# a review on a public pull request. No field is empty, so read splits right.
+# and one more line per review whose <line> is "@review", for the state of
+# every reviewer (requests_changes). Only reviews that are submitted and not
+# dismissed, by an owner, member or collaborator: anybody else can post a
+# review on a public pull request. Whether the reviewer of a record that is
+# used can write is read once more (host_trust). No field is empty, so read
+# splits right.
 # shellcheck disable=SC2016
 REVIEWS_JQ='.[] | select(.state != "PENDING" and .state != "DISMISSED")
   | select(.author_association == "OWNER" or .author_association == "MEMBER" or .author_association == "COLLABORATOR")
-  | . as $r | (.body // "") | split("\n")[] | sub("\r$"; "")
-  | select(test("^- (Round [0-9]+|Lens [a-z0-9][a-z0-9-]*): "))
+  | . as $r | ("@review", ((.body // "") | split("\n")[] | sub("\r$"; "")
+      | select(test("^- (Round [0-9]+|Lens [a-z0-9][a-z0-9-]*): "))))
   | [ ($r.commit_id // "-"), ($r.user.login // "-"), ($r.id | tostring), ($r.submitted_at // "-"), $r.state, . ] | join("\t")'
 HOST_ERR=""
 # host_records: fills $W/host, ordered by the time of submission (newest last).
@@ -646,6 +650,17 @@ host_records() {
     HOST_ERR=$(grep . "$W/host.err" | head -1); HOST_ERR=${HOST_ERR:-gh failed without a message}; return 1
   fi
   sort -s -t "$(printf '\t')" -k4,4 "$W/host.raw" > "$W/host"
+}
+
+# requests_changes: "<review id> TAB <login>" for every reviewer whose newest
+# review requests changes, record line or not. As on the host, a reviewer's
+# newest review is the state that counts: a later approval or comment of the
+# same reviewer supersedes the request.
+requests_changes() {
+  awk -F'\t' '
+    $6 == "@review" { if (!($2 in st)) order[++n] = $2; st[$2] = $5; id[$2] = $3 }
+    END { for (i = 1; i <= n; i++) if (st[order[i]] == "CHANGES_REQUESTED") print id[order[i]] "\t" order[i] }
+  ' "$W/host"
 }
 
 # pick <ERE>: the newest record line that matches. From the host when one of
@@ -839,6 +854,17 @@ EOF
       [ -z "$moved" ] || note route review "the newest round reviewed $(short "$rh") and $(printf '%s\n' "$moved" | grep -c .) path(s) changed since, first $(printf '%s\n' "$moved" | sed -n 1p): it is not valid for $(short "$HEADC")"
     fi
   fi
+  # Any reviewer whose newest review requests changes holds the change, also
+  # with no record line in that review. The round's own review was named
+  # above already.
+  local cr_id cr_login round_id=""
+  [ "$REC_FROM" != host ] || [ "$REC_STATE" != CHANGES_REQUESTED ] || round_id="$REC_ID"
+  while IFS=$'\t' read -r cr_id cr_login; do
+    [ -n "$cr_id" ] && [ "$cr_id" != "$round_id" ] || continue
+    note route review "host review $cr_id by $cr_login requests changes"
+  done <<EOF
+$(requests_changes)
+EOF
 
   # The class is the higher of floor and stated risk; it stays within the
   # ceiling of the touched areas.
