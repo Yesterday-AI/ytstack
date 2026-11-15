@@ -118,6 +118,53 @@ class RegisterAllOpen(unittest.TestCase):
         self.assertEqual(sorted(self.watches()), [1, 2, 4, 5, 6])
         self.assertIn('#3 (author third)', out)
 
+    def test_label_spellings_and_bot_authors(self):
+        prs = [pull(1, labels=['DNM']), pull(2, labels=['status: do not merge']), pull(3, labels=['dnmx']),
+               pull(4, author='dependabot[bot]'), pull(5, labels=['Do_Not_Merge'])]
+        with patch.object(github, 'open_pulls', return_value=prs), \
+                patch.object(github, 'login', return_value='me'):
+            code, out = self.run_cli('register', '--repo', 'o/r', '--all-open', '--author', 'Dependabot',
+                                     '--session', 'claude:coordinator', '--cwd', self.tmp.name)
+        self.assertEqual(code, 0)
+        self.assertEqual(sorted(self.watches()), [3, 4])
+
+    def test_rerun_pauses_own_watches_the_filter_now_skips(self):
+        # PR #89 review: a watch from an earlier unfiltered run stayed active.
+        db = connect()
+        with db:
+            register(db, 'o/r', 20, 'claude:coordinator', '/tmp')
+            register(db, 'o/r', 21, 'claude:other', '/tmp')
+        db.close()
+        with patch.object(github, 'open_pulls', return_value=[pull(20, author='someone'), pull(21, author='someone')]), \
+                patch.object(github, 'login', return_value='me'):
+            code, out = self.run_cli('register', '--repo', 'o/r', '--all-open',
+                                     '--session', 'claude:coordinator', '--cwd', self.tmp.name)
+        self.assertEqual(code, 0)
+        db = connect()
+        paused = {r['number']: r['paused'] for r in db.execute('SELECT number, paused FROM watches')}
+        db.close()
+        self.assertEqual(paused, {20: 1, 21: 0})
+        self.assertIn('paused (watched by this session, now skipped by the filter): #20', out)
+        self.assertIn('resume --repo o/r --pr N', out)
+
+    def test_login_lookup_failure(self):
+        failing = patch.object(github, 'login', side_effect=github.APIError('gh api failed (exit 1)'))
+        with patch.object(github, 'open_pulls', return_value=[pull(1), pull(2, author='bot')]), failing, \
+                patch('sys.stderr', io.StringIO()) as err:
+            with self.assertRaises(SystemExit):
+                self.run_cli('register', '--repo', 'o/r', '--all-open', '--session', 's', '--cwd', self.tmp.name)
+            self.assertIn('--author <login>', err.getvalue())
+            code, out = self.run_cli('register', '--repo', 'o/r', '--all-open', '--author', 'bot',
+                                     '--session', 's', '--cwd', self.tmp.name)
+            self.assertIn('only --author', err.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(sorted(self.watches()), [2])
+
+    def test_filter_flags_need_all_open(self):
+        for flag in (['--author', 'x'], ['--include-drafts'], ['--include-labelled']):
+            with self.subTest(flag=flag), self.assertRaises(SystemExit), patch('sys.stderr', io.StringIO()):
+                self.run_cli('register', '--repo', 'o/r', '--pr', '5', '--session', 's', *flag)
+
     def test_needs_a_session(self):
         with patch.object(github, 'open_pulls', return_value=[]), self.assertRaises(SystemExit):
             with redirect_stdout(io.StringIO()), patch('sys.stderr', io.StringIO()):

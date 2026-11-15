@@ -59,6 +59,63 @@ class ChangedLines(unittest.TestCase):
         self.assertIn('3 unchanged', text)
         self.assertNotIn('o/r#9:', text)
 
+    def test_a_closed_pr_gets_one_last_line_and_leaves_the_count(self):
+        # PR #89 review: a merge without bot findings sends no notice, so the line is the only report.
+        with self.db:
+            for n in (7, 8, 9):
+                register(self.db, 'o/r', n, 'claude:abc', '/tmp')
+        for n in (7, 8, 9):
+            self.observe(n, snapshot())
+        self.prompt()
+        merged = snapshot(); merged['closed'] = True; merged['pr'] = {'state': 'closed', 'merged_at': '2026-11-15T00:00:00Z'}
+        self.observe(8, merged)
+        text = self.prompt()
+        self.assertIn('- o/r#8: closed (merged)', text)
+        self.assertIn('- 2 unchanged', text)
+        self.assertIsNone(self.prompt())
+        closed = snapshot(); closed['closed'] = True; closed['pr'] = {'state': 'closed'}
+        self.observe(9, closed)
+        text = self.prompt()
+        self.assertIn('- o/r#9: closed\n', text)
+        self.assertIn('- 1 unchanged', text)
+        self.assertIsNone(self.prompt())
+        # The last open one closes too: still reported, nothing counted.
+        self.observe(7, closed)
+        text = self.prompt()
+        self.assertIn('- o/r#7: closed', text)
+        self.assertNotIn('unchanged', text)
+        self.assertIsNone(self.prompt())
+
+    def stale(self, changed_at):
+        with self.db:
+            register(self.db, 'o/r', 7, 'claude:abc', '/tmp')
+        s = snapshot(); s['pr']['mergeable'] = False
+        self.observe(7, s)
+        self.prompt()
+        with self.db:
+            self.db.execute('UPDATE watches SET changed_at=? WHERE number=7', (changed_at,))
+        return s
+
+    def test_pause_hint_comes_once_even_when_the_detail_changes(self):
+        s = self.stale(time.time() - 25 * 3600)
+        text = self.prompt()
+        self.assertIn('no new head or status for 25 h', text)
+        self.assertIn('pause --repo o/r --pr 7', text)
+        self.assertIsNone(self.prompt())
+        s['threads'] = [test_findings.thread()]
+        self.observe(7, s)   # same head and status: changed_at stays
+        text = self.prompt()
+        self.assertIn('o/r#7: action_required', text)
+        self.assertNotIn('pause --repo', text)
+        # A SessionStart resets the block, not the hint.
+        hooks.handle({'session_id': 'abc', 'hook_event_name': 'SessionStart', 'cwd': '/tmp'}, 'claude')
+        self.assertNotIn('pause --repo', self.prompt())
+
+    def test_rows_without_changed_at_count_as_long_ago(self):
+        self.stale(None)
+        text = self.prompt()
+        self.assertIn('no new head or status for over 24 h', text)
+
     def test_stale_action_required_suggests_pause_once(self):
         with self.db:
             register(self.db, 'o/r', 7, 'claude:abc', '/tmp')
@@ -68,7 +125,7 @@ class ChangedLines(unittest.TestCase):
         with self.db:
             self.db.execute('UPDATE watches SET changed_at=? WHERE number=7', (time.time() - 25 * 3600,))
         text = self.prompt()
-        self.assertIn('unchanged for 25 h', text)
+        self.assertIn('no new head or status for 25 h', text)
         self.assertIn('pause --repo o/r --pr 7', text)
         self.assertIsNone(self.prompt())
         with self.db:
@@ -102,6 +159,8 @@ class StatusScope(unittest.TestCase):
         self.assertIn('health', mine)
         self.assertEqual(len(self.status('--all')['watches']), 4)   # with the fixture's o/r#1
         self.assertEqual(len(self.status('--repo', 'o/other')['watches']), 1)
+        # GitHub names are case-insensitive: a remote spelled differently still matches.
+        self.assertEqual(len(self.status(repo='O/R')['watches']), 1)
         # Outside a session and a GitHub checkout nothing narrows it.
         self.assertEqual(len(self.status(session=None, repo=None)['watches']), 4)
 

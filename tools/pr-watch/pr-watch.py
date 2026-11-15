@@ -6,6 +6,7 @@ State lives in ${YTSTACK_PR_WATCH_HOME:-~/.ytstack/pr-watch}/state. See docs/pr-
 import argparse
 import json
 import os
+import re
 import sys
 import subprocess
 import time
@@ -21,16 +22,27 @@ from prwatch.state import (cli, connect, handover, known_session, qualify_known,
 from prwatch.worker import tick
 
 
+# A label that says "do not merge": `do-not-merge`, `DO NOT MERGE`, `do_not_merge/hold`, `status: dnm`.
+DO_NOT_MERGE = re.compile(r'\b(?:do not merge|dnm)\b')
+
+
+def login_key(login):
+    """A login as compared: case-insensitive, `dependabot` and `dependabot[bot]` alike."""
+    login = login.strip().lower()
+    return login[:-len('[bot]')] if login.endswith('[bot]') else login
+
+
 def skip_reason(pr, authors, drafts, labelled):
     """Why `register --all-open` leaves an open PR alone, or None: another author, a draft,
-    a do-not-merge label (`do-not-merge`, `DO NOT MERGE`, `do-not-merge/hold` ...)."""
-    author = ((pr.get('user') or {}).get('login') or '').lower()
-    if author not in authors:
+    a do-not-merge label."""
+    author = (pr.get('user') or {}).get('login') or ''
+    if login_key(author) not in authors:
         return f'author {author or "unknown"}'
     if pr.get('draft') and not drafts:
         return 'draft'
-    names = [(label.get('name') or '').lower().replace(' ', '-').replace('_', '-') for label in pr.get('labels') or []]
-    if not labelled and any(name.startswith('do-not-merge') for name in names):
+    names = [' '.join(re.sub(r'[-_/:.]', ' ', (label.get('name') or '').lower()).split())
+             for label in pr.get('labels') or []]
+    if not labelled and any(DO_NOT_MERGE.search(name) for name in names):
         return 'do-not-merge'
     return None
 
@@ -99,6 +111,8 @@ def main():
     move.add_argument('--from', dest='source', required=True, metavar='DIR')
     move.add_argument('--yes', action='store_true')
     args = parser.parse_args()
+    if args.command == 'register' and not args.all_open and (args.author or args.include_drafts or args.include_labelled):
+        parser.error('--author, --include-drafts and --include-labelled apply to --all-open only')
     # The current Claude session's id given bare would be stored as a Codex thread and never delivered.
     own = os.environ.get('CLAUDE_CODE_SESSION_ID')
     if own and getattr(args, 'session', None) == own:
@@ -188,13 +202,25 @@ def main():
                     parser.error('--session or CODEX_THREAD_ID required')
                 # One paginated list call (one REST call per 100 open PRs), one for the login.
                 cwd = str(Path(args.cwd).resolve())
-                authors = {github.login().lower()} | {a.strip().lower() for a in (args.author or '').split(',') if a.strip()}
-                added, kept, foreign, filtered = [], [], [], []
+                authors = {login_key(a) for a in (args.author or '').split(',') if a.strip()}
+                try:
+                    authors.add(login_key(github.login()))
+                except github.APIError:
+                    if not authors:
+                        parser.error('could not read your GitHub login (gh api user); check `gh auth status` '
+                                     'or name the authors with --author <login>[,<login>]')
+                    print('ytstack-pr-watch: could not read your GitHub login (gh api user); '
+                          'registering only --author PRs', file=sys.stderr)
+                added, kept, foreign, filtered, paused = [], [], [], [], []
                 for pr in sorted(github.open_pulls(args.repo), key=lambda p: p['number']):
                     number = pr['number']
                     reason = skip_reason(pr, authors, args.include_drafts, args.include_labelled)
                     if reason:
                         filtered.append(f'#{number} ({reason})')
+                        # A watch of this session from an earlier, unfiltered run would keep reporting.
+                        if db.execute("UPDATE watches SET paused=1 WHERE repo=? AND number=? AND session=? "
+                                      "AND paused=0 AND status!='closed'", (args.repo, number, args.session)).rowcount:
+                            paused.append(f'#{number}')
                         continue
                     known = db.execute('SELECT session FROM watches WHERE repo=? AND number=?',
                                        (args.repo, number)).fetchone()
@@ -216,6 +242,9 @@ def main():
                 if filtered:
                     print('  skipped by filter: ' + ' '.join(filtered)
                           + ' (widen with --author, --include-drafts, --include-labelled, or register --pr N)')
+                if paused:
+                    print('  paused (watched by this session, now skipped by the filter): ' + ' '.join(paused)
+                          + f' (undo: {cli()} resume --repo {args.repo} --pr N)')
             elif args.command == 'register':
                 if not args.session:
                     parser.error('--session or CODEX_THREAD_ID required')
@@ -233,7 +262,8 @@ def main():
                 # Default scope: this session and the repository of the working directory (issue #85).
                 scope = {} if args.all else {k: v for k, v in (
                     ('session', args.session), ('repo', args.repo or origin_repo(os.getcwd()))) if v}
-                where = ' AND '.join(f'{k}=?' for k in scope) or '1'
+                # GitHub owner and repository names are case-insensitive.
+                where = ' AND '.join('lower(repo)=lower(?)' if k == 'repo' else f'{k}=?' for k in scope) or '1'
                 print(json.dumps(dict(scope=scope or 'all',
                     watches=[dict(r) for r in db.execute(f'SELECT * FROM watches WHERE {where}', tuple(scope.values()))],
                     pending_delivery=[dict(r) for r in db.execute('SELECT event_key,session,attempts,error,retry_at,dispatch_id,turn_id FROM outbox '
