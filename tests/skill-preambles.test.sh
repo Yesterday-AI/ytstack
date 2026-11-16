@@ -398,6 +398,12 @@ PEERS_END"
       has "$s: and the preamble says to migrate it" "$OUT" "LANES_MIGRATE: the repo LANES.md is still the lanes file; run ytstack-frontier migrate once"
       has "$s: its rows are listed" "$OUT" "| M001-S01 | implement | running |"
       rm -f "$WT/.ytstack/LANES.md"
+      # goal mode (issue #99): the current milestone becomes the session's goal
+      has "$s: without a session id no goal" "$OUT" "GOAL: ytstack-goal: no session id"
+      PRE_SID=goal-s1 run_pre "$P" "$WT"
+      hasnt "$s: with a session id the goal is tried" "$OUT" "GOAL: ytstack-goal: no session id"
+      has "$s: a GOAL line" "$OUT" "GOAL: "
+      rm -rf "$TMP/xdg/ytstack/sessions/goal-s1"
       # the open lessons (M032): counted in the status, a proposal for the daily question, a check for a lane
       has "$s: bare fixture -> no open lesson" "$OUT" "LESSONS: 0 open (0 proposals, 0 checks to build)"
       printf 'x\n' | bash "$ROOT/bin/ytstack-signals" -C "$WT" lesson new --area ci --class flaky-order --title "Order" --target check:tests/order.sh >/dev/null

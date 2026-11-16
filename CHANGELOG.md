@@ -36,6 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Goal mode** (issue #99): `ytstack-goal set <M###>|"<sentence>"` makes a
+  goal for the session, and the Stop hook keeps the turn going while its
+  exit criteria are open, naming the open slices, the milestone's exit
+  criteria, missing files and failed checks. The stop still goes through for
+  a question you were asked, a blocker the session recorded
+  (`ytstack-goal block "<why>"`), lanes or a watched pull request in the
+  background, or a reached bound (`--until <UTC>`, `--rounds N`). It never
+  holds twice in a row without a tool call in between. `ytstack-goal status`
+  runs the `--check` commands; `clear` ends it. `coordinate` 0.9.0 sets the
+  current milestone as the goal at its start and clears it when the
+  milestone closes. On Codex use its own `/goal`.
 - **`ytstack-upkeep` counts bookkeeping pull requests** (issue #79): a new
   `bookkeeping` section names every UTC day of the last seven with more than
   three merged pull requests that changed only `.ytstack/`, read from the

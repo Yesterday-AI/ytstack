@@ -1586,3 +1586,23 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - `ytstack-standing add` still opens its one pull request per UTC day; folding standing entries into lane branches is not part of this change.
 
 **Supersedes:** Narrows "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)": `.ytstack/LANES.md` is no longer where the lanes live.
+
+## 2026-11-16: Goal mode is a session marker and a Stop-hook clamp that lets a stop through for a question, a blocker, background work or a bound (issue #99)
+
+**Context:** Codex's `/goal` keeps an agent working until a goal is reached. ytstack had the long-running session (`coordinate`), the in-slice loop (`autonomy: loop`) and exit criteria per milestone, but nothing kept a turn going: a turn ended whenever the model thought it was done, and in the meinKontext run lanes sat idle overnight (#84). With the lane state on the host and with the session (#79), the long-running session needs this clamp.
+
+**Options considered:**
+- The clamp: a Stop hook that blocks while the goal is open; or only skill text.
+- Command criteria: run them in the hook; or run them in `ytstack-goal status` and let the hook read the last result.
+- Loop guard: respect `stop_hook_active` strictly (one block per human prompt); or block again inside a continued turn only after a tool call.
+
+**Chose:** `bin/ytstack-goal set|status|block|clear` and a `hook` subcommand that `hooks/stop` calls. The marker is `<session home>/<session id>/goal` beside the coordinate marker. A milestone goal holds when the roadmap is closed or every slice is ticked or merged in the lanes file; the hook names the open slices and up to three exit criteria of `M###-CONTEXT.md`. A sentence goal needs a `--check` command or a `--file`. The stop goes through for an asked question, a recorded blocker (`ytstack-goal block`), a `running` lane, a pull request the PR watch watches for this session while its worker ticks, and a reached bound (`--until`, `--rounds`), said once. Inside a hook-continued turn the goal blocks again only when the transcript shows a tool call after its last block. `coordinate` sets the current milestone with `--if-unset` in its preamble and clears it when the milestone closes (checklist item 14). Codex: the skill points at its native `/goal`, and ytstack registers nothing there.
+
+**Reason:** Skill text alone is what failed. The hook budget is seconds and no hook runs a command from a file a person did not review (standing, 2026-11-15); the checks come from the session itself, but running them belongs where the session already works, so `status` runs them and the hook reads files only. A strict `stop_hook_active` would make the clamp one block per human prompt, which is not a goal; a tool call in between shows the model did work, so a block after it cannot loop on itself. A standing or lint block of the same stop wins, so a stop never carries two blocks.
+
+**How to apply:**
+- A stop that the goal should let through is one of the listed reasons; anything else is answered by doing the next step, not by stopping.
+- Bounds are for unattended runs: `--rounds N` counts the goal's blocks, `--until` a UTC time.
+- Kimi has no session id, Codex no ytstack Stop hook: both keep the skill text only.
+
+**Supersedes:** None. Extends "2026-11-15: Coordinate mode is a session marker the coordinate preamble writes ..." with one more marker and one more Stop-hook part.

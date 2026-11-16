@@ -27,10 +27,15 @@
 #      row (default 3) the stop is blocked once. See the section below.
 #   4. Rotation (coordinate mode, issue #83): from the second compaction of
 #      the session, one reminder per compaction to rotate (Step 12).
+#   5. Goal mode (issue #99): with the goal marker of bin/ytstack-goal, block
+#      the stop while the goal is open, unless a question is asked, a blocker
+#      is recorded, work runs in the background or the bound is reached
+#      (`ytstack-goal hook` decides). Only when 2. and 3. did not block.
 #
 # Resolution: payload `cwd` via hooks/lib/git-ctx.sh (never CLAUDE_PROJECT_DIR).
 # Respects `stop_hook_active` (set when a previous Stop hook already continued
-# the turn) to avoid any loop.
+# the turn): then only the goal runs, and it blocks again only after a tool
+# call since its last block (the transcript), so it cannot loop.
 
 set -uo pipefail
 trap '' PIPE
@@ -39,8 +44,38 @@ trap '' PIPE
 
 yt_read_stdin
 JQ=$(yt_jq)
-# stop_hook_active: do nothing when we are inside a hook-continued turn
-if [ -n "${YT_STDIN:-}" ] && [ -n "$JQ" ] && [ "$(printf '%s' "$YT_STDIN" | "$JQ" -r '.stop_hook_active // false' 2>/dev/null)" = true ]; then
+# stop_hook_active: inside a hook-continued turn only the goal (5.) may hold the
+# stop again, and only after a tool call (bin/ytstack-goal hook); nothing else runs.
+ACTIVE=false; TRANSCRIPT=""
+if [ -n "${YT_STDIN:-}" ] && [ -n "$JQ" ]; then
+  ACTIVE=$(printf '%s' "$YT_STDIN" | "$JQ" -r '.stop_hook_active // false' 2>/dev/null)
+  TRANSCRIPT=$(printf '%s' "$YT_STDIN" | "$JQ" -r '.transcript_path // empty' 2>/dev/null)
+elif printf '%s' "${YT_STDIN:-}" | grep -Eq '"stop_hook_active"[[:space:]]*:[[:space:]]*true'; then
+  ACTIVE=true
+fi
+[ "$ACTIVE" = true ] || ACTIVE=false
+
+# ---- 5. goal mode (issue #99) ----------------------------------------------------
+# With a goal marker (bin/ytstack-goal set), hold the stop while the goal is
+# open; the decision is `ytstack-goal hook` (files only, no command of the goal).
+goal_check() {
+  local sid="${YT_SESSION_ID:-}" out
+  case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  [ -f "$(yt_session_home)/$sid/goal" ] || return 0
+  out=$(bash "$(cd "$(dirname "$0")/.." && pwd)/bin/ytstack-goal" --session "$sid" hook --active "$ACTIVE" ${TRANSCRIPT:+--transcript "$TRANSCRIPT"} 2>/dev/null) || return 0
+  case "$out" in
+    "block "*) BLOCK_REASON="${out#block }" ;;
+    "say "*) GOAL_MSG="${out#say }" ;;
+  esac
+}
+GOAL_MSG=""
+if [ "$ACTIVE" = true ]; then
+  BLOCK_REASON=""; goal_check
+  [ -n "$BLOCK_REASON$GOAL_MSG" ] || exit 0
+  MSG="$GOAL_MSG"
+  if [ -n "$JQ" ]; then
+    "$JQ" -n --arg m "$MSG" --arg r "$BLOCK_REASON" '(if $r != "" then {decision: "block", reason: $r} else {} end) + (if $m != "" then {systemMessage: $m} else {} end)'
+  fi
   exit 0
 fi
 
@@ -230,6 +265,9 @@ MSG=""
 task_msg
 [ -z "$ROTATE_MSG" ] || MSG="${MSG:+$MSG }$ROTATE_MSG"
 [ -z "$LINT_MSG" ] || MSG="${MSG:+$MSG }$LINT_MSG"
+# The goal holds the stop only when nothing above did: never two blocks at once.
+[ -n "$BLOCK_REASON" ] || goal_check
+[ -z "$GOAL_MSG" ] || MSG="${MSG:+$MSG }$GOAL_MSG"
 
 [ -n "$MSG$BLOCK_REASON" ] || exit 0
 if [ -n "$JQ" ]; then

@@ -3,7 +3,7 @@ name: coordinate
 description: "Coordinator mode for the session that owns a plan and delegates all of it, writing no product code itself. Use when many lanes are in flight, when a plan has dozens of work packages, when a session with open lanes continues after a compaction or a resume, or when the user says coordinate this, run the plan, you are the coordinator, keep the lanes moving, where does each lane stand. Not for one milestone with a handful of independent slices (spawn-milestone-team) and not for doing a task yourself (plan-task)."
 metadata:
   tier: task
-  version: 0.8.0
+  version: 0.9.0
 allowed-tools:
   - Bash
   - Read
@@ -46,6 +46,7 @@ You MUST create a TodoWrite task for each of these items. Items 4 to 13 are one 
 11. **Report status** -- only on a change the human acts on, or at a boundary he set
 12. **Rotate** -- after one compaction or with a large context, in one step while lanes run: files current, handoff with the PR watch session, the watches and the workers' addresses, fresh session; this one stays open only as a relay
 13. **Sample finished lanes** -- `ytstack:lane-retro` about every fifth lane
+14. **Clear the goal when the milestone closes** -- `ytstack-goal clear`, then the next milestone as the goal (Codex: its `/goal`)
 
 ## Process Flow
 
@@ -180,6 +181,14 @@ _ROWS=""
 [ -n "$_LANES" ] && [ -f "$_LANES" ] && _ROWS=$(awk '/^\|/ { n++; if (n > 2) print }' "$_LANES")
 echo "${_ROWS:-no lanes}"
 echo "LANES_END"
+# Goal mode (issue #99): the current milestone is this session's goal unless one is set; the Stop hook holds the stop while it is open.
+if [ -n "${CODEX_THREAD_ID:-}" ] && [ -z "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+  echo "GOAL: Codex: set the host's own /goal to the exit criteria of $_M (ytstack registers no Stop hook there)"
+elif [ -n "$_YT_DIR" ] && [ -f "$_BIN/ytstack-goal" ]; then
+  echo "GOAL: $(bash "$_BIN/ytstack-goal" set "$_M" --if-unset 2>&1 | head -1)"
+else
+  echo "GOAL: none (ytstack-goal not reachable)"
+fi
 
 echo "FRONTIER_BEGIN"
 _FRONTIER="${CLAUDE_SKILL_DIR}/../../bin/ytstack-frontier"
@@ -233,6 +242,8 @@ The scripts live in the directory the preamble prints as `YT_BIN=<dir>` (also in
 **Step 3 -- Start from files.** At the first start, after every compaction and after every resume, before anything else: read the standing instructions in full (every entry listed as active between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END`, newest first, its file in `standing/`, and `STANDING.md` when `STANDING: yes`; an entry that another entry supersedes, or that ended, is not listed as active and no longer holds). Then act on the rest of that block: an entry under `ended` gets its closing entry now (`ytstack-standing end <entry> --reason "<what ended it>"`), an entry under `condition to check now` is checked against the host now and closed the same way when it is met, a line under `check failed` is an instruction you are not keeping: fix that first. Its first line counts the human prompts since the newest entry: more than a few after a compaction means instructions may be missing, so read the conversation summary for instructions and record them (Step 9) before you dispatch. Then the rows between `LANES_BEGIN` and `LANES_END`, the frontier, every file listed between `QUESTIONS_BEGIN` and `QUESTIONS_END`, and the newer of the two handoffs. Do not rebuild who holds what from a conversation summary. Where a summary and a file disagree, the file is the claim, and Step 4 checks it against the host before anybody acts on it. A `running` row whose worker no longer exists in this session is not dispatched again blindly: read its branch (`git log <base>..<branch>`), then `ytstack-frontier release <lane>` and claim it for a new worker that continues on that branch, or write a question.
 
 **The lanes file moved out of the repository (issue #79).** `LANES_FILE` names it. A project from before keeps its `.ytstack/LANES.md` as the lanes file until you migrate it: on a `LANES_MIGRATE` line, run `ytstack-frontier migrate` once (it copies the file out of tree and marks the repo copy as a snapshot, which rides with the next lane's pull request), and nothing else changes. With `no lanes` and pull requests or lane branches on the host (a new machine), rebuild the rows from them: one `claim` per open lane pull request or branch, with its `--branch`, then `set --pr`. A `LANES.md` in the repository is only a snapshot from then on: `ytstack-frontier snapshot` writes it when a person asks for one, and `finish-lane` writes it into the last lane of a milestone.
+
+**Goal mode (issue #99).** The preamble sets the current milestone as this session's goal (`GOAL:`) unless one is set. While the goal is open, the Stop hook holds the stop with the open slices and the exit criteria of `M###-CONTEXT.md`, and lets it through only for a question you asked (`ytstack-questions ask`), a recorded blocker (`ytstack-goal block "<why>"`), a running lane or a pull request the PR watch watches for this session, or a reached bound. It never holds twice in a row without a tool call in between. `ytstack-goal status` names what is open; `ytstack-goal set <M###> --rounds N` or `--until <UTC>` bounds a long run. When the milestone closes, `ytstack-goal clear` and set the next one. On Codex use the host's own `/goal` with the milestone's exit criteria instead.
 
 When the newer handoff carries a "Rotation" block (Step 12 of the session before, `docs/ux/coordinator-format.md`), this session is its successor. Before Step 4: `ytstack-pr-watch handover --from <the PR watch session it names>` (skip with `PR watch session: none`; check that the output names the moved pull requests), start the background watches it lists again, and leave the rows of its running workers alone: those workers report to the old session, which stays open as a relay and appends each report under "Reports after the rotation" in `HANDOFF.md` and sets the row to `reported`. Read the handoff again when such a row turns `reported`, and send a worker a message at its address only where the host lets this session reach it. Only when the person says the old session is closed before a worker reported does the rule above for a lost worker apply.
 
@@ -324,7 +335,7 @@ The same files let another person or another host take over.
 
 This skill does not end by itself. It returns control to the user in exactly three states:
 
-- The frontier is empty and no lane is held: report per Step 11 and name `ytstack:reassess-roadmap` as the next step.
+- The frontier is empty and no lane is held: report per Step 11, clear the goal when its milestone closed (`ytstack-goal clear`), and name `ytstack:reassess-roadmap` as the next step.
 - A question waits for the human and nothing ready is independent of it.
 - It rotated (Step 12): the handoff path and the sentence that a fresh session continues from the files; until its listed workers reported, it only relays their reports.
 

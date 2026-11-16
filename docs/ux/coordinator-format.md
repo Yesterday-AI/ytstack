@@ -334,6 +334,20 @@ The `coordinate` preamble writes the session marker `<session home>/<session id>
 
 Claude Code only: Codex registers no UserPromptSubmit or Agent hook of ytstack (its subagent tools are not covered), its PreToolUse and PostToolUse entries on `Bash` run only the PR watch, and Kimi's shell has no session id to write the marker with. On both the skill text (HARD-GATE, Steps 5, 6 and 12) carries these rules without the hooks.
 
+### Goal mode
+
+A long-running coordinator keeps working until its goal's exit criteria hold (issue #99, after Codex's `/goal`). `bin/ytstack-goal` writes the goal as a session marker beside the coordinate marker, `<session home>/<session id>/goal`, and the Stop hook holds the stop while it is open.
+
+| Command | Does |
+|---|---|
+| `ytstack-goal set <M###> [--until <UTC>] [--rounds N] [--if-unset]` | The milestone is the goal: it holds once the roadmap is `done`, `shipped-informally` or `dropped`, or every slice is ticked or has a `merged` row. The `coordinate` preamble runs it for the current milestone with `--if-unset` (`GOAL:`). |
+| `ytstack-goal set "<sentence>" --check "<command>" --file <path> ...` | A sentence goal needs at least one checkable criterion: a command that exits 0, or a file that exists. A milestone goal may add them too. |
+| `ytstack-goal status` | Runs every `--check` in the checkout (stdin closed) and records the result, then prints the goal, what is open, the blocker and the rounds used. Exit 0 reached, 1 open, 3 no goal. |
+| `ytstack-goal block "<why>"`, `block --clear` | Records a blocker: the stop goes through while it is set. |
+| `ytstack-goal clear` | Removes the goal; checklist item 14 of `coordinate` when the milestone closes. |
+
+The Stop hook (`ytstack-goal hook`, files only, no command of the goal) blocks with the open slices, up to three exit criteria of `M###-CONTEXT.md`, the missing files and the checks that failed or never ran. It lets the stop through when a question is `asked`, a blocker is recorded, a lane is `running` or the PR watch watches a pull request for this session while its worker ticks, or the bound is reached (`--until` passed, `--rounds` blocks used); the bound and a reached goal are said once. It never blocks twice in a row without a tool call in between: inside a hook-continued turn (`stop_hook_active`) it blocks again only when the transcript shows a tool call after its last block, and never without a transcript. A standing or lint block of the same stop comes first. Claude Code only: Codex registers no ytstack Stop hook of its own, so the skill says to use its native `/goal`; a Kimi shell has no session id.
+
 ### `STANDING.md`
 
 The single file of earlier versions stays valid. A project without `standing/` keeps it as it was: one line per instruction, time, the instruction, its scope; a replaced line is struck through and dated.
@@ -375,6 +389,7 @@ The old session stays open as a relay until every listed worker has reported. Pe
 ## Checked mechanically
 
 - `bin/ytstack-frontier where`, `migrate`, `snapshot`: the lanes file out of tree, a repo `LANES.md` from before until `migrate`, a snapshot never read as the lanes file ("Where the lanes file lives").
+- `bin/ytstack-goal`: a sentence goal without `--check` or `--file` is refused; `status` runs the checks, `hook` reads their last result ("Goal mode").
 - `bin/ytstack-upkeep`, section `bookkeeping`: UTC days of the last seven with more than three merged pull requests that changed only `.ytstack/`, from the first-parent history of `origin`'s default branch (local refs; one pull request per commit whose subject names its number).
 - `bin/ytstack-frontier check`: the lanes file has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time, every line under `## Peers` is a list line with four cells and a UTC time (a table row there is named as one); then the lanes that stall ("Lanes that stall", exit 2). `ytstack-frontier owner --pr <N>[,<N>...]`: the lane that holds a pull request and its last commit or claim, one line per PR (with several, each led by the number and a tab), exit 1 without a row ("Pull requests that stall"). A fresh worker's `claim` of a released lane keeps branch and worktree unless given: `--worktree <new>` sets its own, `--worktree -` clears it.
 - `bin/ytstack-upkeep --worktrees`: the linked worktrees (not the main one, not the one it runs in) and local branches with the state of their pull request (an open one first, else the newest), the age of the last commit, uncommitted changes, unpushed commits and the lane of the lanes file that holds them, and the `git worktree remove` / `git branch -D` commands for those whose pull request is merged or closed, with no open one, nothing unpushed, clean, unlocked and unheld. It prints the commands and runs none.
