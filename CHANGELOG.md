@@ -196,6 +196,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   skipped `summarize-task` is still caught. `ytstack-spec impact` takes
   `--head` to check a commit range that is not checked out. `finish-lane`
   0.6.0.
+- The six gstack-derived skills move their upstream baseline to gstack
+  v1.99.5.0 (`office-hours` 1.0.1, `plan-ceo-review` 1.0.4,
+  `plan-eng-review` 1.0.4, `retro` 1.3.2, `ship` 1.0.4,
+  `document-release` 1.0.2). Upstream only renamed `/autoplan` to
+  `/plan-eng-review` in next-step recommendations; ytstack has no
+  `autoplan` and already names `ytstack:plan-eng-review`, so no text
+  changed.
 
 ### Fixed
 

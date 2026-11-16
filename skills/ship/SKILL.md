@@ -3,8 +3,8 @@ name: ship
 description: "Ships the current branch (merge the base, tests, coverage and plan audit, pre-landing review, version and CHANGELOG, docs sync, commit, push, pull request), gated on ytstack's slice state. Use when a slice or milestone is closed on paper and verified, or when the user says ship it, open the PR, land this, create a PR. Not before every task of the slice has a summary (summarize-task), not for merging into the base locally (finish-branch), and never for a merge without an explicit merge instruction."
 metadata:
   tier: task
-  version: 1.0.3
-  upstream: "gstack v1.99.3.0 (ship/, commit 1d3c63c53)"
+  version: 1.0.4
+  upstream: "gstack v1.99.5.0 (ship/, commit 0326b144a)"
 allowed-tools:
   - Bash
   - Read
