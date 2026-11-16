@@ -42,6 +42,7 @@ MAIN="$TMP/main"; Y="$MAIN/.ytstack"; mkdir -p "$Y/milestones/M046"
   printf -- '---\nslice: S02\n---\n- [ ] T01 -- d\n- [ ] T02 -- e\n' > .ytstack/milestones/M046/M046-S02-PLAN.md
   printf -- '---\nmilestone: M040\nstatus: done\n---\n' > .ytstack/M040-ROADMAP.md
   printf -- '---\nslice: S01\n---\n- [ ] T01 -- left over\n' > .ytstack/M040-S01-PLAN.md
+  printf -- '---\nslice: S03\n---\n- [ ] T01 -- f\n' > .ytstack/milestones/M046/M046-S03-PLAN.md
   cat > .ytstack/LANES.md <<'EOF'
 ---
 updated: 2026-11-16T10:00:00Z
@@ -83,11 +84,18 @@ idle lane-s02; eq "#98: a third idle -> silent" "" "$ERR"
 printf -- '---\nslice: S02\n---\n- [x] T01 -- d\n- [ ] T02 -- e\n' > "$Y/milestones/M046/M046-S02-PLAN.md"
 idle lane-s02; eq "progress, still open -> said again" 2 "$EC"; has "the new count" "$ERR" "1 task(s) still open"
 idle lane-s02; eq "and then once only" "" "$ERR"
+printf -- '---\nslice: S02\n---\n- [ ] T01 -- d\n- [ ] T02 -- e\n' > "$Y/milestones/M046/M046-S02-PLAN.md"
+idle lane-s02; eq "2 -> 1 -> 2: the count differs from the last said one -> said again" 2 "$EC"
+idle lane-s02; eq "and once only again" "" "$ERR"
 idle lane-s02 s2; eq "another session -> said again" 2 "$EC"
 idle lane-t03; eq "held task still open -> exit 2" 2 "$EC"; has "task lane counts one" "$ERR" "1 task(s) still open in M046-S01-T03"
 
 echo "# team mode: no row, the ref in the teammate name"
-idle impl-M046-S02 s3; eq "name names a held milestone's slice -> exit 2" 2 "$EC"
+idle impl-M046-S03 s3; eq "name names an unclaimed slice of a held milestone -> exit 2" 2 "$EC"; has "its count" "$ERR" "1 task(s) still open in M046-S03"
+idle impl-M046-S02 s3; eq "review: the named slice is held by another teammate -> silent" "" "$ERR"
+idle impl-M046-S01 s3; eq "review: the named slice has a row (reported) -> silent" "" "$ERR"
+idle impl-M046-S03-x s5; eq "a ref followed by a non-word character counts" 2 "$EC"
+idle impl-M046-S031 s5; eq "review: M046-S031 is no ref to M046-S03 -> silent" "" "$ERR"
 idle impl-M034-S01 s3; eq "name outside the held lanes' milestones -> silent" "" "$ERR"
 mv "$Y/LANES.md" "$TMP/LANES.md"
 idle impl-M034-S01 s3; eq "no LANES.md: the named slice counts" 2 "$EC"; has "its count" "$ERR" "13 task(s) still open in M034-S01"
@@ -97,6 +105,14 @@ idle impl-M040-S01 s4; eq "a done milestone -> silent" "" "$ERR"
 mv "$TMP/LANES.md" "$Y/LANES.md"
 printf -- '---\nmilestone: M034\nstatus: in-progress\n---\n- [ ] S01\n' > "$Y/M034-ROADMAP.md"
 printf -- '---\nslice: S02\n---\n- [ ] T01 -- d\n- [ ] T02 -- e\n' > "$Y/milestones/M046/M046-S02-PLAN.md"
+
+echo "# a linked worktree reads the main checkout's LANES.md (its own copy is stale)"
+git -C "$MAIN" worktree add -q --detach "$TMP/wt" HEAD >/dev/null 2>&1 || { echo FATAL worktree; exit 2; }
+cp "$Y/LANES.md" "$TMP/LANES.keep"
+printf '| M046-S03 | implement | running | lane-wt 2026-11-16T11:00Z | b6 | - | - | - | 0 | - |\n' >> "$Y/LANES.md"
+CWD="$TMP/wt" idle lane-wt s6; eq "review: the claim in the main checkout counts" 2 "$EC"; has "its lane" "$ERR" "in M046-S03"
+CWD="$TMP/wt" idle impl-M046-S03 s6; eq "review: and the row there silences another teammate" "" "$ERR"
+cp "$TMP/LANES.keep" "$Y/LANES.md"
 
 echo "# guards"
 printf '{"cwd":%s,"hook_event_name":"TeammateIdle","teammate_name":"lane-s02"}' "$(jstr "$MAIN")" \
