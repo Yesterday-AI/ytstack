@@ -1,9 +1,9 @@
 ---
 project: ytstack
-last_updated: 2026-11-14T13:58:34Z
+last_updated: 2026-11-16T09:00:00Z
 total_milestones: 24
 completed_milestones: 21
-current_milestone: none (M033 done 2026-11-15, released in 0.11.0; M034 planned and on the backlog; M014 reserved; M011 and M013 absorbed into M019)
+current_milestone: none (M033 done 2026-11-15, released in 0.11.0; issue work outside milestones released in 0.12.0; M034 planned and on the backlog; M014 reserved; M011 and M013 absorbed into M019)
 ---
 
 # ytstack Roadmap
@@ -54,6 +54,8 @@ Progress legend: `[ ]` todo, `[~]` in progress, `[x]` done, `[-]` skipped.
 | M034 | Sticky session status (issues #31, #42 follow-up) -- a todo reader per host (Claude task files, Codex plan, Kimi to-dos), the todo state as the first line of `ytstack-status` with optional extra lines, Codex `task-progress`, optional herdr pane metadata and terminal-title sinks; research `docs/research/2026-11-15-sticky-session-status.md`. Planned 2026-11-15, on the backlog. | backlog | 0 | -- |
 
 **Total (2026-11-15):** 225 tasks across M001-M033, 223 done; the 2 open are M008's user actions (git init + push, GitHub repo creation), long since done outside the loop. M011 and M013 were absorbed into M019, M014 is reserved, M034 is on the backlog. Slice and task files of M010-M030 are in `archive/2026-11-15/`.
+
+**Outside milestones (released in 0.12.0, 2026-11-16):** issues #70, #72-#76, #78, #81-#86 and #91, built as single pull requests without milestone, slice or task files: PRs #77, #87-#90, #92-#94. CHANGELOG `[0.12.0]` lists what each changed.
 
 ---
 
