@@ -3,8 +3,8 @@ name: office-hours
 description: "Validates a new project, feature or initiative before anything is scaffolded and writes OFFICE-HOURS.md. Use as the first step for a greenfield idea, when the user says office hours, validate this idea, pitch this, brainstorm this, is this worth building, or whenever a premise needs a forcing-question test. Not for existing codebases (adopt-brownfield) and not once a pitch exists (plan-ceo-review, init-project)."
 metadata:
   tier: core
-  version: 1.0.0
-  upstream: "gstack v1.99.3.0 (office-hours/, commit 1d3c63c53)"
+  version: 1.0.1
+  upstream: "gstack v1.99.5.0 (office-hours/, commit 0326b144a)"
 allowed-tools:
   - Bash
   - Read

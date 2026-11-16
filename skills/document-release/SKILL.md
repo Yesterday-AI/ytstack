@@ -3,8 +3,8 @@ name: document-release
 description: "Writes the release documentation for a version bump (CHANGELOG section, release notes), fed with the task summaries since the last tag. Use when a version is being cut, after ship or finish-branch landed the work, or when the user says write the changelog, release notes, document the release. Not for ad-hoc docs edits (quick-task) and not for the retrospective (retro)."
 metadata:
   tier: task
-  version: 1.0.1
-  upstream: "gstack v1.99.3.0 (document-release/, commit 1d3c63c53)"
+  version: 1.0.2
+  upstream: "gstack v1.99.5.0 (document-release/, commit 0326b144a)"
 allowed-tools:
   - Bash
   - Read

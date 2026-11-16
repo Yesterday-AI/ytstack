@@ -3,8 +3,8 @@ name: retro
 description: "Milestone retrospective fed with the milestone's task summaries, deviations and follow-ups plus the git history of the milestone window, written to M###-RETRO.md. Use after a milestone's last slice closed and reassess-roadmap ran, or when the user says retro, retrospective, what did we learn, lessons from this milestone. Not mid-milestone (reassess-roadmap) and not for closing a task (summarize-task)."
 metadata:
   tier: task
-  version: 1.3.1
-  upstream: "gstack v1.99.3.0 (retro/, commit 1d3c63c53)"
+  version: 1.3.2
+  upstream: "gstack v1.99.5.0 (retro/, commit 0326b144a)"
 allowed-tools:
   - Bash
   - Read

@@ -3,8 +3,8 @@ name: plan-ceo-review
 description: "Challenges premise, scope and ambition of a pitch or a milestone. Use right after office-hours on OFFICE-HOURS.md, or after plan-milestone and before slice-milestone on M###-CONTEXT.md and M###-ROADMAP.md; also when the user says CEO review, scope review, is this too big, is this too small. Not for technical feasibility (plan-eng-review)."
 metadata:
   tier: core
-  version: 1.0.3
-  upstream: "gstack v1.99.3.0 (plan-ceo-review/, commit 1d3c63c53)"
+  version: 1.0.4
+  upstream: "gstack v1.99.5.0 (plan-ceo-review/, commit 0326b144a)"
 allowed-tools:
   - Bash
   - Read

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-16
+
+A coordinator stays on its operating path: standing instructions recorded
+under load, an escalation policy for who decides, stall and liveness lines,
+spec deltas checked before a merge without you, plan skeletons from
+`reconcile`, progress per phase, a quieter PR watch, and artifacts that follow
+their milestone's directory (issues #70, #72-#76, #78, #81-#86, #91).
+
 ### Added
 
 - **Focus PRs and STALL lines** (issue #91): a pull request that sat in a
@@ -196,6 +204,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   skipped `summarize-task` is still caught. `ytstack-spec impact` takes
   `--head` to check a commit range that is not checked out. `finish-lane`
   0.6.0.
+- The six gstack-derived skills move their upstream baseline to gstack
+  v1.99.5.0 (`office-hours` 1.0.1, `plan-ceo-review` 1.0.4,
+  `plan-eng-review` 1.0.4, `retro` 1.3.2, `ship` 1.0.4,
+  `document-release` 1.0.2). Upstream only renamed `/autoplan` to
+  `/plan-eng-review` in next-step recommendations; ytstack has no
+  `autoplan` and already names `ytstack:plan-eng-review`, so no text
+  changed.
 
 ### Fixed
 
@@ -216,7 +231,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files (reassess-roadmap, retro, spawn-milestone-team, task-created,
   teammate-idle) also see files of that milestone that landed flat before it
   moved.
-- `teammate-idle` no longer fails on a slice plan without an open task (`grep
+- `teammate-idle` no longer fails on a slice plan without an open task (issue #86; `grep
   -c ... || echo 0` produced `0` twice and broke the sum).
 - `coordinate` and `resume-session` (0.1.2) find the automatic handoff the
   PreCompact hook wrote under `CLAUDE_PLUGIN_DATA`, which their shell does
@@ -1167,6 +1182,7 @@ model). Research basis: `docs/research/2026-11-07-modernisierung-best-practices.
   `.ytstack/` artifact model (PROJECT / DECISIONS / KNOWLEDGE / STATE /
   milestone-slice-task hierarchy).
 
+[0.12.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Yesterday-AI/ytstack/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/Yesterday-AI/ytstack/compare/v0.9.1...v0.9.2

@@ -3,8 +3,8 @@ name: plan-eng-review
 description: "Reviews the execution approach of a pitch or a sliced milestone for feasibility, architecture, data flow, edge cases, test coverage, performance and security. Use after plan-ceo-review on a pitch, or after slice-milestone and before plan-task on M###-S##-PLAN.md; also when the user says eng review, architecture review, lock the approach. Not for scope and ambition questions (plan-ceo-review)."
 metadata:
   tier: core
-  version: 1.0.3
-  upstream: "gstack v1.99.3.0 (plan-eng-review/, commit 1d3c63c53)"
+  version: 1.0.4
+  upstream: "gstack v1.99.5.0 (plan-eng-review/, commit 0326b144a)"
 allowed-tools:
   - Bash
   - Read
