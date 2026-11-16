@@ -46,7 +46,7 @@ You MUST create a TodoWrite task for each of these items. Items 4 to 13 are one 
 11. **Report status** -- only on a change the human acts on, or at a boundary he set
 12. **Rotate** -- after one compaction or with a large context, in one step while lanes run: files current, handoff with the PR watch session, the watches and the workers' addresses, fresh session; this one stays open only as a relay
 13. **Sample finished lanes** -- `ytstack:lane-retro` about every fifth lane
-14. **Clear the goal when the milestone closes** -- `ytstack-goal clear`, then the next milestone as the goal (Codex: its `/goal`)
+14. **Clear the goal when the milestone closes** -- `ytstack-goal clear`, then the next milestone as the goal (or the host's own `/goal`)
 
 ## Process Flow
 
@@ -183,7 +183,8 @@ echo "${_ROWS:-no lanes}"
 echo "LANES_END"
 # Goal mode (issue #99): the current milestone is this session's goal unless one is set; the Stop hook holds the stop while it is open.
 if [ -n "${CODEX_THREAD_ID:-}" ] && [ -z "${CLAUDE_CODE_SESSION_ID:-}" ]; then
-  echo "GOAL: Codex: set the host's own /goal to the exit criteria of $_M (ytstack registers no Stop hook there)"
+  # Codex has a native /goal and no ytstack Stop hook.
+  echo "GOAL: host goal: set the host's own /goal to the exit criteria of $_M (ytstack registers no Stop hook on this host)"
 elif [ -n "$_YT_DIR" ] && [ -f "$_BIN/ytstack-goal" ]; then
   echo "GOAL: $(bash "$_BIN/ytstack-goal" set "$_M" --if-unset 2>&1 | head -1)"
 else
@@ -243,7 +244,7 @@ The scripts live in the directory the preamble prints as `YT_BIN=<dir>` (also in
 
 **The lanes file moved out of the repository (issue #79).** `LANES_FILE` names it. A project from before keeps its `.ytstack/LANES.md` as the lanes file until you migrate it: on a `LANES_MIGRATE` line, run `ytstack-frontier migrate` once (it copies the file out of tree and marks the repo copy as a snapshot, which rides with the next lane's pull request), and nothing else changes. With `no lanes` and pull requests or lane branches on the host (a new machine), rebuild the rows from them: one `claim` per open lane pull request or branch, with its `--branch`, then `set --pr`. A `LANES.md` in the repository is only a snapshot from then on: `ytstack-frontier snapshot` writes it when a person asks for one, and `finish-lane` writes it into the last lane of a milestone.
 
-**Goal mode (issue #99).** The preamble sets the current milestone as this session's goal (`GOAL:`) unless one is set. While the goal is open, the Stop hook holds the stop with the open slices and the exit criteria of `M###-CONTEXT.md`, and lets it through only for a question you asked (`ytstack-questions ask`), a recorded blocker (`ytstack-goal block "<why>"`), a running lane or a pull request the PR watch watches for this session, or a reached bound. It never holds twice in a row without a tool call in between. `ytstack-goal status` names what is open; `ytstack-goal set <M###> --rounds N` or `--until <UTC>` bounds a long run. When the milestone closes, `ytstack-goal clear` and set the next one. On Codex use the host's own `/goal` with the milestone's exit criteria instead.
+**Goal mode (issue #99).** The preamble sets the current milestone as this session's goal (`GOAL:`) unless one is set. While the goal is open, the Stop hook holds the stop with the open slices and the exit criteria of `M###-CONTEXT.md`, and lets it through only for a question you asked (`ytstack-questions ask`), a recorded blocker (`ytstack-goal block "<why>"`), a running lane or a pull request the PR watch watches for this session, or a reached bound. It never holds twice in a row without a tool call in between. `ytstack-goal status` names what is open; `ytstack-goal set <M###> --rounds N` or `--until <UTC>` bounds a long run. When the milestone closes, `ytstack-goal clear` and set the next one. On a host with its own `/goal` (the preamble says `GOAL: host goal`), use that with the milestone's exit criteria instead.
 
 When the newer handoff carries a "Rotation" block (Step 12 of the session before, `docs/ux/coordinator-format.md`), this session is its successor. Before Step 4: `ytstack-pr-watch handover --from <the PR watch session it names>` (skip with `PR watch session: none`; check that the output names the moved pull requests), start the background watches it lists again, and leave the rows of its running workers alone: those workers report to the old session, which stays open as a relay and appends each report under "Reports after the rotation" in `HANDOFF.md` and sets the row to `reported`. Read the handoff again when such a row turns `reported`, and send a worker a message at its address only where the host lets this session reach it. Only when the person says the old session is closed before a worker reported does the rule above for a lost worker apply.
 
