@@ -17,7 +17,12 @@
 #   lanes     held rows of LANES.md claimed more than --lane-hours hours ago
 #             (default 24), also lanes that are no slice; a table that fails
 #             `ytstack-frontier check` is reported and not read; its "stale:"
-#             lines are items too, once per lane
+#             lines are items too, once per lane; the lanes file is read out
+#             of tree when the repo has none (issue #79)
+#   bookkeeping  UTC days with more than 3 merged pull requests that changed
+#             only .ytstack/, from origin's default branch (local refs); a
+#             pull request that also changed code, a commit without a number
+#             and a day with three are not counted; no ref: not read
 #   --worktrees  linked worktrees and local branches with PR state (one
 #             `gh pr list`), age, uncommitted changes and the lane that holds
 #             them; the remove commands for merged or closed, clean, unheld
@@ -68,6 +73,8 @@ trap 'rm -rf "$TMP"' EXIT
 STAMP='[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z'
 # ytstack-frontier check keeps out-of-tree state; never in the real data dir
 export CLAUDE_PLUGIN_DATA="$TMP/data"
+# the lanes file out of tree (issue #79): never the real XDG state
+export XDG_STATE_HOME="$TMP/xdg"
 NOW=$(date -u +%s)
 
 UP="$BIN"
@@ -104,10 +111,10 @@ run "$D"
 eq "a clean project: exit 0" 0 "$EC"
 eq "the last line says so" "nothing needs a look" "$(printf '%s\n' "$OUT" | tail -1)"
 like "the first line names the directory and the time of the read" "^ytstack upkeep: $Y, read $STAMP" "$(printf '%s\n' "$OUT" | sed -n 1p)"
-for s in spec state gates questions lanes runtime "review policy" "review checks" "factory tools"; do
+for s in spec state gates questions lanes bookkeeping runtime "review policy" "review checks" "factory tools"; do
   eq "section $s: 0" 0 "$(count "$s")"
 done
-eq "nine sections, the first and the last line" 11 "$(printf '%s\n' "$OUT" | awk 'NF { n++ } END { print n + 0 }')"
+eq "ten sections, the first and the last line" 12 "$(printf '%s\n' "$OUT" | awk 'NF { n++ } END { print n + 0 }')"
 has "a project without own reviewers says so" "review checks: 0 (no own reviewers)" "$OUT"
 has "a project without a technical spec says so" "spec: 0 (no technical spec)" "$OUT"
 eq "nothing was written" "$BEFORE" "$(snap)"
@@ -260,6 +267,35 @@ eq "a table that fails the check: lanes: 2" 2 "$(count lanes)"
 like "the problems of the check are the items" "^  - check: line [0-9]+: 9 cells, expected 10\$" "$OUT"
 has "each one" "  - check: M004-S03: status \"sleeping\" is not one of" "$OUT"
 hasnt "and its rows are not read" "hours ago" "$OUT"
+# The lanes file out of tree (issue #79): read there once the repo has none.
+lanes "| M004-S02 | implement | running | impl-b $(claim $((30 * HOUR))) | ytstack/M004-S02 | - | - | - | 0 | wait for the report |"
+rm -f "$Y/LANES.md"
+OOT=$(bash "$ROOT/bin/ytstack-frontier" -C "$D" where | cut -f1)
+case "$OOT" in "$XDG_STATE_HOME"/*) ok "the lanes file lives under the XDG state base" ;; *) bad "the lanes file lives under the XDG state base" "$OOT" ;; esac
+mkdir -p "${OOT%/*}"; ( D="$TMP/oot-tmp"; Y="$D"; mkdir -p "$D"; lanes "| M004-S02 | implement | running | impl-b $(claim $((30 * HOUR))) | ytstack/M004-S02 | - | - | - | 0 | wait for the report |"; mv "$D/LANES.md" "$OOT" )
+run "$D"
+like "an out-of-tree lanes file is read" "^  - M004-S02: running, claimed by impl-b " "$OUT"
+rm -f "$OOT"
+
+# ---- 6b. bookkeeping: pull requests that changed only .ytstack/ (issue #79) ---------
+echo "# bookkeeping"
+project books
+( cd "$D" && git init -q -b main && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false \
+  && git add -A && git commit -qm base \
+  && for n in 11 12 13 14; do echo "$n" > ".ytstack/n$n"; git add -A; git commit -qm "docs(lanes): row $n (#$n)"; done \
+  && mkdir src && echo x > src/a && echo y > .ytstack/mix && git add -A && git commit -qm "feat: code and notes (#15)" \
+  && echo z > .ytstack/direct && git add -A && git commit -qm "chore: no pull request" \
+  && for n in 21 22 23; do echo "$n" > ".ytstack/o$n"; git add -A; GIT_COMMITTER_DATE="$(ago $((3 * DAY)))" git commit -qm "docs: tick (#$n)"; done \
+  && git update-ref refs/remotes/origin/main HEAD && git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main ) >/dev/null 2>&1 || { echo "FATAL fixture"; exit 2; }
+run "$D"
+eq "a day with four bookkeeping pull requests: bookkeeping 1" 1 "$(count bookkeeping)"
+like "the day, the count and the numbers" "^  - [0-9]{4}-[0-9]{2}-[0-9]{2}: 4 pull requests changed only \.ytstack/ \(#14, #13, #12, #11\)\$" "$OUT"
+hasnt "a pull request that also changed code is not counted" "#15" "$OUT"
+hasnt "three on one day are not over the limit" "#21" "$OUT"
+has "the note names the limit and the ref" "bookkeeping: 1 (more than 3 a UTC day in the last 7 days on origin/main)" "$OUT"
+project nobooks
+run "$D"
+has "without an origin default branch: not read" "bookkeeping: 0 (no origin default branch, not read)" "$OUT"
 
 # ---- 7. runtime -------------------------------------------------------------------
 echo "# runtime"

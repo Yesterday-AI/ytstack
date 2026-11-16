@@ -1565,3 +1565,24 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** While the ready-for-review count is at the cap, the coordinator dispatches no new implement lane.
 
 **Supersedes:** Narrows "2026-11-15: Hooks read a stale checkout from origin ..." (the behind conditions; "the `open-prs` gate counts pull requests ready for review" becomes the cap on opening).
+
+## 2026-11-16: The host is the ledger of a lane; the lanes file lives out of tree per repository, a repo `LANES.md` is a snapshot (issue #79)
+
+**Context:** In a four-day coordinator run 176 of more than 500 pull requests were bookkeeping (`LANES.md` rows, roadmap ticks, receipts): on a protected `main` every update of a tracking file in the repository is a branch, a commit and a pull request. Issue #79 offered state outside the repository with periodic snapshots, or one rolling ledger pull request per day. The maintainer decided neither, after "Inside OpenAI's agentic software factory" (Gergely Orosz, 2026-09-15): the state of a change is its pull request on the host and the agent's own thread.
+
+**Chose:**
+- A lane's state is its pull request, read fresh (`finish-lane`, the PR watch, `ytstack-frontier owner`). Nothing the host knows is written to a repository file.
+- What only the coordinator knows (holder, next action, round, lanes without a pull request) is the lanes file, out of tree: `${XDG_STATE_HOME:-~/.local/state}/ytstack/repos/<repo key>/LANES.md`, beside the session home of the coordinate marker and keyed like the automatic handoff. One resolver, `yt_lanes_file` in `hooks/lib/git-ctx.sh`, serves every reader: `ytstack-frontier`, `hooks/stop`, `ytstack-upkeep`, `ytstack-status --phases`, `ytstack-finish-lane route` and the preambles of `coordinate`, `finish-lane` and `lane-retro`.
+- Migration: a repo `.ytstack/LANES.md` without a `snapshot:` key stays the lanes file while no out-of-tree file exists. `ytstack-frontier migrate` copies it out and marks the repo copy `snapshot: <UTC>`; a snapshot is never the lanes file. The `coordinate` preamble prints `LANES_FILE` and, while a repo file is still authoritative, `LANES_MIGRATE`.
+- `LANES.md` in the repository is optional: `ytstack-frontier snapshot` writes it when a person asks, and `finish-lane` writes it into the last lane pull request of a milestone.
+- `finish-lane` bundles what lasts (the roadmap tick, the lane's `DECISIONS.md` or spec lines) on the lane's branch before the push. `questions/` and `standing/` stay in the repository: they are durable and reviewed.
+- `ytstack-upkeep` has a `bookkeeping` section: UTC days of the last seven with more than three merged pull requests that changed only `.ytstack/`.
+
+**Reason:** The XDG base, not `yt_state_base`: Claude Code gives `CLAUDE_PLUGIN_DATA` to hooks only, and the lanes file is written from the Bash tool and read by `hooks/stop` (the reason of the coordinate marker, 2026-11-15). The repository key makes every linked worktree read the same file, which removes the stale copy in a worktree that `ytstack-upkeep --worktrees` had to work around. Keeping a repo file authoritative until an explicit `migrate` changes nothing for a running coordination on upgrade, and the `snapshot:` key keeps a committed copy from becoming the lanes file on another machine. A successor there rebuilds the rows from the host: every implement lane has a pull request or a branch. Upkeep counts from local refs (the first-parent history of `origin`'s default branch, one pull request per numbered subject), so it needs no host call and no `gh`, and counts what actually merged.
+
+**How to apply:**
+- A new reader of the lanes file calls `yt_lanes_file`; it never builds `.ytstack/LANES.md` itself. Tests export `XDG_STATE_HOME` into their temporary directory.
+- Nothing is committed only to record a lane's state. A `DECISIONS.md` entry routes its lane to a person (`bin/ytstack-risk` floor), so it rides with the lane it decides or with the next lane that goes to a person anyway.
+- `ytstack-standing add` still opens its one pull request per UTC day; folding standing entries into lane branches is not part of this change.
+
+**Supersedes:** Narrows "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)": `.ytstack/LANES.md` is no longer where the lanes live.

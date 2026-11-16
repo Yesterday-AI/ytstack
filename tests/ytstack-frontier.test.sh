@@ -24,6 +24,10 @@
 #   peer     set adds or updates one "## Peers" line per role and repository,
 #            list prints them; the lanes table is untouched
 #   refused  a value with "|" or a newline, and usage errors: exit 64
+#   location the lanes file is out of tree per repository (issue #79), shared
+#            by linked worktrees; a repo LANES.md from before stays the file
+#            until migrate copies it and marks it a snapshot; snapshot writes
+#            the repo copy; a snapshot alone is never the lanes file
 #
 # Run: /bin/bash tests/ytstack-frontier.test.sh   (exit 0 = all pass; macOS bash 3.2)
 
@@ -52,6 +56,8 @@ trap 'rm -rf "$TMP"' EXIT
 TAB='	'
 # Out-of-tree state (the first sight of a ready lane) goes here, never to the real one.
 export CLAUDE_PLUGIN_DATA="$TMP/data"
+# The lanes file lives out of tree (issue #79): under this XDG base, never the real one.
+export XDG_STATE_HOME="$TMP/xdg"
 
 # run <dir> <args...>: sets OUT (stdout + stderr) and EC
 run() { local d="$1"; shift; OUT=$(bash "$BIN" -C "$d" "$@" 2>&1); EC=$?; }
@@ -93,9 +99,11 @@ updated: 2026-11-13T10:42:00Z
 |---|---|---|---|---|---|---|---|---|---|
 | M004-S01 | implement | merged | impl-M004-S01 2026-11-13T08:10Z | ytstack/M004-S01 | - | 11 | a1b2c3d | 1 | - |
 | M004-S02 | implement | running | impl-M004-S02 2026-11-13T10:02Z | ytstack/M004-S02 | .claude/worktrees/m004-s02 | - | - | 0 | wait for the report |'
-lanes() { printf '%s\n' "$EXAMPLE" > "$1/.ytstack/LANES.md"; }
-# rowof <repo> <lane>: the lane's line in LANES.md
-rowof() { grep "^| $2 |" "$1/.ytstack/LANES.md"; }
+# lf <repo>: the repository's lanes file, out of tree (issue #79), from `where`
+lf() { local f; f=$(bash "$BIN" -C "$1" where | cut -f1); mkdir -p "${f%/*}"; printf '%s' "$f"; }
+lanes() { printf '%s\n' "$EXAMPLE" > "$(lf "$1")"; }
+# rowof <repo> <lane>: the lane's line in the lanes file
+rowof() { grep "^| $2 |" "$(lf "$1")"; }
 
 # ---- 1. list ------------------------------------------------------------------
 echo "# list"
@@ -218,14 +226,14 @@ bash "$SIG" -C "$R" set F005 --state planned --ref lesson-F005 >/dev/null
 run "$R" list
 hasnt "a planned lesson whose ref is a regular task is no lane (the task builds it)" "lesson-F004" "$OUT"
 has "a planned lesson whose ref is its own lane stays a lane" "lesson-F005" "$OUT"
-rm -rf "$R/.ytstack/signals" "$R/.ytstack/LANES.md" "$R/tests" "$R/.ytstack/M010-ROADMAP.md" "$R/.ytstack/M010-S01-PLAN.md"
+rm -rf "$R/.ytstack/signals" "$(lf "$R")" "$R/tests" "$R/.ytstack/M010-ROADMAP.md" "$R/.ytstack/M010-S01-PLAN.md"
 
 # ---- 2. claim -----------------------------------------------------------------
 echo "# claim"
 R=$(new_repo claim M004)
 roadmap "$R" M004 in-progress "- S01" "- S02" "- S03"
 plan "$R" M004-S01; plan "$R" M004-S02; plan "$R" M004-S03 "S01"
-L="$R/.ytstack/LANES.md"
+L=$(lf "$R")
 run "$R" claim M004-S02 --by impl-M004-S02 --kind implement --branch ytstack/M004-S02 --worktree .claude/worktrees/m004-s02
 eq "the first claim: exit 0" 0 "$EC"
 eq "it creates LANES.md with the ten columns in the documented order" \
@@ -285,7 +293,7 @@ eq "still one row per lane" 1 "$(grep -c '^| M004-S02 |' "$L")"
 R=$(new_repo parallel M004)
 for N in 1 2 3 4 5 6; do ( bash "$BIN" -C "$R" claim "lane-$N" --by "w-$N" > "$TMP/par-$N.out" 2>&1; echo "exit $?" >> "$TMP/par-$N.out" ) & done
 wait
-PROWS=$(grep -c '^| lane-' "$R/.ytstack/LANES.md")
+PROWS=$(grep -c '^| lane-' "$(lf "$R")")
 PEXIT=$(cat "$TMP"/par-[1-6].out | grep -c '^exit 0$')
 eq "six claims at the same time: six rows" 6 "$PROWS"
 eq "and all six succeeded" 6 "$PEXIT"
@@ -293,23 +301,23 @@ if [ "$PROWS" != 6 ] || [ "$PEXIT" != 6 ]; then
   # what each claim said, and the table: two writers at once show as a failed mv
   # in one claim and a missing row of another
   for N in 1 2 3 4 5 6; do echo "  FAIL   claim lane-$N: $(tr '\n' ' ' < "$TMP/par-$N.out")"; done
-  echo "  FAIL   table: $(grep '^| lane-' "$R/.ytstack/LANES.md" | cut -d'|' -f2 | tr '\n' ' ') lock left: $([ -e "$R/.ytstack/LANES.md.lock" ] && echo yes || echo no)"
+  echo "  FAIL   table: $(grep '^| lane-' "$(lf "$R")" | cut -d'|' -f2 | tr '\n' ' ') lock left: $([ -e "$(lf "$R").lock" ] && echo yes || echo no)"
 fi
 # a held lock is waited for, not written past
-: > "$R/.ytstack/LANES.md.lock"
+: > "$(lf "$R").lock"
 bash "$BIN" -C "$R" claim lane-7 --by w-7 > "$TMP/par-7.out" 2>&1 &
 sleep 1
-eq "while the lock is held, nothing is written" 6 "$(grep -c '^| lane-' "$R/.ytstack/LANES.md")"
-rm -f "$R/.ytstack/LANES.md.lock"
+eq "while the lock is held, nothing is written" 6 "$(grep -c '^| lane-' "$(lf "$R")")"
+rm -f "$(lf "$R").lock"
 wait
-eq "once it is free, the waiting claim writes its row" 7 "$(grep -c '^| lane-' "$R/.ytstack/LANES.md")"
+eq "once it is free, the waiting claim writes its row" 7 "$(grep -c '^| lane-' "$(lf "$R")")"
 run "$R" check
 eq "and a well-formed file" "lanes ok" "$OUT"
-if [ -e "$R/.ytstack/LANES.md.lock" ] || [ -e "$R/.ytstack/LANES.md.tmp" ]; then bad "no lock and no temporary file left behind"; else ok "no lock and no temporary file left behind"; fi
+if [ -e "$(lf "$R").lock" ] || [ -e "$(lf "$R").tmp" ]; then bad "no lock and no temporary file left behind"; else ok "no lock and no temporary file left behind"; fi
 
 # ---- 3. set -------------------------------------------------------------------
 echo "# set"
-R=$(new_repo set M004); lanes "$R"; L="$R/.ytstack/LANES.md"
+R=$(new_repo set M004); lanes "$R"; L=$(lf "$R")
 run "$R" set M004-S02 --status reported --next "verify the slice" --pr 12 --head d4e5f6a --round 1 --branch work/s02 --worktree wt/s02
 eq "set: exit 0" 0 "$EC"
 eq "the named cells of the row" "| M004-S02 | implement | reported | impl-M004-S02 2026-11-13T10:02Z | work/s02 | wt/s02 | 12 | d4e5f6a | 1 | verify the slice |" "$(rowof "$R" M004-S02)"
@@ -340,11 +348,11 @@ if cmp -s "$L" "$TMP/before"; then ok "a refused set writes nothing"; else bad "
 R2=$(new_repo setnone M004)
 run "$R2" set M004-S01 --status running
 eq "set without LANES.md: exit 1" 1 "$EC"
-[ ! -e "$R2/.ytstack/LANES.md" ] && ok "and creates no file" || bad "and creates no file"
+[ ! -e "$R2/.ytstack/LANES.md" ] && [ ! -e "$(lf "$R2")" ] && ok "and creates no file" || bad "and creates no file"
 
 # ---- 4. release ---------------------------------------------------------------
 echo "# release"
-R=$(new_repo release M004); lanes "$R"; L="$R/.ytstack/LANES.md"
+R=$(new_repo release M004); lanes "$R"; L=$(lf "$R")
 roadmap "$R" M004 in-progress "- S01" "- S02" "- S03"
 plan "$R" M004-S02; plan "$R" M004-S03 "S01"
 run "$R" list
@@ -371,7 +379,7 @@ has "a blocked row is listed as blocked, with what it waits for" "M004-S03${TAB}
 
 # ---- 5. check -----------------------------------------------------------------
 echo "# check"
-R=$(new_repo check M004); L="$R/.ytstack/LANES.md"
+R=$(new_repo check M004); L=$(lf "$R")
 run "$R" check
 eq "no LANES.md: exit 0" 0 "$EC"
 eq "and says so" "no lanes file" "$OUT"
@@ -416,7 +424,7 @@ utc() {
   [ -z "${2:-}" ] || f='%Y-%m-%dT%H:%M:%SZ'
   date -u -r "$e" +"$f" 2>/dev/null || date -u -d "@$e" +"$f"
 }
-R=$(new_repo live M004); L="$R/.ytstack/LANES.md"
+R=$(new_repo live M004); L=$(lf "$R")
 roadmap "$R" M004 in-progress "- S01" "- S02" "- S03" "- S04" "- S05" "- S06" "- S07" "- S08"
 for s in S01 S02 S03 S04 S05 S06 S07 S08; do plan "$R" "M004-$s" none; done
 ( cd "$R" && git add -A && GIT_COMMITTER_DATE="$(utc 30000 s)" GIT_AUTHOR_DATE="$(utc 30000 s)" git commit -qm base ) >/dev/null 2>&1
@@ -495,7 +503,7 @@ mkdir -p "$TMP/bare"
 run "$TMP/bare" owner --pr 12;                    eq "owner without .ytstack: exit 1" "1 " "$EC $OUT"
 # PR #92 review: a held row wins over a dropped one with the same PR; several PRs in one call;
 # a fresh worker's claim takes a new worktree (or clears it) and keeps the branch
-O=$(new_repo owner M001); OL="$O/.ytstack/LANES.md"
+O=$(new_repo owner M001); OL=$(lf "$O")
 { printf -- '---\nupdated: 2026-11-15T10:00:00Z\n---\n\n# Lanes\n\n'
   echo '| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |'
   echo '|---|---|---|---|---|---|---|---|---|---|'
@@ -526,7 +534,7 @@ hasnt "no stale line then" "stale:" "$OUT"
 
 # ---- 5c. peers (issue #84) ------------------------------------------------------
 echo "# peers"
-R=$(new_repo peers M004); L="$R/.ytstack/LANES.md"; roadmap "$R" M004 in-progress "- S01" "- S02"
+R=$(new_repo peers M004); L=$(lf "$R"); roadmap "$R" M004 in-progress "- S01" "- S02"
 run "$R" peer list
 eq "no LANES.md: no peers, exit 0" "0 " "$EC $OUT"
 run "$R" peer set prod --repo Yesterday-AI/cloud --address claude:6f1c2d0e
@@ -560,7 +568,7 @@ run "$R" peer drop prod;                          eq "an unknown peer command: e
 
 # ---- 6. refused values and usage ----------------------------------------------
 echo "# refused"
-R=$(new_repo refused M004); lanes "$R"; L="$R/.ytstack/LANES.md"
+R=$(new_repo refused M004); lanes "$R"; L=$(lf "$R")
 cp "$L" "$TMP/before"
 run "$R" set M004-S02 --next "a | b";            eq "a | in a value: exit 64" 64 "$EC"
 has "says why" "must not contain '|' or a newline" "$OUT"
@@ -585,6 +593,61 @@ mkdir -p "$TMP/bare"
 run "$TMP/bare" list;                            eq "list without .ytstack: exit 1" 1 "$EC"
 run "$TMP/bare" claim x --by w;                  eq "claim without .ytstack: exit 1" 1 "$EC"
 run "$TMP/bare" check;                           eq "check without .ytstack: no lanes file" "0 no lanes file" "$EC $OUT"
+
+# ---- 9. where the lanes file lives (issue #79) --------------------------------
+echo "# location"
+R=$(new_repo where M004); roadmap "$R" M004 in-progress "- S01" "- S02"
+( cd "$R" && git commit -q --allow-empty -m init )
+run "$R" claim M004-S01 --by w1
+eq "a claim in a project without a repo LANES.md: exit 0" 0 "$EC"
+run "$R" where
+like "the lanes file is out of tree, per repository, under the XDG state base" "^$XDG_STATE_HOME/ytstack/repos/[0-9a-f]{16}/LANES.md${TAB}out-of-tree$" "$OUT"
+[ ! -e "$R/.ytstack/LANES.md" ] && ok "and nothing is written into the repository" || bad "and nothing is written into the repository"
+OOT=$(lf "$R")
+( cd "$R" && git worktree add -q -b lane "$TMP/where-wt" 2>/dev/null )
+mkdir -p "$TMP/where-wt/.ytstack"; cp "$R/.ytstack/STATE.md" "$R/.ytstack/M004-ROADMAP.md" "$TMP/where-wt/.ytstack/"
+run "$TMP/where-wt" where
+eq "a linked worktree of the repository reads the same file" "$OOT${TAB}out-of-tree" "$OUT"
+run "$TMP/where-wt" list
+has "and sees the claim" "M004-S01${TAB}claimed${TAB}w1 " "$OUT"
+
+# a project from before #79: its repo LANES.md stays the lanes file until migrate
+R=$(new_repo legacy M004); roadmap "$R" M004 in-progress "- S01" "- S02"
+printf '%s\n' "$EXAMPLE" > "$R/.ytstack/LANES.md"
+run "$R" where
+eq "an existing repo LANES.md is the lanes file" "$R/.ytstack/LANES.md${TAB}repo" "$OUT"
+run "$R" set M004-S02 --next "read the PR"
+has "set writes the repo file" "| read the PR |" "$(grep '^| M004-S02 ' "$R/.ytstack/LANES.md")"
+run "$R" snapshot
+eq "snapshot of the repo file itself: exit 1" 1 "$EC"
+has "and says to migrate first" "migrate" "$OUT"
+run "$R" migrate
+eq "migrate: exit 0" 0 "$EC"
+has "names both files" "is now a snapshot" "$OUT"
+OOT=$(lf "$R")
+run "$R" where
+eq "after migrate the out-of-tree file is the lanes file" "$OOT${TAB}out-of-tree" "$OUT"
+has "with the rows of the repo file" "| M004-S02 | implement | running | impl-M004-S02 2026-11-13T10:02Z | ytstack/M004-S02 | .claude/worktrees/m004-s02 | - | - | 0 | read the PR |" "$(cat "$OOT")"
+hasnt "and no snapshot line" "snapshot:" "$(cat "$OOT")"
+like "the repo file is marked as a snapshot" "^snapshot: [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z$" "$(sed -n '1,5p' "$R/.ytstack/LANES.md")"
+run "$R" set M004-S02 --next "merge it"
+has "a write goes out of tree" "| merge it |" "$(cat "$OOT")"
+hasnt "and leaves the repo file alone" "merge it" "$(cat "$R/.ytstack/LANES.md")"
+run "$R" migrate
+eq "migrate again: already out of tree" "0 already out of tree: $OOT" "$EC $OUT"
+run "$R" snapshot
+eq "snapshot: exit 0" 0 "$EC"
+has "snapshot carries the current rows" "| merge it |" "$(cat "$R/.ytstack/LANES.md")"
+like "and its time" "^snapshot: " "$(sed -n '1,5p' "$R/.ytstack/LANES.md")"
+run "$R" check
+eq "the out-of-tree file is well-formed (exit 2: only the stale fixture row)" 2 "$EC"
+# another machine: only the committed snapshot, no out-of-tree file
+mv "$OOT" "$TMP/oot.saved"
+run "$R" where
+eq "a repo snapshot is never the lanes file" "$OOT${TAB}out-of-tree" "$OUT"
+run "$R" migrate
+has "migrate copies a snapshot and says to read the rows against their PRs" "read every held row against its pull request" "$OUT"
+hasnt "without the snapshot line" "snapshot:" "$(cat "$OOT")"
 
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

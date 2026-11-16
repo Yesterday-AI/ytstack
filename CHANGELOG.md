@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The host is the ledger of a lane; the lanes file moved out of the
+  repository** (issue #79). A lane's state is its pull request, read fresh.
+  What only the coordinator knows (holder, next action, round, lanes without
+  a pull request) now lives out of tree, per repository, at
+  `~/.local/state/ytstack/repos/<repo key>/LANES.md` (`$XDG_STATE_HOME`
+  respected), beside the coordinate marker and the automatic handoff, and
+  every linked worktree reads the same file. So a claim or a row update no
+  longer costs a branch, a commit and a pull request on a protected `main`.
+  One resolver, `yt_lanes_file` in `hooks/lib/git-ctx.sh`, serves
+  `ytstack-frontier`, the Stop hook's lanes lint, `ytstack-upkeep`,
+  `ytstack-status --phases`, `ytstack-finish-lane route` and the preambles of
+  `coordinate` 0.8.0, `finish-lane` 0.8.0 and `lane-retro` 0.2.1
+  (`spawn-milestone-team` 0.5.3 names the new place). New:
+  `ytstack-frontier where` (the file and `out-of-tree` or `repo`),
+  `migrate` and `snapshot`. `finish-lane` bundles what lasts on the lane's
+  branch before the push: the roadmap tick, the lane's `DECISIONS.md` or spec
+  lines, and in a milestone's last lane the snapshot. `questions/` and
+  `standing/` stay in the repository.
+- **Upgrade:** nothing changes until you migrate. An existing
+  `.ytstack/LANES.md` stays the lanes file, and the `coordinate` preamble
+  says `LANES_MIGRATE`. Run `ytstack-frontier migrate` once: it copies the
+  file out of tree and marks the repo copy `snapshot: <UTC>`, which is never
+  read as the lanes file again; commit that copy with the next lane or
+  remove it there.
+
+### Added
+
+- **`ytstack-upkeep` counts bookkeeping pull requests** (issue #79): a new
+  `bookkeeping` section names every UTC day of the last seven with more than
+  three merged pull requests that changed only `.ytstack/`, read from the
+  first-parent history of `origin`'s default branch (local refs, no `gh`).
+
 ## [0.12.0] - 2026-11-16
 
 A coordinator stays on its operating path: standing instructions recorded

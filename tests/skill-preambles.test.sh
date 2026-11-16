@@ -380,11 +380,23 @@ newest entry: 20261114T1436Z-at-most-fifteen ("
       has "$s: no peers" "$OUT" "PEERS_BEGIN
 no peers
 PEERS_END"
-      bash "$ROOT/bin/ytstack-frontier" -C "$WT" peer set prod --repo acme/cloud --address claude:abc --contact 2026-11-15T09:00Z >/dev/null 2>&1
+      XDG_STATE_HOME="$TMP/xdg" bash "$ROOT/bin/ytstack-frontier" -C "$WT" peer set prod --repo acme/cloud --address claude:abc --contact 2026-11-15T09:00Z >/dev/null 2>&1
       run_pre "$P" "$WT"
       has "$s: a peer is listed" "$OUT" "PEERS_BEGIN
 prod	acme/cloud	claude:abc	2026-11-15T09:00Z
 PEERS_END"
+      # the lanes file is out of tree (issue #79): the preamble names it, the repo holds none
+      _LF=$(XDG_STATE_HOME="$TMP/xdg" bash "$ROOT/bin/ytstack-frontier" -C "$WT" where | cut -f1)
+      has "$s: names the out-of-tree lanes file" "$OUT" "LANES_FILE: $_LF (out-of-tree)"
+      case "$_LF" in "$TMP/xdg/"*) ok "$s: the lanes file is under XDG_STATE_HOME" ;; *) bad "$s: the lanes file is under XDG_STATE_HOME" "$_LF" ;; esac
+      [ ! -e "$WT/.ytstack/LANES.md" ] && ok "$s: nothing in the repo" || bad "$s: nothing in the repo"
+      rm -f "$_LF"
+      # a repo LANES.md from before #79 is still read, and the preamble says to migrate
+      printf '| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |\n|---|---|---|---|---|---|---|---|---|---|\n| M001-S01 | implement | running | w 2026-11-15T09:00Z | - | - | - | - | 0 | wait |\n' > "$WT/.ytstack/LANES.md"
+      run_pre "$P" "$WT"
+      has "$s: a repo LANES.md is still the lanes file" "$OUT" "LANES_FILE: $WT/.ytstack/LANES.md (repo)"
+      has "$s: and the preamble says to migrate it" "$OUT" "LANES_MIGRATE: the repo LANES.md is still the lanes file; run ytstack-frontier migrate once"
+      has "$s: its rows are listed" "$OUT" "| M001-S01 | implement | running |"
       rm -f "$WT/.ytstack/LANES.md"
       # the open lessons (M032): counted in the status, a proposal for the daily question, a check for a lane
       has "$s: bare fixture -> no open lesson" "$OUT" "LESSONS: 0 open (0 proposals, 0 checks to build)"
@@ -431,7 +443,8 @@ with db:
     db.execute("INSERT OR REPLACE INTO meta VALUES('heartbeat', ?)", (str(int(time.time()) - 77),))
 PY
       run_pre "$P" "$WT"
-      case "$OUT" in *"PR_WATCH: on, heartbeat 7"[0-9]" s ago"*) ok "$s: a worker tick -> heartbeat age";; *) bad "$s: a worker tick -> heartbeat age" "$(printf '%s' "$OUT" | grep PR_WATCH)";; esac
+      # 77 s when written; a loaded machine takes a few seconds for the preamble
+      case "$OUT" in *"PR_WATCH: on, heartbeat "[7-9][0-9]" s ago"*) ok "$s: a worker tick -> heartbeat age";; *) bad "$s: a worker tick -> heartbeat age" "$(printf '%s' "$OUT" | grep PR_WATCH)";; esac
       rm -rf "$TMP/home/.ytstack" "$WT/.ytstack/RUNTIME.md"; own_reviewers_off; unset YTSTACK_PYTHON
       # every bin/ command that Step 7 names exists, with the subcommand its usage names
       awk '/^\*\*Step 7 --/ { p = 1 } /^\*\*Step 8 --/ { p = 0 } p' "$ROOT/skills/$s/SKILL.md" > "$TMP/step7.md"

@@ -6,7 +6,7 @@
 #   ytstack-upkeep [-C DIR] --worktrees
 #
 # Prints one report for the project of DIR (default: $PWD): a first line with
-# the directory and the UTC time of the read, nine sections with a count and
+# the directory and the UTC time of the read, ten sections with a count and
 # one "  - " line per item, and a last line with the sum.
 #   spec           failures of `ytstack-spec lint` and the areas that
 #                  `ytstack-spec drift` lists, when there is a technical spec
@@ -16,10 +16,16 @@
 #   questions      open for more than --open-days days (default 3) and never
 #                  asked; asked more than --asked-days days ago (default 7)
 #                  and not answered
-#   lanes          rows of LANES.md in a held status that were claimed more
+#   lanes          rows of the lanes file (yt_lanes_file: out of tree, or a
+#                  repo LANES.md before `ytstack-frontier migrate`) in a held
+#                  status that were claimed more
 #                  than --lane-hours hours ago (default 24), and the "stale:"
 #                  lines of `ytstack-frontier check` (once per lane); the
 #                  problems of that check instead when the table has some
+#   bookkeeping    UTC days of the last 7 with more than 3 merged pull
+#                  requests that changed only .ytstack/ (issue #79): the
+#                  first-parent history of origin's default branch, local
+#                  refs, one pull request per commit whose subject names it
 #   runtime        the problems of `ytstack-runtime check`
 #   review policy  the problems of `ytstack-risk check`, when that script is
 #                  part of this installation (the spec lint repeats them; they
@@ -158,9 +164,11 @@ worktrees() {
       | "\(.headRefName)\t\(.state | ascii_downcase)\t\(.number)\t\(.headRefOid // "")"' 2>/dev/null) \
       || { note="PR state not read: gh gave no JSON"; prs=""; }
   fi
-  # Branches a held lane names: "<branch> <lane> (<status>)", from the
+  # Branches a held lane names: "<branch> <lane> (<status>)", from the lanes
+  # file of the repository (issue #79: out of tree); before migrate the
   # LANES.md of the main checkout (a linked worktree carries a stale copy).
-  lanes="$top/.ytstack/LANES.md"; [ -f "$lanes" ] || lanes="$YT_DIR/LANES.md"
+  yt_lanes_file "$top/.ytstack" >/dev/null; lanes=$YT_LANES_FILE
+  [ -f "$lanes" ] || { yt_lanes_file "$YT_DIR" >/dev/null; lanes=$YT_LANES_FILE; }
   [ ! -f "$lanes" ] || held=$(awk -v tab="$TAB" '
     /^\|/ && ++n > 2 {
       split($0, c, "|"); for (i = 2; i <= 6; i++) gsub(/^[ \t]+|[ \t]+$/, "", c[i])
@@ -300,7 +308,8 @@ section questions "$items"
 # The rows are read here and not through `ytstack-frontier list`: that prints
 # the slices of one milestone, and a lane may be a task or a named piece.
 items=""
-if [ -f "$YT_DIR/LANES.md" ]; then
+yt_lanes_file "$YT_DIR" >/dev/null; LANES=$YT_LANES_FILE
+if [ -f "$LANES" ]; then
   out=$(tool ytstack-frontier check 2>&1); ec=$?
   # 2: well-formed, with stale lanes; those lines are items below.
   if [ "$ec" -eq 0 ] || [ "$ec" -eq 2 ]; then
@@ -315,7 +324,7 @@ $(awk -v tab="$TAB" '
         split($0, c, "|")
         for (i = 2; i <= 11; i++) { gsub(/^[ \t]+|[ \t]+$/, "", c[i]); if (c[i] == "") c[i] = "-" }
         if (c[4] ~ /^(claimed|running|reported|in-review|ready|parked)$/) print c[2] tab c[4] tab c[5] tab c[11]
-      }' "$YT_DIR/LANES.md")
+      }' "$LANES")
 EOF
     # A stale lane (issue #84) is listed once: not again when it is listed above.
     while IFS= read -r l; do
@@ -330,6 +339,46 @@ EOF
   fi
 fi
 section lanes "$items"
+
+# ---- bookkeeping (issue #79) -------------------------------------------------------
+# Pull requests that change nothing but .ytstack/ are what a ledger in the
+# repository costs. Local refs only: the first-parent history of origin's
+# default branch for the last BOOK_DAYS UTC days, one pull request per commit
+# whose subject names it ("(#N)" of a squash, "Merge pull request #N").
+BOOK_MAX=3 BOOK_DAYS=7
+items=""; note=""; ref=""
+if [ "$YT_IS_GIT" = yes ]; then
+  ref=$(git -C "$YT_TOPLEVEL" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
+  if [ -z "$ref" ]; then
+    for b in origin/main origin/master; do
+      git -C "$YT_TOPLEVEL" rev-parse -q --verify "refs/remotes/$b" >/dev/null 2>&1 && { ref=$b; break; }
+    done
+  fi
+fi
+if [ -z "$ref" ]; then
+  note="no origin default branch, not read"
+else
+  items=$(TZ=UTC git -C "$YT_TOPLEVEL" log -m --first-parent --since="$BOOK_DAYS days ago" \
+      --date=format-local:%Y-%m-%d --format="%x01%cd$TAB%s" --name-only "$ref" -- 2>/dev/null \
+    | awk -F'\t' -v max="$BOOK_MAX" '
+      function done_pr() {
+        if (pr != "" && paths && only) { if (!(day in n)) order[++k] = day; n[day]++; list[day] = list[day] (n[day] > 1 ? ", " : "") "#" pr }
+        pr = ""; paths = 0; only = 1
+      }
+      /^\001/ {
+        done_pr(); day = substr($1, 2); s = $2
+        if (match(s, /\(#[0-9]+\)$/)) pr = substr(s, RSTART + 2, RLENGTH - 3)
+        else if (match(s, /^Merge pull request #[0-9]+/)) pr = substr(s, 20, RLENGTH - 19)
+        next
+      }
+      NF { paths++; if (index($0, ".ytstack/") != 1) only = 0 }
+      END {
+        done_pr()
+        for (i = 1; i <= k; i++) if (n[order[i]] > max) print order[i] ": " n[order[i]] " pull requests changed only .ytstack/ (" list[order[i]] ")"
+      }')
+  note="more than $BOOK_MAX a UTC day in the last $BOOK_DAYS days on $ref"
+fi
+section bookkeeping "$items" "$note"
 
 # ---- runtime -----------------------------------------------------------------------
 items=""
