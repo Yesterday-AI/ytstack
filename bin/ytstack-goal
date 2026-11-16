@@ -33,12 +33,17 @@
 #            block <reason>     hold the stop
 #          It lets the stop through for a recorded blocker, an asked
 #          question (questions/ of the goal's .ytstack, state asked), a
-#          running lane of the lanes file, a pull request the PR watch
-#          watches for this session while its worker ticks, and a reached
-#          bound (--until passed, or --rounds blocks used: said once). With
-#          --active true (stop_hook_active) it blocks again only when the
-#          transcript shows a tool call after the last block; without a
-#          transcript it lets the stop through.
+#          running lane of the lanes file that `ytstack-frontier check` does
+#          not name as stale, a pull request the PR watch watches for this
+#          session while its worker ticks, every open slice waiting for a
+#          person (parked; ready or in-review unless merge_by is coordinator;
+#          said once), and a reached bound (--until passed, or --rounds
+#          blocks used: said once). With --active true (stop_hook_active) it
+#          blocks again only when the transcript shows a tool call other than
+#          ytstack-goal after the last block of the stop hook (the goal's, or
+#          the offset hooks/stop leaves in stop-block-offset), reading at most
+#          the last 2 MB; without a transcript it lets the stop through.
+# --if-unset keeps an open goal and replaces a reached one.
 #
 # Exit codes
 #   set      0; 1 no milestone or roadmap; 3 no session id (Codex: use /goal)
@@ -154,7 +159,8 @@ cmd_set() {
     case "$until" in *T[0-9][0-9]:[0-9][0-9]Z) until="${until%Z}:00Z" ;; esac
     [ -n "$(yt_epoch "$until")" ] || bad_usage "--until takes a UTC time (YYYY-MM-DDTHH:MMZ)"
   fi
-  if [ -n "$ifunset" ] && [ -f "$GOAL" ]; then echo "$(field goal) is the goal already (set $(field set))"; return 0; fi
+  # --if-unset keeps an open goal; a reached one is replaced.
+  if [ -n "$ifunset" ] && [ -f "$GOAL" ] && [ -n "$(open_items)" ]; then echo "$(field goal) is the goal already (set $(field set))"; return 0; fi
   yt_git_ctx "$DIR"; yt_resolve_yt_dir >/dev/null
   case "$g" in
     none|"") die "no current milestone: no goal set" ;;
@@ -229,11 +235,24 @@ cmd_clear() {
 # lane of the goal's repository, or a pull request the PR watch watches for it
 # while its worker ticks (10 minutes, as yt_factory_notices).
 background() {
-  local ytd key n st now
-  ytd=$(field yt_dir); key=$(field key)
+  local ytd key n st now run stale l top ec
+  ytd=$(field yt_dir); key=$(field key); top=$(field top)
   if [ "$ytd" != - ]; then
     yt_lanes_file "$ytd" "$key" >/dev/null
-    [ -f "$YT_LANES_FILE" ] && awk '/^\|/ && ++n > 2 { split($0, c, "|"); s = c[4]; gsub(/^[ \t]+|[ \t]+$/, "", s); if (s == "running") f = 1 } END { exit !f }' "$YT_LANES_FILE" && return 0
+    run=""
+    [ ! -f "$YT_LANES_FILE" ] || run=$(awk '/^\|/ && ++n > 2 { split($0, c, "|"); l = c[2]; s = c[4]; gsub(/^[ \t]+|[ \t]+$/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", s); if (s == "running") print l }' "$YT_LANES_FILE")
+    if [ -n "$run" ]; then
+      # A running row the frontier's liveness check names as stale (its worker
+      # ended, or no commit for an hour) is no work in the background.
+      # A table check refuses (exit 1) is no evidence of running work either.
+      stale=""; ec=1
+      if [ -d "$top" ]; then stale=$(bash "$ROOT/bin/ytstack-frontier" -C "$top" check 2>/dev/null); ec=$?; fi
+      [ "$ec" -ne 1 ] || run=""
+      stale=$(printf '%s\n' "$stale" | sed -n 's/^stale: \([^:]*\): running.*/\1/p')
+      for l in $run; do
+        case "$NL$stale$NL" in *"$NL$l$NL"*) ;; *) return 0 ;; esac
+      done
+    fi
   fi
   st="${PR_WATCH_HOME:-${YTSTACK_PR_WATCH_HOME:-$HOME/.ytstack/pr-watch}/state}"
   [ -f "$st/watch.sqlite3" ] && command -v sqlite3 >/dev/null 2>&1 || return 1
@@ -242,6 +261,33 @@ background() {
   n=$(sqlite3 -readonly "$st/watch.sqlite3" "SELECT count(*) FROM watches WHERE session='claude:$SID' AND status != 'closed' AND paused = 0" 2>/dev/null)
   case "$n" in ''|*[!0-9]*|0) return 1 ;; esac
   return 0
+}
+# person_wait <open items>: prints "S02 (ready), S03 (parked)" and returns 0
+# when every open item is a slice whose lane waits for a person: `parked`, or
+# `ready`/`in-review` unless merge_by is coordinator (then the coordinator
+# merges it itself). Any other open item (a file, a check) is work.
+person_wait() {
+  local ytd key ids mb waits
+  printf '%s\n' "$1" | grep -v -e ': open slices ' -e '^exit criterion: ' | grep -q . && return 1
+  ids=$(printf '%s\n' "$1" | sed -n 's/^[^:]*: open slices //p' | tr -d ',')
+  [ -n "$ids" ] || return 1
+  ytd=$(field yt_dir); key=$(field key)
+  mb=$(yt_pref "$ytd" merge_by risk 2>/dev/null); [ -n "$mb" ] || mb=risk
+  yt_lanes_file "$ytd" "$key" >/dev/null
+  [ -f "$YT_LANES_FILE" ] || return 1
+  waits=$(awk -v m="$(field goal)" -v ids=" $ids " -v mb="$mb" '
+    /^\|/ && ++n > 2 { split($0, c, "|"); l = c[2]; s = c[4]; gsub(/^[ \t]+|[ \t]+$/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", s); st[l] = s }
+    END {
+      k = split(ids, a, " ")
+      for (i = 1; i <= k; i++) {
+        s = st[m "-" a[i]]
+        if (!(s == "parked" || (mb != "coordinator" && (s == "ready" || s == "in-review")))) exit 1
+        out = out (out == "" ? "" : ", ") a[i] " (" s ")"
+      }
+      print out
+    }' "$YT_LANES_FILE") || return 1
+  [ -n "$waits" ] || return 1
+  printf '%s' "$waits"
 }
 # asked: 0 when a question of the goal's .ytstack is asked and not answered
 asked() {
@@ -254,7 +300,7 @@ asked() {
   return 1
 }
 cmd_hook() {
-  local active=false tp="" n=0 off=0 used rounds until ue open size g
+  local active=false tp="" n=0 off=0 used rounds until ue open size g pw o2 SCAN_MAX=2000000
   while [ $# -gt 0 ]; do
     case "$1" in
       --active) [ $# -ge 2 ] || bad_usage; active=$2; shift 2 ;;
@@ -281,13 +327,26 @@ cmd_hook() {
     return 0
   fi
   if [ -s "$SD/goal-blocker" ] || asked || background; then echo pass; return 0; fi
-  # Never twice in a row without a tool call: a continued turn blocks again
-  # only when the transcript has a tool call after the last block.
-  if [ "$active" = true ]; then
-    [ -n "$tp" ] && [ -f "$tp" ] || { echo pass; return 0; }
-    tail -c +$((off + 1)) "$tp" 2>/dev/null | grep -Eq '"type": ?"tool_use"' || { echo pass; return 0; }
+  # Every open item waits for a person (a merge, a parked lane): said once.
+  if pw=$(person_wait "$open"); then
+    if says "person:$pw"; then echo pass; else echo "say ytstack: the goal \"$g\" waits for a person: $pw. The stop goes through until one of them moves."; fi
+    return 0
   fi
   size=0; [ -z "$tp" ] || [ ! -f "$tp" ] || size=$(wc -c < "$tp" | tr -d ' ')
+  # Never twice in a row without a tool call: a continued turn blocks again
+  # only when the transcript has a tool call after the last block of this
+  # stop hook (the goal's, or a standing or lint block: stop-block-offset),
+  # other than a call of ytstack-goal itself. The scan reads at most the last
+  # SCAN_MAX bytes.
+  if [ "$active" = true ]; then
+    [ -n "$tp" ] && [ -f "$tp" ] || { echo pass; return 0; }
+    o2=$(cat "$SD/stop-block-offset" 2>/dev/null); case "$o2" in ''|*[!0-9]*) o2=0 ;; esac
+    [ "$o2" -le "$off" ] || off=$o2
+    [ $((size - off)) -le "$SCAN_MAX" ] || off=$((size - SCAN_MAX))
+    # Counted, not grep -q: an early exit would fail the pipe under pipefail.
+    o2=$(tail -c +$((off + 1)) "$tp" 2>/dev/null | grep -E '"type": ?"tool_use"' | grep -vc 'ytstack-goal')
+    case "$o2" in ''|0) echo pass; return 0 ;; esac
+  fi
   n=$((n + 1)); printf '%s %s\n' "$n" "${size:-0}" > "$SD/goal-blocks" 2>/dev/null
   printf 'block ytstack: the goal "%s" of this session is open (round %s%s):\n%s\nKeep working toward it: the next ready lane, the next fix. Stop only when a question is asked (ytstack-questions ask), a blocker is recorded (ytstack-goal block "<why>"), or work runs in the background. ytstack-goal status runs the checks.\n' \
     "$g" "$n" "$([ "$rounds" = - ] || echo " of $rounds")" "$(printf '%s\n' "$open" | sed 's/^/- /')"

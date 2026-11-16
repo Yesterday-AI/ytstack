@@ -270,7 +270,7 @@ hasnt "and its rows are not read" "hours ago" "$OUT"
 # The lanes file out of tree (issue #79): read there once the repo has none.
 lanes "| M004-S02 | implement | running | impl-b $(claim $((30 * HOUR))) | ytstack/M004-S02 | - | - | - | 0 | wait for the report |"
 rm -f "$Y/LANES.md"
-OOT=$(bash "$ROOT/bin/ytstack-frontier" -C "$D" where | cut -f1)
+OOT=$(bash "$ROOT/bin/ytstack-frontier" -C "$D" where 2>/dev/null | cut -f1)
 case "$OOT" in "$XDG_STATE_HOME"/*) ok "the lanes file lives under the XDG state base" ;; *) bad "the lanes file lives under the XDG state base" "$OOT" ;; esac
 mkdir -p "${OOT%/*}"; ( D="$TMP/oot-tmp"; Y="$D"; mkdir -p "$D"; lanes "| M004-S02 | implement | running | impl-b $(claim $((30 * HOUR))) | ytstack/M004-S02 | - | - | - | 0 | wait for the report |"; mv "$D/LANES.md" "$OOT" )
 run "$D"
@@ -293,6 +293,14 @@ like "the day, the count and the numbers" "^  - [0-9]{4}-[0-9]{2}-[0-9]{2}: 4 pu
 hasnt "a pull request that also changed code is not counted" "#15" "$OUT"
 hasnt "three on one day are not over the limit" "#21" "$OUT"
 has "the note names the limit and the ref" "bookkeeping: 1 (more than 3 a UTC day in the last 7 days on origin/main)" "$OUT"
+project merges
+( cd "$D" && git init -q -b main && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false \
+  && git add -A && git commit -qm base \
+  && for n in 31 32 33 34; do git checkout -q -b "b$n" && echo "$n" > ".ytstack/m$n" && git add -A && git commit -qm "row $n" \
+       && git checkout -q main && git merge -q --no-ff -m "Merge pull request #$n from acme/b$n" "b$n"; done \
+  && git update-ref refs/remotes/origin/main HEAD && git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main ) >/dev/null 2>&1 || { echo "FATAL fixture"; exit 2; }
+run "$D"
+like "merge commits are counted by their number" "^  - [0-9]{4}-[0-9]{2}-[0-9]{2}: 4 pull requests changed only \.ytstack/ \(#34, #33, #32, #31\)\$" "$OUT"
 project nobooks
 run "$D"
 has "without an origin default branch: not read" "bookkeeping: 0 (no origin default branch, not read)" "$OUT"

@@ -30,9 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Upgrade:** nothing changes until you migrate. An existing
   `.ytstack/LANES.md` stays the lanes file, and the `coordinate` preamble
   says `LANES_MIGRATE`. Run `ytstack-frontier migrate` once: it copies the
-  file out of tree and marks the repo copy `snapshot: <UTC>`, which is never
+  file out of tree (the main checkout's copy; it refuses while a worktree's
+  copy differs) and marks the repo copy `snapshot: <UTC>`, which is never
   read as the lanes file again; commit that copy with the next lane or
-  remove it there.
+  remove it there. The file is keyed by the repository's path: after moving
+  a checkout, `ytstack-frontier migrate --from <old path>` takes it along.
 
 ### Added
 
@@ -43,10 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a question you were asked, a blocker the session recorded
   (`ytstack-goal block "<why>"`), lanes or a watched pull request in the
   background, or a reached bound (`--until <UTC>`, `--rounds N`). It never
-  holds twice in a row without a tool call in between. `ytstack-goal status`
-  runs the `--check` commands; `clear` ends it. `coordinate` 0.9.0 sets the
-  current milestone as the goal at its start and clears it when the
-  milestone closes. On Codex use its own `/goal`.
+  holds twice in a row without a tool call in between (a call of
+  `ytstack-goal` itself does not count), lets the stop through once every
+  open slice waits for a person, and does not count a stale running lane as
+  background work. `ytstack-goal status` runs the `--check` commands;
+  `clear` ends it. `coordinate` 0.9.0 sets the current milestone as the goal
+  at its start, bounded to 30 rounds, and clears it when the milestone
+  closes. On Codex use its own `/goal`.
 - **`ytstack-upkeep` counts bookkeeping pull requests** (issue #79): a new
   `bookkeeping` section names every UTC day of the last seven with more than
   three merged pull requests that changed only `.ytstack/`, read from the

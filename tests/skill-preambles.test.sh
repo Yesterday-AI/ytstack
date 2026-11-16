@@ -386,7 +386,7 @@ PEERS_END"
 prod	acme/cloud	claude:abc	2026-11-15T09:00Z
 PEERS_END"
       # the lanes file is out of tree (issue #79): the preamble names it, the repo holds none
-      _LF=$(XDG_STATE_HOME="$TMP/xdg" bash "$ROOT/bin/ytstack-frontier" -C "$WT" where | cut -f1)
+      _LF=$(XDG_STATE_HOME="$TMP/xdg" bash "$ROOT/bin/ytstack-frontier" -C "$WT" where 2>/dev/null | cut -f1)
       has "$s: names the out-of-tree lanes file" "$OUT" "LANES_FILE: $_LF (out-of-tree)"
       case "$_LF" in "$TMP/xdg/"*) ok "$s: the lanes file is under XDG_STATE_HOME" ;; *) bad "$s: the lanes file is under XDG_STATE_HOME" "$_LF" ;; esac
       [ ! -e "$WT/.ytstack/LANES.md" ] && ok "$s: nothing in the repo" || bad "$s: nothing in the repo"

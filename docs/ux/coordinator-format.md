@@ -60,7 +60,7 @@ A lane that was never claimed has no row. `bin/ytstack-frontier` is the only wri
 
 ### Where the lanes file lives
 
-Out of tree, one per repository: `${XDG_STATE_HOME:-~/.local/state}/ytstack/repos/<repo key>/LANES.md`, beside the session home of the coordinate marker (the same base for a hook and for the Bash tool; `yt_lanes_file` in `hooks/lib/git-ctx.sh` is the one resolver every reader uses). The repository key is the one of the automatic handoff, so every linked worktree of the repository reads the same file. A successor session on the same machine reads it there; one on another machine rebuilds it from the host, since every implement lane has a pull request or a branch there.
+Out of tree, one per repository: `${XDG_STATE_HOME:-~/.local/state}/ytstack/repos/<repo key>/LANES.md`, beside the session home of the coordinate marker (the same base for a hook and for the Bash tool; `yt_lanes_file` in `hooks/lib/git-ctx.sh` is the one resolver every reader uses). The repository key is the one of the automatic handoff, so every linked worktree of the repository reads the same file. The key is a digest of the repository's git directory path: a checkout that moves gets a new key and finds no lanes file (`where` says so); `ytstack-frontier migrate --from <old absolute checkout path>` (or `--from <old key>`) copies the old one. Before migrate, the main checkout's `.ytstack/LANES.md` is read before a linked worktree's copy, which is its branch's and may be stale; `migrate` refuses while the two differ. A successor session on the same machine reads it there; one on another machine rebuilds it from the host, since every implement lane has a pull request or a branch there.
 
 | Command | Does |
 |---|---|
@@ -282,7 +282,7 @@ One review per lane, a second only for the fix.
 | `until` | Optional. An ISO UTC time after `given`; from then on the entry has ended. |
 | `until-condition` | Optional. One sentence naming the event that ends the entry ("PR #1879 merged"). The coordinator checks it when the list names it. |
 | `until-check` | Optional. A command that exits 0 once the entry has ended (`gh pr view 1879 --json state -q .state \| grep -qx MERGED`). It may stand alone (the command is the condition) or beside `until-condition` (the sentence says for people what it checks). |
-| `check` | Optional. A command that exits non-zero while the instruction is not kept; its first output line is the warning (`test -n "$(find .ytstack/LANES.md -mmin -120)" \|\| echo "LANES.md older than 2 h"; ...`). |
+| `check` | Optional. A command that exits non-zero while the instruction is not kept; its first output line is the warning (`f=$(ytstack-frontier where \| cut -f1); test -n "$(find "$f" -mmin -120)" \|\| echo "lanes file older than 2 h"; ...`). |
 | `kind` | Optional. Only `end`: the entry closes the one its `supersedes` names and is no instruction itself. |
 
 Rules:
@@ -340,13 +340,13 @@ A long-running coordinator keeps working until its goal's exit criteria hold (is
 
 | Command | Does |
 |---|---|
-| `ytstack-goal set <M###> [--until <UTC>] [--rounds N] [--if-unset]` | The milestone is the goal: it holds once the roadmap is `done`, `shipped-informally` or `dropped`, or every slice is ticked or has a `merged` row. The `coordinate` preamble runs it for the current milestone with `--if-unset` (`GOAL:`). |
+| `ytstack-goal set <M###> [--until <UTC>] [--rounds N] [--if-unset]` | The milestone is the goal: it holds once the roadmap is `done`, `shipped-informally` or `dropped`, or every slice is ticked or has a `merged` row. The `coordinate` preamble runs it for the current milestone with `--if-unset --rounds 30` (`GOAL:`); `--if-unset` keeps an open goal and replaces a reached one. |
 | `ytstack-goal set "<sentence>" --check "<command>" --file <path> ...` | A sentence goal needs at least one checkable criterion: a command that exits 0, or a file that exists. A milestone goal may add them too. |
 | `ytstack-goal status` | Runs every `--check` in the checkout (stdin closed) and records the result, then prints the goal, what is open, the blocker and the rounds used. Exit 0 reached, 1 open, 3 no goal. |
 | `ytstack-goal block "<why>"`, `block --clear` | Records a blocker: the stop goes through while it is set. |
 | `ytstack-goal clear` | Removes the goal; checklist item 14 of `coordinate` when the milestone closes. |
 
-The Stop hook (`ytstack-goal hook`, files only, no command of the goal) blocks with the open slices, up to three exit criteria of `M###-CONTEXT.md`, the missing files and the checks that failed or never ran. It lets the stop through when a question is `asked`, a blocker is recorded, a lane is `running` or the PR watch watches a pull request for this session while its worker ticks, or the bound is reached (`--until` passed, `--rounds` blocks used); the bound and a reached goal are said once. It never blocks twice in a row without a tool call in between: inside a hook-continued turn (`stop_hook_active`) it blocks again only when the transcript shows a tool call after its last block, and never without a transcript. A standing or lint block of the same stop comes first. Claude Code only: Codex registers no ytstack Stop hook of its own, so the skill says to use its native `/goal`; a Kimi shell has no session id.
+The Stop hook (`ytstack-goal hook`, files only, no command of the goal) blocks with the open slices, up to three exit criteria of `M###-CONTEXT.md`, the missing files and the checks that failed or never ran. It lets the stop through when a question is `asked`, a blocker is recorded, a lane is `running` and `ytstack-frontier check` does not call it stale, the PR watch watches a pull request for this session while its worker ticks, every open slice waits for a person (`parked`; `ready` or `in-review` unless `merge_by: coordinator`), or the bound is reached (`--until` passed, `--rounds` blocks used); the person wait, the bound and a reached goal are said once. It never blocks twice in a row without a tool call in between: inside a hook-continued turn (`stop_hook_active`) it blocks again only when the transcript shows a tool call other than `ytstack-goal` after the last block of the Stop hook (its own, or a standing or lint block, whose offset `hooks/stop` keeps in `stop-block-offset`), reading at most the last 2 MB, and never without a transcript. A standing or lint block of the same stop comes first. Claude Code only: Codex registers no ytstack Stop hook of its own, so the skill says to use its native `/goal`; a Kimi shell has no session id.
 
 ### `STANDING.md`
 

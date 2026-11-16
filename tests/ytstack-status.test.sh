@@ -209,7 +209,7 @@ case "$LOG" in "$TMP/data/repos/"*) ok "the log lives in the plugin data dir, ke
 eq "the first report logs each phase once" "M003 - 2 first report|M004 - 4 first report" "$(awk -F'\t' '{ printf "%s%s %s %s %s", (NR > 1 ? "|" : ""), $2, $3, $4, $5 }' "$LOG")"
 eq "nothing is written into the tree" "" "$(git -C "$P" status --porcelain --untracked-files=all | grep -v -e LANES.md -e ROADMAP.md -e STATE.md -e PLAN.md)"
 # The lanes file out of tree (issue #79) is read the same way: move it there.
-OOT=$(bash "$ROOT/bin/ytstack-frontier" -C "$P" migrate >/dev/null 2>&1; bash "$ROOT/bin/ytstack-frontier" -C "$P" where | cut -f1)
+OOT=$(bash "$ROOT/bin/ytstack-frontier" -C "$P" migrate >/dev/null 2>&1; bash "$ROOT/bin/ytstack-frontier" -C "$P" where 2>/dev/null | cut -f1)
 case "$OOT" in "$XDG_STATE_HOME"/*) ok "migrated out of tree" ;; *) bad "migrated out of tree" "$OOT" ;; esac
 printf -- '---\nsnapshot: 2026-11-01T00:00Z\n---\n\n| Lane | Kind | Status | Claimed by | Branch | Worktree | PR | Reviewed head | Round | Next action |\n|---|---|---|---|---|---|---|---|---|---|\n' > "$P/.ytstack/LANES.md"
 ph "$P"

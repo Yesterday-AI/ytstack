@@ -1606,3 +1606,15 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 - Kimi has no session id, Codex no ytstack Stop hook: both keep the skill text only.
 
 **Supersedes:** None. Extends "2026-11-15: Coordinate mode is a session marker the coordinate preamble writes ..." with one more marker and one more Stop-hook part.
+
+## 2026-11-16: The main checkout's `LANES.md` wins before migrate; the coordinator's goal is bounded and lets a person's wait through (review of PR #102)
+
+**Context:** The independent review of PR #102 found that `migrate` from a linked worktree copied the branch's stale `.ytstack/LANES.md`, that PR #101 defines a second `yt_lanes_file` (main checkout first, path only), and that the goal could hold a coordinator forever: any tool call re-armed it, even `ytstack-goal status`, the goal had no bound, and lanes waiting for a person counted as nothing to wait for.
+
+**Chose:**
+- One `yt_lanes_file`: the out-of-tree file when it exists, else the main checkout's `.ytstack/LANES.md` (no snapshot), else `<yt_dir>/LANES.md` (no snapshot), else the out-of-tree path. It prints the path and sets `YT_LANES_FILE`/`YT_LANES_SOURCE`, so `$(yt_lanes_file ...)` callers of #101 keep working. `migrate` takes the main checkout's copy and refuses while a worktree's differs; `--from <old path|key>` takes the file of a moved checkout.
+- `coordinate` sets the goal with `--rounds 30`. A call of `ytstack-goal` is no tool call for re-arming. The stop goes through, said once, when every open slice waits for a person: `parked`, or `ready`/`in-review` unless `merge_by: coordinator`. A `running` lane that `ytstack-frontier check` calls stale is no background work. Any block of the Stop hook leaves its transcript offset, and the scan reads at most the last 2 MB.
+
+**Reason:** The main checkout holds what was merged; a worktree holds its branch. A bound is the only guard that holds when the model keeps making calls without progress; 30 rounds is a working day of rounds and stops a runaway loop. Waiting for a person is no work the session can do.
+
+**Supersedes:** Narrows "2026-11-16: Goal mode is a session marker ..." (the loop guard, the let-through list) and "2026-11-16: The host is the ledger of a lane ..." (the resolver's precedence).

@@ -368,7 +368,7 @@ else
       /^\001/ {
         done_pr(); day = substr($1, 2); s = $2
         if (match(s, /\(#[0-9]+\)$/)) pr = substr(s, RSTART + 2, RLENGTH - 3)
-        else if (match(s, /^Merge pull request #[0-9]+/)) pr = substr(s, 20, RLENGTH - 19)
+        else if (match(s, /^Merge pull request #[0-9]+/)) pr = substr(s, 21, RLENGTH - 20)
         next
       }
       NF { paths++; if (index($0, ".ytstack/") != 1) only = 0 }

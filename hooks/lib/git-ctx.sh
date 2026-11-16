@@ -925,19 +925,24 @@ yt_session_home() {
 # (issue #79). Default: out of tree, ${XDG_STATE_HOME:-~/.local/state}/ytstack/
 # repos/<repo key>/LANES.md, beside the session home, so a hook and the Bash
 # tool find the same file (not yt_state_base, for the reason given at
-# yt_session_home). A <yt_dir>/LANES.md that is no snapshot (no `snapshot:` key
-# in its frontmatter) stays the lanes file while the out-of-tree one does not
-# exist: a project from before #79, until `ytstack-frontier migrate`. Key: the
-# argument, else YT_REPO_KEY (call yt_git_ctx first). Sets YT_LANES_FILE and
-# YT_LANES_SOURCE (out-of-tree or repo); the file need not exist.
+# yt_session_home). Precedence: the out-of-tree file when it exists; else a
+# repo LANES.md that is no snapshot (no `snapshot:` key in its frontmatter), the
+# main checkout's first (YT_MAIN_TOPLEVEL: a linked worktree carries the copy
+# of its branch), then <yt_dir>'s: a project from before #79, until
+# `ytstack-frontier migrate`; else the out-of-tree path. Key: the argument,
+# else YT_REPO_KEY (call yt_git_ctx first). Prints the path and sets
+# YT_LANES_FILE and YT_LANES_SOURCE (out-of-tree or repo); the file need not
+# exist. `lanes=$(yt_lanes_file "$YT_DIR")` works too (no globals then).
 yt_lanes_file() {
-  local ytd="${1:-}" oot
+  local ytd="${1:-}" oot f
   oot="${XDG_STATE_HOME:-$HOME/.local/state}/ytstack/repos/${2:-${YT_REPO_KEY:-unknown}}/LANES.md"
   YT_LANES_FILE=$oot; YT_LANES_SOURCE=out-of-tree
-  if [ ! -f "$oot" ] && [ -n "$ytd" ] && [ -f "$ytd/LANES.md" ] && ! yt_lanes_snapshot "$ytd/LANES.md"; then
-    YT_LANES_FILE="$ytd/LANES.md"; YT_LANES_SOURCE=repo
+  if [ ! -f "$oot" ]; then
+    for f in ${YT_MAIN_TOPLEVEL:+"$YT_MAIN_TOPLEVEL/.ytstack/LANES.md"} ${ytd:+"$ytd/LANES.md"}; do
+      if [ -f "$f" ] && ! yt_lanes_snapshot "$f"; then YT_LANES_FILE=$f; YT_LANES_SOURCE=repo; break; fi
+    done
   fi
-  printf '%s' "$YT_LANES_FILE"
+  printf '%s\n' "$YT_LANES_FILE"
 }
 # yt_lanes_snapshot <file>: 0 when its frontmatter has a `snapshot:` key.
 yt_lanes_snapshot() {

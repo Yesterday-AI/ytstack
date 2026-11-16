@@ -100,7 +100,7 @@ updated: 2026-11-13T10:42:00Z
 | M004-S01 | implement | merged | impl-M004-S01 2026-11-13T08:10Z | ytstack/M004-S01 | - | 11 | a1b2c3d | 1 | - |
 | M004-S02 | implement | running | impl-M004-S02 2026-11-13T10:02Z | ytstack/M004-S02 | .claude/worktrees/m004-s02 | - | - | 0 | wait for the report |'
 # lf <repo>: the repository's lanes file, out of tree (issue #79), from `where`
-lf() { local f; f=$(bash "$BIN" -C "$1" where | cut -f1); mkdir -p "${f%/*}"; printf '%s' "$f"; }
+lf() { local f; f=$(bash "$BIN" -C "$1" where 2>/dev/null | cut -f1); mkdir -p "${f%/*}"; printf '%s' "$f"; }
 lanes() { printf '%s\n' "$EXAMPLE" > "$(lf "$1")"; }
 # rowof <repo> <lane>: the lane's line in the lanes file
 rowof() { grep "^| $2 |" "$(lf "$1")"; }
@@ -644,10 +644,38 @@ eq "the out-of-tree file is well-formed (exit 2: only the stale fixture row)" 2 
 # another machine: only the committed snapshot, no out-of-tree file
 mv "$OOT" "$TMP/oot.saved"
 run "$R" where
-eq "a repo snapshot is never the lanes file" "$OOT${TAB}out-of-tree" "$OUT"
+eq "a repo snapshot is never the lanes file" "$OOT${TAB}out-of-tree" "$(printf '%s\n' "$OUT" | sed -n 1p)"
 run "$R" migrate
 has "migrate copies a snapshot and says to read the rows against their PRs" "read every held row against its pull request" "$OUT"
 hasnt "without the snapshot line" "snapshot:" "$(cat "$OOT")"
+
+# a linked worktree before migrate: the main checkout's copy is current (PR #102 review)
+R=$(new_repo wtmig M004); roadmap "$R" M004 in-progress "- S01" "- S02"
+printf '%s\n' "$EXAMPLE" > "$R/.ytstack/LANES.md"
+( cd "$R" && git add -A && git commit -qm init && git worktree add -q -b old "$TMP/wtmig-wt" ) >/dev/null 2>&1
+WT="$TMP/wtmig-wt"
+run "$R" set M004-S02 --next "main is newer"
+run "$WT" where
+eq "from a worktree the main checkout's LANES.md is the lanes file" "$R/.ytstack/LANES.md${TAB}repo" "$OUT"
+run "$WT" migrate
+eq "migrate from a worktree whose copy differs: refused" 1 "$EC"
+has "and names both" "differ" "$OUT"
+eq "nothing copied: the main checkout's file is still the lanes file" "$R/.ytstack/LANES.md" "$(lf "$R")"
+cp "$R/.ytstack/LANES.md" "$WT/.ytstack/LANES.md"
+run "$WT" migrate
+eq "identical copies: migrate from the worktree" 0 "$EC"
+has "it copied the main checkout's file" "| main is newer |" "$(cat "$(lf "$R")")"
+eq "both copies are marked as snapshots" 2 "$(grep -l '^snapshot:' "$R/.ytstack/LANES.md" "$WT/.ytstack/LANES.md" | grep -c .)"
+# a moved checkout: the key follows the path, --from takes the old file
+OLDOOT=$(lf "$R"); mkdir -p "$TMP/moved"; cp -R "$R" "$TMP/moved/wtmig"
+run "$TMP/moved/wtmig" where
+has "a moved checkout has no lanes file and says how to recover" "migrate --from" "$OUT"
+run "$TMP/moved/wtmig" migrate --from "$R"
+eq "migrate --from <old path>: exit 0" 0 "$EC"
+eq "the old file is copied" "$(cat "$OLDOOT")" "$(cat "$(lf "$TMP/moved/wtmig")")"
+run "$TMP/moved/wtmig" migrate --from 0123456789abcdef
+eq "migrate when the file exists already: nothing to do" 0 "$EC"
+run "$TMP/bare2" migrate --from x; [ "$EC" -ne 0 ] && ok "migrate --from outside .ytstack fails" || bad "migrate --from outside .ytstack fails"
 
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

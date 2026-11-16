@@ -50,6 +50,17 @@ ACTIVE=false; TRANSCRIPT=""
 if [ -n "${YT_STDIN:-}" ] && [ -n "$JQ" ]; then
   ACTIVE=$(printf '%s' "$YT_STDIN" | "$JQ" -r '.stop_hook_active // false' 2>/dev/null)
   TRANSCRIPT=$(printf '%s' "$YT_STDIN" | "$JQ" -r '.transcript_path // empty' 2>/dev/null)
+elif [ -n "${YT_STDIN:-}" ] && [ -n "$(yt_python)" ]; then
+  _P=$(printf '%s' "$YT_STDIN" | "$(yt_python)" -I -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = {}
+d = d if isinstance(d, dict) else {}
+print("true" if d.get("stop_hook_active") is True else "false")
+print(str(d.get("transcript_path") or ""))' 2>/dev/null)
+  ACTIVE=$(printf '%s\n' "$_P" | sed -n 1p); TRANSCRIPT=$(printf '%s\n' "$_P" | sed -n 2p)
 elif printf '%s' "${YT_STDIN:-}" | grep -Eq '"stop_hook_active"[[:space:]]*:[[:space:]]*true'; then
   ACTIVE=true
 fi
@@ -68,14 +79,40 @@ goal_check() {
     "say "*) GOAL_MSG="${out#say }" ;;
   esac
 }
+# emit: print MSG and BLOCK_REASON as the hook's JSON (jq, else python, else a
+# systemMessage only). A block records the transcript's size in
+# <session dir>/stop-block-offset, so the goal never blocks the next stop of a
+# continued turn without a tool call after this block (any part's block).
+emit() {
+  local sid="${YT_SESSION_ID:-}" sz
+  [ -n "$MSG$BLOCK_REASON" ] || return 0
+  if [ -n "$BLOCK_REASON" ] && [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
+    case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) ;; *)
+      sz=$(wc -c < "$TRANSCRIPT" | tr -d ' ')
+      [ ! -d "$(yt_session_home)/$sid" ] || printf '%s\n' "$sz" > "$(yt_session_home)/$sid/stop-block-offset" 2>/dev/null ;;
+    esac
+  fi
+  if [ -n "$JQ" ]; then
+    "$JQ" -n --arg m "$MSG" --arg r "$BLOCK_REASON" \
+      '(if $r != "" then {decision: "block", reason: $r} else {} end) + (if $m != "" then {systemMessage: $m} else {} end)'
+  elif [ -n "$(yt_python)" ]; then
+    "$(yt_python)" -I -c '
+import json, sys
+m, r = sys.argv[1], sys.argv[2]
+o = {}
+if r:
+    o.update(decision="block", reason=r)
+if m:
+    o["systemMessage"] = m
+print(json.dumps(o))' "$MSG" "$BLOCK_REASON"
+  else
+    printf '{"systemMessage":"%s"}\n' "$(printf '%s' "$MSG" | sed 's/"/\\"/g')"
+  fi
+}
 GOAL_MSG=""
 if [ "$ACTIVE" = true ]; then
   BLOCK_REASON=""; goal_check
-  [ -n "$BLOCK_REASON$GOAL_MSG" ] || exit 0
-  MSG="$GOAL_MSG"
-  if [ -n "$JQ" ]; then
-    "$JQ" -n --arg m "$MSG" --arg r "$BLOCK_REASON" '(if $r != "" then {decision: "block", reason: $r} else {} end) + (if $m != "" then {systemMessage: $m} else {} end)'
-  fi
+  MSG="$GOAL_MSG"; emit
   exit 0
 fi
 
@@ -139,6 +176,8 @@ coordinate_lints() {
   last=$(cat "$sd/dispatches" "$sd/reports" 2>/dev/null | awk '$1 + 0 > m { m = $1 + 0 } END { print m + 0 }')
   yt_state_lint "$ytd" >/dev/null
   # The lanes file of the repository (issue #79): out of tree, or a repo LANES.md before migrate.
+  # (the main checkout's copy first before migrate: yt_git_ctx sets YT_MAIN_TOPLEVEL)
+  case "$ytd" in */.ytstack) yt_git_ctx "${ytd%/.ytstack}" ;; esac
   yt_lanes_file "$ytd" "$key" >/dev/null
   for kind in lanes state; do
     text=""
@@ -269,21 +308,5 @@ task_msg
 [ -n "$BLOCK_REASON" ] || goal_check
 [ -z "$GOAL_MSG" ] || MSG="${MSG:+$MSG }$GOAL_MSG"
 
-[ -n "$MSG$BLOCK_REASON" ] || exit 0
-if [ -n "$JQ" ]; then
-  "$JQ" -n --arg m "$MSG" --arg r "$BLOCK_REASON" \
-    '(if $r != "" then {decision: "block", reason: $r} else {} end) + (if $m != "" then {systemMessage: $m} else {} end)'
-elif [ -n "$(yt_python)" ]; then
-  "$(yt_python)" -I -c '
-import json, sys
-m, r = sys.argv[1], sys.argv[2]
-o = {}
-if r:
-    o.update(decision="block", reason=r)
-if m:
-    o["systemMessage"] = m
-print(json.dumps(o))' "$MSG" "$BLOCK_REASON"
-else
-  printf '{"systemMessage":"%s"}\n' "$(printf '%s' "$MSG" | sed 's/"/\\"/g')"
-fi
+emit
 exit 0

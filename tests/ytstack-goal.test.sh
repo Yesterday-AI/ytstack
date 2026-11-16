@@ -108,10 +108,36 @@ printf -- '---\nid: Q001\nstate: asked\n---\n# Q001\n' > "$Y/questions/Q001-x.md
 hook; eq "an asked question: pass" pass "$OUT"
 printf -- '---\nid: Q001\nstate: open\n---\n# Q001\n' > "$Y/questions/Q001-x.md"
 hook; case "$OUT" in block*) ok "an open question that was not asked does not let it through" ;; *) bad "an open question that was not asked does not let it through" "$OUT" ;; esac
-LF=$(bash "$ROOT/bin/ytstack-frontier" -C "$R" where | cut -f1)
+LF=$(bash "$ROOT/bin/ytstack-frontier" -C "$R" where 2>/dev/null | cut -f1)
 bash "$ROOT/bin/ytstack-frontier" -C "$R" claim M004-S02 --by w1 >/dev/null 2>&1
 bash "$ROOT/bin/ytstack-frontier" -C "$R" set M004-S02 --status running >/dev/null 2>&1
 hook; eq "a running lane in the background: pass" pass "$OUT"
+bash "$ROOT/bin/ytstack-frontier" -C "$R" set M004-S02 --worktree "$TMP/gone-wt" >/dev/null 2>&1
+hook; case "$OUT" in block*) ok "a running lane whose worktree is gone (stale) is no background work" ;; *) bad "a running lane whose worktree is gone (stale) is no background work" "$OUT" ;; esac
+# every open slice waits for a person: said once, then the stop goes through
+bash "$ROOT/bin/ytstack-frontier" -C "$R" set M004-S02 --status ready >/dev/null 2>&1
+bash "$ROOT/bin/ytstack-frontier" -C "$R" claim M004-S03 --by w2 >/dev/null 2>&1
+bash "$ROOT/bin/ytstack-frontier" -C "$R" set M004-S03 --status parked >/dev/null 2>&1
+hook
+case "$OUT" in say*"waits for a person: S02 (ready), S03 (parked)"*) ok "every open slice waits for a person: said" ;; *) bad "every open slice waits for a person: said" "$OUT" ;; esac
+hook; eq "and then passed silently" pass "$OUT"
+printf 'merge_by: coordinator\n' > "$Y/PREFERENCES.md"
+hook; case "$OUT" in block*) ok "merge_by coordinator: a ready lane is the coordinator's to merge" ;; *) bad "merge_by coordinator: a ready lane is the coordinator's to merge" "$OUT" ;; esac
+rm -f "$Y/PREFERENCES.md"
+bash "$ROOT/bin/ytstack-frontier" -C "$R" set M004-S03 --status running >/dev/null 2>&1
+# a call of ytstack-goal is no tool call that re-arms the goal
+TP2="$TMP/t2.jsonl"; : > "$TP2"
+bash "$ROOT/bin/ytstack-frontier" -C "$R" set M004-S03 --status blocked >/dev/null 2>&1
+hook --transcript "$TP2"
+printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"g","name":"Bash","input":{"command":"ytstack-goal status"}}]}}\n' >> "$TP2"
+hook --active true --transcript "$TP2"
+eq "only ytstack-goal was called since the block: pass" pass "$OUT"
+# a block of another part of the stop hook counts as the last block too
+printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"b","name":"Bash","input":{"command":"ls"}}]}}\n' >> "$TP2"
+wc -c < "$TP2" | tr -d ' ' > "$SH/s1/stop-block-offset"
+hook --active true --transcript "$TP2"
+eq "no tool call after a standing or lint block: pass" pass "$OUT"
+rm -f "$SH/s1/stop-block-offset"
 bash "$ROOT/bin/ytstack-frontier" -C "$R" set M004-S02 --status merged >/dev/null 2>&1
 hook; has "a merged lane counts as done" "open slices S03" "$OUT"
 road in-progress "- [x] S01 -- one" "- [ ] S02 -- two" "- [x] S03 -- three"
@@ -120,6 +146,8 @@ case "$OUT" in say*"holds"*) ok "every slice done: the goal holds, said once" ;;
 hook; eq "then pass" pass "$OUT"
 g --session s1 status
 eq "status of a reached goal: exit 0" 0 "$EC"
+g --session s1 set M004 --if-unset
+has "--if-unset replaces a reached goal" "M004 set as the goal of this session" "$OUT"
 rm -f "$LF"
 
 echo "# sentence goals and status"
@@ -166,6 +194,10 @@ if [ -z "$JQ" ]; then ok "jq missing: stop cases skipped"; else
   eq "no tool call since that block: no block" "" "$(printf '%s' "$OUT" | "$JQ" -r '.decision // empty')"
   stop nogoal false
   eq "a session without a goal: silent" "" "$OUT"
+  # without jq the message is still printed (python), so "said once" is true
+  g --session s5 set "late" --file nothing.txt --until 2000-01-01T00:00Z
+  OUT=$(printf '{"session_id":"s5","cwd":"%s","hook_event_name":"Stop","stop_hook_active":true}' "$R" | YT_FORCE_NO_JQ=1 bash "$ROOT/hooks/stop" 2>/dev/null)
+  has "no jq, a continued turn: the bound message is printed" "reached its bound" "$OUT"
 fi
 
 echo "$PASS passed, $FAIL failed"
