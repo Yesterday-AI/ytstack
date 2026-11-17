@@ -57,6 +57,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   three merged pull requests that changed only `.ytstack/`, read from the
   first-parent history of `origin`'s default branch (local refs, no `gh`).
 
+### Fixed
+
+- **TeammateIdle no longer loops on an unrelated milestone** (issues #97,
+  #98): the hook counted the open tasks of the `STATE.md` pointer's
+  milestone and fired at every idle turn, so coordinator lanes were asked
+  about 30 times each to claim tasks of an old open milestone outside their
+  brief. It now counts only the lane the teammate holds (its claimed or
+  running row in the main checkout's `LANES.md`, else the `M###-S##[-T##]`
+  in its name when that lane has no row of someone else), never a done,
+  dropped, shipped-informally or backlog milestone, and stays silent without
+  a known lane or after the lane reported. It speaks again only when the open
+  count changed since it last spoke (`idle-said` in the session home, pruned
+  by `stop` after 14 days like `stop-said`).
+  `spawn-milestone-team` 0.5.3 names team-mode teammates after their slice.
+
 ## [0.12.0] - 2026-11-16
 
 A coordinator stays on its operating path: standing instructions recorded

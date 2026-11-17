@@ -126,10 +126,14 @@ case "$OUT" in *"behind"*|*" /  / "*) bad "user scope: no empty origin pointer";
 echo "# old session dirs that only held stop-said are pruned (PR #94 review)"
 SHM="$XDG_STATE_HOME/ytstack/sessions"
 mkdir -p "$SHM/old1" "$SHM/oldc"; : > "$SHM/old1/stop-said"; : > "$SHM/oldc/stop-said"; : > "$SHM/oldc/coordinate"
-touch -t 202001010000 "$SHM/old1/stop-said" "$SHM/oldc/stop-said"
+mkdir -p "$SHM/oldi" "$SHM/oldb" "$SHM/newi"; : > "$SHM/oldi/idle-said"; : > "$SHM/oldb/idle-said"; : > "$SHM/oldb/stop-said"; : > "$SHM/newi/idle-said"
+touch -t 202001010000 "$SHM/old1/stop-said" "$SHM/oldc/stop-said" "$SHM/oldi/idle-said" "$SHM/oldb/idle-said" "$SHM/oldb/stop-said"
 SID=fresh2; printf 'current_milestone: M042\nactive_slice: S09\nactive_task: T09\n' > "$WT/.ytstack/STATE.md"; OUT=$(fire "$WT"); has "a new session's reminder" "$OUT" "M042-S09-T09"
 eq "an old stop-said-only dir is gone" no "$([ -d "$SHM/old1" ] && echo yes || echo no)"
 eq "an old dir with a coordinate marker stays" yes "$([ -d "$SHM/oldc" ] && echo yes || echo no)"
+eq "an old idle-said-only dir is gone (teammate-idle)" no "$([ -d "$SHM/oldi" ] && echo yes || echo no)"
+eq "an old dir with idle-said and stop-said is gone" no "$([ -d "$SHM/oldb" ] && echo yes || echo no)"
+eq "a fresh idle-said dir stays" yes "$([ -d "$SHM/newi" ] && echo yes || echo no)"
 
 echo
 echo "$PASS passed, $FAIL failed"

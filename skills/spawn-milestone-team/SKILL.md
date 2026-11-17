@@ -328,7 +328,7 @@ After each merge (policy A) or each verified slice (policy B): back to Step 5 an
 
 ### Step 5-8 under EXECUTION=team
 
-With `team: on` and Agent Teams enabled, skip the subagent calls and emit the team instruction instead (unchanged from 0.1.x): one teammate per slice using the `ytstack:implementer` definition, an optional architect-lead, the shared task list from the roadmap, teammates with `YTSTACK_NON_INTERACTIVE=1`, the lead coordinating and running `reassess-roadmap` at the end. Present the instruction and wait for "go"; Claude Code creates the team from the next prompt. Teams cannot be resumed after `/resume`; say so once. No lanes are claimed in team mode: the team's shared task list says who holds what.
+With `team: on` and Agent Teams enabled, skip the subagent calls and emit the team instruction instead (unchanged from 0.1.x): one teammate per slice using the `ytstack:implementer` definition and named after its slice (`impl-M004-S02`: the TeammateIdle hook reads the slice from the name), an optional architect-lead, the shared task list from the roadmap, teammates with `YTSTACK_NON_INTERACTIVE=1`, the lead coordinating and running `reassess-roadmap` at the end. Present the instruction and wait for "go"; Claude Code creates the team from the next prompt. Teams cannot be resumed after `/resume`; say so once. No lanes are claimed in team mode: the team's shared task list says who holds what.
 
 ### Step 9: Report + return
 
