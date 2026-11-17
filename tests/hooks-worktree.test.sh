@@ -24,6 +24,7 @@ eq()  { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected '$2' got '$3'"
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/ytwt.XXXXXX"); TMP=$(cd "$TMP" && pwd -P)
 trap 'rm -rf "$TMP"' EXIT
 PD="$TMP/plugin-data"
+export XDG_STATE_HOME="$TMP/state"   # session home (teammate-idle's idle-said)
 ELSEWHERE="$TMP/elsewhere"; mkdir -p "$ELSEWHERE"
 in_fixture() { case "$1" in "$TMP"/*) return 0 ;; *) echo "FATAL: non-fixture path '$1'" >&2; exit 2 ;; esac; }
 jstr() { printf '%s' "$1" | jq -Rs .; }
@@ -134,14 +135,14 @@ fire task-completed "$MV" "$MV" ',"tool_input":{"subject":"M050-S01-T02 -- two"}
 [ -f "$MV/.ytstack/milestones/M050/M050-S01-T02-SUMMARY.md" ] && ok "d: task-completed writes the summary into milestones/M050/" || bad "d: summary in milestones/M050/"
 [ -e "$MV/.ytstack/M050-S01-T02-SUMMARY.md" ] && bad "d: no flat summary" || ok "d: no flat summary"
 grep -F -- '- [x] T02 -- two' >/dev/null "$MV/.ytstack/milestones/M050/M050-S01-PLAN.md" && ok "d: checkbox ticked in the moved slice plan" || bad "d: checkbox ticked in the moved slice plan"
-fire teammate-idle "$MV" "$MV" ''
-case "$(cat "$TMP/err.teammate-idle")" in *"1 task(s) still open in milestone M050"*) ok "d: teammate-idle counts the moved slice plan";; *) bad "d: teammate-idle counts the moved slice plan" "$(cat "$TMP/err.teammate-idle")";; esac
+fire teammate-idle "$MV" "$MV" ',"teammate_name":"impl-M050-S01"'
+case "$(cat "$TMP/err.teammate-idle")" in *"1 task(s) still open in M050-S01"*) ok "d: teammate-idle counts the moved slice plan";; *) bad "d: teammate-idle counts the moved slice plan" "$(cat "$TMP/err.teammate-idle")";; esac
 
 # ---- (e) split state: roadmap moved, a slice plan still flat (#70) -----------
 echo "# (e) split state"
 printf -- '---\nslice: S02\n---\n- [ ] T01 -- three (src/flat.ts)\n- [ ] T02 -- four\n' > "$MV/.ytstack/M050-S02-PLAN.md"
-fire teammate-idle "$MV" "$MV" ''
-case "$(cat "$TMP/err.teammate-idle")" in *"3 task(s) still open in milestone M050"*) ok "e: teammate-idle counts the flat straggler too";; *) bad "e: teammate-idle counts the flat straggler too" "$(cat "$TMP/err.teammate-idle")";; esac
+fire teammate-idle "$MV" "$MV" ',"teammate_name":"impl-M050-S02"'
+case "$(cat "$TMP/err.teammate-idle")" in *"2 task(s) still open in M050-S02"*) ok "e: teammate-idle finds the flat straggler plan too";; *) bad "e: teammate-idle finds the flat straggler plan too" "$(cat "$TMP/err.teammate-idle")";; esac
 printf '{"session_id":"se","cwd":%s,"hook_event_name":"TaskCreated","tool_input":{"subject":"touch src/flat.ts"}}' "$(jstr "$MV")" \
   | ( cd "$MV" && env CLAUDE_PLUGIN_DATA="$PD" CLAUDE_PROJECT_DIR="$MV" bash "$H/task-created" >/dev/null 2>"$TMP/err.tc" ); EC=$?
 eq "e: task-created finds the file in the flat slice plan (no drift)" 0 "$EC"
@@ -150,7 +151,7 @@ eq "e: task-created finds the file in the flat slice plan (no drift)" 0 "$EC"
 echo "# (f) all done"
 printf -- '---\nslice: S01\n---\n- [x] T01 -- one\n- [x] T02 -- two\n' > "$MV/.ytstack/milestones/M050/M050-S01-PLAN.md"
 printf -- '---\nslice: S02\n---\n- [x] T01 -- three\n' > "$MV/.ytstack/M050-S02-PLAN.md"
-printf '{"session_id":"sf","cwd":%s,"hook_event_name":"TeammateIdle"}' "$(jstr "$MV")" \
+printf '{"session_id":"sf","cwd":%s,"hook_event_name":"TeammateIdle","teammate_name":"impl-M050-S01"}' "$(jstr "$MV")" \
   | ( cd "$MV" && env CLAUDE_PLUGIN_DATA="$PD" CLAUDE_PROJECT_DIR="$MV" bash "$H/teammate-idle" >/dev/null 2>"$TMP/err.ti" ); EC=$?
 eq "f: no open task -> exit 0" 0 "$EC"
 eq "f: no open task -> no message" "" "$(cat "$TMP/err.ti")"

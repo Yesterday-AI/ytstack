@@ -160,7 +160,7 @@ worktrees() {
   fi
   # Branches a held lane names: "<branch> <lane> (<status>)", from the
   # LANES.md of the main checkout (a linked worktree carries a stale copy).
-  lanes="$top/.ytstack/LANES.md"; [ -f "$lanes" ] || lanes="$YT_DIR/LANES.md"
+  lanes=$(yt_lanes_file "$YT_DIR")
   [ ! -f "$lanes" ] || held=$(awk -v tab="$TAB" '
     /^\|/ && ++n > 2 {
       split($0, c, "|"); for (i = 2; i <= 6; i++) gsub(/^[ \t]+|[ \t]+$/, "", c[i])

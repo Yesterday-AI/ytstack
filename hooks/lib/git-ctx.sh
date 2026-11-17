@@ -889,6 +889,15 @@ yt_standing_lines() {
   return 0
 }
 
+# yt_lanes_file <yt_dir> -> the LANES.md to read (call yt_git_ctx first): the
+# main checkout's .ytstack/LANES.md when it exists (a linked worktree carries a
+# stale copy), else <yt_dir>/LANES.md. The one place that says where it lives.
+yt_lanes_file() {
+  local top="${YT_MAIN_TOPLEVEL:-${YT_TOPLEVEL:-}}"
+  if [ -n "$top" ] && [ -f "$top/.ytstack/LANES.md" ]; then printf '%s\n' "$top/.ytstack/LANES.md"
+  else printf '%s\n' "$1/LANES.md"; fi
+}
+
 # yt_session_home -> the directory of per-session state that a hook and the
 # Bash tool of the same session both find: ${XDG_STATE_HOME:-~/.local/state}/
 # ytstack/sessions. Not yt_state_base: Claude Code sets CLAUDE_PLUGIN_DATA for

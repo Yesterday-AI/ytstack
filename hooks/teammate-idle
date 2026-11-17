@@ -1,11 +1,26 @@
 #!/usr/bin/env bash
-# ytstack TeammateIdle hook
+# ytstack TeammateIdle hook (issues #97, #98)
 #
-# Fires when a Claude Code Agent Teams teammate is about to go idle.
-# Checks whether the teammate has unfinished work in the shared task list
-# and, if so, emits feedback (exit 2) to keep them working.
+# Fires when a Claude Code Agent Teams teammate (also a named subagent while
+# Agent Teams are on) is about to go idle. When the teammate's own lane still
+# has open tasks, it says so once (exit 2 + stderr keeps the teammate working).
 #
-# Idempotent: safe to re-fire; doesn't double-count.
+# The lane's scope, M###-S## (a slice) or M###-S##-T## (a task):
+#   1. the LANES.md row whose "Claimed by" names the teammate (its first
+#      word). Only a claimed or running row counts; a row in any other status
+#      (reported, merged, ...) means the lane's work is in: silent.
+#   2. no row: the M###-S##[-T##] ref in the teammate's name, ending at a
+#      non-word character (team mode names a teammate after its slice,
+#      impl-M004-S02). Silent when that lane has any row in LANES.md (another
+#      holder, released, dropped: it is not this teammate's). With held lanes
+#      in LANES.md only a milestone among theirs counts.
+#   Nothing else: never the STATE pointer, no scope known means silence.
+# LANES.md is the main checkout's (yt_lanes_file). A milestone whose roadmap
+# says done, dropped, shipped-informally or backlog is never counted. Said
+# when the open count differs from the last one said for this teammate and
+# scope (<session home>/<session id>/idle-said): the payload has no loop
+# guard, so a repeat idle with no change stays quiet.
+# No session id, no teammate name, no jq or python: silent. Fails open.
 
 set -uo pipefail
 trap '' PIPE
@@ -14,41 +29,75 @@ trap '' PIPE
 # DECISIONS 2026-11-07).
 . "$(cd "$(dirname "$0")" && pwd)/lib/git-ctx.sh"
 yt_read_stdin
+case "${YT_SESSION_ID:-}" in ''|.|..|*[!A-Za-z0-9._-]*) exit 0 ;; esac
+TM=""
+if [ -n "$(yt_jq)" ]; then
+  TM=$(printf '%s' "$YT_STDIN" | "$(yt_jq)" -r '.teammate_name // "" | tostring' 2>/dev/null)
+elif [ -n "$(yt_python)" ]; then
+  TM=$(printf '%s' "$YT_STDIN" | "$(yt_python)" -I -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = {}
+print(d.get("teammate_name") or "" if isinstance(d, dict) else "")' 2>/dev/null)
+fi
+case "$TM" in ''|*[!A-Za-z0-9._-]*) exit 0 ;; esac
+
 yt_git_ctx "${YT_CWD:-$PWD}"
 YT_DIR=$(yt_resolve_yt_dir)
+[ -n "$YT_DIR" ] || exit 0
 
-# Silent exit if not a ytstack project
-[ -z "$YT_DIR" ] && exit 0
-
-STATE_FILE="$YT_DIR/STATE.md"
-[ ! -f "$STATE_FILE" ] && exit 0
-
-# Determine current milestone + its slice-plans
-CURRENT_MILESTONE=$(sed -n 's/^current_milestone: *//p' "$STATE_FILE" | head -1)
-[ -z "$CURRENT_MILESTONE" ] || [ "$CURRENT_MILESTONE" = "none" ] && exit 0
-
-# Count unfinished tasks across all slice-plans for this milestone
-OPEN_TASK_COUNT=0
-# Every layout, one file per name: plans that landed flat before the milestone
-# moved to milestones/M###/ count too (#70).
-while IFS= read -r plan; do
-  [ -f "$plan" ] || continue
-  # grep -c prints 0 itself and exits 1; `|| echo 0` would yield "0\n0".
-  count=$(grep -c '^- \[ \] T[0-9][0-9]' "$plan" 2>/dev/null); count=${count:-0}
-  OPEN_TASK_COUNT=$((OPEN_TASK_COUNT + count))
-done <<EOF
-$(yt_find_artifacts "$YT_DIR" "$CURRENT_MILESTONE-S[0-9][0-9]-PLAN.md" | awk -F/ 'NF && !s[$NF]++')
-EOF
-
-# If everything done, let teammate idle (exit 0, no feedback)
-if [ "$OPEN_TASK_COUNT" -eq 0 ]; then
-  exit 0
+# LANES.md rows: lane TAB status TAB holder (first word of "Claimed by").
+ROWS=""
+LANES=$(yt_lanes_file "$YT_DIR")
+[ -f "$LANES" ] && ROWS=$(awk -F '|' '
+  function t(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+  /^\|/ && NF >= 11 { l = t($2); s = t($4); c = t($5); split(c, w, " ")
+    if (l != "" && l != "Lane" && l !~ /^-+$/) print l "\t" s "\t" w[1] }' "$LANES" 2>/dev/null)
+MINE=$(printf '%s\n' "$ROWS" | awk -F '\t' -v n="$TM" '$3 == n')
+if [ -n "$MINE" ]; then
+  SCOPE=$(printf '%s\n' "$MINE" | awk -F '\t' '$2 == "claimed" || $2 == "running" { print $1; exit }')
+else
+  # The ref stands alone in the name: impl-M046-S023 names no lane.
+  SCOPE=$(printf '%s\n' "$TM" | grep -oE '(^|[^A-Za-z0-9])M[0-9]{3}-S[0-9]{2}(-T[0-9]{2})?([^A-Za-z0-9]|$)' | head -1 | grep -oE 'M[0-9]{3}-S[0-9]{2}(-T[0-9]{2})?')
+  # A lane with a row is not this teammate's (another holder, released, dropped).
+  [ -z "$SCOPE" ] || ! printf '%s\n' "$ROWS" | awk -F '\t' -v s="$SCOPE" '
+    { sl = substr(s, 1, 8) } $1 == s || $1 == sl || index($1, s "-") == 1 { f = 1 } END { exit !f }' || exit 0
+  ACTIVE=$(printf '%s\n' "$ROWS" | awk -F '\t' '$3 != "" && $3 != "-" && $2 != "merged" && $2 != "dropped" { print substr($1, 1, 4) }')
+  if [ -n "$SCOPE" ] && [ -n "$ACTIVE" ]; then
+    printf '%s\n' "$ACTIVE" | grep -qxF "${SCOPE%%-*}" || exit 0
+  fi
 fi
+case "$SCOPE" in M[0-9][0-9][0-9]-S[0-9][0-9]|M[0-9][0-9][0-9]-S[0-9][0-9]-T[0-9][0-9]) ;; *) exit 0 ;; esac
+M=${SCOPE%%-*}; REST=${SCOPE#*-}; S=${REST%%-*}; T=""
+[ "$REST" = "$S" ] || T=${REST#*-}
 
-# Otherwise emit feedback via exit 2 + stderr (lead gets the message)
+ROAD=$(yt_artifact_path "$YT_DIR" "$M-ROADMAP.md")
+case "$(sed -n 's/^status:[ ]*\([^ ]*\).*/\1/p' "$ROAD" 2>/dev/null | head -1)" in
+  done|dropped|shipped-informally|backlog) exit 0 ;;
+esac
+PLAN=$(yt_artifact_path "$YT_DIR" "$M-$S-PLAN.md")
+[ -f "$PLAN" ] || exit 0
+# grep -c prints 0 itself and exits 1; `|| echo 0` would yield "0\n0".
+if [ -n "$T" ]; then
+  N=$(grep -cE "^- \[ \] $T([^0-9]|\$)" "$PLAN" 2>/dev/null)
+else
+  N=$(grep -c '^- \[ \] T[0-9][0-9]' "$PLAN" 2>/dev/null)
+fi
+case "$N" in ''|*[!0-9]*) N=0 ;; esac
+[ "$N" -gt 0 ] || exit 0
+
+# Said when the count differs from the last one said for this teammate and
+# scope (lines "<teammate> <scope> <count>"); silent when it cannot be recorded.
+SAID="$(yt_session_home)/$YT_SESSION_ID/idle-said"
+LAST=$(awk -v t="$TM" -v s="$SCOPE" '$1 == t && $2 == s { n = $3 } END { print n }' "$SAID" 2>/dev/null)
+[ "$LAST" != "$N" ] || exit 0
+mkdir -p "${SAID%/*}" 2>/dev/null && printf '%s %s %s\n' "$TM" "$SCOPE" "$N" >> "$SAID" 2>/dev/null || exit 0
+
 cat >&2 <<EOF
-[ytstack] $OPEN_TASK_COUNT task(s) still open in milestone $CURRENT_MILESTONE.
-Check the shared task list and claim the next unblocked task. If you believe
-you have no claimable work, confirm with the lead before going idle.
+[ytstack] $N task(s) still open in $SCOPE, the lane you hold.
+Take the next open one. If none of them is yours to take, tell the lead in one
+line and go idle; this is said again only when the open count changes.
 EOF
 exit 2

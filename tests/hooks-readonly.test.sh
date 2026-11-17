@@ -330,10 +330,10 @@ if [ -e "$ELSEWHERE/.ytstack" ]; then bad "tc: nothing under CLAUDE_PROJECT_DIR"
 
 # ---- 6. teammate-idle / task-created ---------------------------------------
 echo "# teammate-idle / task-created"
-run teammate-idle "{\"cwd\":$(jstr "$MAIN")}" >/dev/null
-eq  "ti: open tasks -> exit 2" 2 "$EC"
-has "ti: reports open count" "$(cat "$ERR")" "2 task(s) still open"
-run teammate-idle "{\"cwd\":$(jstr "$PLAIN")}" >/dev/null
+run teammate-idle "{\"session_id\":\"ti1\",\"cwd\":$(jstr "$MAIN"),\"teammate_name\":\"impl-M999-S01\"}" XDG_STATE_HOME="$TMP/xdg" >/dev/null
+eq  "ti: open tasks of its slice -> exit 2" 2 "$EC"
+has "ti: reports open count" "$(cat "$ERR")" "2 task(s) still open in M999-S01"
+run teammate-idle "{\"session_id\":\"ti2\",\"cwd\":$(jstr "$PLAIN"),\"teammate_name\":\"impl-M999-S01\"}" XDG_STATE_HOME="$TMP/xdg" >/dev/null
 eq  "ti: no .ytstack -> exit 0" 0 "$EC"
 run task-created "{\"cwd\":$(jstr "$MAIN"),\"tool_input\":{\"subject\":\"touch foo/bar.ts\",\"description\":\"edit foo/bar.ts\"}}" >/dev/null
 eq  "tcr: drifted path -> exit 2" 2 "$EC"

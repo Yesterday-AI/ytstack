@@ -181,9 +181,12 @@ said() { # said <key>: 0 when this session said it already; records it otherwise
   grep -qxF -- "$1" "$f" 2>/dev/null && return 0
   if [ ! -d "${f%/*}" ]; then
     # A new session dir: prune the dirs of old sessions that only ever held
-    # stop-said (14 days untouched); a coordinate session's dir stays.
-    find "$(yt_session_home)" -mindepth 2 -maxdepth 2 -name stop-said -mtime +14 2>/dev/null | while IFS= read -r o; do
-      [ "$(ls -A "${o%/*}" 2>/dev/null)" = stop-said ] && rm -f "$o" && rmdir "${o%/*}" 2>/dev/null
+    # stop-said and/or idle-said (hooks/teammate-idle), all 14 days
+    # untouched; a coordinate session's dir stays.
+    find "$(yt_session_home)" -mindepth 2 -maxdepth 2 \( -name stop-said -o -name idle-said \) -mtime +14 2>/dev/null | while IFS= read -r o; do
+      o=${o%/*}; [ -d "$o" ] || continue
+      case "$(ls -A "$o" 2>/dev/null | tr '\n' ' ')" in "stop-said "|"idle-said "|"idle-said stop-said ") ;; *) continue ;; esac
+      [ -z "$(find "$o" -type f ! -mtime +14 2>/dev/null)" ] && rm -f "$o/stop-said" "$o/idle-said" && rmdir "$o" 2>/dev/null
     done
     mkdir -p "${f%/*}" 2>/dev/null || return 1
   fi

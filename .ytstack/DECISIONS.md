@@ -1565,3 +1565,20 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** While the ready-for-review count is at the cap, the coordinator dispatches no new implement lane.
 
 **Supersedes:** Narrows "2026-11-15: Hooks read a stale checkout from origin ..." (the behind conditions; "the `open-prs` gate counts pull requests ready for review" becomes the cap on opening).
+
+## 2026-11-16: TeammateIdle counts the teammate's own lane, read from LANES.md or its name, and says it once (issues #97, #98)
+
+**Context:** `hooks/teammate-idle` counted the open tasks of `current_milestone` in `STATE.md` and exited 2 at every idle turn while any was open. In a coordinator session the pointer named an old open milestone (M034) while the lanes worked on M046, so every lane got "13 task(s) still open in milestone M034" about 30 times, also after its report and after the lead confirmed. The payload has `teammate_name` and no loop guard like `stop_hook_active`.
+
+**Options considered:**
+- A) Keep the pointer, add a dedupe only.
+- B) The lane's scope: its held `LANES.md` row, else a slice ref in the teammate name; silent without one; once per teammate, lane and count.
+- C) Read the host's team task list under `~/.claude/tasks/` for the teammate's owned tasks.
+
+**Chose:** B. A row counts only while `claimed` or `running`; any other status of the teammate's row means its work is in. Without a row of its own (team mode claims no lanes) the `M###-S##[-T##]` that stands alone in the name counts, and `spawn-milestone-team` names team-mode teammates after their slice; a lane that has any row (another holder, released, dropped) is not the teammate's, so an old worker of a re-claimed lane is not pushed back to it. With held lanes in `LANES.md`, a name ref outside their milestones is ignored. `LANES.md` is the main checkout's (`yt_lanes_file`). A milestone whose roadmap is `done`, `dropped`, `shipped-informally` or `backlog` never counts. The record is `<session home>/<session-id>/idle-said`; the hook speaks when the count differs from the last one it said for that teammate and lane.
+
+**Reason:** A teammate can only act on its own lane; the pointer is the lead's position, not the lane's. A count that did not change since the last message carries nothing new, so repeating it only costs turns. C reads an undocumented host format.
+
+**How to apply:** A lane that should get the reminder holds its row in `LANES.md` (`ytstack-frontier claim --by <teammate name>`) or carries its slice in its name.
+
+**Supersedes:** None.

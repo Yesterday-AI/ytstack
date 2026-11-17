@@ -3,7 +3,7 @@ name: spawn-milestone-team
 description: "Dispatches the current milestone's slices to parallel workers: by default one worktree-isolated implementer subagent per slice plus a fresh verifier per slice, orchestrated from the main session which never edits source; with PREFERENCES team on, a Claude Code Agent Team instead. Use after slice-milestone and plan-eng-review when the slices are independent, or when the user says spawn the team, run the slices in parallel, dispatch the milestone. Not for a single slice or sequential work (plan-task)."
 metadata:
   tier: task
-  version: 0.5.2
+  version: 0.5.3
   triggers:
     - spawn team
     - dispatch milestone
@@ -328,7 +328,7 @@ After each merge (policy A) or each verified slice (policy B): back to Step 5 an
 
 ### Step 5-8 under EXECUTION=team
 
-With `team: on` and Agent Teams enabled, skip the subagent calls and emit the team instruction instead (unchanged from 0.1.x): one teammate per slice using the `ytstack:implementer` definition, an optional architect-lead, the shared task list from the roadmap, teammates with `YTSTACK_NON_INTERACTIVE=1`, the lead coordinating and running `reassess-roadmap` at the end. Present the instruction and wait for "go"; Claude Code creates the team from the next prompt. Teams cannot be resumed after `/resume`; say so once. No lanes are claimed in team mode: the team's shared task list says who holds what.
+With `team: on` and Agent Teams enabled, skip the subagent calls and emit the team instruction instead (unchanged from 0.1.x): one teammate per slice using the `ytstack:implementer` definition and named after its slice (`impl-M004-S02`: the TeammateIdle hook reads the slice from the name), an optional architect-lead, the shared task list from the roadmap, teammates with `YTSTACK_NON_INTERACTIVE=1`, the lead coordinating and running `reassess-roadmap` at the end. Present the instruction and wait for "go"; Claude Code creates the team from the next prompt. Teams cannot be resumed after `/resume`; say so once. No lanes are claimed in team mode: the team's shared task list says who holds what.
 
 ### Step 9: Report + return
 
