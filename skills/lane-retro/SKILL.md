@@ -3,7 +3,7 @@ name: lane-retro
 description: "Looks at a sample of finished lanes while coordinated work is still running and proposes checks and pointers for what went wrong in them. Use when several lanes finished, when a lane went wrong, when the same finding came back in a review, or when the user says lane retro, why does this keep happening, what do the lanes keep getting wrong. Not the retrospective of a finished milestone (retro) and not a review of one change (code-review)."
 metadata:
   tier: task
-  version: 0.2.0
+  version: 0.2.1
 allowed-tools:
   - Bash
   - Read
@@ -91,11 +91,14 @@ for _p in "$_YT_DIR"/retro/LANES-*.md; do
   [ -n "$_YT_DIR" ] && [ -f "$_p" ] || continue
   _SAMPLED="$_SAMPLED$_NL$(sed -n 's/^sampled: *//p' "$_p" | tr ',' '\n' | sed 's/^ *//; s/ *$//')"
 done
-# Finished lanes: merged ones, and blocked ones (those went wrong).
+# Finished lanes: merged ones, and blocked ones (those went wrong), from the
+# lanes file (issue #79: out of tree, or a repo LANES.md before migrate).
+_LANES="$_YT_DIR/LANES.md"
+if [ -n "$_YT_DIR" ] && command -v yt_lanes_file >/dev/null 2>&1; then yt_lanes_file "$_YT_DIR" >/dev/null; _LANES="$YT_LANES_FILE"; fi
 _FIN=""
-[ -f "$_YT_DIR/LANES.md" ] && _FIN=$(awk -F'|' '/^\|/ { n++; if (n <= 2) next
+[ -n "$_YT_DIR" ] && [ -f "$_LANES" ] && _FIN=$(awk -F'|' '/^\|/ { n++; if (n <= 2) next
     for (i = 2; i <= 11; i++) gsub(/^[ \t]+|[ \t]+$/, "", $i)
-    if ($4 == "merged" || $4 == "blocked") print $2 "\t" $4 "\t" $10 "\t" $8 }' "$_YT_DIR/LANES.md")
+    if ($4 == "merged" || $4 == "blocked") print $2 "\t" $4 "\t" $10 "\t" $8 }' "$_LANES")
 
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "PROJECT_SLUG: $_PROJECT_SLUG"
@@ -141,7 +144,7 @@ echo "UPSTREAM_TOOL: ${_UP:-unavailable}"
 - its **brief**: `"${CLAUDE_SKILL_DIR}/../../bin/ytstack-brief" render --slice <lane>` (`--task` for a task lane) prints what the worker was given;
 - its **report**: the labelled lines the coordinator kept, or the lane's `M###-S##-T##-SUMMARY.md` files;
 - its **review findings**: the `## Review` lines in its task plans and the findings of its review (in the pull request, read from the host for this purpose; say when);
-- its **row** in `LANES.md`.
+- its **row** in the lanes file (`ytstack-frontier where`).
 
 **Step 5 -- Examine in six categories.** The same six for every lane, in this order:
 

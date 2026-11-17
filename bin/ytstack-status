@@ -27,7 +27,7 @@
 # that is not dropped or backlog, "<M###> <done>/<total> done (<n>%) <n> in
 # review", tab separated, then one line per phase that left the report,
 # "total" and "read <UTC>, log <path>". Rows are the roadmap's slices; done
-# is a checked slice or a merged LANES.md row (every slice of a done or
+# is a checked slice or a merged row of the lanes file (yt_lanes_file; every slice of a done or
 # shipped-informally milestone), in review a row in reported, in-review,
 # ready or parked. A phase whose slices changed since the last text report says by how
 # much and why (slices added, removed), a new phase says so, and the total
@@ -55,15 +55,17 @@ phases() {
   done
   yt_git_ctx "$dir"; yt_resolve_yt_dir >/dev/null
   [ -n "$YT_DIR" ] || { echo "ytstack-status: no .ytstack directory for $dir" >&2; return 1; }
+  # The lanes file (issue #79): out of tree, or a repo LANES.md before migrate.
+  yt_lanes_file "$YT_DIR" >/dev/null
   # "<M###> <status> <done> <review> <total> <slice ids>" per roadmap, tab separated
   rows=$(yt_find_artifacts "$YT_DIR" 'M[0-9][0-9][0-9]-ROADMAP.md' | sort | while IFS= read -r f; do
     m=$(basename "$f" -ROADMAP.md)
     st=$(sed -n 's/^status:[ ]*\([A-Za-z-]*\).*/\1/p' "$f" | head -1)
     # (no `case` here: bash 3.2 misparses its ")" inside $( ))
     [ "$st" != dropped ] && [ "$st" != backlog ] || continue
-    awk -v m="$m" -v st="${st:--}" -v lanes="$YT_DIR/LANES.md" '
+    awk -v m="$m" -v st="${st:--}" -v lanes="$YT_LANES_FILE" '
       BEGIN {
-        # the first table of LANES.md: lane -> status
+        # the first table of the lanes file: lane -> status
         while ((getline x < lanes) > 0) {
           if (x !~ /^\|/) { if (n) break; continue }
           if (++n > 2) { split(x, c, "|"); l = c[2]; s = c[4]; gsub(/^[ \t]+|[ \t]+$/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", s); lane[l] = s }

@@ -20,16 +20,22 @@
 #      branch of a pushed standing PR) added it after that prompt. Local git
 #      only, no network. Afterwards the flags count as handled
 #      (<session dir>/standing-stop), so the same prompts never block twice.
-#   3. Coordinate lints (coordinate mode, issue #76): LANES.md behind the
+#   3. Coordinate lints (coordinate mode, issue #76): the lanes file
+#      (yt_lanes_file, out of tree since issue #79) behind the
 #      session's dispatches and reports, the STATE pointer behind the newest
 #      milestone. Said once per session; after YT_LINT_STREAK_N sessions in a
 #      row (default 3) the stop is blocked once. See the section below.
 #   4. Rotation (coordinate mode, issue #83): from the second compaction of
 #      the session, one reminder per compaction to rotate (Step 12).
+#   5. Goal mode (issue #99): with the goal marker of bin/ytstack-goal, block
+#      the stop while the goal is open, unless a question is asked, a blocker
+#      is recorded, work runs in the background or the bound is reached
+#      (`ytstack-goal hook` decides). Only when 2. and 3. did not block.
 #
 # Resolution: payload `cwd` via hooks/lib/git-ctx.sh (never CLAUDE_PROJECT_DIR).
 # Respects `stop_hook_active` (set when a previous Stop hook already continued
-# the turn) to avoid any loop.
+# the turn): then only the goal runs, and it blocks again only after a tool
+# call since its last block (the transcript), so it cannot loop.
 
 set -uo pipefail
 trap '' PIPE
@@ -38,8 +44,75 @@ trap '' PIPE
 
 yt_read_stdin
 JQ=$(yt_jq)
-# stop_hook_active: do nothing when we are inside a hook-continued turn
-if [ -n "${YT_STDIN:-}" ] && [ -n "$JQ" ] && [ "$(printf '%s' "$YT_STDIN" | "$JQ" -r '.stop_hook_active // false' 2>/dev/null)" = true ]; then
+# stop_hook_active: inside a hook-continued turn only the goal (5.) may hold the
+# stop again, and only after a tool call (bin/ytstack-goal hook); nothing else runs.
+ACTIVE=false; TRANSCRIPT=""
+if [ -n "${YT_STDIN:-}" ] && [ -n "$JQ" ]; then
+  ACTIVE=$(printf '%s' "$YT_STDIN" | "$JQ" -r '.stop_hook_active // false' 2>/dev/null)
+  TRANSCRIPT=$(printf '%s' "$YT_STDIN" | "$JQ" -r '.transcript_path // empty' 2>/dev/null)
+elif [ -n "${YT_STDIN:-}" ] && [ -n "$(yt_python)" ]; then
+  _P=$(printf '%s' "$YT_STDIN" | "$(yt_python)" -I -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = {}
+d = d if isinstance(d, dict) else {}
+print("true" if d.get("stop_hook_active") is True else "false")
+print(str(d.get("transcript_path") or ""))' 2>/dev/null)
+  ACTIVE=$(printf '%s\n' "$_P" | sed -n 1p); TRANSCRIPT=$(printf '%s\n' "$_P" | sed -n 2p)
+elif printf '%s' "${YT_STDIN:-}" | grep -Eq '"stop_hook_active"[[:space:]]*:[[:space:]]*true'; then
+  ACTIVE=true
+fi
+[ "$ACTIVE" = true ] || ACTIVE=false
+
+# ---- 5. goal mode (issue #99) ----------------------------------------------------
+# With a goal marker (bin/ytstack-goal set), hold the stop while the goal is
+# open; the decision is `ytstack-goal hook` (files only, no command of the goal).
+goal_check() {
+  local sid="${YT_SESSION_ID:-}" out
+  case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  [ -f "$(yt_session_home)/$sid/goal" ] || return 0
+  out=$(bash "$(cd "$(dirname "$0")/.." && pwd)/bin/ytstack-goal" --session "$sid" hook --active "$ACTIVE" ${TRANSCRIPT:+--transcript "$TRANSCRIPT"} 2>/dev/null) || return 0
+  case "$out" in
+    "block "*) BLOCK_REASON="${out#block }" ;;
+    "say "*) GOAL_MSG="${out#say }" ;;
+  esac
+}
+# emit: print MSG and BLOCK_REASON as the hook's JSON (jq, else python, else a
+# systemMessage only). A block records the transcript's size in
+# <session dir>/stop-block-offset, so the goal never blocks the next stop of a
+# continued turn without a tool call after this block (any part's block).
+emit() {
+  local sid="${YT_SESSION_ID:-}" sz
+  [ -n "$MSG$BLOCK_REASON" ] || return 0
+  if [ -n "$BLOCK_REASON" ] && [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
+    case "$sid" in ''|.|..|*[!A-Za-z0-9._-]*) ;; *)
+      sz=$(wc -c < "$TRANSCRIPT" | tr -d ' ')
+      [ ! -d "$(yt_session_home)/$sid" ] || printf '%s\n' "$sz" > "$(yt_session_home)/$sid/stop-block-offset" 2>/dev/null ;;
+    esac
+  fi
+  if [ -n "$JQ" ]; then
+    "$JQ" -n --arg m "$MSG" --arg r "$BLOCK_REASON" \
+      '(if $r != "" then {decision: "block", reason: $r} else {} end) + (if $m != "" then {systemMessage: $m} else {} end)'
+  elif [ -n "$(yt_python)" ]; then
+    "$(yt_python)" -I -c '
+import json, sys
+m, r = sys.argv[1], sys.argv[2]
+o = {}
+if r:
+    o.update(decision="block", reason=r)
+if m:
+    o["systemMessage"] = m
+print(json.dumps(o))' "$MSG" "$BLOCK_REASON"
+  else
+    printf '{"systemMessage":"%s"}\n' "$(printf '%s' "$MSG" | sed 's/"/\\"/g')"
+  fi
+}
+GOAL_MSG=""
+if [ "$ACTIVE" = true ]; then
+  BLOCK_REASON=""; goal_check
+  MSG="$GOAL_MSG"; emit
   exit 0
 fi
 
@@ -74,7 +147,7 @@ BLOCK_REASON=""
 standing_block
 
 # ---- 3. coordinate lints, escalating (issue #76) ----------------------------------
-# lanes: LANES.md older than the newest lane event minus 5 minutes (a claim comes
+# lanes: the lanes file older than the newest lane event minus 5 minutes (a claim comes
 # right before its dispatch), or missing although lanes were dispatched; the
 # events are <session dir>/dispatches (hooks/pre-tool-use-agent) and reports
 # (hooks/standing-prompt). state: the STATE pointer is behind the newest
@@ -102,14 +175,18 @@ coordinate_lints() {
   mkdir -p "$(dirname "$streak")" 2>/dev/null || return 0
   last=$(cat "$sd/dispatches" "$sd/reports" 2>/dev/null | awk '$1 + 0 > m { m = $1 + 0 } END { print m + 0 }')
   yt_state_lint "$ytd" >/dev/null
+  # The lanes file of the repository (issue #79): out of tree, or a repo LANES.md before migrate.
+  # (the main checkout's copy first before migrate: yt_git_ctx sets YT_MAIN_TOPLEVEL)
+  case "$ytd" in */.ytstack) yt_git_ctx "${ytd%/.ytstack}" ;; esac
+  yt_lanes_file "$ytd" "$key" >/dev/null
   for kind in lanes state; do
     text=""
     if [ "$kind" = lanes ] && [ "${last:-0}" -gt 0 ]; then
-      lm=$(yt_mtime "$ytd/LANES.md"); case "$lm" in ''|*[!0-9]*) lm=0 ;; esac
+      lm=$(yt_mtime "$YT_LANES_FILE"); case "$lm" in ''|*[!0-9]*) lm=0 ;; esac
       if [ "$lm" -eq 0 ]; then
-        text="lanes were dispatched in this session, but $ytd/LANES.md does not exist: claim every lane with ytstack-frontier claim before its dispatch."
+        text="lanes were dispatched in this session, but the lanes file $YT_LANES_FILE does not exist: claim every lane with ytstack-frontier claim before its dispatch."
       elif [ $((lm + 300)) -lt "$last" ]; then
-        text="LANES.md last changed $(( (last - lm) / 60 )) min before the newest dispatch or report of this session: ytstack-frontier claim before a dispatch, ytstack-frontier set after a report."
+        text="the lanes file last changed $(( (last - lm) / 60 )) min before the newest dispatch or report of this session: ytstack-frontier claim before a dispatch, ytstack-frontier set after a report."
       fi
     elif [ "$kind" = state ]; then
       text=$(printf '%s\n' "${YT_STATE_WARNINGS:-}" | grep 'is behind the newest milestone' | head -1)
@@ -230,22 +307,9 @@ MSG=""
 task_msg
 [ -z "$ROTATE_MSG" ] || MSG="${MSG:+$MSG }$ROTATE_MSG"
 [ -z "$LINT_MSG" ] || MSG="${MSG:+$MSG }$LINT_MSG"
+# The goal holds the stop only when nothing above did: never two blocks at once.
+[ -n "$BLOCK_REASON" ] || goal_check
+[ -z "$GOAL_MSG" ] || MSG="${MSG:+$MSG }$GOAL_MSG"
 
-[ -n "$MSG$BLOCK_REASON" ] || exit 0
-if [ -n "$JQ" ]; then
-  "$JQ" -n --arg m "$MSG" --arg r "$BLOCK_REASON" \
-    '(if $r != "" then {decision: "block", reason: $r} else {} end) + (if $m != "" then {systemMessage: $m} else {} end)'
-elif [ -n "$(yt_python)" ]; then
-  "$(yt_python)" -I -c '
-import json, sys
-m, r = sys.argv[1], sys.argv[2]
-o = {}
-if r:
-    o.update(decision="block", reason=r)
-if m:
-    o["systemMessage"] = m
-print(json.dumps(o))' "$MSG" "$BLOCK_REASON"
-else
-  printf '{"systemMessage":"%s"}\n' "$(printf '%s' "$MSG" | sed 's/"/\\"/g')"
-fi
+emit
 exit 0

@@ -73,6 +73,7 @@ fi
 
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/ytwatch-t.XXXXXX"); TMP=$(cd "$TMP" && pwd -P)
 trap 'rm -rf "$TMP"' EXIT
+export XDG_STATE_HOME="$TMP/xdg"  # the lanes file out of tree (issue #79)
 FIX="$TMP/fix"; FAKE="$TMP/fakebin"; REPO="$TMP/repo"
 mkdir -p "$FAKE" "$REPO"
 ( cd "$REPO" && git init -q && git config user.email t@t.t && git config user.name t && git config commit.gpgsign false \

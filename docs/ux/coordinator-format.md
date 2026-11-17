@@ -2,7 +2,9 @@
 
 One session that owns a plan and delegates all of it needs four things on disk, so that it can lose its context and continue from files: who works on what (lanes), what may start next (the frontier), what only the human can decide (questions) and what the human asked for once and for all (standing instructions). This document fixes their formats. The skills that use them are `coordinate`, `spawn-milestone-team`, `finish-lane`, `handover-step`, `lane-retro` and `reassess-roadmap`; the scripts are `bin/ytstack-frontier`, `bin/ytstack-questions`, `bin/ytstack-finish-lane`, `bin/ytstack-handover`, `bin/ytstack-watch`, `bin/ytstack-brief` and `bin/ytstack-standing`.
 
-All files live in the project's `.ytstack/` directory and are user-owned like every artifact there.
+All files but one live in the project's `.ytstack/` directory and are user-owned like every artifact there. The exception is the lanes file: it lives out of tree, per repository (see "`LANES.md`").
+
+**The host is the ledger of a lane (issue #79).** A lane's state is its pull request (open, draft, checks, review, merged), read fresh from the host. Nothing the host already knows is written to a file in the repository. What only the coordinator knows (who holds a lane, its next action, its review round, a lane without a pull request yet) stays with the session, out of tree, beside the automatic handoff and the coordinate marker. What lasts (`DECISIONS.md`, `standing/`, `questions/`, the spec, the roadmap tick of a change) goes to main by pull request, bundled on the lane's branch by `finish-lane`, never as a bookkeeping pull request of its own. `bin/ytstack-upkeep` names every UTC day with more than three merged pull requests that changed only `.ytstack/`.
 
 ## Two rules for everything a coordinator writes
 
@@ -54,7 +56,21 @@ updated: 2026-11-13T10:42:00Z
 | Round | The number of review rounds on this lane (`code-review` rules: round 1 complete, round 2 the fix, round 3 a diagnosis). |
 | Next action | One line: what the coordinator does next for this lane, or what it waits for. For `blocked`: on what. |
 
-A lane that was never claimed has no row. `bin/ytstack-frontier` is the only writer besides a human: it changes one row per call, takes a lock for the write (the file `LANES.md.lock`, so that claims sent together do not lose a row) and rewrites `updated`. Cells contain no `|`. A held lane is released before it can be claimed again.
+A lane that was never claimed has no row. `bin/ytstack-frontier` is the only writer besides a human: it changes one row per call, takes a lock for the write (the file `LANES.md.lock` beside it, so that claims sent together do not lose a row) and rewrites `updated`. Cells contain no `|`. A held lane is released before it can be claimed again.
+
+### Where the lanes file lives
+
+Out of tree, one per repository: `${XDG_STATE_HOME:-~/.local/state}/ytstack/repos/<repo key>/LANES.md`, beside the session home of the coordinate marker (the same base for a hook and for the Bash tool; `yt_lanes_file` in `hooks/lib/git-ctx.sh` is the one resolver every reader uses). The repository key is the one of the automatic handoff, so every linked worktree of the repository reads the same file. The key is a digest of the repository's git directory path: a checkout that moves gets a new key and finds no lanes file (`where` says so); `ytstack-frontier migrate --from <old absolute checkout path>` (or `--from <old key>`) copies the old one. Before migrate, the main checkout's `.ytstack/LANES.md` is read before a linked worktree's copy, which is its branch's and may be stale; `migrate` refuses while the two differ. A successor session on the same machine reads it there; one on another machine rebuilds it from the host, since every implement lane has a pull request or a branch there.
+
+| Command | Does |
+|---|---|
+| `ytstack-frontier where` | Prints the lanes file and where it lives: `<path>` TAB `out-of-tree` or `repo`. |
+| `ytstack-frontier migrate` | Copies a repo `.ytstack/LANES.md` out of tree and adds `snapshot: <UTC>` to the repo file's frontmatter. |
+| `ytstack-frontier snapshot` | Writes the lanes file to `.ytstack/LANES.md` of the checkout with a `snapshot: <UTC>` line, and commits nothing. |
+
+**Migration.** A project from before #79 keeps its `.ytstack/LANES.md` as the lanes file while no out-of-tree file exists: every reader and writer uses it as before, and the `coordinate` preamble says `LANES_MIGRATE`. `migrate` ends that once; the marked repo copy rides with the next lane's pull request or is removed there. A `LANES.md` with a `snapshot:` key is never the lanes file. `migrate` also copies such a snapshot when no out-of-tree file exists (a new machine), without the key; its held rows are then read against their pull requests before anyone acts on them.
+
+**Snapshots.** `LANES.md` in the repository is optional: written only when a person asks for one, or at a milestone boundary inside that milestone's last lane pull request (`finish-lane`, Step 3).
 
 ### Peers
 
@@ -266,7 +282,7 @@ One review per lane, a second only for the fix.
 | `until` | Optional. An ISO UTC time after `given`; from then on the entry has ended. |
 | `until-condition` | Optional. One sentence naming the event that ends the entry ("PR #1879 merged"). The coordinator checks it when the list names it. |
 | `until-check` | Optional. A command that exits 0 once the entry has ended (`gh pr view 1879 --json state -q .state \| grep -qx MERGED`). It may stand alone (the command is the condition) or beside `until-condition` (the sentence says for people what it checks). |
-| `check` | Optional. A command that exits non-zero while the instruction is not kept; its first output line is the warning (`test -n "$(find .ytstack/LANES.md -mmin -120)" \|\| echo "LANES.md older than 2 h"; ...`). |
+| `check` | Optional. A command that exits non-zero while the instruction is not kept; its first output line is the warning (`f=$(ytstack-frontier where \| cut -f1); test -n "$(find "$f" -mmin -120)" \|\| echo "lanes file older than 2 h"; ...`). |
 | `kind` | Optional. Only `end`: the entry closes the one its `supersedes` names and is no instruction itself. |
 
 Rules:
@@ -309,7 +325,7 @@ The `coordinate` preamble writes the session marker `<session home>/<session id>
 - `hooks/stop` blocks the stop once when flagged prompts have no entry since: an entry counts when its name time is in or after the minute of the first flagged prompt, in the working tree or added on any ref of the repository after it (local branches, and the remote-tracking branch a pushed standing pull request left). Local git only. The same prompts never block twice.
 - `hooks/session-start` injects the "Operating checklist" above, in place of the minimal-code line (a coordinator writes no product code).
 - `hooks/pre-tool-use-agent` (PreToolUse on `Agent`, `Task`, `SendMessage`) adds one line of context when the prompt has no line starting with `# Brief: ` (the first line `ytstack-brief render` prints): the path is claim, render, dispatch. It never denies the call; a lookup that is no lane needs no brief. A `SendMessage` of up to 400 characters is a follow-up and is not checked. An `Agent` call of a lookup type (`Explore`, `Plan`, `claude-code-guide`, `statusline-setup`, a type naming search or explore) without a brief is neither warned about nor counted; every other `Agent` call is appended to `dispatches`; a task notification the prompt hook sees is appended to `reports`.
-- `hooks/stop` warns, once per session as a `systemMessage`, when `LANES.md` changed more than five minutes before the newest dispatch or report of the session (or does not exist although lanes were dispatched), and when the `STATE.md` pointer is behind the newest milestone on disk. A warning that comes in three sessions in a row (`YT_LINT_STREAK_N`; counter `<state base>/repos/<repo key>/coordinate-lints`) blocks the stop once in the third session. A session counts once when the finding was there at any of its stops (a session that begins with a status question and dispatches later counts); a session that ended without it breaks the row; overlapping sessions count once each.
+- `hooks/stop` warns, once per session as a `systemMessage`, when the lanes file (`yt_lanes_file`) changed more than five minutes before the newest dispatch or report of the session (or does not exist although lanes were dispatched), and when the `STATE.md` pointer is behind the newest milestone on disk. A warning that comes in three sessions in a row (`YT_LINT_STREAK_N`; counter `<state base>/repos/<repo key>/coordinate-lints`) blocks the stop once in the third session. A session counts once when the finding was there at any of its stops (a session that begins with a status question and dispatches later counts); a session that ended without it breaks the row; overlapping sessions count once each.
 
 - `hooks/pre-tool-use-agent` also adds a line when an `Agent` call that is no lookup has no `isolation` (dispatch lane work with `isolation: "worktree"`), and, on `Bash`, when the command runs `gh pr merge` (the merge is `ytstack-finish-lane merge --at <reviewed head>`) or `gh pr close` (a cap waits with the lane `parked`, a check reruns with `gh run rerun`). Advisory, never a deny: the person may have asked for that close.
 - `hooks/pre-compact` counts the session's compactions in `compactions` beside the marker. After one, `hooks/session-start` says `Compaction N of this coordinator: ytstack:coordinate Step 12, rotate now`; from the second on, `hooks/stop` says it too, once per compaction.
@@ -317,6 +333,20 @@ The `coordinate` preamble writes the session marker `<session home>/<session id>
 - `hooks/stop` gives a coordinate session no reminder about the `STATE.md` task pointer: a coordinator holds no task.
 
 Claude Code only: Codex registers no UserPromptSubmit or Agent hook of ytstack (its subagent tools are not covered), its PreToolUse and PostToolUse entries on `Bash` run only the PR watch, and Kimi's shell has no session id to write the marker with. On both the skill text (HARD-GATE, Steps 5, 6 and 12) carries these rules without the hooks.
+
+### Goal mode
+
+A long-running coordinator keeps working until its goal's exit criteria hold (issue #99, after Codex's `/goal`). `bin/ytstack-goal` writes the goal as a session marker beside the coordinate marker, `<session home>/<session id>/goal`, and the Stop hook holds the stop while it is open.
+
+| Command | Does |
+|---|---|
+| `ytstack-goal set <M###> [--until <UTC>] [--rounds N] [--if-unset]` | The milestone is the goal: it holds once the roadmap is `done`, `shipped-informally` or `dropped`, or every slice is ticked or has a `merged` row. The `coordinate` preamble runs it for the current milestone with `--if-unset --rounds 30` (`GOAL:`); `--if-unset` keeps an open goal and replaces a reached one. |
+| `ytstack-goal set "<sentence>" --check "<command>" --file <path> ...` | A sentence goal needs at least one checkable criterion: a command that exits 0, or a file that exists. A milestone goal may add them too. |
+| `ytstack-goal status` | Runs every `--check` in the checkout (stdin closed) and records the result, then prints the goal, what is open, the blocker and the rounds used. Exit 0 reached, 1 open, 3 no goal. |
+| `ytstack-goal block "<why>"`, `block --clear` | Records a blocker: the stop goes through while it is set. |
+| `ytstack-goal clear` | Removes the goal; checklist item 14 of `coordinate` when the milestone closes. |
+
+The Stop hook (`ytstack-goal hook`, files only, no command of the goal) blocks with the open slices, up to three exit criteria of `M###-CONTEXT.md`, the missing files and the checks that failed or never ran. It lets the stop through when a question is `asked`, a blocker is recorded, a lane is `running` and `ytstack-frontier check` does not call it stale, the PR watch watches a pull request for this session while its worker ticks, every open slice waits for a person (`parked`; `ready` or `in-review` unless `merge_by: coordinator`), or the bound is reached (`--until` passed, `--rounds` blocks used); the person wait, the bound and a reached goal are said once. It never blocks twice in a row without a tool call in between: inside a hook-continued turn (`stop_hook_active`) it blocks again only when the transcript shows a tool call other than `ytstack-goal` after the last block of the Stop hook (its own, or a standing or lint block, whose offset `hooks/stop` keeps in `stop-block-offset`), reading at most the last 2 MB, and never without a transcript. A standing or lint block of the same stop comes first. Claude Code only: Codex registers no ytstack Stop hook of its own, so the skill says to use its native `/goal`; a Kimi shell has no session id.
 
 ### `STANDING.md`
 
@@ -358,8 +388,11 @@ The old session stays open as a relay until every listed worker has reported. Pe
 
 ## Checked mechanically
 
-- `bin/ytstack-frontier check`: `LANES.md` has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time, every line under `## Peers` is a list line with four cells and a UTC time (a table row there is named as one); then the lanes that stall ("Lanes that stall", exit 2). `ytstack-frontier owner --pr <N>[,<N>...]`: the lane that holds a pull request and its last commit or claim, one line per PR (with several, each led by the number and a tab), exit 1 without a row ("Pull requests that stall"). A fresh worker's `claim` of a released lane keeps branch and worktree unless given: `--worktree <new>` sets its own, `--worktree -` clears it.
-- `bin/ytstack-upkeep --worktrees`: the linked worktrees (not the main one, not the one it runs in) and local branches with the state of their pull request (an open one first, else the newest), the age of the last commit, uncommitted changes, unpushed commits and the lane of the main checkout's `LANES.md` that holds them, and the `git worktree remove` / `git branch -D` commands for those whose pull request is merged or closed, with no open one, nothing unpushed, clean, unlocked and unheld. It prints the commands and runs none.
+- `bin/ytstack-frontier where`, `migrate`, `snapshot`: the lanes file out of tree, a repo `LANES.md` from before until `migrate`, a snapshot never read as the lanes file ("Where the lanes file lives").
+- `bin/ytstack-goal`: a sentence goal without `--check` or `--file` is refused; `status` runs the checks, `hook` reads their last result ("Goal mode").
+- `bin/ytstack-upkeep`, section `bookkeeping`: UTC days of the last seven with more than three merged pull requests that changed only `.ytstack/`, from the first-parent history of `origin`'s default branch (local refs; one pull request per commit whose subject names its number).
+- `bin/ytstack-frontier check`: the lanes file has the ten columns, lane references are unique, `Status` and `Kind` hold listed values, a held lane has a claim time, every line under `## Peers` is a list line with four cells and a UTC time (a table row there is named as one); then the lanes that stall ("Lanes that stall", exit 2). `ytstack-frontier owner --pr <N>[,<N>...]`: the lane that holds a pull request and its last commit or claim, one line per PR (with several, each led by the number and a tab), exit 1 without a row ("Pull requests that stall"). A fresh worker's `claim` of a released lane keeps branch and worktree unless given: `--worktree <new>` sets its own, `--worktree -` clears it.
+- `bin/ytstack-upkeep --worktrees`: the linked worktrees (not the main one, not the one it runs in) and local branches with the state of their pull request (an open one first, else the newest), the age of the last commit, uncommitted changes, unpushed commits and the lane of the lanes file that holds them, and the `git worktree remove` / `git branch -D` commands for those whose pull request is merged or closed, with no open one, nothing unpushed, clean, unlocked and unheld. It prints the commands and runs none.
 - `bin/ytstack-status --phases [--json]`: done, in review and total per milestone and in total, with each change since the last text report, its cause and the phases that joined or left (`docs/statusline.md`, "Progress per phase").
 - `bin/ytstack-questions check`: ids are unique and match the file name, `state` holds a listed value, `asked` and `answered` are set exactly when the state says so, an answered file has text under `## Answer`, `class` is `escalation` or `info` (or missing), an escalation names its `because`, and `because` is an item of the list in "Who decides". `new --decides` refuses an item that is not on the project's list, and `ask` a Context without `Source:` and `Purpose:` (issue #78).
 - `bin/ytstack-brief check`: the report labels, the three `Status:` values and their consistency with `Blockers:`, and the form of the spec delta under `Spec:`.

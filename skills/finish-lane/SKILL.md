@@ -3,7 +3,7 @@ name: finish-lane
 description: "Takes a delegated lane from the worker's report to a pull request merged at the reviewed commit, with every gate read from the host. Use in the coordinating session when a lane reported and its work has to become a merged pull request, or when the user says finish the lane, land this lane, get this lane merged. Not for the session's own branch (finish-branch), not for a release (ship) and not for the worker of the lane."
 metadata:
   tier: task
-  version: 0.7.1
+  version: 0.8.0
 allowed-tools:
   - Bash
   - Read
@@ -35,7 +35,7 @@ You MUST create a TodoWrite task for each of these items and complete them in or
 
 1. **Run preamble** -- host, the script, `merge_by`, standing instructions, the lanes table
 2. **HARD-GATE** -- `.ytstack`, git, the script; on a host other than GitHub only the steps that need no host (3, 6, 7 without the posting, 8, 9), then stop
-3. **Read the report, commit leftovers** -- `leftovers`, then `commit` with the brief's scope (only for a `prepare` lane or `Uncommitted:` other than `none`)
+3. **Read the report, commit leftovers, bundle what lasts** -- `leftovers`, then `commit` with the brief's scope (only for a `prepare` lane or `Uncommitted:` other than `none`); the roadmap tick, decisions and the milestone's snapshot on the lane's branch
 4. **Push and open the pull request** -- `push`, a body file, `open-pr`
 5. **Wait for the head, check the body** -- `wait-head`, `body-check`, one read of the body against the diff
 6. **Commission the review** -- a `review` lane pinned to that commit, in a fresh context; at most two rounds
@@ -155,8 +155,12 @@ if [ -n "$YTSTACK_NON_INTERACTIVE" ] || [ -n "$OPENCLAW_SESSION" ] || [ -n "$CLA
 else
   echo "YTSTACK_NON_INTERACTIVE: false"
 fi
+# The lanes file (issue #79): out of tree per repository, or a repo LANES.md before `ytstack-frontier migrate`.
+_LANES="$_YT_DIR/LANES.md"
+if [ -n "$_YT_DIR" ] && command -v yt_lanes_file >/dev/null 2>&1; then yt_lanes_file "$_YT_DIR" >/dev/null; _LANES="$YT_LANES_FILE"; fi
+echo "LANES_FILE: $([ -n "$_YT_DIR" ] && [ -f "$_LANES" ] && echo "$_LANES" || echo none)"
 echo "LANES_BEGIN"
-[ -n "$_YT_DIR" ] && [ -f "$_YT_DIR/LANES.md" ] && grep '^|' "$_YT_DIR/LANES.md" | head -60
+[ -n "$_YT_DIR" ] && [ -f "$_LANES" ] && grep '^|' "$_LANES" | head -60
 echo "LANES_END"
 exit 0
 ```
@@ -177,7 +181,7 @@ In the calls below `{WT}` is the lane's worktree: the `Worktree` cell of its row
 
 Read the standing instructions in full now, before anything is pushed: every file listed between `STANDING_ENTRIES_BEGIN` and `STANDING_ENTRIES_END` (newest first; superseded entries are not listed) and the file `STANDING` names, if any. They are what the human asked for once and for all; they override the defaults of this skill: who merges, when a status is due, a cap on open pull requests.
 
-### Step 3: Read the report, commit leftovers
+### Step 3: Read the report, commit leftovers, bundle what lasts
 
 Read the worker's report by its labels (`docs/ux/coordinator-format.md`, "The report"). A report that has not passed `bin/ytstack-brief check` yet is checked first. `Status:` other than `complete` is not finished work: the lane goes back to whoever dispatched it, with the `Blockers:` value. Save the report as it came to a file outside the worktree, `{REPORT_FILE}`: Step 9 checks its `Spec:` line, the spec delta, against the diff.
 
@@ -197,6 +201,8 @@ What a refusal of `commit` means:
 - **"unmerged paths"**: the worker left a merge or rebase unfinished. Back to the worker.
 
 A lane whose `Commits:` is `none` and that has nothing to commit has nothing to land. Stop and say so.
+
+**Bundle what lasts (issue #79).** The host is the ledger of the lane; what lasts goes to main on the lane's own branch, never in a bookkeeping pull request of its own. Before the push, in `{WT}`: tick the lane's slice in its `M###-ROADMAP.md` (`- [x] S##`) when the lane lands the whole slice, and add what this session recorded for the lane in `DECISIONS.md` or the spec. When the lane is the last open slice of its milestone, also write the snapshot of the lanes file into it: `"${CLAUDE_SKILL_DIR}/../../bin/ytstack-frontier" -C {WT} snapshot`. Commit exactly these paths: `commit --message "{REF}: record the lane in .ytstack" --scope {the .ytstack paths}`. Nothing is added after the review: a commit moves the head off the reviewed commit. A `DECISIONS.md` entry routes the merge to a person (`bin/ytstack-risk` floor); bundle it with the lane it decides, or with the next lane that goes to a person anyway. The row itself (status, next action, round) stays in the lanes file, out of tree.
 
 On a host other than GitHub go on with Step 6 at the local head (Step 2).
 
@@ -334,7 +340,7 @@ Post the lens lines as one more review on the pull request (`gh pr review {N} --
 
 ### Step 9: Read the route
 
-Whether a person has to look at this change is decided per change, from its risk (`docs/ux/review-policy-format.md`, "The route"). Run this in the checkout of this session, without `-C {WT}`: it reads `LANES.md` and the lane's plan here, and the reviews of the pull request on the host.
+Whether a person has to look at this change is decided per change, from its risk (`docs/ux/review-policy-format.md`, "The route"). Run this in the checkout of this session, without `-C {WT}`: it reads the lanes file and the lane's plan here, and the reviews of the pull request on the host.
 
 ```bash
 "${CLAUDE_SKILL_DIR}/../../bin/ytstack-finish-lane" route --lane {REF} --base {BASE_SHA} --head {SHA} --pr {N} --report {REPORT_FILE}

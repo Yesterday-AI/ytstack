@@ -10,6 +10,7 @@
 #   ytstack-frontier [-C DIR] owner --pr N[,N...] [--pr N...]
 #   ytstack-frontier [-C DIR] peer set <role> --repo R --address A [--contact UTC]
 #   ytstack-frontier [-C DIR] peer list
+#   ytstack-frontier [-C DIR] where | migrate [--from <old checkout path|repo key>] | snapshot
 #
 # list     one line per slice of the milestone (default: current_milestone of
 #          STATE.md; with "none" the highest M###-ROADMAP.md that is not done,
@@ -62,10 +63,24 @@
 #            - <role> | <repository> | <address> | <last contact UTC>
 #          set adds the line of role and repository or replaces it (the last
 #          contact: --contact, else now), list prints them tab separated.
+# where    the lanes file and where it lives: "<path>\tout-of-tree" or "<path>\trepo".
+# migrate  copies a repo .ytstack/LANES.md out of tree, the main checkout's
+#          first (refused when a linked worktree's copy differs from it), and
+#          marks the repo copies as a snapshot (a `snapshot:` line in the
+#          frontmatter), so no checkout reads them as the lanes file again. A
+#          snapshot is copied too (without that line): its rows are then read
+#          against their PRs. The key follows the repository's path: after a
+#          move, --from <old absolute checkout path> or --from <old key> copies
+#          the old out-of-tree file.
+# snapshot writes the lanes file to DIR's .ytstack/LANES.md with a `snapshot:`
+#          line, for a person or for the last lane PR of a milestone; it
+#          commits nothing.
 #
-# LANES.md lives in the .ytstack directory of DIR (default: $PWD). A write
-# changes one row and the "updated:" line, under a lock, through a temporary
-# file in the same directory.
+# The lanes file (issue #79, docs/ux/coordinator-format.md "LANES.md") lives
+# out of tree, per repository: <XDG state>/ytstack/repos/<repo key>/LANES.md
+# (yt_lanes_file in hooks/lib/git-ctx.sh). A repo .ytstack/LANES.md without
+# `snapshot:` stays the lanes file until `migrate`. A write changes one row and
+# the "updated:" line, under a lock, through a temporary file beside it.
 #
 # Exit codes
 #   list     0; with --ready 1 when no lane is ready; 1 no milestone or roadmap
@@ -76,7 +91,12 @@
 #            file is well-formed and some lanes are stale
 #   owner    0; 1 no lanes file or no row with any of the pull requests
 #   peer     0
-#   64       usage, or a cell value with "|" or a newline
+#   where    0
+#   migrate  0 copied, or already out of tree; 1 no repo LANES.md to copy,
+#            the main checkout's and the worktree's copies differ, or no
+#            file under --from
+#   snapshot 0 written; 1 the lanes file is the repo file itself, or none exists
+#   64      usage, or a cell value with "|" or a newline
 
 set -uo pipefail
 
@@ -91,7 +111,7 @@ KINDS='implement|review|prepare'
 NL='
 '
 
-usage() { sed -n '5,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '5,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "ytstack-frontier: $*" >&2; exit 1; }
 # listed <value> <a|b|c>
 listed() { case "|$2|" in *"|$1|"*) return 0 ;; esac; return 1; }
@@ -106,7 +126,7 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD=list
 case "${1:-}" in
-  list|claim|set|release|check|owner|peer) CMD=$1; shift ;;
+  list|claim|set|release|check|owner|peer|where|migrate|snapshot) CMD=$1; shift ;;
   -h|--help|help) usage; exit 0 ;;
   ""|--*) ;;
   *) usage >&2; exit 64 ;;
@@ -116,7 +136,10 @@ esac
 
 yt_git_ctx "$DIR"
 yt_resolve_yt_dir >/dev/null
-LANES="$YT_DIR/LANES.md"
+# The lanes file (issue #79): out of tree by default, a repo LANES.md from
+# before #79 until `migrate` (yt_lanes_file in hooks/lib/git-ctx.sh).
+LANES=/nonexistent/LANES.md; YT_LANES_SOURCE=none
+if [ -n "$YT_DIR" ]; then yt_lanes_file "$YT_DIR" >/dev/null; LANES=$YT_LANES_FILE; fi
 need_yt() { [ -n "$YT_DIR" ] || die "no .ytstack directory for $DIR"; }
 
 # ---- LANES.md --------------------------------------------------------------------
@@ -162,7 +185,8 @@ table_ok() {
 # happens in practice.
 lock() {
   local n=0
-  [ -w "$YT_DIR" ] || die "cannot write in $YT_DIR"
+  mkdir -p "${LANES%/*}" 2>/dev/null
+  [ -w "${LANES%/*}" ] || die "cannot write in ${LANES%/*}"
   until ( set -o noclobber; : > "$LANES.lock" ) 2>/dev/null; do
     n=$((n + 1))
     [ "$n" -le 50 ] || die "$LANES.lock exists: another ytstack-frontier is writing. Remove the file if none is."
@@ -694,7 +718,88 @@ cmd_peer() {
   ' "$LANES" > "$LANES.tmp" && mv "$LANES.tmp" "$LANES" || die "could not write $LANES"
 }
 
+# ---- where, migrate, snapshot (issue #79) ----------------------------------------
+# mark_snapshot <in> <out> <utc>: the file with "snapshot: <utc>" in its
+# frontmatter (a frontmatter is added when it has none).
+mark_snapshot() {
+  awk -v t="$3" '
+    NR == 1 && $0 == "---" { fm = 1; print; next }
+    NR == 1 { print "---"; print "snapshot: " t; print "---"; print ""; print; next }
+    fm && $0 == "---" { print "snapshot: " t; fm = 0; print; next }
+    fm && /^snapshot:/ { next }
+    { print }
+  ' "$1" > "$2"
+}
+cmd_where() {
+  [ $# -eq 0 ] || { usage >&2; return 64; }
+  need_yt
+  printf '%s\t%s\n' "$LANES" "$YT_LANES_SOURCE"
+  # The key follows the repository's path: a moved checkout finds no file.
+  [ -f "$LANES" ] || echo "ytstack-frontier: no lanes file yet; if this checkout moved, 'ytstack-frontier migrate --from <old checkout path or repo key>' takes the old one" >&2
+}
+# copy_out <src> <oot>: the file without a snapshot line, under the lock
+copy_out() {
+  awk 'NR == 1 && $0 == "---" { fm = 1; print; next } fm && $0 == "---" { fm = 0 } fm && /^snapshot:/ { next } { print }' "$1" > "$2.tmp" \
+    && mv "$2.tmp" "$2" || die "could not write $2"
+}
+cmd_migrate() {
+  local oot t f src="" from="" k old
+  case "$#:${1:-}" in
+    0:) ;;
+    2:--from) from=$2 ;;
+    *) usage >&2; return 64 ;;
+  esac
+  need_yt
+  oot="${XDG_STATE_HOME:-$HOME/.local/state}/ytstack/repos/${YT_REPO_KEY:-unknown}/LANES.md"
+  if [ -f "$oot" ]; then echo "already out of tree: $oot"; return 0; fi
+  if [ -n "$from" ]; then
+    # A checkout that moved: the old key is the digest of its old git dir.
+    case "$from" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) k=$from ;;
+      *) k=$(yt_sha16 "${from%/}/.git") ;;
+    esac
+    old="${oot%/*/LANES.md}/$k/LANES.md"
+    [ -f "$old" ] || die "no lanes file for $from ($old)"
+    LANES=$oot; lock; copy_out "$old" "$oot"
+    echo "copied $old to $oot"; return 0
+  fi
+  # The main checkout's copy is current; a linked worktree carries its branch's.
+  for f in ${YT_MAIN_TOPLEVEL:+"$YT_MAIN_TOPLEVEL/.ytstack/LANES.md"} "$YT_DIR/LANES.md"; do
+    [ -f "$f" ] || continue
+    if [ -z "$src" ]; then src=$f
+    elif [ "$f" != "$src" ] && ! yt_lanes_snapshot "$f" && ! yt_lanes_snapshot "$src" && ! cmp -s "$f" "$src"; then
+      die "$src and $f differ: settle which one is current (the main checkout's is read), then migrate"
+    fi
+  done
+  [ -n "$src" ] || die "no $YT_DIR/LANES.md to migrate; the lanes file is $oot (created by the first claim)"
+  LANES=$oot; lock
+  t=$(date -u +%Y-%m-%dT%H:%MZ)
+  copy_out "$src" "$oot"
+  if yt_lanes_snapshot "$src"; then
+    echo "copied the snapshot $src to $oot: read every held row against its pull request before acting on it"
+    return 0
+  fi
+  for f in ${YT_MAIN_TOPLEVEL:+"$YT_MAIN_TOPLEVEL/.ytstack/LANES.md"} "$YT_DIR/LANES.md"; do
+    [ -f "$f" ] && ! yt_lanes_snapshot "$f" || continue
+    mark_snapshot "$f" "$f.tmp" "$t" && mv "$f.tmp" "$f" || die "could not mark $f as a snapshot"
+  done
+  echo "copied $src to $oot; $src is now a snapshot of $t, read by no checkout as the lanes file: commit it with the next lane, or remove it there"
+}
+cmd_snapshot() {
+  local t
+  [ $# -eq 0 ] || { usage >&2; return 64; }
+  need_yt
+  [ "$YT_LANES_SOURCE" = out-of-tree ] || die "$LANES is the lanes file itself (run 'ytstack-frontier migrate' first)"
+  [ -f "$LANES" ] || die "no lanes file at $LANES"
+  t=$(date -u +%Y-%m-%dT%H:%MZ)
+  mark_snapshot "$LANES" "$YT_DIR/LANES.md.tmp" "$t" && mv "$YT_DIR/LANES.md.tmp" "$YT_DIR/LANES.md" || die "could not write $YT_DIR/LANES.md"
+  echo "snapshot of $t: $YT_DIR/LANES.md (not committed)"
+}
+
 case "$CMD" in
+  where)    cmd_where "$@" ;;
+  migrate)  cmd_migrate "$@" ;;
+  snapshot) cmd_snapshot "$@" ;;
   list)    cmd_list "$@" ;;
   claim)   cmd_claim "$@" ;;
   set)     cmd_set "$@" ;;

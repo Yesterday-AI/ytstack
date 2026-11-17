@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The host is the ledger of a lane; the lanes file moved out of the
+  repository** (issue #79). A lane's state is its pull request, read fresh.
+  What only the coordinator knows (holder, next action, round, lanes without
+  a pull request) now lives out of tree, per repository, at
+  `~/.local/state/ytstack/repos/<repo key>/LANES.md` (`$XDG_STATE_HOME`
+  respected), beside the coordinate marker and the automatic handoff, and
+  every linked worktree reads the same file. So a claim or a row update no
+  longer costs a branch, a commit and a pull request on a protected `main`.
+  One resolver, `yt_lanes_file` in `hooks/lib/git-ctx.sh`, serves
+  `ytstack-frontier`, the Stop hook's lanes lint, `ytstack-upkeep`,
+  `ytstack-status --phases`, `ytstack-finish-lane route` and the preambles of
+  `coordinate` 0.8.0, `finish-lane` 0.8.0 and `lane-retro` 0.2.1
+  (`spawn-milestone-team` 0.5.3 names the new place). New:
+  `ytstack-frontier where` (the file and `out-of-tree` or `repo`),
+  `migrate` and `snapshot`. `finish-lane` bundles what lasts on the lane's
+  branch before the push: the roadmap tick, the lane's `DECISIONS.md` or spec
+  lines, and in a milestone's last lane the snapshot. `questions/` and
+  `standing/` stay in the repository.
+- **Upgrade:** nothing changes until you migrate. An existing
+  `.ytstack/LANES.md` stays the lanes file, and the `coordinate` preamble
+  says `LANES_MIGRATE`. Run `ytstack-frontier migrate` once: it copies the
+  file out of tree (the main checkout's copy; it refuses while a worktree's
+  copy differs) and marks the repo copy `snapshot: <UTC>`, which is never
+  read as the lanes file again; commit that copy with the next lane or
+  remove it there. The file is keyed by the repository's path: after moving
+  a checkout, `ytstack-frontier migrate --from <old path>` takes it along.
+
+### Added
+
+- **Goal mode** (issue #99): `ytstack-goal set <M###>|"<sentence>"` makes a
+  goal for the session, and the Stop hook keeps the turn going while its
+  exit criteria are open, naming the open slices, the milestone's exit
+  criteria, missing files and failed checks. The stop still goes through for
+  a question you were asked, a blocker the session recorded
+  (`ytstack-goal block "<why>"`), lanes or a watched pull request in the
+  background, or a reached bound (`--until <UTC>`, `--rounds N`). It never
+  holds twice in a row without a tool call in between (a call of
+  `ytstack-goal` itself does not count), lets the stop through once every
+  open slice waits for a person, and does not count a stale running lane as
+  background work. `ytstack-goal status` runs the `--check` commands;
+  `clear` ends it. `coordinate` 0.9.0 sets the current milestone as the goal
+  at its start, bounded to 30 rounds, and clears it when the milestone
+  closes. On Codex use its own `/goal`.
+- **`ytstack-upkeep` counts bookkeeping pull requests** (issue #79): a new
+  `bookkeeping` section names every UTC day of the last seven with more than
+  three merged pull requests that changed only `.ytstack/`, read from the
+  first-parent history of `origin`'s default branch (local refs, no `gh`).
+
 ### Fixed
 
 - **TeammateIdle no longer loops on an unrelated milestone** (issues #97,

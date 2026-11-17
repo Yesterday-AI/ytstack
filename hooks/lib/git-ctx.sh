@@ -889,15 +889,6 @@ yt_standing_lines() {
   return 0
 }
 
-# yt_lanes_file <yt_dir> -> the LANES.md to read (call yt_git_ctx first): the
-# main checkout's .ytstack/LANES.md when it exists (a linked worktree carries a
-# stale copy), else <yt_dir>/LANES.md. The one place that says where it lives.
-yt_lanes_file() {
-  local top="${YT_MAIN_TOPLEVEL:-${YT_TOPLEVEL:-}}"
-  if [ -n "$top" ] && [ -f "$top/.ytstack/LANES.md" ]; then printf '%s\n' "$top/.ytstack/LANES.md"
-  else printf '%s\n' "$1/LANES.md"; fi
-}
-
 # yt_session_home -> the directory of per-session state that a hook and the
 # Bash tool of the same session both find: ${XDG_STATE_HOME:-~/.local/state}/
 # ytstack/sessions. Not yt_state_base: Claude Code sets CLAUDE_PLUGIN_DATA for
@@ -928,6 +919,34 @@ yt_latest_handoff() {
 
 yt_session_home() {
   printf '%s' "${XDG_STATE_HOME:-$HOME/.local/state}/ytstack/sessions"
+}
+
+# yt_lanes_file <yt_dir> [<repo key>] -> the lanes file of the repository
+# (issue #79). Default: out of tree, ${XDG_STATE_HOME:-~/.local/state}/ytstack/
+# repos/<repo key>/LANES.md, beside the session home, so a hook and the Bash
+# tool find the same file (not yt_state_base, for the reason given at
+# yt_session_home). Precedence: the out-of-tree file when it exists; else a
+# repo LANES.md that is no snapshot (no `snapshot:` key in its frontmatter), the
+# main checkout's first (YT_MAIN_TOPLEVEL: a linked worktree carries the copy
+# of its branch), then <yt_dir>'s: a project from before #79, until
+# `ytstack-frontier migrate`; else the out-of-tree path. Key: the argument,
+# else YT_REPO_KEY (call yt_git_ctx first). Prints the path and sets
+# YT_LANES_FILE and YT_LANES_SOURCE (out-of-tree or repo); the file need not
+# exist. `lanes=$(yt_lanes_file "$YT_DIR")` works too (no globals then).
+yt_lanes_file() {
+  local ytd="${1:-}" oot f
+  oot="${XDG_STATE_HOME:-$HOME/.local/state}/ytstack/repos/${2:-${YT_REPO_KEY:-unknown}}/LANES.md"
+  YT_LANES_FILE=$oot; YT_LANES_SOURCE=out-of-tree
+  if [ ! -f "$oot" ]; then
+    for f in ${YT_MAIN_TOPLEVEL:+"$YT_MAIN_TOPLEVEL/.ytstack/LANES.md"} ${ytd:+"$ytd/LANES.md"}; do
+      if [ -f "$f" ] && ! yt_lanes_snapshot "$f"; then YT_LANES_FILE=$f; YT_LANES_SOURCE=repo; break; fi
+    done
+  fi
+  printf '%s\n' "$YT_LANES_FILE"
+}
+# yt_lanes_snapshot <file>: 0 when its frontmatter has a `snapshot:` key.
+yt_lanes_snapshot() {
+  awk 'NR == 1 { if ($0 != "---") exit; next } $0 == "---" { exit } /^snapshot:/ { f = 1; exit } END { exit !f }' "$1" 2>/dev/null
 }
 
 # ---- factory tools that are off (M031-S03, issues #54 and #61) -----------------

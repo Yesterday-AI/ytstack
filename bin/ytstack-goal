@@ -1,0 +1,361 @@
+#!/usr/bin/env bash
+# ytstack goal (issue #99): keep a long-running session working until the
+# goal's exit criteria hold. Format: docs/ux/coordinator-format.md ("Goal mode").
+#
+#   ytstack-goal [-C DIR] [--session ID] set <M###>|"<sentence>" [--check "<command>"]... [--file <path>]... [--until <ISO UTC>] [--rounds N] [--if-unset]
+#   ytstack-goal [--session ID] status
+#   ytstack-goal [--session ID] block "<reason>" | block --clear
+#   ytstack-goal [--session ID] clear
+#   ytstack-goal --session ID hook [--active true|false] [--transcript FILE]
+#
+# The goal is a session marker out of tree, like the coordinate marker:
+# <session home>/<session id>/goal (yt_session_home in hooks/lib/git-ctx.sh;
+# the id is --session, else CLAUDE_CODE_SESSION_ID). Its criteria:
+#   milestone  <M###>: the milestone is closed: its roadmap `status` is done,
+#              shipped-informally or dropped, or every slice is ticked or has
+#              a merged row in the lanes file. The exit criteria of its
+#              M###-CONTEXT.md are named with the open slices.
+#   --file     the file exists (relative to the checkout of DIR).
+#   --check    the command exits 0, run by `status` in the checkout of DIR
+#              with stdin closed; the hook reads the last result and never
+#              runs a command. A sentence goal needs one --check or --file.
+#
+# set      writes the marker; --if-unset keeps a goal that is set. A new goal
+#          starts with no rounds used, no blocker and no check results.
+# status   runs the checks and prints the goal, what is open, the blocker and
+#          the rounds used.
+# block    records a blocker (one line): the stop goes through while it is
+#          set; --clear removes it.
+# clear    removes the goal and its state.
+# hook     the decision of hooks/stop, from files only: one line
+#            pass               let the stop through
+#            say <message>      let it through, with a message (said once)
+#            block <reason>     hold the stop
+#          It lets the stop through for a recorded blocker, an asked
+#          question (questions/ of the goal's .ytstack, state asked), a
+#          running lane of the lanes file that `ytstack-frontier check` does
+#          not name as stale, a pull request the PR watch watches for this
+#          session while its worker ticks, every open slice waiting for a
+#          person (parked; ready or in-review unless merge_by is coordinator;
+#          said once), and a reached bound (--until passed, or --rounds
+#          blocks used: said once). With --active true (stop_hook_active) it
+#          blocks again only when the transcript shows a tool call other than
+#          ytstack-goal after the last block of the stop hook (the goal's, or
+#          the offset hooks/stop leaves in stop-block-offset), reading at most
+#          the last 2 MB; without a transcript it lets the stop through.
+# --if-unset keeps an open goal and replaces a reached one.
+#
+# Exit codes
+#   set      0; 1 no milestone or roadmap; 3 no session id (Codex: use /goal)
+#   status   0 the goal holds; 1 open; 3 no goal
+#   block, clear, hook  0; 3 no session id
+#   64       usage
+
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/hooks/lib/git-ctx.sh"
+
+NL='
+'
+usage() { sed -n '5,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+bad_usage() { [ $# -eq 0 ] || echo "ytstack-goal: $*" >&2; usage >&2; exit 64; }
+die() { echo "ytstack-goal: $*" >&2; exit 1; }
+utc() { date -u +%Y-%m-%dT%H:%MZ; }
+
+DIR="$PWD"; SID="${CLAUDE_CODE_SESSION_ID:-}"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -C) [ $# -ge 2 ] && [ -d "$2" ] || bad_usage "-C needs a directory"; DIR=$2; shift 2 ;;
+    --session) [ $# -ge 2 ] || bad_usage "--session needs an id"; SID=$2; shift 2 ;;
+    *) break ;;
+  esac
+done
+CMD="${1:-}"; [ $# -eq 0 ] || shift
+case "$CMD" in
+  set|status|block|clear|hook) ;;
+  -h|--help|help) usage; exit 0 ;;
+  *) bad_usage ;;
+esac
+case "$SID" in
+  ''|.|..|*[!A-Za-z0-9._-]*)
+    [ "$CMD" = hook ] && { echo pass; exit 0; }
+    if [ -n "${CODEX_THREAD_ID:-}" ]; then echo "ytstack-goal: Codex has its own /goal: use it; ytstack registers no Stop hook there" >&2
+    else echo "ytstack-goal: no session id (CLAUDE_CODE_SESSION_ID or --session): the goal needs the Stop hook of Claude Code" >&2; fi
+    exit 3 ;;
+esac
+SD="$(yt_session_home)/$SID"; GOAL="$SD/goal"
+
+# field <name>: the first value of a key in the marker; fields <name>: all
+field() { sed -n "s/^$1: //p" "$GOAL" 2>/dev/null | head -1; }
+fields() { sed -n "s/^$1: //p" "$GOAL" 2>/dev/null; }
+
+# ---- what is open ----------------------------------------------------------------
+# open_items: one line per open criterion (nothing when the goal holds). Reads
+# files only; a --check counts by the result `status` recorded last.
+open_items() {
+  local ytd key m road st lanes ctx f c rec
+  ytd=$(field yt_dir); key=$(field key)
+  if [ "$(field kind)" = milestone ]; then
+    m=$(field goal)
+    road=$(yt_find_artifacts "$ytd" "$m-ROADMAP.md" | head -1)
+    if [ -z "$road" ]; then echo "$m: no roadmap in $ytd"
+    else
+      st=$(sed -n 's/^status:[ ]*\([A-Za-z-]*\).*/\1/p' "$road" | head -1)
+      case "$st" in
+        done|shipped-informally|dropped) ;;
+        *)
+          yt_lanes_file "$ytd" "$key" >/dev/null; lanes=$YT_LANES_FILE
+          rec=$(awk -v m="$m" -v lanes="$lanes" '
+            BEGIN { while ((getline x < lanes) > 0) if (x ~ /^\|/ && ++n > 2) { split(x, c, "|"); l = c[2]; s = c[4]; gsub(/^[ \t]+|[ \t]+$/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", s); lane[l] = s } }
+            /^- \[[ xX]\] S[0-9][0-9]( |$)/ { t++; id = substr($0, 7, 3); if (substr($0, 4, 1) == " " && lane[m "-" id] != "merged") open = open (open == "" ? "" : ", ") id }
+            END { if (open != "") print m ": open slices " open; else if (!t) print m ": no slices in its roadmap, status " (st == "" ? "none" : st) }
+          ' st="$st" "$road")
+          if [ -n "$rec" ]; then
+            printf '%s\n' "$rec"
+            ctx=$(yt_find_artifacts "$ytd" "$m-CONTEXT.md" | head -1)
+          else ctx=""; fi
+          [ -z "$ctx" ] || awk '/^## Exit criteria/ { f = 1; next } /^## / { f = 0 } f && /^- / && n < 3 { n++; s = substr($0, 3); if (length(s) > 110) s = substr(s, 1, 107) "..."; print "exit criterion: " s }' "$ctx" ;;
+      esac
+    fi
+  fi
+  while IFS= read -r f; do
+    [ -n "$f" ] && [ ! -e "$f" ] && echo "file missing: $f"
+  done <<EOF
+$(fields file)
+EOF
+  while IFS= read -r c; do
+    [ -n "$c" ] || continue
+    rec=$(YTG_C="$c" awk -F'\t' '$3 == ENVIRON["YTG_C"] { r = $1 "\t" $2 } END { print r }' "$SD/goal-checks" 2>/dev/null)
+    case "$rec" in
+      0"	"*) ;;
+      "") echo "check not run yet: $c (ytstack-goal status runs it)" ;;
+      *) echo "check failed (exit ${rec%%	*} at ${rec#*	}): $c" ;;
+    esac
+  done <<EOF
+$(fields check)
+EOF
+}
+# says <key>: 0 when this goal said it already; records it otherwise
+says() { grep -qxF -- "$1" "$SD/goal-said" 2>/dev/null && return 0; printf '%s\n' "$1" >> "$SD/goal-said" 2>/dev/null; return 1; }
+
+# ---- set -------------------------------------------------------------------------
+cmd_set() {
+  local g="" kind checks="" files="" until="-" rounds="-" ifunset="" f
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --check) [ $# -ge 2 ] && [ -n "$2" ] || bad_usage "--check needs a command"; case "$2" in *"$NL"*) bad_usage "--check takes one line" ;; esac; checks="$checks$2$NL"; shift 2 ;;
+      --file) [ $# -ge 2 ] && [ -n "$2" ] || bad_usage "--file needs a path"; files="$files$2$NL"; shift 2 ;;
+      --until) [ $# -ge 2 ] || bad_usage "--until needs a UTC time"; until=$2; shift 2 ;;
+      --rounds) [ $# -ge 2 ] || bad_usage "--rounds needs a number"; case "$2" in ''|*[!0-9]*|0) bad_usage "--rounds takes a whole number above 0" ;; esac; rounds=$((10#$2)); shift 2 ;;
+      --if-unset) ifunset=1; shift ;;
+      -*) bad_usage "set: unknown option '$1'" ;;
+      *) [ -z "$g" ] || bad_usage "set takes one goal"; g=$1; shift ;;
+    esac
+  done
+  [ -n "$g" ] || bad_usage "set needs a milestone or a sentence"
+  case "$g" in *"$NL"*) bad_usage "the goal takes one line" ;; esac
+  if [ "$until" != - ]; then
+    case "$until" in *T[0-9][0-9]:[0-9][0-9]Z) until="${until%Z}:00Z" ;; esac
+    [ -n "$(yt_epoch "$until")" ] || bad_usage "--until takes a UTC time (YYYY-MM-DDTHH:MMZ)"
+  fi
+  # --if-unset keeps an open goal; a reached one is replaced.
+  if [ -n "$ifunset" ] && [ -f "$GOAL" ] && [ -n "$(open_items)" ]; then echo "$(field goal) is the goal already (set $(field set))"; return 0; fi
+  yt_git_ctx "$DIR"; yt_resolve_yt_dir >/dev/null
+  case "$g" in
+    none|"") die "no current milestone: no goal set" ;;
+    M[0-9][0-9][0-9])
+      kind=milestone
+      [ -n "$YT_DIR" ] || die "no .ytstack directory for $DIR"
+      [ -n "$(yt_find_artifacts "$YT_DIR" "$g-ROADMAP.md" | head -1)" ] || die "no roadmap for $g in $YT_DIR" ;;
+    *)
+      kind=sentence
+      [ -n "$checks$files" ] || bad_usage "a sentence goal needs a checkable criterion: --check \"<command>\" or --file <path>" ;;
+  esac
+  mkdir -p "$SD" 2>/dev/null || die "cannot write $SD"
+  {
+    printf 'goal: %s\nkind: %s\nyt_dir: %s\nkey: %s\ntop: %s\nset: %s\nuntil: %s\nrounds: %s\n' \
+      "$g" "$kind" "${YT_DIR:--}" "${YT_REPO_KEY:-unknown}" "$YT_TOPLEVEL" "$(utc)" "$until" "$rounds"
+    printf '%s' "$checks" | awk 'NF { print "check: " $0 }'
+    printf '%s' "$files" | while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      case "$f" in /*) ;; *) f="$YT_TOPLEVEL/$f" ;; esac
+      echo "file: $f"
+    done
+  } > "$GOAL.tmp" && mv "$GOAL.tmp" "$GOAL" || die "cannot write $GOAL"
+  rm -f "$SD/goal-blocks" "$SD/goal-blocker" "$SD/goal-checks" "$SD/goal-said"
+  echo "$g set as the goal of this session (until: $until, rounds: $rounds)"
+}
+
+# ---- status ----------------------------------------------------------------------
+cmd_status() {
+  local c ec top open tmp used
+  [ $# -eq 0 ] || bad_usage
+  [ -f "$GOAL" ] || { echo "no goal set"; return 3; }
+  top=$(field top); [ -d "$top" ] || top=$PWD
+  # Run every --check and record its result: the hook reads only this file.
+  tmp="$SD/goal-checks.$$"; : > "$tmp"
+  while IFS= read -r c; do
+    [ -n "$c" ] || continue
+    ( cd "$top" && bash -c "$c" </dev/null >/dev/null 2>&1 ); ec=$?
+    printf '%s\t%s\t%s\n' "$ec" "$(utc)" "$c" >> "$tmp"
+  done <<EOF
+$(fields check)
+EOF
+  mv "$tmp" "$SD/goal-checks"
+  used=$(awk '{ print $1 + 0 }' "$SD/goal-blocks" 2>/dev/null); used=${used:-0}
+  echo "goal: $(field goal) ($(field kind), set $(field set), until $(field until), rounds used $used of $(field rounds))"
+  [ ! -s "$SD/goal-blocker" ] || echo "blocker: $(cat "$SD/goal-blocker")"
+  open=$(open_items)
+  if [ -z "$open" ]; then echo "reached: every criterion holds; ytstack-goal clear, then set the next goal"; return 0; fi
+  printf '%s\n' "$open" | sed 's/^/open: /'
+  return 1
+}
+
+cmd_block() {
+  case "$#:${1:-}" in
+    1:--clear) rm -f "$SD/goal-blocker"; echo "blocker cleared"; return 0 ;;
+    1:*) ;;
+    *) bad_usage "block takes one reason" ;;
+  esac
+  case "$1" in ""|*"$NL"*) bad_usage "the blocker is one line" ;; esac
+  [ -f "$GOAL" ] || { echo "no goal set"; return 3; }
+  printf '%s (%s)\n' "$1" "$(utc)" > "$SD/goal-blocker" || die "cannot write $SD/goal-blocker"
+  echo "blocker recorded: the stop goes through while it is set (ytstack-goal block --clear)"
+}
+
+cmd_clear() {
+  [ $# -eq 0 ] || bad_usage
+  rm -f "$GOAL" "$SD/goal-blocks" "$SD/goal-blocker" "$SD/goal-checks" "$SD/goal-said"
+  echo "goal cleared"
+}
+
+# ---- hook ------------------------------------------------------------------------
+# background: 0 when work runs in the background for this session: a running
+# lane of the goal's repository, or a pull request the PR watch watches for it
+# while its worker ticks (10 minutes, as yt_factory_notices).
+background() {
+  local ytd key n st now run stale l top ec
+  ytd=$(field yt_dir); key=$(field key); top=$(field top)
+  if [ "$ytd" != - ]; then
+    yt_lanes_file "$ytd" "$key" >/dev/null
+    run=""
+    [ ! -f "$YT_LANES_FILE" ] || run=$(awk '/^\|/ && ++n > 2 { split($0, c, "|"); l = c[2]; s = c[4]; gsub(/^[ \t]+|[ \t]+$/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", s); if (s == "running") print l }' "$YT_LANES_FILE")
+    if [ -n "$run" ]; then
+      # A running row the frontier's liveness check names as stale (its worker
+      # ended, or no commit for an hour) is no work in the background.
+      # A table check refuses (exit 1) is no evidence of running work either.
+      stale=""; ec=1
+      if [ -d "$top" ]; then stale=$(bash "$ROOT/bin/ytstack-frontier" -C "$top" check 2>/dev/null); ec=$?; fi
+      [ "$ec" -ne 1 ] || run=""
+      stale=$(printf '%s\n' "$stale" | sed -n 's/^stale: \([^:]*\): running.*/\1/p')
+      for l in $run; do
+        case "$NL$stale$NL" in *"$NL$l$NL"*) ;; *) return 0 ;; esac
+      done
+    fi
+  fi
+  st="${PR_WATCH_HOME:-${YTSTACK_PR_WATCH_HOME:-$HOME/.ytstack/pr-watch}/state}"
+  [ -f "$st/watch.sqlite3" ] && command -v sqlite3 >/dev/null 2>&1 || return 1
+  yt_pr_watch_heartbeat; now=$(date +%s)
+  [ -n "$YT_PRW_HEARTBEAT" ] && [ $((now - YT_PRW_HEARTBEAT)) -lt "${YT_PRW_STALE:-600}" ] || return 1
+  n=$(sqlite3 -readonly "$st/watch.sqlite3" "SELECT count(*) FROM watches WHERE session='claude:$SID' AND status != 'closed' AND paused = 0" 2>/dev/null)
+  case "$n" in ''|*[!0-9]*|0) return 1 ;; esac
+  return 0
+}
+# person_wait <open items>: prints "S02 (ready), S03 (parked)" and returns 0
+# when every open item is a slice whose lane waits for a person: `parked`, or
+# `ready`/`in-review` unless merge_by is coordinator (then the coordinator
+# merges it itself). Any other open item (a file, a check) is work.
+person_wait() {
+  local ytd key ids mb waits
+  printf '%s\n' "$1" | grep -v -e ': open slices ' -e '^exit criterion: ' | grep -q . && return 1
+  ids=$(printf '%s\n' "$1" | sed -n 's/^[^:]*: open slices //p' | tr -d ',')
+  [ -n "$ids" ] || return 1
+  ytd=$(field yt_dir); key=$(field key)
+  mb=$(yt_pref "$ytd" merge_by risk 2>/dev/null); [ -n "$mb" ] || mb=risk
+  yt_lanes_file "$ytd" "$key" >/dev/null
+  [ -f "$YT_LANES_FILE" ] || return 1
+  waits=$(awk -v m="$(field goal)" -v ids=" $ids " -v mb="$mb" '
+    /^\|/ && ++n > 2 { split($0, c, "|"); l = c[2]; s = c[4]; gsub(/^[ \t]+|[ \t]+$/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", s); st[l] = s }
+    END {
+      k = split(ids, a, " ")
+      for (i = 1; i <= k; i++) {
+        s = st[m "-" a[i]]
+        if (!(s == "parked" || (mb != "coordinator" && (s == "ready" || s == "in-review")))) exit 1
+        out = out (out == "" ? "" : ", ") a[i] " (" s ")"
+      }
+      print out
+    }' "$YT_LANES_FILE") || return 1
+  [ -n "$waits" ] || return 1
+  printf '%s' "$waits"
+}
+# asked: 0 when a question of the goal's .ytstack is asked and not answered
+asked() {
+  local ytd q
+  ytd=$(field yt_dir); [ "$ytd" != - ] || return 1
+  for q in "$ytd"/questions/Q[0-9]*.md; do
+    [ -f "$q" ] || continue
+    [ "$(sed -n 's/^state: *//p' "$q" | head -1)" = asked ] && return 0
+  done
+  return 1
+}
+cmd_hook() {
+  local active=false tp="" n=0 off=0 used rounds until ue open size g pw o2 SCAN_MAX=2000000
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --active) [ $# -ge 2 ] || bad_usage; active=$2; shift 2 ;;
+      --transcript) [ $# -ge 2 ] || bad_usage; tp=$2; shift 2 ;;
+      *) bad_usage "hook: unknown argument '$1'" ;;
+    esac
+  done
+  [ -f "$GOAL" ] || { echo pass; return 0; }
+  g=$(field goal)
+  [ ! -f "$SD/goal-blocks" ] || read -r n off < "$SD/goal-blocks" || true
+  case "$n" in ''|*[!0-9]*) n=0 ;; esac; case "$off" in ''|*[!0-9]*) off=0 ;; esac
+  rounds=$(field rounds); until=$(field until)
+  ue=""; [ "$until" = - ] || ue=$(yt_epoch "$until")
+  if { [ -n "$ue" ] && [ "$(date -u +%s)" -ge "$ue" ]; } || { [ "$rounds" != - ] && [ "$n" -ge "$rounds" ]; }; then
+    if says bound; then echo pass; else
+      used="until $until"; [ "$rounds" = - ] || [ "$n" -lt "$rounds" ] || used="$rounds rounds"
+      echo "say ytstack: the goal \"$g\" reached its bound ($used) and no longer holds the stop. ytstack-goal status names what is open; set it again to go on."
+    fi
+    return 0
+  fi
+  open=$(open_items)
+  if [ -z "$open" ]; then
+    if says reached; then echo pass; else echo "say ytstack: the goal \"$g\" holds. Clear it (ytstack-goal clear) and set the next one."; fi
+    return 0
+  fi
+  if [ -s "$SD/goal-blocker" ] || asked || background; then echo pass; return 0; fi
+  # Every open item waits for a person (a merge, a parked lane): said once.
+  if pw=$(person_wait "$open"); then
+    if says "person:$pw"; then echo pass; else echo "say ytstack: the goal \"$g\" waits for a person: $pw. The stop goes through until one of them moves."; fi
+    return 0
+  fi
+  size=0; [ -z "$tp" ] || [ ! -f "$tp" ] || size=$(wc -c < "$tp" | tr -d ' ')
+  # Never twice in a row without a tool call: a continued turn blocks again
+  # only when the transcript has a tool call after the last block of this
+  # stop hook (the goal's, or a standing or lint block: stop-block-offset),
+  # other than a call of ytstack-goal itself. The scan reads at most the last
+  # SCAN_MAX bytes.
+  if [ "$active" = true ]; then
+    [ -n "$tp" ] && [ -f "$tp" ] || { echo pass; return 0; }
+    o2=$(cat "$SD/stop-block-offset" 2>/dev/null); case "$o2" in ''|*[!0-9]*) o2=0 ;; esac
+    [ "$o2" -le "$off" ] || off=$o2
+    [ $((size - off)) -le "$SCAN_MAX" ] || off=$((size - SCAN_MAX))
+    # Counted, not grep -q: an early exit would fail the pipe under pipefail.
+    o2=$(tail -c +$((off + 1)) "$tp" 2>/dev/null | grep -E '"type": ?"tool_use"' | grep -vc 'ytstack-goal')
+    case "$o2" in ''|0) echo pass; return 0 ;; esac
+  fi
+  n=$((n + 1)); printf '%s %s\n' "$n" "${size:-0}" > "$SD/goal-blocks" 2>/dev/null
+  printf 'block ytstack: the goal "%s" of this session is open (round %s%s):\n%s\nKeep working toward it: the next ready lane, the next fix. Stop only when a question is asked (ytstack-questions ask), a blocker is recorded (ytstack-goal block "<why>"), or work runs in the background. ytstack-goal status runs the checks.\n' \
+    "$g" "$n" "$([ "$rounds" = - ] || echo " of $rounds")" "$(printf '%s\n' "$open" | sed 's/^/- /')"
+}
+
+case "$CMD" in
+  set)    cmd_set "$@" ;;
+  status) cmd_status "$@" ;;
+  block)  cmd_block "$@" ;;
+  clear)  cmd_clear "$@" ;;
+  hook)   cmd_hook "$@" ;;
+esac

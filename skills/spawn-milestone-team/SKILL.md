@@ -20,7 +20,7 @@ allowed-tools:
 
 # spawn-milestone-team
 
-Run a sliced milestone in parallel. The main session becomes a thin orchestrator: it dispatches one `ytstack:implementer` subagent per slice into its own git worktree, one `ytstack:verifier` subagent per finished slice into a fresh worktree, merges the slice branches it accepts, and advances `STATE.md`. The orchestrator never edits source files; its context stays small because the work happens in the subagents' contexts. What may start and who holds it is on disk, not in the orchestrator's memory: `bin/ytstack-frontier` reads the `**Blocked by:**` lines of the slice plans and keeps one row per lane (one delegated slice, `M004-S02`) in `.ytstack/LANES.md`. Claude Code Agent Teams remain available as an explicit opt-in (`team: on` in PREFERENCES) for milestones that need teammates to talk to each other.
+Run a sliced milestone in parallel. The main session becomes a thin orchestrator: it dispatches one `ytstack:implementer` subagent per slice into its own git worktree, one `ytstack:verifier` subagent per finished slice into a fresh worktree, merges the slice branches it accepts, and advances `STATE.md`. The orchestrator never edits source files; its context stays small because the work happens in the subagents' contexts. What may start and who holds it is on disk, not in the orchestrator's memory: `bin/ytstack-frontier` reads the `**Blocked by:**` lines of the slice plans and keeps one row per lane (one delegated slice, `M004-S02`) in the lanes file, out of tree per repository (`ytstack-frontier where`; a repo `.ytstack/LANES.md` from before stays it until `ytstack-frontier migrate`). Claude Code Agent Teams remain available as an explicit opt-in (`team: on` in PREFERENCES) for milestones that need teammates to talk to each other.
 
 ## Anti-Pattern: "Just execute the slices sequentially myself"
 
@@ -44,7 +44,7 @@ You MUST create a TodoWrite task for each of these items:
 8. **Merge accepted slices, look at the frontier again** -- slice branch into the working branch, `STATE.md` from the orchestrator's side; back to item 5 until no lane is ready or in flight
 9. **Report + return** -- per slice: branch, verdict, merge result, what is still blocked; next step `reassess-roadmap`
 
-Items 5 to 8 each end with the `bin/ytstack-frontier set` call that records the lane's stage and its next action in `.ytstack/LANES.md`.
+Items 5 to 8 each end with the `bin/ytstack-frontier set` call that records the lane's stage and its next action in the lanes file.
 
 ## Preamble
 
@@ -160,7 +160,7 @@ One AskUserQuestion with the plan spelled out:
 > Dispatch **{CURRENT_MILESTONE}** ({OPEN_SLICES}) from branch `{BRANCH}`:
 >
 > - one `ytstack:implementer` per slice, each in its own worktree on branch `ytstack/{CURRENT_MILESTONE}-S##` (forked from `{BRANCH}`), working through the slice's tasks with plan-task -> TDD -> verification -> summarize-task;
-> - a slice starts when the slices its plan names under `**Blocked by:**` are done, and it is claimed in `.ytstack/LANES.md` before it starts, so no slice is started twice;
+> - a slice starts when the slices its plan names under `**Blocked by:**` are done, and it is claimed in the lanes file before it starts, so no slice is started twice;
 > - one `ytstack:verifier` per finished slice in a fresh worktree, running every task plan's verification command on the slice branch;
 > - merge of each verified slice branch into `{BRANCH}` by the orchestrator (fast-forward or merge commit; `STATE.md` kept from `{BRANCH}` and re-pointed), then `ytstack:reassess-roadmap`.
 >
@@ -174,7 +174,7 @@ Remember as `_MERGE_POLICY` (A = orchestrator merges, B = branches only) and `_W
 
 ### Step 5: Claim and dispatch the frontier (EXECUTION=subagents)
 
-Ask what may start. The frontier is every lane that is open, unblocked and unclaimed; the script works it out from the roadmap checkboxes, the `**Blocked by:**` line of each slice plan and `.ytstack/LANES.md`:
+Ask what may start. The frontier is every lane that is open, unblocked and unclaimed; the script works it out from the roadmap checkboxes, the `**Blocked by:**` line of each slice plan and the lanes file:
 
 ```bash
 "${CLAUDE_SKILL_DIR}/../../bin/ytstack-frontier" list --milestone {CURRENT_MILESTONE}
@@ -189,7 +189,7 @@ M004-S04	ready
 
 - `ready`: dispatch it now. With the detail `unplanned` the slice has no plan: leave it and name it in the report (`ytstack:slice-milestone` comes first).
 - `blocked`: it waits for the slices named behind it. Do not start it.
-- `claimed`: somebody holds it. Do not start it again. If it is a lane of this run whose worker you no longer remember (after a compaction or a new session), read its row in `.ytstack/LANES.md` and continue at the stage that Status and Next action name.
+- `claimed`: somebody holds it. Do not start it again. If it is a lane of this run whose worker you no longer remember (after a compaction or a new session), read its row in the lanes file and continue at the stage that Status and Next action name.
 
 Claim each ready lane before anything is sent to a worker:
 
@@ -334,7 +334,7 @@ With `team: on` and Agent Teams enabled, skip the subagent calls and emit the te
 
 > Dispatched {CURRENT_MILESTONE}: {per slice: branch, the outcome from the implementer's report, verifier verdict, merge result}.
 > {Only when a lane is left: per lane that is blocked or unplanned, what it waits for.}
-> Lanes: `.ytstack/LANES.md`.
+> Lanes: the lanes file (`ytstack-frontier where`).
 > Next: `ytstack:reassess-roadmap` (slice boundaries), then `ytstack:finish-branch` or `ytstack:ship` for `{BRANCH}`.
 
 ## Terminal State

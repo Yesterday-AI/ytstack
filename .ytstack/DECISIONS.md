@@ -1566,6 +1566,59 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 
 **Supersedes:** Narrows "2026-11-15: Hooks read a stale checkout from origin ..." (the behind conditions; "the `open-prs` gate counts pull requests ready for review" becomes the cap on opening).
 
+## 2026-11-16: The host is the ledger of a lane; the lanes file lives out of tree per repository, a repo `LANES.md` is a snapshot (issue #79)
+
+**Context:** In a four-day coordinator run 176 of more than 500 pull requests were bookkeeping (`LANES.md` rows, roadmap ticks, receipts): on a protected `main` every update of a tracking file in the repository is a branch, a commit and a pull request. Issue #79 offered state outside the repository with periodic snapshots, or one rolling ledger pull request per day. The maintainer decided neither, after "Inside OpenAI's agentic software factory" (Gergely Orosz, 2026-09-15): the state of a change is its pull request on the host and the agent's own thread.
+
+**Chose:**
+- A lane's state is its pull request, read fresh (`finish-lane`, the PR watch, `ytstack-frontier owner`). Nothing the host knows is written to a repository file.
+- What only the coordinator knows (holder, next action, round, lanes without a pull request) is the lanes file, out of tree: `${XDG_STATE_HOME:-~/.local/state}/ytstack/repos/<repo key>/LANES.md`, beside the session home of the coordinate marker and keyed like the automatic handoff. One resolver, `yt_lanes_file` in `hooks/lib/git-ctx.sh`, serves every reader: `ytstack-frontier`, `hooks/stop`, `ytstack-upkeep`, `ytstack-status --phases`, `ytstack-finish-lane route` and the preambles of `coordinate`, `finish-lane` and `lane-retro`.
+- Migration: a repo `.ytstack/LANES.md` without a `snapshot:` key stays the lanes file while no out-of-tree file exists. `ytstack-frontier migrate` copies it out and marks the repo copy `snapshot: <UTC>`; a snapshot is never the lanes file. The `coordinate` preamble prints `LANES_FILE` and, while a repo file is still authoritative, `LANES_MIGRATE`.
+- `LANES.md` in the repository is optional: `ytstack-frontier snapshot` writes it when a person asks, and `finish-lane` writes it into the last lane pull request of a milestone.
+- `finish-lane` bundles what lasts (the roadmap tick, the lane's `DECISIONS.md` or spec lines) on the lane's branch before the push. `questions/` and `standing/` stay in the repository: they are durable and reviewed.
+- `ytstack-upkeep` has a `bookkeeping` section: UTC days of the last seven with more than three merged pull requests that changed only `.ytstack/`.
+
+**Reason:** The XDG base, not `yt_state_base`: Claude Code gives `CLAUDE_PLUGIN_DATA` to hooks only, and the lanes file is written from the Bash tool and read by `hooks/stop` (the reason of the coordinate marker, 2026-11-15). The repository key makes every linked worktree read the same file, which removes the stale copy in a worktree that `ytstack-upkeep --worktrees` had to work around. Keeping a repo file authoritative until an explicit `migrate` changes nothing for a running coordination on upgrade, and the `snapshot:` key keeps a committed copy from becoming the lanes file on another machine. A successor there rebuilds the rows from the host: every implement lane has a pull request or a branch. Upkeep counts from local refs (the first-parent history of `origin`'s default branch, one pull request per numbered subject), so it needs no host call and no `gh`, and counts what actually merged.
+
+**How to apply:**
+- A new reader of the lanes file calls `yt_lanes_file`; it never builds `.ytstack/LANES.md` itself. Tests export `XDG_STATE_HOME` into their temporary directory.
+- Nothing is committed only to record a lane's state. A `DECISIONS.md` entry routes its lane to a person (`bin/ytstack-risk` floor), so it rides with the lane it decides or with the next lane that goes to a person anyway.
+- `ytstack-standing add` still opens its one pull request per UTC day; folding standing entries into lane branches is not part of this change.
+
+**Supersedes:** Narrows "2026-11-13: Coordinator mode keeps lanes, questions and standing instructions in files and reads host facts fresh (M024, issue #34)": `.ytstack/LANES.md` is no longer where the lanes live.
+
+## 2026-11-16: Goal mode is a session marker and a Stop-hook clamp that lets a stop through for a question, a blocker, background work or a bound (issue #99)
+
+**Context:** Codex's `/goal` keeps an agent working until a goal is reached. ytstack had the long-running session (`coordinate`), the in-slice loop (`autonomy: loop`) and exit criteria per milestone, but nothing kept a turn going: a turn ended whenever the model thought it was done, and in the meinKontext run lanes sat idle overnight (#84). With the lane state on the host and with the session (#79), the long-running session needs this clamp.
+
+**Options considered:**
+- The clamp: a Stop hook that blocks while the goal is open; or only skill text.
+- Command criteria: run them in the hook; or run them in `ytstack-goal status` and let the hook read the last result.
+- Loop guard: respect `stop_hook_active` strictly (one block per human prompt); or block again inside a continued turn only after a tool call.
+
+**Chose:** `bin/ytstack-goal set|status|block|clear` and a `hook` subcommand that `hooks/stop` calls. The marker is `<session home>/<session id>/goal` beside the coordinate marker. A milestone goal holds when the roadmap is closed or every slice is ticked or merged in the lanes file; the hook names the open slices and up to three exit criteria of `M###-CONTEXT.md`. A sentence goal needs a `--check` command or a `--file`. The stop goes through for an asked question, a recorded blocker (`ytstack-goal block`), a `running` lane, a pull request the PR watch watches for this session while its worker ticks, and a reached bound (`--until`, `--rounds`), said once. Inside a hook-continued turn the goal blocks again only when the transcript shows a tool call after its last block. `coordinate` sets the current milestone with `--if-unset` in its preamble and clears it when the milestone closes (checklist item 14). Codex: the skill points at its native `/goal`, and ytstack registers nothing there.
+
+**Reason:** Skill text alone is what failed. The hook budget is seconds and no hook runs a command from a file a person did not review (standing, 2026-11-15); the checks come from the session itself, but running them belongs where the session already works, so `status` runs them and the hook reads files only. A strict `stop_hook_active` would make the clamp one block per human prompt, which is not a goal; a tool call in between shows the model did work, so a block after it cannot loop on itself. A standing or lint block of the same stop wins, so a stop never carries two blocks.
+
+**How to apply:**
+- A stop that the goal should let through is one of the listed reasons; anything else is answered by doing the next step, not by stopping.
+- Bounds are for unattended runs: `--rounds N` counts the goal's blocks, `--until` a UTC time.
+- Kimi has no session id, Codex no ytstack Stop hook: both keep the skill text only.
+
+**Supersedes:** None. Extends "2026-11-15: Coordinate mode is a session marker the coordinate preamble writes ..." with one more marker and one more Stop-hook part.
+
+## 2026-11-16: The main checkout's `LANES.md` wins before migrate; the coordinator's goal is bounded and lets a person's wait through (review of PR #102)
+
+**Context:** The independent review of PR #102 found that `migrate` from a linked worktree copied the branch's stale `.ytstack/LANES.md`, that PR #101 defines a second `yt_lanes_file` (main checkout first, path only), and that the goal could hold a coordinator forever: any tool call re-armed it, even `ytstack-goal status`, the goal had no bound, and lanes waiting for a person counted as nothing to wait for.
+
+**Chose:**
+- One `yt_lanes_file`: the out-of-tree file when it exists, else the main checkout's `.ytstack/LANES.md` (no snapshot), else `<yt_dir>/LANES.md` (no snapshot), else the out-of-tree path. It prints the path and sets `YT_LANES_FILE`/`YT_LANES_SOURCE`, so `$(yt_lanes_file ...)` callers of #101 keep working. `migrate` takes the main checkout's copy and refuses while a worktree's differs; `--from <old path|key>` takes the file of a moved checkout.
+- `coordinate` sets the goal with `--rounds 30`. A call of `ytstack-goal` is no tool call for re-arming. The stop goes through, said once, when every open slice waits for a person: `parked`, or `ready`/`in-review` unless `merge_by: coordinator`. A `running` lane that `ytstack-frontier check` calls stale is no background work. Any block of the Stop hook leaves its transcript offset, and the scan reads at most the last 2 MB.
+
+**Reason:** The main checkout holds what was merged; a worktree holds its branch. A bound is the only guard that holds when the model keeps making calls without progress; 30 rounds is a working day of rounds and stops a runaway loop. Waiting for a person is no work the session can do.
+
+**Supersedes:** Narrows "2026-11-16: Goal mode is a session marker ..." (the loop guard, the let-through list) and "2026-11-16: The host is the ledger of a lane ..." (the resolver's precedence).
+
 ## 2026-11-16: TeammateIdle counts the teammate's own lane, read from LANES.md or its name, and says it once (issues #97, #98)
 
 **Context:** `hooks/teammate-idle` counted the open tasks of `current_milestone` in `STATE.md` and exited 2 at every idle turn while any was open. In a coordinator session the pointer named an old open milestone (M034) while the lanes worked on M046, so every lane got "13 task(s) still open in milestone M034" about 30 times, also after its report and after the lead confirmed. The payload has `teammate_name` and no loop guard like `stop_hook_active`.

@@ -366,7 +366,7 @@ Milestone states are data, not prose: `planned`, `in-progress`, `done`, `dropped
 
 | File or tool | What it is for |
 | --- | --- |
-| `.ytstack/LANES.md`, `bin/ytstack-frontier` | one row per delegated lane; slice plans name what blocks them; the frontier is what is open, unblocked and unclaimed; a claim precedes every dispatch, so no lane starts twice |
+| the lanes file (out of tree per repository; `.ytstack/LANES.md` only as a snapshot), `bin/ytstack-frontier` | one row per delegated lane; slice plans name what blocks them; the frontier is what is open, unblocked and unclaimed; a claim precedes every dispatch, so no lane starts twice |
 | `bin/ytstack-plans` | a plan kept outside `.ytstack/` (`plans/*.md` tables or checklists) is invisible to the frontier; `scan` finds one with at least 10 open rows, and `ytstack:reconcile` (or `adopt-brownfield`) asks once whether to map its open rows into milestones and slices, each with a pointer back to its row. The plan files are never written ([`docs/ux/external-plans.md`](./docs/ux/external-plans.md)) |
 | `bin/ytstack-finish-lane`, `ytstack:finish-lane` | a reported lane becomes a merged pull request: commit what it left, push, wait until the host shows the head, review pinned to that commit, the required lenses, the route, gates read from the host, merge at the reviewed commit, then the release watch (GitHub through `gh`; who merges is `merge_by`) |
 | `bin/ytstack-risk` | whether a change may merge without a person: `floor` from the diff, `route` from the review records, the ceilings of the touched areas and the lenses, `check` for `REVIEW.md`, `manifest` for the screenshots of a visual review |

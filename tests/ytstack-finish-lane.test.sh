@@ -55,6 +55,7 @@ fi
 
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/ytfinish.XXXXXX"); TMP=$(cd "$TMP" && pwd -P)
 trap 'rm -rf "$TMP"' EXIT
+export XDG_STATE_HOME="$TMP/xdg"  # the lanes file out of tree (issue #79)
 
 # ---- the fake host ----------------------------------------------------------------
 # Fixtures in $GH_FIX: view.json (gh pr view), graphql.json (gh api graphql),

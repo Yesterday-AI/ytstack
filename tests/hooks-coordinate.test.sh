@@ -141,12 +141,19 @@ marker s1
 printf '| a |\n' > "$P/.ytstack/LANES.md"; touch -t 202001010000 "$P/.ytstack/LANES.md"
 printf '%s\n' "$(date +%s)" > "$SH/s1/dispatches"
 stop s1
-has "LANES.md behind the dispatches: warned" "$(ctx .systemMessage)" "LANES.md last changed"
+has "LANES.md behind the dispatches: warned" "$(ctx .systemMessage)" "lanes file last changed"
 eq "a first session: no block" "" "$(ctx .decision)"
 stop s1
-hasnt "said once per session" "$(ctx .systemMessage)" "LANES.md last changed"
+hasnt "said once per session" "$(ctx .systemMessage)" "lanes file last changed"
 touch "$P/.ytstack/LANES.md"; stop s1
 eq "LANES.md current: silent" "" "$OUT"
+# Once the lanes file is out of tree (issue #79) the check reads that one, not the repo copy.
+KEY=$(. "$ROOT/hooks/lib/git-ctx.sh"; yt_git_ctx "$P"; printf '%s' "$YT_REPO_KEY")
+OOT="$XDG_STATE_HOME/ytstack/repos/$KEY/LANES.md"
+mkdir -p "${OOT%/*}"; printf '| a |\n' > "$OOT"; touch -t 202001010000 "$OOT"
+marker s1b; printf '%s\n' "$(date +%s)" > "$SH/s1b/dispatches"; stop s1b
+has "an old out-of-tree lanes file beside a current repo copy: warned" "$(ctx .systemMessage)" "lanes file last changed"
+rm -f "$OOT"
 printf -- '---\nmilestone: M003\n---\n' > "$P/.ytstack/M003-ROADMAP.md"
 marker s2; stop s2
 has "STATE pointer behind: warned" "$(ctx .systemMessage)" "current_milestone M001 is behind the newest milestone on disk (M003)"

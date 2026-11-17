@@ -69,7 +69,7 @@
 #             `ytstack-risk route` (docs/ux/review-policy-format.md, "The
 #             route") for the change --base..--head, prints one line of what
 #             it read and then that script's lines. It merges nothing. DIR is
-#             the checkout whose .ytstack/ holds LANES.md and the plan with
+#             the checkout whose .ytstack/ holds the plan with
 #             the review records: the coordinating session's, not the lane's
 #             worktree. The author of the change is the first word of the
 #             lane's "Claimed by" cell; without a row the author is unknown
@@ -661,13 +661,15 @@ cmd_route() {
     || die "bin/ytstack-risk and hooks/lib/git-ctx.sh are not next to this script: the route is unknown, a person merges"
   . "$SELF_DIR/../hooks/lib/git-ctx.sh"
   yt_git_ctx "$TOP"; yt_resolve_yt_dir >/dev/null
-  [ -n "$YT_DIR" ] || die "no .ytstack directory for $TOP: route runs in the checkout that holds LANES.md and the plans"
+  [ -n "$YT_DIR" ] || die "no .ytstack directory for $TOP: route runs in the checkout that holds the plans"
 
-  # Who made the change: the worker that holds the lane's row.
-  [ ! -f "$YT_DIR/LANES.md" ] || author=$(YTF_LANE="$lane" awk -F'|' '
+  # Who made the change: the worker that holds the lane's row in the lanes
+  # file (yt_lanes_file: out of tree since issue #79, or a repo LANES.md).
+  yt_lanes_file "$YT_DIR" >/dev/null
+  [ ! -f "$YT_LANES_FILE" ] || author=$(YTF_LANE="$lane" awk -F'|' '
     function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
     /^\|/ && ++n > 2 && trim($2) == ENVIRON["YTF_LANE"] { split(trim($5), w, /[ \t]+/); print w[1]; exit }
-  ' "$YT_DIR/LANES.md")
+  ' "$YT_LANES_FILE")
   [ "$author" != - ] || author=""
   plan=$(yt_find_artifacts "$YT_DIR" "$lane-PLAN.md" | head -1)
   shown=none; [ -z "$plan" ] || shown=${plan#"$TOP"/}

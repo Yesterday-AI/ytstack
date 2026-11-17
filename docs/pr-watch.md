@@ -203,7 +203,7 @@ after a longer silence, and a new head or status starts at `STALL 1` again
 (the step shown is kept per session, `meta` key `stall:<session>`). Each mark
 shows the line once, like any other change. When the
 watch's checkout (`--cwd` of the registration) is a checkout of the PR's
-repository and its `.ytstack/LANES.md` names the PR in a lane row, the mark
+repository and its lanes file (out of tree, `ytstack-frontier where`) names the PR in a lane row, the mark
 ends with that lane's holder and its last sign of life, read from local files
 by `ytstack-frontier owner --pr N`: `lane M004-S03 held by impl-S03 (running),
 last commit 52 min ago on ytstack/M004-S03`. A blocking review followed by

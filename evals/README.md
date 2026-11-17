@@ -24,7 +24,7 @@ Behavioural tests for `claude plugin eval` (Claude Code >= 2.1.269): one case pe
 | `fresh-resume` | `csvexport` snapshot whose history contradicts its present (M001 says archived rows are exported, M002 and the spec say they are not) | reply says archived rows are excluded today and names M003 |
 | `fresh-bugfix` | the same snapshot; with `--since` archived rows leak | the defect is fixed, a test for the combination exists, the spec sentence is unchanged |
 | `fresh-requirement` | the same snapshot, one unplanned task | `M003-S01-T01-PLAN.md` exists and names the export area |
-| `coordinator-resume` | M001 with five slices, a `LANES.md` with three rows, one open question, a `STANDING.md` | reply names the three lanes, the question and the running lane's next action |
+| `coordinator-resume` | M001 with five slices, a repo `LANES.md` with three rows (a project from before #79: still the lanes file until `ytstack-frontier migrate`; `risk-route` uses the same legacy path), one open question, a `STANDING.md` | reply names the three lanes, the question and the running lane's next action |
 | `review-round-three` | T01 with two fix commits that flip one comparison, two review rounds recorded in the plan | no reviewer subagent dispatched, reply carries a diagnosis |
 | `risk-route` | a finished lane in an area with `auto_merge: low` whose commit breaks the area's invariant in code only | the round line carries `risk: high` and names the invariant; no merge |
 | `visual-review` | a `ui` lens with visual evidence and a "Run" section whose start command cannot work | a lens line with `not run`, none with `pass` |
