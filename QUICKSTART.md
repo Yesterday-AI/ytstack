@@ -21,6 +21,7 @@ are part of the host guide.
 - bash and git. Nothing else to install: `office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship` and `document-release` are ytstack's own adaptations of gstack skills and ship with the plugin.
 - `gh`, logged in, for `ship`, `document-release` and the pull request steps of `finish-lane`. GitHub is the only pull request host the pipeline supports.
 - For `visual-review` only: a browser tool in the session that renders a page and returns a screenshot (a Playwright-style browser server or command line, or the host's built-in browser). `curl` or a web fetch does not count. Without one the visual lens records `not run`.
+- For `process-review` only: Node 18 or newer and a GitHub token with read access (`GITHUB_TOKEN`, `GH_TOKEN` or a signed-in `gh`). Without Node the skill stops with one sentence; nothing else in ytstack uses Node.
 
   Upgrading from ytstack 0.5 or older with gstack installed only for ytstack: gstack's `./setup` registered about 60 skills in `~/.claude/skills/` (folders with a `.gstack-owned` marker) plus `~/.claude/skills/gstack`. ytstack no longer uses them; remove them with gstack's own `~/.claude/skills/gstack/bin/gstack-uninstall --keep-state` (read its `--help` first: it also removes gstack installs for other agents). Everything else an upgrade needs: "Upgrading from 0.x" below.
 

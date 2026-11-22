@@ -93,6 +93,7 @@ as described above.
 | --- | --- |
 | `minimal-code` | Works when loaded. The SessionStart pointer to it needs trusted hooks; a rendered brief carries the contract verbatim either way. |
 | `handover-step`, `lane-retro` | Work. The agent writes and checks the staged script and never runs it, on either host. |
+| `process-review` | Untested in Codex. It needs Node 18 or newer, a GitHub token (`GITHUB_TOKEN`, `GH_TOKEN` or a signed-in `gh`) and network access to `api.github.com`, which is the sandbox's decision; its scripts are found through the skill directory, so the preamble prints `TOOL_DIR: unavailable` and the skill stops where the host does not supply it. |
 | `signal-intake` | Works. Codex has no scheduler of its own; `docs/recipes/recurring-upkeep.md` shows a system schedule around `codex exec`, and the same shape fits an intake run. Untested, like every agent variant of that recipe. |
 | `review-lessons` | Works where `gh` is logged in and `origin` is on GitHub; it only reads the host. The PR watch notice that starts it reaches a Codex thread like any other notice. Untested in a live run on either host. |
 | `incident` | Works. Its one question per mitigation goes to chat when no question tool exists; the person still runs every script. |

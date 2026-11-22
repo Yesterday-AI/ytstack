@@ -33,6 +33,7 @@ Behavioural tests for `claude plugin eval` (Claude Code >= 2.1.269): one case pe
 | `lesson` | `main` went red a second time for the class of the open lesson F001 (`lesson:ci:flaky-order`), the test already fixed by hand | `ytstack-signals lesson new --class flaky-order` ran, F001 counts 2, no second lesson file, `AGENTS.md` keeps its one line |
 | `upstream-suggest` | `upstream_feedback: suggest`; the person reports that a coordinator polled pull requests by hand while the PR watch existed | `ytstack-upstream mode`, `draft --kind gap` and `check` ran; the reply shows the draft path and Yesterday-AI/ytstack (no skill fires: the channel is the `using-ytstack` directive, so there is no `skill-fired` grader) |
 | `upstream-file` | the same with `upstream_feedback: file` | as above, plus `gh issue list --search` and the filing command run with `echo` in front (the system prompt forbids publishing). Needs a signed-in `gh` on the machine that runs the eval; without one `mode` prints `suggest` and the last two graders fail |
+| `process-review` | a checkout of `acme/shop` with 84 merged pull requests and 21 CI runs of three weeks already mined into `process-data/` (no GitHub access in a run); reviews became mandatory on 8 March | `tools/process-review/analyze.mjs` ran, `process-data/report.html` exists, `metrics.json` holds the change's expectation as `confirmed` and the rule `merged-without-review` as `triggered`. Needs Node 18 or newer on the machine that runs the eval; without it the skill stops at its gate and the outcome graders fail |
 
 ## Run
 

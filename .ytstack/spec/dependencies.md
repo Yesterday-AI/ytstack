@@ -40,7 +40,7 @@ What ytstack takes from other projects and by which mechanism: superpowers as a 
 **Methodology and attribution**
 
 - Third-party methodology material contributes concepts only. Prose, definitions, catalogs and graphics are not copied, and the source is not named.
-- `NOTICE` holds the attribution per source: superpowers (vendored, license file in the subtree), gstack (six skills adapted, MIT text and credits in `NOTICE`), three concept credits (ponytail for the work contract and the review rules, mattpocock/skills for coordinator mode, a published account of an agentic software factory for the risk gate and the delivery flow; no text of any is included), the external methodology, Claude Code, and GSD as a reference that is not a dependency.
+- `NOTICE` holds the attribution per source: superpowers (vendored, license file in the subtree), gstack (six skills adapted, MIT text and credits in `NOTICE`), three concept credits (ponytail for the work contract and the review rules, mattpocock/skills for coordinator mode, a published account of an agentic software factory for the risk gate and the delivery flow; no text of any is included), the external methodology, Claude Code, and GSD as a reference that is not a dependency. It also names the Lucide icon set (ISC): `tools/process-review/report.mjs` inlines the outlines of a few of its icons into the report it renders; nothing else of Lucide is shipped or loaded.
 
 ## Interfaces and contracts
 
