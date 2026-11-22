@@ -156,8 +156,9 @@ function ciStats(list) {
   };
 }
 const mainRuns = ciRuns.filter((r) => r.branch === defaultBranch && r.event === "push");
-// runs on other branches: where a cancelled run is a superseded push, not a queue the default branch drops on purpose
-const prRuns = ciRuns.filter((r) => r.branch !== defaultBranch);
+// runs of pull requests: where a cancelled run is a superseded push, not a queue the default branch drops on purpose.
+// A branch counts when a mined pull request came from it or a pull_request event started the run, never only because it is not the default branch (release or develop branches are no pull requests).
+const prRuns = ciRuns.filter((r) => r.branch !== defaultBranch && (branchOf.has(r.branch) || r.event?.startsWith("pull_request")));
 
 // ---- aggregate
 function summ(g) {
@@ -470,8 +471,9 @@ if (existsSync(`${dir}/labels.tsv`)) {
   };
 }
 
-// ---- the last eight days one by one, for the daily digest
-const dayList = [...new Set(rows.map((r) => r.day))].sort().slice(-9);
+// ---- the last nine calendar days one by one, for the daily digest: a day without a merge is a day with zero merges, not a missing day
+const digestEnd = [...rows.map((r) => r.day), ...mainRuns.map((r) => r.createdAt.slice(0, 10))].sort().at(-1);
+const dayList = digestEnd ? Array.from({ length: 9 }, (_, i) => new Date(+new Date(`${digestEnd}T00:00:00Z`) - (8 - i) * 864e5).toISOString().slice(0, 10)).filter((d) => d >= metrics.period.from) : [];
 metrics.daily = dayList.map((d) => { const g = rows.filter((r) => r.day === d), s = summ(g), mr = ciStats(mainRuns.filter((r) => r.createdAt.slice(0, 10) === d));
   return { day: d, merged: g.length, roundsMean: s.efficiency.roundsMean, multiRoundShare: s.efficiency.multiRoundShare, firstPassShare: s.efficiency.firstPassShare, firstPassN: s.efficiency.firstPassN, ciHoursPerPr: s.efficiency.ciHoursPerPr, leadMedianH: s.efficiency.leadMedianH, mainRuns: mr.success + mr.failure, mainFailed: mr.failure, mainFailureRate: mr.failureRate }; });
 

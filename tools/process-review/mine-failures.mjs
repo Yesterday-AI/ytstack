@@ -21,7 +21,9 @@ const main = cfg.defaultBranch ?? Object.entries(tally).sort((a, b) => b[1] - a[
 const last = runs.map((r) => r.createdAt).sort().at(-1);
 const from = new Date(+new Date(last) - days * 864e5).toISOString();
 
-const gh = async (path) => { try { return await rest(path, 2); } catch { return null; } };
+// A request that still fails after its retries is recorded in failures.json and makes the run exit 3, so incomplete evidence is never shown as complete.
+const incomplete = [];
+const gh = async (path) => { try { return await rest(path, 2); } catch (e) { incomplete.push({ path, error: String(e?.message ?? e).slice(0, 200) }); return null; } };
 // the failed jobs of one attempt, each with its first failed step
 const failed = async (id, attempt) => ((await gh(`repos/${repo}/actions/runs/${id}/attempts/${attempt}/jobs?per_page=100`))?.jobs ?? [])
   .filter((j) => j.conclusion === "failure" || j.conclusion === "timed_out")
@@ -45,5 +47,6 @@ for (const r of rerun) {
   for (const j of f) { const k = `${j.job} › ${j.step ?? "(no failed step recorded)"}`; const s = (flakyJobs[k] ??= { job: j.job, step: j.step, count: 0, lastSeen: "", example: r.id }); s.count++; if (r.createdAt > s.lastSeen) { s.lastSeen = r.createdAt; s.example = r.id; } }
 }
 console.log(`re-runs that turned green: ${read} read of ${runs.filter((r) => r.attempt > 1 && r.conclusion === "success").length}`);
-writeFileSync(`${dir}/failures.json`, JSON.stringify({ repo, at: new Date().toISOString(), days, from: from.slice(0, 10), branch: main, defaultBranch, rerunsRead: read, flaky: Object.values(flakyJobs).sort((a, b) => b.count - a.count) }, null, 1));
+writeFileSync(`${dir}/failures.json`, JSON.stringify({ repo, at: new Date().toISOString(), days, from: from.slice(0, 10), branch: main, defaultBranch, rerunsRead: read, flaky: Object.values(flakyJobs).sort((a, b) => b.count - a.count), incomplete }, null, 1));
 console.log(`written: ${dir}/failures.json`);
+if (incomplete.length) { console.error(`incomplete: ${incomplete.length} requests failed after retries (first: ${incomplete[0].path}: ${incomplete[0].error}); listed in failures.json`); process.exit(3); }
