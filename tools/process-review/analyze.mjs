@@ -458,7 +458,9 @@ metrics.changeCandidates = {
   processPrs: rows.filter((r) => r.p.files.some((f) => procRe.test(f))).slice(-(cfg.candidateList ?? 40)).map((r) => ({ at: r.day, pr: r.p.number, title: r.p.title.slice(0, 100), paths: r.p.files.filter((f) => procRe.test(f)).slice(0, 3) })),
   reviewers: kinds.map((k) => { const d = rows.filter((r) => r.kinds.includes(k)).map((r) => r.day); return { reviewer: k, firstSeen: d[0], lastSeen: d.at(-1), prs: d.length }; }),
 };
+// meta.json is the last mining call's: its count of pull requests closed without a merge belongs to that call's range only
 metrics.meta = existsSync(`${dir}/meta.json`) ? JSON.parse(readFileSync(`${dir}/meta.json`, "utf8")) : null;
+if (metrics.meta && !(metrics.meta.since === firstDay && metrics.meta.until === lastDay)) metrics.meta = { ...metrics.meta, closedUnmerged: null };
 
 // rules -> suggestions, and what changed since the previous report of this working directory
 const outFile = opt("--out", `${dir}/metrics.json`);
@@ -471,7 +473,9 @@ metrics.ruleWindow = { from: ruleFrom < firstDay ? firstDay : ruleFrom, to: last
 if (existsSync(`${dir}/failures.json`)) {
   // jobs that only report that another job failed (a "require all" gate) are noise here: ignoreFailedJobs names them
   const F = JSON.parse(readFileSync(`${dir}/failures.json`, "utf8")), ig = cfg.ignoreFailedJobs && new RegExp(cfg.ignoreFailedJobs, "i"), keep = (j) => !ig || !ig.test(`${j.job} › ${j.step ?? ""}`);
-  metrics.failures = { ...F, defaultBranch: F.defaultBranch.map((r) => ({ ...r, failed: r.failed.filter(keep) })), flaky: F.flaky.filter(keep) };
+  // failures.json may be from an earlier run over other days: only what lies in this period is shown
+  const inP = (iso) => Boolean(iso) && iso.slice(0, 10) >= firstDay && iso.slice(0, 10) <= lastDay;
+  metrics.failures = { ...F, defaultBranch: F.defaultBranch.filter((r) => inP(r.at)).map((r) => ({ ...r, failed: r.failed.filter(keep) })), flaky: F.flaky.filter((j) => keep(j) && inP(j.lastSeen)) };
 }
 const headline = (m) => ({ merged: m.total.merged, leadMedianH: m.total.efficiency.leadMedianH, roundsMean: m.total.efficiency.roundsMean, firstPassShare: m.total.efficiency.firstPassShare ?? null,
   followUpExplicitShare: m.total.quality.followUpExplicitShare, mainFailureRate: m.ci?.defaultBranchPush.failureRate ?? null, notGreenShare: m.ci?.all.hours ? r3(m.ci.all.hoursNotGreen / m.ci.all.hours) : null });
@@ -499,7 +503,7 @@ if (existsSync(`${dir}/labels.tsv`)) {
 }
 
 // ---- the last nine calendar days one by one, for the daily digest: a day without a merge is a day with zero merges, not a missing day
-const digestEnd = [...rows.map((r) => r.day), ...mainRuns.map((r) => r.createdAt.slice(0, 10))].sort().at(-1);
+const digestEnd = [lastDay, ...mainRuns.map((r) => r.createdAt.slice(0, 10))].sort().at(-1);
 const dayList = digestEnd ? Array.from({ length: 9 }, (_, i) => new Date(+new Date(`${digestEnd}T00:00:00Z`) - (8 - i) * 864e5).toISOString().slice(0, 10)).filter((d) => d >= metrics.period.from) : [];
 metrics.daily = dayList.map((d) => { const g = rows.filter((r) => r.day === d), s = summ(g), mr = ciStats(mainRuns.filter((r) => r.createdAt.slice(0, 10) === d));
   return { day: d, merged: g.length, roundsMean: s.efficiency.roundsMean, multiRoundShare: s.efficiency.multiRoundShare, firstPassShare: s.efficiency.firstPassShare, firstPassN: s.efficiency.firstPassN, ciHoursPerPr: s.efficiency.ciHoursPerPr, leadMedianH: s.efficiency.leadMedianH, mainRuns: mr.success + mr.failure, mainFailed: mr.failure, mainFailureRate: mr.failureRate }; });

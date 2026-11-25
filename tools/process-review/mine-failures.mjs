@@ -21,7 +21,7 @@ if (!runs.length) { console.error("no CI runs mined"); process.exit(1); }
 const tally = {}; for (const r of runs) if (r.event === "push") tally[r.branch] = (tally[r.branch] ?? 0) + 1;
 // the default branch, as analyze.mjs finds it: configured, else the base most merged pull requests went into, else the branch with most push runs.
 // None of them: the default-branch section stays empty, the re-runs are still read.
-const bases = {}; if (existsSync(`${dir}/prs`)) for (const f of readdirSync(`${dir}/prs`).filter((f) => f.endsWith(".jsonl"))) for (const l of readFileSync(`${dir}/prs/${f}`, "utf8").split("\n").filter(Boolean)) { const b = JSON.parse(l).base; if (b) bases[b] = (bases[b] ?? 0) + 1; }
+const bases = {}; if (existsSync(`${dir}/prs`)) for (const f of readdirSync(`${dir}/prs`).filter((f) => f.endsWith(".jsonl"))) for (const l of readFileSync(`${dir}/prs/${f}`, "utf8").split("\n").filter(Boolean)) { const p = JSON.parse(l), d = (p.mergedAt ?? "").slice(0, 10); if (p.base && d >= since && d <= until) bases[p.base] = (bases[p.base] ?? 0) + 1; }
 const top = (m) => Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0];
 const main = cfg.defaultBranch ?? top(bases) ?? top(tally) ?? null;
 const last = runs.map((r) => r.createdAt).sort().at(-1);
