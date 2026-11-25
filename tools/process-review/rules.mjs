@@ -52,7 +52,7 @@ export const RULES = [
   },
   {
     id: "ci-hours-not-green", group: "ci", severity: "high", name: "CI time spent on runs that did not end green", th: 0.2, min: 100,
-    check: ({ ci }, th) => { const c = ci?.prBranches ?? ci?.all; if (!c?.hours) return { n: 0 }; /* no measured CI time: not evaluated, never passed */ return { n: c.runs, hit: c.hoursNotGreen / c.hours >= th, problem: `${c.hoursNotGreen} of ${c.hours} CI hours on pull request branches went to runs that were cancelled or failed (${pct(c.hoursNotGreen / c.hours)}).`, good: `Only ${pct(c.hoursNotGreen / c.hours)} of the CI hours on pull request branches went to cancelled or failed runs.` }; },
+    check: ({ ci }, th) => { const c = ci?.prBranches ?? ci?.all; if (!c?.hours) return { n: 0 }; /* no measured CI time: not evaluated, never passed */ return { n: c.timed, hit: c.hoursNotGreen / c.hours >= th, problem: `${c.hoursNotGreen} of ${c.hours} CI hours on pull request branches went to runs that were cancelled or failed (${pct(c.hoursNotGreen / c.hours)}).`, good: `Only ${pct(c.hoursNotGreen / c.hours)} of the CI hours on pull request branches went to cancelled or failed runs.` }; },
     why: "Runners are the shared bottleneck when many pull requests are open; time on runs nobody waits for delays every other pull request.",
     action: "Collect changes and push once; cancel superseded runs at the start, not the end (concurrency groups); run cheap checks first so a failure stops the expensive jobs.",
   },

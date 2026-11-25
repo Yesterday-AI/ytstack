@@ -27,10 +27,13 @@ function save(sub, day, rows) {
 const refresh = process.argv.includes("--refresh");
 // (a day already written with the current fields is kept, so an interrupted refresh resumes)
 const current = (f) => { const s = readFileSync(f, "utf8"); return !s.trim() || s.includes('"authorBot"'); };
-// A day's file is final only when it was written after that day ended (a day mined while it ran is fetched again),
-// and a CI day only when every stored run has finished (a run that started before midnight ends after it).
-const final = (sub, f, day) => statSync(f).mtimeMs >= Date.parse(`${day}T00:00:00Z`) + 864e5 && !(sub === "ci" && /"status":"(?!completed")/.test(readFileSync(f, "utf8")));
-const done = (sub, day) => { const f = `${out}/${sub}/${day}.jsonl`; return day !== today && existsSync(f) && final(sub, f, day) && (!refresh || sub !== "prs" || current(f)); };
+// A day's file is final only when it was written after that day ended (a day mined while it ran is fetched again).
+// A CI day needs more: every stored run finished, and the file written a week after the day, because a re-run
+// changes a run under its original day. --refresh fetches CI days again too; a file of the last six hours is kept, so an interrupted refresh resumes.
+const age = (f, day) => statSync(f).mtimeMs - (Date.parse(`${day}T00:00:00Z`) + 864e5);
+const final = (sub, f, day) => (sub === "ci" ? age(f, day) >= 7 * 864e5 && !/"status":"(?!completed")/.test(readFileSync(f, "utf8")) : age(f, day) >= 0);
+const fresh = (f) => Date.now() - statSync(f).mtimeMs < 6 * 36e5;
+const done = (sub, day) => { const f = `${out}/${sub}/${day}.jsonl`; return day !== today && existsSync(f) && (sub === "ci" && fresh(f) ? true : final(sub, f, day) && (!refresh || (sub === "prs" ? current(f) : false))); };
 
 const QUERY = `query($q:String!,$n:Int!,$c:String){search(query:$q,type:ISSUE,first:$n,after:$c){pageInfo{hasNextPage endCursor} nodes{... on PullRequest{
  number title body createdAt mergedAt additions deletions changedFiles headRefName baseRefName author{login __typename}

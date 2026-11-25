@@ -163,7 +163,7 @@ function ciStats(list) {
   const ok = count(done, (r) => r.conclusion === "success"), bad = count(done, (r) => r.conclusion === "failure"), cancelled = count(done, (r) => r.conclusion === "cancelled");
   const minutes = (f) => done.filter(f).reduce((s, r) => s + (r.min ?? 0), 0);
   return {
-    runs: list.length, completed: done.length, success: ok, failure: bad, cancelled, failureRate: r3(share(bad, ok + bad)), cancelledShare: r3(share(cancelled, done.length)),
+    runs: list.length, completed: done.length, timed: count(done, (r) => r.min !== null), success: ok, failure: bad, cancelled, failureRate: r3(share(bad, ok + bad)), cancelledShare: r3(share(cancelled, done.length)),
     rerunShare: r3(share(count(done, (r) => r.attempt > 1), done.length)), rerunGreen: count(done, (r) => r.attempt > 1 && r.conclusion === "success"),
     medianMin: r1(med(done.filter((r) => r.conclusion === "success").map((r) => r.min))), p90Min: r1(q(done.filter((r) => r.conclusion === "success").map((r) => r.min), 0.9)),
     hours: r1(minutes(() => true) / 60), hoursNotGreen: r1(minutes((r) => r.conclusion !== "success") / 60),
@@ -449,6 +449,9 @@ const droppedAt = decided("dropped"), escalatedAt = decided("escalated");
 // how often a key was asked counts every recorded ask, also those before the analysed period
 const askEver = askAll.filter((a) => !a.dropped && !a.escalated).sort((a, b) => a.at.localeCompare(b.at));
 const askList = askEver.filter((a) => a.at >= firstDay && a.at <= lastDay);
+// every key the user decided, with its latest ask, also when that ask lies before the analysed period
+metrics.askDecisions = [...new Set([...droppedAt.keys(), ...escalatedAt.keys()])].map((key) => { const l = askEver.filter((a) => a.key === key).at(-1);
+  return { key, decision: droppedAt.has(key) ? "dropped" : "escalated", at: droppedAt.get(key) ?? escalatedAt.get(key), ask: l?.ask ?? null, to: l?.to ?? null, lastAsked: l?.at ?? null, times: askEver.filter((a) => a.key === key).length }; });
 metrics.asks = askList.map((a) => {
   const j = judge({ ...a, label: a.ask, expect: a.metric ? { metric: a.metric, direction: a.direction } : a.expect }, changeList);
   const same = askEver.filter((o) => o.key === a.key);
@@ -477,7 +480,9 @@ if (existsSync(`${dir}/failures.json`)) {
   const F = JSON.parse(readFileSync(`${dir}/failures.json`, "utf8")), ig = cfg.ignoreFailedJobs && new RegExp(cfg.ignoreFailedJobs, "i"), keep = (j) => !ig || !ig.test(`${j.job} › ${j.step ?? ""}`);
   // failures.json may be from an earlier run over other days: only what lies in this period is shown
   const inP = (iso) => Boolean(iso) && iso.slice(0, 10) >= firstDay && iso.slice(0, 10) <= lastDay;
-  metrics.failures = { ...F, defaultBranch: F.defaultBranch.filter((r) => inP(r.at)).map((r) => ({ ...r, failed: r.failed.filter(keep) })), flaky: F.flaky.filter((j) => keep(j) && inP(j.lastSeen)) };
+  metrics.failures = { ...F, defaultBranch: F.defaultBranch.filter((r) => inP(r.at)).map((r) => ({ ...r, failed: r.failed.filter(keep) })), 
+    // a flaky job is counted from its single sightings inside the period; a file without them (older format) only when it was mined for exactly this period
+    flaky: F.flaky.filter(keep).map((j) => (j.seen ? { ...j, count: count(j.seen, inP) } : F.since === firstDay && F.until === lastDay ? j : { ...j, count: 0 })).filter((j) => j.count > 0).sort((a, b) => b.count - a.count) };
 }
 const headline = (m) => ({ merged: m.total.merged, leadMedianH: m.total.efficiency.leadMedianH, roundsMean: m.total.efficiency.roundsMean, firstPassShare: m.total.efficiency.firstPassShare ?? null,
   followUpExplicitShare: m.total.quality.followUpExplicitShare, mainFailureRate: m.ci?.defaultBranchPush.failureRate ?? null, notGreenShare: m.ci?.all.hours ? r3(m.ci.all.hoursNotGreen / m.ci.all.hours) : null });

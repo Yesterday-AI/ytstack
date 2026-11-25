@@ -205,6 +205,8 @@ node "$TOOLS/analyze.mjs" "$D" --out "$T/fourth.json" >/dev/null 2>&1
 eq "period: it ends on the last mined day, not on the last merge" 2026-03-13 "$(j "$T/fourth.json" 'm.period.to')"
 eq "asks: an ask before the period counts in times" "1 2 of 2" "$(j "$T/fourth.json" 'm.asks.length + " " + m.asks[0].nth + " of " + m.asks[0].times')"
 eq "asks: the user's escalation marks the key" true "$(j "$T/fourth.json" 'm.asks[0].escalated')"
+node "$TOOLS/analyze.mjs" "$D" --since 2026-03-09 --out "$T/fifth.json" >/dev/null 2>&1
+eq "asks: a decided key is kept when its asks left the period" "0 red-main escalated" "$(j "$T/fifth.json" 'm.asks.length + " " + m.askDecisions[0].key + " " + m.askDecisions[0].decision')"
 
 echo "# mine-failures.mjs without a push run"
 mkdir -p "$T/pronly/ci"; cp "$D/ci/2026-03-11.jsonl" "$T/pronly/ci/"
