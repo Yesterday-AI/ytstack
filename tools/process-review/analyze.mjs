@@ -196,7 +196,7 @@ function summ(g) {
       followUpDefectShare: r3(share(count(g, (r) => r.fixDefect), g.length)), followUpPlannedShare: r3(share(count(g, (r) => r.fixPlanned && !r.fixDefect), g.length)),
       noReviewShare: r3(share(count(g, (r) => r.noReview), g.length)), unresolvedThreadPrs: count(g, (r) => r.unresolved > 0),
       sourceWithoutTestShare: r3(share(count(g, (r) => r.srcNoTest), count(g, (r) => r.touchesSrc))),
-      fixWithoutTestShare: r3(share(count(g, (r) => r.isFix && r.srcNoTest), count(g, (r) => r.isFix && r.touchesSrc))),
+      fixWithoutTestShare: r3(share(count(g, (r) => r.isFix && r.srcNoTest), count(g, (r) => r.isFix && r.touchesSrc))), sourceFixes: count(g, (r) => r.isFix && r.touchesSrc),
     },
   };
 }
@@ -216,9 +216,11 @@ function compareOf(list) {
   if (!(cfg.compare && fcfg)) return null;
   const [a, b] = cfg.compare; const m = { both: 0, onlyA: 0, onlyB: 0, neither: 0 }; const disagree = [];
   for (const r of list) {
-    const of = (k) => r.evs.filter((e) => e.kind.name === k && findings(e.body)).map((e) => ({ head: e.head || headAt(r.p, e.at), block: blockingOf(findings(e.body)) > 0 }));
-    for (const x of of(a)) { const y = of(b).find((v) => v.head === x.head); if (!y) continue;
-      m[x.block ? (y.block ? "both" : "onlyA") : y.block ? "onlyB" : "neither"]++; if (x.block !== y.block) disagree.push({ pr: r.p.number, blocks: x.block ? a : b }); }
+    // one outcome per reviewer and head: several reviews of the same commit block when any of them does
+    const of = (k) => { const h = new Map(); for (const e of r.evs) if (e.kind.name === k && findings(e.body)) { const head = e.head || headAt(r.p, e.at); h.set(head, Boolean(h.get(head)) || blockingOf(findings(e.body)) > 0); } return h; };
+    const hb = of(b);
+    for (const [head, xb] of of(a)) { if (!hb.has(head)) continue; const yb = hb.get(head);
+      m[xb ? (yb ? "both" : "onlyA") : yb ? "onlyB" : "neither"]++; if (xb !== yb) disagree.push({ pr: r.p.number, blocks: xb ? a : b }); }
   }
   return { a, b, ...m, disagree };
 }
@@ -425,13 +427,17 @@ metrics.changes = changeList.map((c) => judge(c, changeList));
 // from the day it was delivered; the same key asked again counts how often the same thing had to be asked
 const askFile = `${dir}/asks.json`;
 const askAll = existsSync(askFile) ? JSON.parse(readFileSync(askFile, "utf8")) : [];
-// { key, at, dropped: true } is the user's decision to stop asking a key: it is no ask, and it marks every ask of that key up to its day
-const droppedAt = new Map(askAll.filter((a) => a.dropped).map((a) => [a.key, a.at]));
-const askList = askAll.filter((a) => !a.dropped && a.at >= rows[0].day && a.at <= lastDay).sort((a, b) => a.at.localeCompare(b.at));
+// { key, at, dropped: true } and { key, at, escalated: true } are the user's decisions about a key (stop asking it; the user takes it up):
+// they are no asks, and each marks every ask of that key up to its day
+const decided = (f) => new Map(askAll.filter((a) => a[f]).map((a) => [a.key, a.at]));
+const droppedAt = decided("dropped"), escalatedAt = decided("escalated");
+// how often a key was asked counts every recorded ask, also those before the analysed period
+const askEver = askAll.filter((a) => !a.dropped && !a.escalated).sort((a, b) => a.at.localeCompare(b.at));
+const askList = askEver.filter((a) => a.at >= rows[0].day && a.at <= lastDay);
 metrics.asks = askList.map((a) => {
   const j = judge({ ...a, label: a.ask, expect: a.metric ? { metric: a.metric, direction: a.direction } : a.expect }, changeList);
-  const same = askList.filter((o) => o.key === a.key);
-  return { key: a.key, at: a.at, to: a.to ?? null, ask: a.ask, ref: a.ref ?? null, times: same.length, nth: same.indexOf(a) + 1, dropped: droppedAt.has(a.key) && droppedAt.get(a.key) >= a.at, expectation: j.expectation, incomplete: j.incomplete, confounded: j.confounded };
+  const same = askEver.filter((o) => o.key === a.key);
+  return { key: a.key, at: a.at, to: a.to ?? null, ask: a.ask, ref: a.ref ?? null, times: same.length, nth: same.indexOf(a) + 1, dropped: droppedAt.has(a.key) && droppedAt.get(a.key) >= a.at, escalated: escalatedAt.has(a.key) && escalatedAt.get(a.key) >= a.at, expectation: j.expectation, incomplete: j.incomplete, confounded: j.confounded };
 });
 // candidates: merged pull requests that changed the process itself, and when each reviewer was first and last seen
 const procRe = new RegExp(cfg.processPaths ?? "^\\.github/|(^|/)(AGENTS|CLAUDE|CONTRIBUTING|CODEOWNERS|REVIEW[A-Z]*)(\\.md)?$|^\\.(cursor|claude|codex|greptile)/|(^|/)(lefthook|\\.pre-commit-config|renovate|biome|eslint\\.config|vitest\\.config|playwright\\.config|turbo)\\.", "i");

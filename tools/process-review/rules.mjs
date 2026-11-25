@@ -83,7 +83,7 @@ export const RULES = [
   },
   {
     id: "fixes-without-tests", group: "quality", severity: "medium", name: "Fixes without a test", th: 0.2, min: 50,
-    check: ({ total: { merged, quality: q } }, th) => ({ n: of(q.fixShare, merged), hit: q.fixWithoutTestShare >= th, problem: `${pct(q.fixWithoutTestShare)} of the fixes that touch source code touch no test file.`, good: `${pct(1 - (q.fixWithoutTestShare ?? 0))} of the source-code fixes come with a test change.` }),
+    check: ({ total: { quality: q } }, th) => ({ n: q.sourceFixes, hit: q.fixWithoutTestShare >= th, problem: `${of(q.fixWithoutTestShare, q.sourceFixes)} of the ${q.sourceFixes} fixes that touch source code touch no test file (${pct(q.fixWithoutTestShare)}).`, good: `${pct(1 - (q.fixWithoutTestShare ?? 0))} of the source-code fixes come with a test change.` }),
     why: "A defect fixed without a pinning test can come back unnoticed.",
     action: "Ask for the failing test first in every behaviour fix; let the review block a fix without one.",
   },
@@ -101,8 +101,8 @@ export const RULES = [
   },
   {
     id: "unresolved-threads", group: "review", severity: "low", name: "Merged with open review threads", th: 0, min: 30,
-    check: ({ total: { merged, quality: q } }, th) => ({ n: merged, hit: q.unresolvedThreadPrs > th, problem: `${q.unresolvedThreadPrs} pull requests were merged with an unresolved review thread.`, good: "No pull request was merged with an unresolved review thread." }),
-    why: "An open thread at merge is a finding nobody answered.",
+    check: ({ total: { merged, quality: q } }, th) => ({ n: merged, hit: q.unresolvedThreadPrs > th, problem: `${q.unresolvedThreadPrs} merged pull requests have a review thread that is unresolved to this day.`, good: "No merged pull request has a review thread that is still unresolved." }),
+    why: "A thread still open after the merge is a finding nobody answered. GitHub records no time of resolution, so a thread that was open at the merge and resolved later is not counted: the number is a lower bound.",
     action: "Require resolved conversations in the branch rules, or answer each thread with the reason it stays open.",
   },
   {

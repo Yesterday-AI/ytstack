@@ -197,12 +197,23 @@ eq "reused branch: the earlier pull request keeps its own run" 1 "$(j "$T/third.
 eq "reused branch: the later pull request gets only its own" 1 "$(j "$T/third.json" 'm.outliers.mostCiRuns.find((x) => x.pr === 42).ciRuns')"
 eq "dropped ask: the decision is no ask of its own" 2 "$(j "$T/third.json" 'm.asks.length')"
 eq "dropped ask: every ask of the key is marked" true "$(j "$T/third.json" 'm.asks.every((a) => a.dropped)')"
+eq "fixes without a test: the rule's sample is the fixes that touch source" 2 "$(j "$T/third.json" '(m.results.find((r) => r.id === "fixes-without-tests") || {}).n ?? m.total.quality.sourceFixes')"
+# an ask from before the period still counts, and the user's escalation marks its key
+printf '[{"key":"red-main","at":"2026-02-20","ask":"Fix a red main first","metric":"mainFailed","direction":"down"},{"key":"red-main","at":"2026-03-08","ask":"Fix a red main first","metric":"mainFailed","direction":"down"},{"key":"red-main","at":"2026-03-10","escalated":true,"by":"user"}]\n' > "$D/asks.json"
+node "$TOOLS/analyze.mjs" "$D" --out "$T/fourth.json" >/dev/null 2>&1
+eq "asks: an ask before the period counts in times" "1 2 of 2" "$(j "$T/fourth.json" 'm.asks.length + " " + m.asks[0].nth + " of " + m.asks[0].times')"
+eq "asks: the user's escalation marks the key" true "$(j "$T/fourth.json" 'm.asks[0].escalated')"
 
 echo "# mine-failures.mjs without a push run"
 mkdir -p "$T/pronly/ci"; cp "$D/ci/2026-03-11.jsonl" "$T/pronly/ci/"
 OUT=$(GITHUB_TOKEN=unused node "$TOOLS/mine-failures.mjs" acme/shop "$T/pronly" 2>&1); EC=$?
 eq "mine-failures: no push run and no defaultBranch -> exit 0, no request" 0 "$EC"
 eq "mine-failures: the default-branch section stays empty" 0 "$(j "$T/pronly/failures.json" 'm.defaultBranch.length')"
+# more push runs on a release branch than on main: the base of the merged pull requests decides
+mkdir -p "$T/bases/ci" "$T/bases/prs"; cp "$D/prs/2026-03-11.jsonl" "$T/bases/prs/"
+for i in 1 2; do printf '{"id":30%s,"name":"ci","event":"push","branch":"release","sha":"r%s","attempt":1,"status":"completed","conclusion":"success","createdAt":"2026-03-11T0%s:00:00Z","startedAt":"2026-03-11T0%s:00:00Z","updatedAt":"2026-03-11T0%s:10:00Z"}\n' "$i" "$i" "$i" "$i" "$i"; done > "$T/bases/ci/2026-03-11.jsonl"
+GITHUB_TOKEN=unused node "$TOOLS/mine-failures.mjs" acme/shop "$T/bases" >/dev/null 2>&1
+eq "mine-failures: the default branch is the base of the merged pull requests" main "$(j "$T/bases/failures.json" 'm.branch')"
 
 echo "# api.mjs without a token"
 NODE_BIN=$(node -e 'console.log(process.execPath)')

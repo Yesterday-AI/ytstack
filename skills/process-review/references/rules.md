@@ -21,7 +21,7 @@ The rules judge the last 28 days of the period (`ruleWindowDays` in `config.json
 | `rounds-after-merge-only` | review | medium | share of later rounds after merge commits only | 0.1 | 20 later rounds |
 | `many-rounds` | review | medium | share of reviewed pull requests with three or more rounds | 0.1 | 30 |
 | `merged-without-review` | review | medium | share merged without any review | 0.2 | 30 |
-| `unresolved-threads` | review | low | pull requests merged with an open thread, more than | 0 | 30 |
+| `unresolved-threads` | review | low | merged pull requests with a thread still unresolved, more than | 0 | 30 |
 | `reviewers-disagree` | review | medium | share of commits reviewed by both `compare` reviewers where only one blocked | 0.2 | 20 |
 | `first-pass-low` | flow | medium | share that passed on the first attempt is below | 0.5 | 30 |
 | `slow-first-review` | flow | medium | median hours to the first review above | 4 | 30 |
