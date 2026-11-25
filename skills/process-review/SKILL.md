@@ -186,7 +186,7 @@ CI runs are the slow part on a busy repository (100 runs per request). Run the t
 **Step 8 -- Mine the failures.** Only if CI runs were mined and `HAS_TOKEN` is `yes`:
 
 ```bash
-node TOOL_DIR/mine-failures.mjs <owner/repo> <workdir> --days 7
+node TOOL_DIR/mine-failures.mjs <owner/repo> <workdir> --since <since> --until <until> --days 7
 node TOOL_DIR/analyze.mjs <workdir> --since <since> --until <until>
 ```
 

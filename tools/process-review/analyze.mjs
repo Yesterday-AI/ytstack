@@ -86,6 +86,8 @@ const rows = prs.map((p) => {
 // the period runs over the days mined, not from the first to the last day something merged: mine.mjs writes a file per day, also an empty one
 const minedDays = existsSync(`${dir}/prs`) ? readdirSync(`${dir}/prs`).filter((f) => /^\d{4}-\d\d-\d\d\.jsonl$/.test(f)).map((f) => f.slice(0, 10)).filter((d) => d >= since && d <= until).sort() : [];
 const firstDay = [rows[0].day, minedDays[0] ?? "9999"].sort()[0], lastDay = [rows.at(-1).day, minedDays.at(-1) ?? ""].sort().at(-1);
+// a pull request merged in the last followUpDays of the period can still be named by a fix nobody has mined yet
+const matureUntil = new Date(+new Date(`${lastDay}T00:00:00Z`) - (cfg.followUpDays ?? 7) * 864e5).toISOString().slice(0, 10);
 
 // ---- rounds: one round per reviewed head by the round reviewer
 let roundKind = cfg.rounds?.kind;
@@ -151,7 +153,7 @@ const ciRuns = runs.filter((r) => !cfg.ciWorkflows || cfg.ciWorkflows.includes(r
 for (const run of ciRuns) { const r = run.branch !== defaultBranch && prOfRun(run); if (r) (r.ci ??= []).push(run); }
 for (const r of rows) {
   const first = r.ci && [...r.ci].filter((c) => c.status === "completed" && c.conclusion !== "cancelled" && c.conclusion !== "skipped").sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
-  r.firstPass = first && r.rounds && r.roundList[0].blocking !== null ? first.conclusion === "success" && r.roundList[0].blocking === false : null;
+  r.firstPass = first && r.rounds && r.roundList[0].blocking !== null ? first.conclusion === "success" && first.attempt === 1 && r.roundList[0].blocking === false : null; // green on a re-run is no first pass
   r.ciHours = r.ci ? r.ci.reduce((s, c) => s + (c.min ?? 0), 0) / 60 : null;
 }
 function ciStats(list) {
@@ -198,6 +200,7 @@ function summ(g) {
       fixShare: r3(share(count(g, (r) => r.isFix), g.length)), reverts: count(g, (r) => r.isRevert),
       followUpExplicitShare: r3(share(count(g, (r) => r.fixExplicit), g.length)), followUpOverlapShare: r3(share(count(g, (r) => r.fixExplicit || r.fixOverlap), g.length)),
       followUpMedianH: r1(med(g.filter((r) => r.fixExplicit).map((r) => r.fixHours))),
+      followUpMature: count(g, (r) => r.day <= matureUntil), followUpDefectMatureShare: r3(share(count(g, (r) => r.fixDefect && r.day <= matureUntil), count(g, (r) => r.day <= matureUntil))),
       followUpDefectShare: r3(share(count(g, (r) => r.fixDefect), g.length)), followUpPlannedShare: r3(share(count(g, (r) => r.fixPlanned && !r.fixDefect), g.length)),
       noReviewShare: r3(share(count(g, (r) => r.noReview), g.length)), unresolvedThreadPrs: count(g, (r) => r.unresolved > 0),
       sourceWithoutTestShare: r3(share(count(g, (r) => r.srcNoTest), count(g, (r) => r.touchesSrc))),

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Looks into the CI runs that need reading: which job and step failed.
-// Usage: node mine-failures.mjs <owner/repo> <workdir> [--days 7] [--max 150]
+// Usage: node mine-failures.mjs <owner/repo> <workdir> [--since d] [--until d] [--days 7] [--max 150]
 // Reads <workdir>/ci (from mine.mjs) and <workdir>/config.json, fetches job details for
 //   1. failed push runs on the default branch in the last <days> days, with the commit that was pushed, and
 //   2. runs of the whole period that turned green on a re-run (the first attempt's failed jobs: flaky candidates),
@@ -9,12 +9,14 @@ import { rest } from "./api.mjs";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 
 const [repo, dir] = process.argv.slice(2);
-const opt = (k, d) => (process.argv.includes(k) ? Number(process.argv[process.argv.indexOf(k) + 1]) : d);
-if (!repo?.includes("/") || !dir) { console.error("usage: mine-failures.mjs <owner/repo> <workdir> [--days 7] [--max 150]"); process.exit(2); }
+const arg = (k, d) => (process.argv.includes(k) ? process.argv[process.argv.indexOf(k) + 1] : d), opt = (k, d) => Number(arg(k, d));
+if (!repo?.includes("/") || !dir) { console.error("usage: mine-failures.mjs <owner/repo> <workdir> [--since d] [--until d] [--days 7] [--max 150]"); process.exit(2); }
+// the period of the analysis: the working directory keeps the days of earlier runs
+const since = arg("--since", "0000"), until = arg("--until", "9999");
 const days = opt("--days", 7), max = opt("--max", 150);
 const cfg = existsSync(`${dir}/config.json`) ? JSON.parse(readFileSync(`${dir}/config.json`, "utf8")) : {};
 const runs = [...new Map(readdirSync(`${dir}/ci`).filter((f) => f.endsWith(".jsonl")).sort().flatMap((f) => readFileSync(`${dir}/ci/${f}`, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l))).map((r) => [r.id, r])).values()]
-  .filter((r) => !cfg.ciWorkflows || cfg.ciWorkflows.includes(r.name));
+  .filter((r) => !cfg.ciWorkflows || cfg.ciWorkflows.includes(r.name)).filter((r) => r.createdAt.slice(0, 10) >= since && r.createdAt.slice(0, 10) <= until);
 if (!runs.length) { console.error("no CI runs mined"); process.exit(1); }
 const tally = {}; for (const r of runs) if (r.event === "push") tally[r.branch] = (tally[r.branch] ?? 0) + 1;
 // the default branch, as analyze.mjs finds it: configured, else the base most merged pull requests went into, else the branch with most push runs.

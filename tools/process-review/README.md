@@ -15,7 +15,7 @@ These are the only Node scripts of the plugin (`.ytstack/DECISIONS.md`, 2026-11-
 ```bash
 node mine.mjs <owner/repo> <since> <until> <workdir> [--only prs|ci] [--refresh]
 node analyze.mjs <workdir> [--since d] [--until d] [--out file] [--prev file]
-node mine-failures.mjs <owner/repo> <workdir> [--days 7] [--max 150]     # optional, then analyze.mjs again
+node mine-failures.mjs <owner/repo> <workdir> [--since d] [--until d] [--days 7] [--max 150]     # optional, then analyze.mjs again
 node report.mjs <workdir>/metrics.json <workdir>/report.html [--findings <workdir>/findings.json]
 node daily.mjs <workdir>/metrics.json [--day YYYY-MM-DD] [--out digest.md]
 node tool-versions.mjs plugin <name> | file <repoPath> <file> '<regex>'   # dates for "changes" in config.json
