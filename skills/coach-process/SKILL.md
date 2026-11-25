@@ -95,11 +95,22 @@ _PROJECT_SLUG=$(basename "$_PROJECT_DIR")   # display only
 echo "BRANCH: $(git branch --show-current 2>/dev/null || echo unknown)"
 echo "PROJECT_SLUG: $_PROJECT_SLUG"
 echo "HAS_YTSTACK: $([ -n "$_YT_DIR" ] && echo yes || echo no)"
-if [ -n "${YTSTACK_NON_INTERACTIVE:-}" ] || [ -n "${OPENCLAW_SESSION:-}" ] || [ -n "${CLAUDE_AGENT_TEAM_MEMBER:-}" ]; then
+echo "YTSTACK_SCOPE: $_YT_SCOPE"
+# YTSTACK_NON_INTERACTIVE=ask restores the questions, also in a spawned session (docs/ux/askuserquestion-format.md).
+_NI="${YTSTACK_NON_INTERACTIVE:-}"
+if [ "$_NI" != ask ] && { [ -n "$_NI" ] || [ -n "${OPENCLAW_SESSION:-}" ] || [ -n "${CLAUDE_AGENT_TEAM_MEMBER:-}" ]; }; then
   echo "YTSTACK_NON_INTERACTIVE: true"
 else
   echo "YTSTACK_NON_INTERACTIVE: false"
 fi
+_EXPLAIN_LEVEL=""
+[ -f "$HOME/.ytstack/config" ] && _EXPLAIN_LEVEL=$(grep -E '^explain_level=' "$HOME/.ytstack/config" 2>/dev/null | cut -d= -f2)
+echo "EXPLAIN_LEVEL: ${_EXPLAIN_LEVEL:-default}"
+_state() { [ -f "$_YT_DIR/STATE.md" ] && sed -n "s/^$1: *//p" "$_YT_DIR/STATE.md" | head -1; }
+_M=$(_state current_milestone); _S=$(_state active_slice)
+echo "CURRENT_MILESTONE: ${_M:-none}"
+echo "ACTIVE_SLICE: ${_S:-none}"
+echo "SENTINELS: $([ -n "$_YT_DIR" ] && ls -a "$_YT_DIR" 2>/dev/null | grep -- '-prompted$' | paste -sd, -)"
 _TOOLS="${CLAUDE_SKILL_DIR}/../../tools/process-review"
 if [ -f "$_TOOLS/analyze.mjs" ]; then echo "TOOL_DIR: $_TOOLS"; else echo "TOOL_DIR: unavailable"; fi
 # The same working directory as process-review: one per measured repository, outside every checkout.

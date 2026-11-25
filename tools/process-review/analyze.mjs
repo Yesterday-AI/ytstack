@@ -79,7 +79,7 @@ const rows = prs.map((p) => {
     ttfr: evs.length ? Math.max(0, hours(p.createdAt, evs[0].at)) : null, size: p.additions + p.deletions,
     kinds: [...new Set([...evs.map((e) => e.kind.name), ...threads.map((t) => t.kind).filter(Boolean)])],
     isFix: fixRe.test(p.title), isRevert: revertRe.test(p.title), noReview: !evs.length && !threads.some((t) => t.kind),
-    unresolved: count(p.threads, (t) => !t.resolved), srcNoTest: src.length > 0 && !p.files.some((f) => testRe.test(f)), touchesSrc: src.length > 0,
+    unresolved: count(threads, (t) => !t.resolved), srcNoTest: src.length > 0 && !p.files.some((f) => testRe.test(f)), touchesSrc: src.length > 0,
   };
 });
 
@@ -96,7 +96,8 @@ for (const r of rows) {
     if (e.kind.name !== roundKind || !(e.type === "review" || e.kind.ruled)) continue;
     const head = e.head || headAt(r.p, e.at);
     const g = byHead.get(head) ?? { head, at: e.at, n: null, state: "COMMENTED" };
-    g.n = findings(e.body) ?? g.n;
+    // several reviews of one head: a blocking count is kept, a later clean one does not clear it
+    const n = findings(e.body); if (n && !(g.n && blockingOf(g.n) > 0 && blockingOf(n) === 0)) g.n = n;
     if (e.kind.clean) g.cleanHit = true;
     if ((STATE[e.state] ?? 0) > STATE[g.state]) g.state = e.state;
     byHead.set(head, g);
@@ -382,7 +383,9 @@ if (metrics.ci) metrics.ci.red = { periods: reds.length, medianH: r1(med(reds)),
 // ---- what a change did: the same metrics in a window before and after each dated change
 const W = cfg.changeWindowDays ?? 7, MIN = cfg.changeMinSample ?? 20;
 const dayPlus = (d, n) => new Date(+new Date(`${d}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
-const lastDay = rows.at(-1).day;
+// the period ends on the last day mined, not on the last day something merged: mine.mjs writes a file per day, also an empty one
+const minedDays = existsSync(`${dir}/prs`) ? readdirSync(`${dir}/prs`).filter((f) => /^\d{4}-\d\d-\d\d\.jsonl$/.test(f)).map((f) => f.slice(0, 10)).filter((d) => d >= since && d <= until).sort() : [];
+const lastDay = [rows.at(-1).day, minedDays.at(-1) ?? ""].sort().at(-1);
 // rank-sum test (normal approximation) for values, two-proportion test for shares; |z| >= 1.96 counts as a clear change
 function zValues(a, b) {
   const all = [...a.map((v) => [v, 0]), ...b.map((v) => [v, 1])].sort((x, y) => x[0] - y[0]); let ra = 0;

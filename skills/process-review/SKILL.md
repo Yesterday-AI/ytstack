@@ -104,11 +104,21 @@ echo "PROJECT_SLUG: $_PROJECT_SLUG"
 echo "HAS_YTSTACK: $_HAS_YTSTACK"
 echo "YTSTACK_SCOPE: $_YT_SCOPE"
 echo "YT_DIR: $_YT_DIR"
-if [ -n "${YTSTACK_NON_INTERACTIVE:-}" ] || [ -n "${OPENCLAW_SESSION:-}" ] || [ -n "${CLAUDE_AGENT_TEAM_MEMBER:-}" ]; then
+# YTSTACK_NON_INTERACTIVE=ask restores the questions, also in a spawned session (docs/ux/askuserquestion-format.md).
+_NI="${YTSTACK_NON_INTERACTIVE:-}"
+if [ "$_NI" != ask ] && { [ -n "$_NI" ] || [ -n "${OPENCLAW_SESSION:-}" ] || [ -n "${CLAUDE_AGENT_TEAM_MEMBER:-}" ]; }; then
   echo "YTSTACK_NON_INTERACTIVE: true"
 else
   echo "YTSTACK_NON_INTERACTIVE: false"
 fi
+_EXPLAIN_LEVEL=""
+[ -f "$HOME/.ytstack/config" ] && _EXPLAIN_LEVEL=$(grep -E '^explain_level=' "$HOME/.ytstack/config" 2>/dev/null | cut -d= -f2)
+echo "EXPLAIN_LEVEL: ${_EXPLAIN_LEVEL:-default}"
+_state() { [ -f "$_YT_DIR/STATE.md" ] && sed -n "s/^$1: *//p" "$_YT_DIR/STATE.md" | head -1; }
+_M=$(_state current_milestone); _S=$(_state active_slice)
+echo "CURRENT_MILESTONE: ${_M:-none}"
+echo "ACTIVE_SLICE: ${_S:-none}"
+echo "SENTINELS: $([ -n "$_YT_DIR" ] && ls -a "$_YT_DIR" 2>/dev/null | grep -- '-prompted$' | paste -sd, -)"
 # Node 18 or newer: the only runtime the scripts need (DECISIONS 2026-11-18).
 _NODE_V=$(node -v 2>/dev/null | sed 's/^v//'); _NODE_MAJOR=${_NODE_V%%.*}
 case "$_NODE_MAJOR" in ''|*[!0-9]*) _NODE_MAJOR=0 ;; esac
