@@ -3,6 +3,7 @@
 // Usage: node analyze.mjs <outDir> [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--out metrics.json]
 // Reads <outDir>/config.json when present (references/config.md). Prints a summary, writes metrics.json.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dayPlus, periodOf } from "./period.mjs";
 import { evaluate } from "./rules.mjs";
 
 const args = process.argv.slice(2);
@@ -10,14 +11,14 @@ const dir = args[0];
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 if (!dir) { console.error("usage: analyze.mjs <outDir> [--since d] [--until d] [--out file]"); process.exit(2); }
 const cfg = existsSync(`${dir}/config.json`) ? JSON.parse(readFileSync(`${dir}/config.json`, "utf8")) : {};
-const since = opt("--since", "0000"), until = opt("--until", "9999");
-const load = (sub) => !existsSync(`${dir}/${sub}`) ? [] : readdirSync(`${dir}/${sub}`).filter((f) => f.endsWith(".jsonl")).sort()
-  .flatMap((f) => readFileSync(`${dir}/${sub}/${f}`, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)));
+// the period is defined in period.mjs and read from P everywhere below: never from the rows, never from the directory
+const P = periodOf(dir, opt("--since", "0000"), opt("--until", "9999"));
 const uniq = (rows, key) => [...new Map(rows.map((r) => [r[key], r])).values()];
-const inRange = (iso) => iso.slice(0, 10) >= since && iso.slice(0, 10) <= until;
-const prs = uniq(load("prs"), "number").filter((p) => inRange(p.mergedAt)).sort((a, b) => a.mergedAt.localeCompare(b.mergedAt));
-const runs = uniq(load("ci"), "id").filter((r) => inRange(r.createdAt));
+const prs = uniq(P.load("prs"), "number").filter((p) => P.inBounds(p.mergedAt)).sort((a, b) => a.mergedAt.localeCompare(b.mergedAt));
+const runs = uniq(P.load("ci"), "id").filter((r) => P.inBounds(r.createdAt));
 if (!prs.length) { console.error("no merged pull requests in range"); process.exit(1); }
+P.cover([prs[0].mergedAt.slice(0, 10), prs.at(-1).mergedAt.slice(0, 10)]);
+const firstDay = P.from, lastDay = P.to;
 
 // ---- helpers
 const hours = (a, b) => (new Date(b) - new Date(a)) / 36e5;
@@ -26,6 +27,9 @@ const q = (a, p) => { const s = sorted(a); return s.length ? s[Math.min(s.length
 const med = (a) => q(a, 0.5);
 const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
 const share = (n, d) => (d ? n / d : null);
+// a sum over what was measured: null when nothing was, never zero (an unmeasured value is not a small one)
+const total = (a) => { const k = a.filter((x) => x !== null && x !== undefined); return k.length ? k.reduce((s, x) => s + x, 0) : null; };
+const per = (x, d) => (x === null ? null : x / d);
 const r1 = (n) => (n === null ? null : Math.round(n * 10) / 10);
 const r3 = (n) => (n === null ? null : Math.round(n * 1000) / 1000);
 const monday = (iso) => { const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`); return new Date(+d - ((d.getUTCDay() + 6) % 7) * 864e5).toISOString().slice(0, 10); };
@@ -83,11 +87,8 @@ const rows = prs.map((p) => {
   };
 });
 
-// the period runs over the days mined, not from the first to the last day something merged: mine.mjs writes a file per day, also an empty one
-const minedDays = existsSync(`${dir}/prs`) ? readdirSync(`${dir}/prs`).filter((f) => /^\d{4}-\d\d-\d\d\.jsonl$/.test(f)).map((f) => f.slice(0, 10)).filter((d) => d >= since && d <= until).sort() : [];
-const firstDay = [rows[0].day, minedDays[0] ?? "9999"].sort()[0], lastDay = [rows.at(-1).day, minedDays.at(-1) ?? ""].sort().at(-1);
 // a pull request merged in the last followUpDays of the period can still be named by a fix nobody has mined yet
-const matureUntil = new Date(+new Date(`${lastDay}T00:00:00Z`) - (cfg.followUpDays ?? 7) * 864e5).toISOString().slice(0, 10);
+const matureUntil = dayPlus(lastDay, -(cfg.followUpDays ?? 7));
 
 // ---- rounds: one round per reviewed head by the round reviewer
 let roundKind = cfg.rounds?.kind;
@@ -154,20 +155,17 @@ for (const run of ciRuns) { const r = run.branch !== defaultBranch && prOfRun(ru
 for (const r of rows) {
   const first = r.ci && [...r.ci].filter((c) => c.status === "completed" && c.conclusion !== "cancelled" && c.conclusion !== "skipped").sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
   r.firstPass = first && r.rounds && r.roundList[0].blocking !== null ? first.conclusion === "success" && first.attempt === 1 && r.roundList[0].blocking === false : null; // green on a re-run is no first pass
-  // runner time only from runs with a measured duration; none measured: not available, never zero
-  const timed = (r.ci ?? []).filter((c) => c.min !== null);
-  r.ciHours = timed.length ? timed.reduce((s, c) => s + c.min, 0) / 60 : null;
+  r.ciHours = per(total((r.ci ?? []).map((c) => c.min)), 60);
 }
 function ciStats(list) {
   const done = list.filter((r) => r.status === "completed");
   const ok = count(done, (r) => r.conclusion === "success"), bad = count(done, (r) => r.conclusion === "failure"), cancelled = count(done, (r) => r.conclusion === "cancelled");
-  const minutes = (f) => done.filter(f).reduce((s, r) => s + (r.min ?? 0), 0);
+  const hoursOf = (f) => r1(per(total(done.filter(f).map((r) => r.min)), 60));
   return {
     runs: list.length, completed: done.length, timed: count(done, (r) => r.min !== null), success: ok, failure: bad, cancelled, failureRate: r3(share(bad, ok + bad)), cancelledShare: r3(share(cancelled, done.length)),
     rerunShare: r3(share(count(done, (r) => r.attempt > 1), done.length)), rerunGreen: count(done, (r) => r.attempt > 1 && r.conclusion === "success"),
     medianMin: r1(med(done.filter((r) => r.conclusion === "success").map((r) => r.min))), p90Min: r1(q(done.filter((r) => r.conclusion === "success").map((r) => r.min), 0.9)),
-    // no run with a measured duration: the hours are not available, never zero
-    hours: done.some((r) => r.min !== null) ? r1(minutes(() => true) / 60) : null, hoursNotGreen: done.some((r) => r.min !== null) ? r1(minutes((r) => r.conclusion !== "success") / 60) : null,
+    hours: hoursOf(() => true), hoursNotGreen: done.some((r) => r.min !== null) ? hoursOf((r) => r.conclusion !== "success") ?? 0 : null,
   };
 }
 const mainRuns = ciRuns.filter((r) => r.branch === defaultBranch && r.event === "push");
@@ -394,7 +392,6 @@ for (const r of mainDone) { if (r.conclusion === "failure") redSince ??= r.creat
 if (metrics.ci) metrics.ci.red = { periods: reds.length, medianH: r1(med(reds)), longestH: r1(reds.length ? Math.max(...reds) : null), totalH: r1(reds.reduce((s, x) => s + x, 0)) };
 // ---- what a change did: the same metrics in a window before and after each dated change
 const W = cfg.changeWindowDays ?? 7, MIN = cfg.changeMinSample ?? 20;
-const dayPlus = (d, n) => new Date(+new Date(`${d}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
 // rank-sum test (normal approximation) for values, two-proportion test for shares; |z| >= 1.96 counts as a clear change
 function zValues(a, b) {
   const all = [...a.map((v) => [v, 0]), ...b.map((v) => [v, 1])].sort((x, y) => x[0] - y[0]); let ra = 0;
@@ -480,7 +477,7 @@ if (existsSync(`${dir}/failures.json`)) {
   // jobs that only report that another job failed (a "require all" gate) are noise here: ignoreFailedJobs names them
   const F = JSON.parse(readFileSync(`${dir}/failures.json`, "utf8")), ig = cfg.ignoreFailedJobs && new RegExp(cfg.ignoreFailedJobs, "i"), keep = (j) => !ig || !ig.test(`${j.job} › ${j.step ?? ""}`);
   // failures.json may be from an earlier run over other days: only what lies in this period is shown
-  const inP = (iso) => Boolean(iso) && iso.slice(0, 10) >= firstDay && iso.slice(0, 10) <= lastDay;
+  const inP = P.has;
   // the file must have searched the end of this period: its window runs from `from` to `until` (older files: the day it was written)
   const searchedTo = F.until ?? (F.at ?? "").slice(0, 10);
   if (!(F.from <= lastDay && searchedTo >= lastDay)) metrics.failuresNotMined = { from: F.from ?? null, to: searchedTo || null };
@@ -519,7 +516,7 @@ if (existsSync(`${dir}/labels.tsv`)) {
 }
 
 // ---- the last nine calendar days one by one, for the daily digest: a day without a merge is a day with zero merges, not a missing day
-const digestEnd = [lastDay, ...mainRuns.map((r) => r.createdAt.slice(0, 10))].sort().at(-1);
+const digestEnd = lastDay;
 const dayList = digestEnd ? Array.from({ length: 9 }, (_, i) => new Date(+new Date(`${digestEnd}T00:00:00Z`) - (8 - i) * 864e5).toISOString().slice(0, 10)).filter((d) => d >= metrics.period.from) : [];
 metrics.daily = dayList.map((d) => { const g = rows.filter((r) => r.day === d), s = summ(g), mr = ciStats(mainRuns.filter((r) => r.createdAt.slice(0, 10) === d));
   return { day: d, merged: g.length, roundsMean: s.efficiency.roundsMean, multiRoundShare: s.efficiency.multiRoundShare, firstPassShare: s.efficiency.firstPassShare, firstPassN: s.efficiency.firstPassN, ciHoursPerPr: s.efficiency.ciHoursPerPr, leadMedianH: s.efficiency.leadMedianH, mainRuns: mr.success + mr.failure, mainFailed: mr.failure, mainFailureRate: mr.failureRate }; });

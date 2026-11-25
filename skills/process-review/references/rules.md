@@ -50,7 +50,7 @@ Set a threshold to what the team has agreed on. A threshold raised only so that 
 
 ## Adding a rule
 
-Add an object to `RULES`: `id`, `group`, `severity`, `name`, `th` (default threshold), `min` (smallest sample), `check(metrics, threshold)` returning `{ n, hit, problem, good }`, plus `why`, `action` and, where the threshold comes from a publication, `ref` with source and year. `problem` and `good` are full sentences with counts and denominators ("413 of 458 ..."), because the card shows them verbatim. If the rule needs a number that `metrics.json` does not hold yet, compute it in `analyze.mjs` first.
+Add an object to `RULES`: `id`, `group`, `severity`, `name`, `th` (default threshold), `min` (smallest sample), `check(metrics, threshold)` returning `{ value, cmp, n, problem, good }` (`value` is the measure, `cmp` one of `>=`, `>`, `<` against the threshold, `n` the number of observations `value` was computed from; `evaluate` compares, and a value that is not a finite number is not evaluated), plus `why`, `action` and, where the threshold comes from a publication, `ref` with source and year. `problem` and `good` are full sentences with counts and denominators ("413 of 458 ..."), because the card shows them verbatim. If the rule needs a number that `metrics.json` does not hold yet, compute it in `analyze.mjs` first.
 
 ## Since the last report
 

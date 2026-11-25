@@ -29,6 +29,7 @@ node tool-versions.mjs plugin <name> | file <repoPath> <file> '<regex>'   # date
 | `mine.mjs` | yes | Writes merged pull requests (`prs/<day>.jsonl`) and CI runs (`ci/<day>.jsonl`) per day, plus `meta.json`. Resumable: a finished day is skipped, today is always read again. |
 | `mine-failures.mjs` | yes | Reads the mined CI runs and fetches job and step for failed pushes to the default branch and for runs that turned green on a re-run. Writes `failures.json`. |
 | `analyze.mjs` | no | Computes the metrics, evaluates the rules, compares before and after each dated change, reads `config.json`, `labels.tsv`, `asks.json`, `failures.json` and the previous `metrics.json`. Prints a summary, writes `metrics.json` and `history/<day>.json` (with `--out` it writes only that file). |
+| `period.mjs` | no | The analysed period, defined once: the days mined inside `--since` and `--until`. `analyze.mjs` and `mine-failures.mjs` read period, bounds and day files from it and nowhere else. |
 | `rules.mjs` | no | The rules that turn metrics into suggestions, and the score per group. Imported by `analyze.mjs`. |
 | `report.mjs` | no | Renders `metrics.json` (and the analyst's `findings.json`) as one self-contained HTML file: no network request, icons inlined. |
 | `daily.mjs` | no | Prints the digest of one day against the seven days before it, as Markdown. Needs the day and at least three days before it. |

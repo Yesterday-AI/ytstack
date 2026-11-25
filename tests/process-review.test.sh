@@ -22,6 +22,10 @@
 #     branch name splits its CI runs by commit, a dropped ask marks its key
 #   - mine-failures.mjs leaves the default-branch section empty when no push
 #     run was mined
+#   - the period is the mined days inside the bounds (period.mjs): quiet days at
+#     both ends belong to it, days of an earlier run in the same directory do
+#     not, and analyze.mjs and mine-failures.mjs agree on it
+#   - what was not measured is not available, never zero, and no rule passes on it
 #
 # No network: mine.mjs is never run, mine-failures.mjs only on a fixture that
 # needs no request. Node is the
@@ -41,7 +45,7 @@ eq()  { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected '$2' got '$3'"
 has() { case "$2" in *"$3"*) ok "$1";; *) bad "$1" "missing '$3'";; esac; }
 
 echo "# files"
-for f in api mine mine-failures analyze rules report daily tool-versions; do
+for f in api period mine mine-failures analyze rules report daily tool-versions; do
   [ -f "$TOOLS/$f.mjs" ] && ok "$f.mjs is shipped" || bad "$f.mjs is shipped"
 done
 [ -f "$ROOT/skills/process-review/SKILL.md" ] && ok "the skill is shipped" || bad "the skill is shipped"
@@ -218,6 +222,36 @@ mkdir -p "$T/bases/ci" "$T/bases/prs"; cp "$D/prs/2026-03-11.jsonl" "$T/bases/pr
 for i in 1 2; do printf '{"id":30%s,"name":"ci","event":"push","branch":"release","sha":"r%s","attempt":1,"status":"completed","conclusion":"success","createdAt":"2026-03-11T0%s:00:00Z","startedAt":"2026-03-11T0%s:00:00Z","updatedAt":"2026-03-11T0%s:10:00Z"}\n' "$i" "$i" "$i" "$i" "$i"; done > "$T/bases/ci/2026-03-11.jsonl"
 GITHUB_TOKEN=unused node "$TOOLS/mine-failures.mjs" acme/shop "$T/bases" >/dev/null 2>&1
 eq "mine-failures: the default branch is the base of the merged pull requests" main "$(j "$T/bases/failures.json" 'm.branch')"
+
+echo "# the period: quiet days at both ends, days of an earlier run in the same directory, unfinished runs"
+# A working directory as a recurring run leaves it: February from an earlier run (pull requests, CI runs and its
+# failures.json), then 1 to 10 April. Nothing merges on 1, 2, 9 and 10 April; April's CI runs never finished.
+E="$T/edge"; mkdir -p "$E/prs" "$E/ci"
+node -e '
+const fs = require("fs"), dir = process.argv[1];
+const pr = (n, day, h) => JSON.stringify({ number: n, title: `feat: change ${n}`, body: "", createdAt: `${day}T08:00:00Z`, mergedAt: `${day}T${h}:00:00Z`, additions: 5, deletions: 1, changedFiles: 1, branch: `feat-${n}`, base: day < "2026-03" ? "trunk" : "main", author: "dev", authorBot: false, bodyTail: "", coAuthors: [], labels: [], commitCount: 1, commits: [{ oid: `c${n}`, at: `${day}T08:00:00Z`, msg: "change" }], reviews: [], comments: [], threadCount: 0, threads: [], files: [`src/a${n}.ts`] });
+const run = (id, day, o) => JSON.stringify({ id, name: "ci", event: "push", branch: "main", sha: `m${id}`, attempt: 1, status: "completed", conclusion: "success", createdAt: `${day}T11:00:00Z`, startedAt: `${day}T11:00:00Z`, updatedAt: `${day}T11:10:00Z`, ...o });
+let n = 0;
+const write = (day, prs, runs) => { fs.writeFileSync(`${dir}/prs/${day}.jsonl`, prs.map((p) => p + "\n").join("")); fs.writeFileSync(`${dir}/ci/${day}.jsonl`, runs.map((r) => r + "\n").join("")); };
+write("2026-02-01", Array.from({ length: 30 }, (_, i) => pr(++n, "2026-02-01", 10 + (i % 9))), Array.from({ length: 5 }, (_, i) => run(900 + i, "2026-02-01", { branch: "trunk" })));
+for (let d = 1; d <= 10; d++) { const day = `2026-04-${String(d).padStart(2, "0")}`, quiet = d <= 2 || d >= 9;
+  write(day, quiet ? [] : Array.from({ length: 5 }, (_, i) => pr(++n, day, 10 + i)), quiet ? [] : Array.from({ length: 20 }, (_, i) => run(d * 100 + i, day, { status: "in_progress", conclusion: null, startedAt: null }))); }
+fs.writeFileSync(`${dir}/config.json`, JSON.stringify({ changeMinSample: 5, changes: [{ at: "2026-04-02", label: "a change on a quiet day", expect: { metric: "lead", direction: "down" } }] }));
+fs.writeFileSync(`${dir}/failures.json`, JSON.stringify({ repo: "acme/shop", at: "2026-02-02T00:00:00Z", days: 7, from: "2026-01-25", branch: "trunk", defaultBranch: [], rerunsRead: 0, flaky: [], incomplete: [] }));
+' "$E"
+node "$TOOLS/analyze.mjs" "$E" --since 2026-04-01 --until 2026-04-10 --out "$T/edge.json" >/dev/null 2>&1
+eq "period: quiet days at both ends belong to it" "2026-04-01 2026-04-10" "$(j "$T/edge.json" 'm.period.from + " " + m.period.to')"
+eq "period: the days of an earlier run stay out" "30 main" "$(j "$T/edge.json" 'm.total.merged + " " + m.defaultBranch')"
+eq "period: a change on a quiet first day is kept, with a short baseline" "true too early" "$(j "$T/edge.json" 'm.changes[0].baselineShort + " " + m.changes[0].expectation.verdict')"
+eq "period: the digest ends on the last day of the period" 2026-04-10 "$(j "$T/edge.json" 'm.daily.at(-1).day')"
+eq "period: failure details of another period are not shown" "undefined 2026-02-02" "$(j "$T/edge.json" 'typeof m.failures + " " + m.failuresNotMined.to')"
+eq "unmeasured: CI hours without a finished run are not available, not zero" "120 0 null" "$(j "$T/edge.json" 'm.ci.all.runs + " " + m.ci.all.completed + " " + m.ci.all.hours')"
+eq "unmeasured: no CI rule passes on runs that never finished" "not-evaluated not-evaluated not-evaluated" "$(j "$T/edge.json" '["ci-hours-not-green", "ci-cancelled", "flaky-reruns"].map((id) => m.results.find((r) => r.id === id).state).join(" ")')"
+node "$TOOLS/analyze.mjs" "$E" --out "$T/edge-all.json" >/dev/null 2>&1
+eq "period: without bounds it is every mined day" "2026-02-01 60" "$(j "$T/edge-all.json" 'm.period.from + " " + m.total.merged')"
+OUT=$(GITHUB_TOKEN=unused node "$TOOLS/mine-failures.mjs" acme/shop "$E" --since 2026-04-01 --until 2026-04-10 2>&1); EC=$?
+eq "mine-failures: same period, no request needed -> exit 0" 0 "$EC"
+eq "mine-failures: branch, bounds and window come from the period" "main 2026-04-01 2026-04-10 2026-04-03" "$(j "$E/failures.json" 'm.branch + " " + m.since + " " + m.until + " " + m.from')"
 
 echo "# api.mjs without a token"
 NODE_BIN=$(node -e 'console.log(process.execPath)')
