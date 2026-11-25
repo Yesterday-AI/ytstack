@@ -171,7 +171,7 @@ node TOOL_DIR/mine.mjs <owner/repo> <since> <until> <workdir> --only prs  # pull
 
 CI runs are the slow part on a busy repository (100 runs per request). Run the two `--only` halves (`prs`, `ci`) as two commands in parallel, or limit CI to the last weeks. After an update of the plugin, add `--refresh` once: it fetches finished days again so that new fields are present. The script waits by itself when GitHub's rate limit (the cap on requests per hour) is reached. Skip this step when the user asked to analyse data that is already mined.
 
-**Step 5 -- First pass.** `node TOOL_DIR/analyze.mjs <workdir>` prints the summary and writes `<workdir>/metrics.json`. Read the `REVIEWERS` line: it shows which accounts reviewed, and the first line names the reviewer whose reviews were counted as rounds.
+**Step 5 -- First pass.** `node TOOL_DIR/analyze.mjs <workdir> --since <since> --until <until>` prints the summary and writes `<workdir>/metrics.json`. Pass the period of Step 3 on every `analyze.mjs` call of this run: the working directory keeps the days of earlier runs, and without the bounds the analysis covers all of them. Read the `REVIEWERS` line: it shows which accounts reviewed, and the first line names the reviewer whose reviews were counted as rounds.
 
 **Step 6 -- Configure.** Open three or four pull requests of the period on GitHub first and look at how reviews actually appear there. A wrong reviewer rule silently yields zero rounds. Then write what the defaults cannot know to `<workdir>/config.json` (schema and examples: `references/config.md`) and run Step 5 again. Typical needs:
 
@@ -187,7 +187,7 @@ CI runs are the slow part on a busy repository (100 runs per request). Run the t
 
 ```bash
 node TOOL_DIR/mine-failures.mjs <owner/repo> <workdir> --days 7
-node TOOL_DIR/analyze.mjs <workdir>
+node TOOL_DIR/analyze.mjs <workdir> --since <since> --until <until>
 ```
 
 It adds two tables: the failed pushes to the default branch with job, step and the merged pull request behind each, and the jobs that failed and then passed on a re-run (flaky candidates: tests that pass on a second try without a change). One request per run, at most 150 runs each.
@@ -206,7 +206,7 @@ It adds two tables: the failed pushes to the default branch with job, step and t
 - **Follow-up fixes.** Read ten entries of `followUps`: could the review have caught the defect, or was it new information?
 - **Red default branch.** For each failed push in `failures.defaultBranch`: `merged defect`, `inherited`, `flaky test` or `infrastructure`.
 
-Record every verdict as one line in `<workdir>/labels.tsv` (tab-separated, format in `references/config.md`, "labels.tsv"), then run `analyze.mjs` again. The report then shows, per reviewer, how many of the decided blocks were right, and the failures by cause. A label names who gave it; an agent's label and a person's label are not the same evidence.
+Record every verdict as one line in `<workdir>/labels.tsv` (tab-separated, format in `references/config.md`, "labels.tsv"), then run `analyze.mjs` again, with the same `--since` and `--until`. The report then shows, per reviewer, how many of the decided blocks were right, and the failures by cause. A label names who gave it; an agent's label and a person's label are not the same evidence.
 
 **Step 11 -- Make changes measurable.** Every process change that should be judged goes into `changes` in `config.json`: a new reviewer, a rule, a CI change, a new version of the agent tooling.
 

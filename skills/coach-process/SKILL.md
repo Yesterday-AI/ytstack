@@ -208,7 +208,7 @@ For every key the user decided in Step 3, append one object that records the dec
 
 When the user later says an escalated ask stands and should be asked again, remove its `escalated` object; when they drop it, append the `dropped` one.
 
-Then `node TOOL_DIR/analyze.mjs WORKDIR` and `node TOOL_DIR/report.mjs WORKDIR/metrics.json WORKDIR/report.html --findings WORKDIR/findings.json`: the report's section "Coaching asks" lists every ask with its verdict, and the next run judges today's.
+Then `node TOOL_DIR/analyze.mjs WORKDIR --since <period.from> --until <period.to>` (the period of the `metrics.json` this run read, so that the analysis keeps the window of the process review) and `node TOOL_DIR/report.mjs WORKDIR/metrics.json WORKDIR/report.html --findings WORKDIR/findings.json`: the report's section "Coaching asks" lists every ask with its verdict, and the next run judges today's.
 
 **Step 10 -- Report + return.**
 

@@ -29,7 +29,8 @@ const from = new Date(+new Date(last) - days * 864e5).toISOString();
 const incomplete = [];
 const gh = async (path) => { try { return await rest(path, 2); } catch (e) { incomplete.push({ path, error: String(e?.message ?? e).slice(0, 200) }); return null; } };
 // the failed jobs of one attempt, each with its first failed step
-const failed = async (id, attempt) => ((await gh(`repos/${repo}/actions/runs/${id}/attempts/${attempt}/jobs?per_page=100`))?.jobs ?? [])
+const jobsOf = async (id, attempt) => { const all = []; for (let page = 1; ; page++) { const j = (await gh(`repos/${repo}/actions/runs/${id}/attempts/${attempt}/jobs?per_page=100&page=${page}`))?.jobs ?? []; all.push(...j); if (j.length < 100) return all; } };
+const failed = async (id, attempt) => (await jobsOf(id, attempt))
   .filter((j) => j.conclusion === "failure" || j.conclusion === "timed_out")
   .map((j) => ({ job: j.name, step: j.steps?.find((s) => s.conclusion === "failure")?.name ?? null, minutes: j.started_at && j.completed_at ? Math.round((new Date(j.completed_at) - new Date(j.started_at)) / 6e4) : null }));
 

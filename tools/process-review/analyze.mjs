@@ -234,7 +234,7 @@ const compare = compareOf(rows);
 const perWorkflow = Object.fromEntries(Object.entries(groupBy(ciRuns, "name")).map(([n, g]) => [n, ciStats(g)]).sort((a, b) => b[1].hours - a[1].hours));
 const worst = (f, n = 15) => [...rows].sort((a, b) => f(b) - f(a)).slice(0, n).map((r) => ({ pr: r.p.number, title: r.p.title.slice(0, 90), rounds: r.rounds, leadH: r1(r.lead), ciRuns: r.ci?.length ?? 0 }));
 const metrics = {
-  repo: cfg.repo ?? null, generatedAt: new Date().toISOString(), period: { from: rows[0].day, to: lastDay }, roundKind, defaultBranch,
+  repo: cfg.repo ?? null, generatedAt: new Date().toISOString(), period: { from: firstDay, to: lastDay }, roundKind, defaultBranch,
   findingsParsed: Boolean(fcfg), markers: cfg.changes ?? cfg.markers ?? [], total: summ(rows), weeks, days, reviewers, compare,
   ci: runs.length ? { all: ciStats(ciRuns), prBranches: ciStats(prRuns), defaultBranchPush: ciStats(mainRuns), perWorkflow } : null,
   outliers: { mostRounds: worst((r) => r.rounds), longestLead: worst((r) => r.lead), mostCiRuns: worst((r) => r.ci?.length ?? 0) },
@@ -403,7 +403,7 @@ const SHARE = [["Passed on the first attempt", (r) => r.firstPass !== null, (r) 
 // short keys for the rows, used by "expect" in a change entry
 const ROW_KEY = { "Merged per day": "mergedPerDay", "Lead time, median (h)": "lead", "Review rounds per reviewed PR, mean": "rounds", "CI hours per PR, mean": "ciHours", "Changed lines, median": "size", "Passed on the first attempt": "firstPass", "PRs with 2+ review rounds": "multiRound", "PRs with a failed CI run": "ciFailed", "Merged without any review": "noReview", "Fix PRs": "fixShare", "Fixed again by a linked fix": "followUp", "Fixes without a test file": "fixNoTest" };
 const verdict = (z, dir, n1, n2) => (n1 < MIN || n2 < MIN ? "too few" : !dir ? "context" : Math.abs(z) < 1.96 ? "no clear change" : Math.sign(z) === dir ? "better" : "worse");
-const changeList = (cfg.changes ?? cfg.markers ?? []).filter((c) => c.at >= rows[0].day && c.at <= lastDay).sort((a, b) => a.at.localeCompare(b.at));
+const changeList = (cfg.changes ?? cfg.markers ?? []).filter((c) => c.at >= firstDay && c.at <= lastDay).sort((a, b) => a.at.localeCompare(b.at));
 function judge(c, peers) {
   const from = dayPlus(c.at, -W), to = dayPlus(c.at, W - 1);
   const before = rows.filter((r) => r.day >= from && r.day < c.at), after = rows.filter((r) => r.day >= c.at && r.day <= to);
@@ -443,7 +443,7 @@ const decided = (f) => new Map(askAll.filter((a) => a[f]).map((a) => [a.key, a.a
 const droppedAt = decided("dropped"), escalatedAt = decided("escalated");
 // how often a key was asked counts every recorded ask, also those before the analysed period
 const askEver = askAll.filter((a) => !a.dropped && !a.escalated).sort((a, b) => a.at.localeCompare(b.at));
-const askList = askEver.filter((a) => a.at >= rows[0].day && a.at <= lastDay);
+const askList = askEver.filter((a) => a.at >= firstDay && a.at <= lastDay);
 metrics.asks = askList.map((a) => {
   const j = judge({ ...a, label: a.ask, expect: a.metric ? { metric: a.metric, direction: a.direction } : a.expect }, changeList);
   const same = askEver.filter((o) => o.key === a.key);
@@ -464,7 +464,7 @@ const ruleDays = cfg.ruleWindowDays ?? 28, ruleFrom = dayPlus(lastDay, -(ruleDay
 const recentRows = rows.filter((r) => r.day >= ruleFrom), inWin = (r) => r.createdAt.slice(0, 10) >= ruleFrom;
 Object.assign(metrics, evaluate({ total: summ(recentRows), defaultBranch, compare: compareOf(recentRows),
   ci: runs.length ? { all: ciStats(ciRuns.filter(inWin)), prBranches: ciStats(prRuns.filter(inWin)), defaultBranchPush: ciStats(mainRuns.filter(inWin)) } : null }, cfg.rules));
-metrics.ruleWindow = { from: ruleFrom < rows[0].day ? rows[0].day : ruleFrom, to: lastDay, days: ruleDays, merged: recentRows.length };
+metrics.ruleWindow = { from: ruleFrom < firstDay ? firstDay : ruleFrom, to: lastDay, days: ruleDays, merged: recentRows.length };
 if (existsSync(`${dir}/failures.json`)) {
   // jobs that only report that another job failed (a "require all" gate) are noise here: ignoreFailedJobs names them
   const F = JSON.parse(readFileSync(`${dir}/failures.json`, "utf8")), ig = cfg.ignoreFailedJobs && new RegExp(cfg.ignoreFailedJobs, "i"), keep = (j) => !ig || !ig.test(`${j.job} › ${j.step ?? ""}`);
