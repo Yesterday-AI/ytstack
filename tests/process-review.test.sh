@@ -200,7 +200,9 @@ eq "dropped ask: every ask of the key is marked" true "$(j "$T/third.json" 'm.as
 eq "fixes without a test: the rule's sample is the fixes that touch source" 2 "$(j "$T/third.json" '(m.results.find((r) => r.id === "fixes-without-tests") || {}).n ?? m.total.quality.sourceFixes')"
 # an ask from before the period still counts, and the user's escalation marks its key
 printf '[{"key":"red-main","at":"2026-02-20","ask":"Fix a red main first","metric":"mainFailed","direction":"down"},{"key":"red-main","at":"2026-03-08","ask":"Fix a red main first","metric":"mainFailed","direction":"down"},{"key":"red-main","at":"2026-03-10","escalated":true,"by":"user"}]\n' > "$D/asks.json"
+: > "$D/prs/2026-03-13.jsonl"   # two mined days on which nothing merged
 node "$TOOLS/analyze.mjs" "$D" --out "$T/fourth.json" >/dev/null 2>&1
+eq "period: it ends on the last mined day, not on the last merge" 2026-03-13 "$(j "$T/fourth.json" 'm.period.to')"
 eq "asks: an ask before the period counts in times" "1 2 of 2" "$(j "$T/fourth.json" 'm.asks.length + " " + m.asks[0].nth + " of " + m.asks[0].times')"
 eq "asks: the user's escalation marks the key" true "$(j "$T/fourth.json" 'm.asks[0].escalated')"
 

@@ -83,6 +83,10 @@ const rows = prs.map((p) => {
   };
 });
 
+// the period runs over the days mined, not from the first to the last day something merged: mine.mjs writes a file per day, also an empty one
+const minedDays = existsSync(`${dir}/prs`) ? readdirSync(`${dir}/prs`).filter((f) => /^\d{4}-\d\d-\d\d\.jsonl$/.test(f)).map((f) => f.slice(0, 10)).filter((d) => d >= since && d <= until).sort() : [];
+const firstDay = [rows[0].day, minedDays[0] ?? "9999"].sort()[0], lastDay = [rows.at(-1).day, minedDays.at(-1) ?? ""].sort().at(-1);
+
 // ---- rounds: one round per reviewed head by the round reviewer
 let roundKind = cfg.rounds?.kind;
 if (!roundKind) {
@@ -230,7 +234,7 @@ const compare = compareOf(rows);
 const perWorkflow = Object.fromEntries(Object.entries(groupBy(ciRuns, "name")).map(([n, g]) => [n, ciStats(g)]).sort((a, b) => b[1].hours - a[1].hours));
 const worst = (f, n = 15) => [...rows].sort((a, b) => f(b) - f(a)).slice(0, n).map((r) => ({ pr: r.p.number, title: r.p.title.slice(0, 90), rounds: r.rounds, leadH: r1(r.lead), ciRuns: r.ci?.length ?? 0 }));
 const metrics = {
-  repo: cfg.repo ?? null, generatedAt: new Date().toISOString(), period: { from: rows[0].day, to: rows.at(-1).day }, roundKind, defaultBranch,
+  repo: cfg.repo ?? null, generatedAt: new Date().toISOString(), period: { from: rows[0].day, to: lastDay }, roundKind, defaultBranch,
   findingsParsed: Boolean(fcfg), markers: cfg.changes ?? cfg.markers ?? [], total: summ(rows), weeks, days, reviewers, compare,
   ci: runs.length ? { all: ciStats(ciRuns), prBranches: ciStats(prRuns), defaultBranchPush: ciStats(mainRuns), perWorkflow } : null,
   outliers: { mostRounds: worst((r) => r.rounds), longestLead: worst((r) => r.lead), mostCiRuns: worst((r) => r.ci?.length ?? 0) },
@@ -299,7 +303,9 @@ if (existsSync(tokenFile)) {
       passedLast: last.length, defectAfterPass: r3(share(count(last, (x) => x.defectAfterMerge), last.length)) }; };
   const grp = (key, min = 5) => Object.fromEntries(Object.entries(matchedRuns.reduce((m, x) => ((m[key(x)] ??= []).push(x), m), {})).filter(([, g]) => g.length >= min).sort((x, y) => y[1].length - x[1].length).map(([k, g]) => [k, revGroup(g)]));
   for (const r of inScope) if (r.impl || r.rev) { r.usd = (r.impl?.usd ?? 0) + (r.fix?.usd ?? 0) + (r.rev?.usd ?? 0); r.activeMin = (r.impl?.min ?? 0) + (r.fix?.min ?? 0) + (r.rev?.min ?? 0); }
-  metrics.cost = { since: tk.since, priceNote: prices.note ?? null, transcripts: tk.files, messages: tk.messages,
+  // a model without a price adds nothing to any cost figure: name it, so that a total is never read as complete
+  const unpriced = Object.entries(perModel).filter(([m, v]) => !prices[m] && v.out > 0).map(([m, v]) => ({ model: m, out: v.out })).sort((a, b) => b.out - a.out);
+  metrics.cost = { since: tk.since, priceNote: prices.note ?? null, unpriced, transcripts: tk.files, messages: tk.messages,
     totalUsd: Math.round(allUsd), coordinationUsd: Math.round(kindUsd((u) => u.key === "coordination")), reviewUsd: Math.round(kindUsd((u) => u.kind === "review")), workUsd: Math.round(kindUsd((u) => u.kind === "work" && u.key !== "coordination")),
     perModel: Object.fromEntries(Object.entries(perModel).filter(([, v]) => v.usd >= 1).map(([m, v]) => [m, { out: v.out, usd: Math.round(v.usd) }])),
     all: phases(inScope), byClass: Object.fromEntries(Object.entries(groupBy(inScope, "cls")).map(([c, g]) => [c, phases(g)])),
@@ -383,9 +389,6 @@ if (metrics.ci) metrics.ci.red = { periods: reds.length, medianH: r1(med(reds)),
 // ---- what a change did: the same metrics in a window before and after each dated change
 const W = cfg.changeWindowDays ?? 7, MIN = cfg.changeMinSample ?? 20;
 const dayPlus = (d, n) => new Date(+new Date(`${d}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
-// the period ends on the last day mined, not on the last day something merged: mine.mjs writes a file per day, also an empty one
-const minedDays = existsSync(`${dir}/prs`) ? readdirSync(`${dir}/prs`).filter((f) => /^\d{4}-\d\d-\d\d\.jsonl$/.test(f)).map((f) => f.slice(0, 10)).filter((d) => d >= since && d <= until).sort() : [];
-const lastDay = [rows.at(-1).day, minedDays.at(-1) ?? ""].sort().at(-1);
 // rank-sum test (normal approximation) for values, two-proportion test for shares; |z| >= 1.96 counts as a clear change
 function zValues(a, b) {
   const all = [...a.map((v) => [v, 0]), ...b.map((v) => [v, 1])].sort((x, y) => x[0] - y[0]); let ra = 0;
@@ -404,7 +407,9 @@ const changeList = (cfg.changes ?? cfg.markers ?? []).filter((c) => c.at >= rows
 function judge(c, peers) {
   const from = dayPlus(c.at, -W), to = dayPlus(c.at, W - 1);
   const before = rows.filter((r) => r.day >= from && r.day < c.at), after = rows.filter((r) => r.day >= c.at && r.day <= to);
-  const out = [{ name: "Merged per day", before: r1(before.length / W), after: r1(after.length / Math.max(1, Math.min(W, (new Date(`${lastDay}T00:00:00Z`) - new Date(`${c.at}T00:00:00Z`)) / 864e5 + 1))), n1: before.length, n2: after.length, verdict: "context" }];
+  // a change closer to the start of the mined days than one window has no full baseline
+  const baselineShort = from < firstDay, daysBefore = Math.max(1, (new Date(`${c.at}T00:00:00Z`) - new Date(`${baselineShort ? firstDay : from}T00:00:00Z`)) / 864e5);
+  const out = [{ name: "Merged per day", before: r1(before.length / daysBefore), after: r1(after.length / Math.max(1, Math.min(W, (new Date(`${lastDay}T00:00:00Z`) - new Date(`${c.at}T00:00:00Z`)) / 864e5 + 1))), n1: before.length, n2: after.length, verdict: "context" }];
   for (const [name, val, stat, dir] of VALUE) { const a = before.map(val).filter((v) => v !== null && v !== undefined), b = after.map(val).filter((v) => v !== null && v !== undefined);
     out.push({ name, before: a.length ? r1(stat(a)) : null, after: b.length ? r1(stat(b)) : null, n1: a.length, n2: b.length, verdict: verdict(a.length && b.length ? zValues(a, b) : 0, dir, a.length, b.length) }); }
   for (const [name, of, hit, dir] of SHARE) { const a = before.filter(of), b = after.filter(of), h1 = count(a, hit), h2 = count(b, hit);
@@ -418,11 +423,13 @@ function judge(c, peers) {
   if (c.expect?.metric) {
     const r = out.find((x) => x.key === c.expect.metric), want = c.expect.direction === "up" ? "up" : "down";
     const moved = !r || !["better", "worse"].includes(r.verdict) ? "none" : r.after > r.before ? "up" : "down";
-    const verdictE = !r ? "unknown metric" : to > lastDay || r.verdict === "too few" ? "too early" : moved === want ? "confirmed" : "refuted";
+    // no verdict from a short baseline, an unfinished window, or follow-up fixes that can still arrive
+    const censored = c.expect.metric === "followUp" && dayPlus(to, cfg.followUpDays ?? 7) > lastDay;
+    const verdictE = !r ? "unknown metric" : to > lastDay || baselineShort || censored || r.verdict === "too few" ? "too early" : moved === want ? "confirmed" : "refuted";
     expectation = { metric: c.expect.metric, name: r?.name ?? c.expect.metric, direction: want, before: r?.before ?? null, after: r?.after ?? null, share: Boolean(r?.share), moved, verdict: verdictE };
   }
   return { at: c.at, label: c.label, decidedBy: c.decidedBy ?? null, approval: c.approval ?? null, expectation, windowDays: W, before: { from, to: dayPlus(c.at, -1), n: before.length }, after: { from: c.at, to: to > lastDay ? lastDay : to, n: after.length },
-    incomplete: to > lastDay, followUpsCensored: dayPlus(to, cfg.followUpDays ?? 7) > lastDay,
+    incomplete: to > lastDay, baselineShort, followUpsCensored: dayPlus(to, cfg.followUpDays ?? 7) > lastDay,
     confounded: peers.filter((o) => o !== c && o.at >= from && o.at <= to).map((o) => `${o.label} (${o.at})`), rows: out };
 }
 metrics.changes = changeList.map((c) => judge(c, changeList));
@@ -515,7 +522,7 @@ function sampleOf() {
   for (const r of list) {
     r.arm = armOf(r.p.number);
     // the first answer of a reviewer: its first review or comment, or (a bot without a finding) its thumbs-up
-    const firstOf = (k) => [r.evs.find((e) => e.kind.name === k)?.at, (r.p.reactions ?? []).find((x) => x.by === loginOf[k] && x.content === "THUMBS_UP")?.at].filter(Boolean).sort()[0] ?? null;
+    const firstOf = (k) => [r.evs.find((e) => e.kind.name === k)?.at, (r.p.reactions ?? []).find((x) => x.by === loginOf[k] && x.content === "THUMBS_UP" && x.at <= r.p.mergedAt)?.at].filter(Boolean).sort()[0] ?? null;
     r.armAt = firstOf(r.arm); r.controlAt = r.arm === s.control ? r.armAt : firstOf(s.control);
     // a bot without a finding may leave only its summary in the description: an answer without a time
     const mark = s.bodyMark?.[r.arm];
