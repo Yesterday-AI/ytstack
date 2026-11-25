@@ -4,7 +4,7 @@
 // Needs: a GitHub token with read access (GITHUB_TOKEN, GH_TOKEN, or a signed-in gh). Node 18 or newer, no dependencies.
 // Resumable: a finished day is skipped, today is always re-read.
 import { graphql, rest } from "./api.mjs";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 
 const [repo, since, until, out] = process.argv.slice(2);
 const only = process.argv.includes("--only") ? process.argv[process.argv.indexOf("--only") + 1] : "";
@@ -27,7 +27,10 @@ function save(sub, day, rows) {
 const refresh = process.argv.includes("--refresh");
 // (a day already written with the current fields is kept, so an interrupted refresh resumes)
 const current = (f) => { const s = readFileSync(f, "utf8"); return !s.trim() || s.includes('"authorBot"'); };
-const done = (sub, day) => { const f = `${out}/${sub}/${day}.jsonl`; return day !== today && existsSync(f) && (!refresh || sub !== "prs" || current(f)); };
+// A day's file is final only when it was written after that day ended (a day mined while it ran is fetched again),
+// and a CI day only when every stored run has finished (a run that started before midnight ends after it).
+const final = (sub, f, day) => statSync(f).mtimeMs >= Date.parse(`${day}T00:00:00Z`) + 864e5 && !(sub === "ci" && /"status":"(?!completed")/.test(readFileSync(f, "utf8")));
+const done = (sub, day) => { const f = `${out}/${sub}/${day}.jsonl`; return day !== today && existsSync(f) && final(sub, f, day) && (!refresh || sub !== "prs" || current(f)); };
 
 const QUERY = `query($q:String!,$n:Int!,$c:String){search(query:$q,type:ISSUE,first:$n,after:$c){pageInfo{hasNextPage endCursor} nodes{... on PullRequest{
  number title body createdAt mergedAt additions deletions changedFiles headRefName baseRefName author{login __typename}

@@ -24,7 +24,8 @@ const tally = {}; for (const r of runs) if (r.event === "push") tally[r.branch] 
 const bases = {}; if (existsSync(`${dir}/prs`)) for (const f of readdirSync(`${dir}/prs`).filter((f) => f.endsWith(".jsonl"))) for (const l of readFileSync(`${dir}/prs/${f}`, "utf8").split("\n").filter(Boolean)) { const p = JSON.parse(l), d = (p.mergedAt ?? "").slice(0, 10); if (p.base && d >= since && d <= until) bases[p.base] = (bases[p.base] ?? 0) + 1; }
 const top = (m) => Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0];
 const main = cfg.defaultBranch ?? top(bases) ?? top(tally) ?? null;
-const last = runs.map((r) => r.createdAt).sort().at(-1);
+// the window of --days ends on the period's last day when one is given, else on the newest run
+const last = until !== "9999" ? `${until}T23:59:59Z` : runs.map((r) => r.createdAt).sort().at(-1);
 const from = new Date(+new Date(last) - days * 864e5).toISOString();
 
 // A request that still fails after its retries is recorded in failures.json and makes the run exit 3, so incomplete evidence is never shown as complete.

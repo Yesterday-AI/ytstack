@@ -154,14 +154,16 @@ for (const run of ciRuns) { const r = run.branch !== defaultBranch && prOfRun(ru
 for (const r of rows) {
   const first = r.ci && [...r.ci].filter((c) => c.status === "completed" && c.conclusion !== "cancelled" && c.conclusion !== "skipped").sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
   r.firstPass = first && r.rounds && r.roundList[0].blocking !== null ? first.conclusion === "success" && first.attempt === 1 && r.roundList[0].blocking === false : null; // green on a re-run is no first pass
-  r.ciHours = r.ci ? r.ci.reduce((s, c) => s + (c.min ?? 0), 0) / 60 : null;
+  // runner time only from runs with a measured duration; none measured: not available, never zero
+  const timed = (r.ci ?? []).filter((c) => c.min !== null);
+  r.ciHours = timed.length ? timed.reduce((s, c) => s + c.min, 0) / 60 : null;
 }
 function ciStats(list) {
   const done = list.filter((r) => r.status === "completed");
   const ok = count(done, (r) => r.conclusion === "success"), bad = count(done, (r) => r.conclusion === "failure"), cancelled = count(done, (r) => r.conclusion === "cancelled");
   const minutes = (f) => done.filter(f).reduce((s, r) => s + (r.min ?? 0), 0);
   return {
-    runs: list.length, success: ok, failure: bad, cancelled, failureRate: r3(share(bad, ok + bad)), cancelledShare: r3(share(cancelled, done.length)),
+    runs: list.length, completed: done.length, success: ok, failure: bad, cancelled, failureRate: r3(share(bad, ok + bad)), cancelledShare: r3(share(cancelled, done.length)),
     rerunShare: r3(share(count(done, (r) => r.attempt > 1), done.length)), rerunGreen: count(done, (r) => r.attempt > 1 && r.conclusion === "success"),
     medianMin: r1(med(done.filter((r) => r.conclusion === "success").map((r) => r.min))), p90Min: r1(q(done.filter((r) => r.conclusion === "success").map((r) => r.min), 0.9)),
     hours: r1(minutes(() => true) / 60), hoursNotGreen: r1(minutes((r) => r.conclusion !== "success") / 60),
@@ -192,7 +194,7 @@ function summ(g) {
       laterNonBlocking: count(later, (x) => x.blocking === false && x.clean === false), laterUnknown: count(later, (x) => x.blocking === null),
       laterAfterMergeOnly: count(later, (x) => x.mergeOnly), reworkCommitsMean: r1(mean(rv.map((r) => r.reworkCommits))),
       ciRunsPerPrMedian: med(withCi.map((r) => r.ci.length)), ciFailedRunShare: r3(share(withCi.reduce((s, r) => s + count(r.ci, (c) => c.conclusion === "failure"), 0), withCi.reduce((s, r) => s + count(r.ci, (c) => c.conclusion === "success" || c.conclusion === "failure"), 0))),
-      ciHoursPerPr: r1(mean(withCi.map((r) => r.ci.reduce((s, c) => s + (c.min ?? 0), 0) / 60))),
+      ciHoursPerPr: r1(mean(withCi.map((r) => r.ciHours).filter((h) => h !== null))),
       firstPassN: judged.length, firstPassShare: r3(share(firstPass, judged.length)),
       ciLoopShare: r3(share(count(withCi, (r) => r.ci.some((c) => c.conclusion === "failure")), withCi.length)), ciJudged: withCi.length,
     },

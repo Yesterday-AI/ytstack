@@ -58,7 +58,7 @@ export const RULES = [
   },
   {
     id: "ci-cancelled", group: "ci", severity: "medium", name: "Many cancelled CI runs", th: 0.2, min: 100,
-    check: ({ ci }, th) => { const c = ci?.prBranches ?? ci?.all; return { n: c?.runs ?? 0, hit: c.cancelledShare >= th, problem: `${c.cancelled} of ${c.runs} CI runs on pull request branches were cancelled (${pct(c.cancelledShare)}). Runs on the default branch are not counted here.`, good: `Only ${pct(c.cancelledShare)} of the CI runs on pull request branches were cancelled.` }; },
+    check: ({ ci }, th) => { const c = ci?.prBranches ?? ci?.all; return { n: c?.completed ?? 0, hit: c.cancelledShare >= th, problem: `${c.cancelled} of ${c.completed} finished CI runs on pull request branches were cancelled (${pct(c.cancelledShare)}). Runs on the default branch are not counted here.`, good: `Only ${pct(c.cancelledShare)} of the CI runs on pull request branches were cancelled.` }; },
     why: "A cancelled run usually means a newer push arrived before CI finished: pushes come faster than CI answers.",
     action: "Verify locally and push when the change is complete; a draft pull request can skip the heavy jobs.",
   },
