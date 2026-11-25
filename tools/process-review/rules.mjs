@@ -38,7 +38,7 @@ export const RULES = [
   },
   {
     id: "slow-first-review", group: "flow", severity: "medium", name: "Pull requests wait for their first review", th: 4, min: 30,
-    check: ({ total: { efficiency: e } }, th) => ({ n: e.firstReviewMedianH === null ? 0 : e.reviewed, hit: e.firstReviewMedianH > th, problem: `Half of the pull requests wait more than ${e.firstReviewMedianH} hours for their first review.`, good: `The first review arrives after ${e.firstReviewMedianH} hours (median).` }),
+    check: ({ total: { efficiency: e } }, th) => ({ n: e.firstReviewN ?? 0, hit: e.firstReviewMedianH > th, problem: `Half of the pull requests wait more than ${e.firstReviewMedianH} hours for their first review.`, good: `The first review arrives after ${e.firstReviewMedianH} hours (median).` }),
     why: "Waiting for pickup is the phase authors cannot shorten themselves.",
     action: "Agree on a time to first review and name who picks up; let a bot or agent reviewer answer first where one exists.",
     ref: "LinearB 2026 benchmarks: pickup under 1 h elite, 1 to 4 h good (75th percentile of vendor customers)",
@@ -71,7 +71,7 @@ export const RULES = [
   },
   {
     id: "flaky-reruns", group: "ci", severity: "medium", name: "Re-runs that turned green without a change", th: 0.01, min: 100,
-    check: ({ ci }, th) => ({ n: ci?.all.runs ?? 0, hit: ci.all.rerunGreen / ci.all.runs >= th, problem: `${ci.all.rerunGreen} of ${ci.all.runs} CI runs turned green on a re-run without a change.`, good: `Only ${ci.all.rerunGreen} of ${ci.all.runs} CI runs needed a re-run to turn green.` }),
+    check: ({ ci }, th) => ({ n: ci?.all.completed ?? 0, hit: ci.all.rerunGreen / ci.all.completed >= th, problem: `${ci.all.rerunGreen} of ${ci.all.completed} finished CI runs turned green on a re-run without a change.`, good: `Only ${ci.all.rerunGreen} of ${ci.all.completed} finished CI runs needed a re-run to turn green.` }),
     why: "A test that passes on the second try teaches everyone to re-run instead of read, and hides real failures.",
     action: "List the tests that failed in those first attempts; fix or quarantine the repeat offenders and keep a table of known flaky tests.",
   },

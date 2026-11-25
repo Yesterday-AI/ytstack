@@ -52,7 +52,7 @@ const flakyJobs = {};
 let read = 0;
 for (const r of rerun) {
   const f = await failed(r.id, 1); read++;
-  for (const j of f) { const k = `${j.job} › ${j.step ?? "(no failed step recorded)"}`; const s = (flakyJobs[k] ??= { job: j.job, step: j.step, count: 0, lastSeen: "", example: r.id, seen: [] }); s.count++; s.seen.push(r.createdAt); if (r.createdAt > s.lastSeen) { s.lastSeen = r.createdAt; s.example = r.id; } }
+  for (const j of f) { const k = `${j.job} › ${j.step ?? "(no failed step recorded)"}`; const s = (flakyJobs[k] ??= { job: j.job, step: j.step, count: 0, lastSeen: "", example: r.id, seen: [] }); s.count++; s.seen.push({ at: r.createdAt, id: r.id }); if (r.createdAt > s.lastSeen) { s.lastSeen = r.createdAt; s.example = r.id; } }
 }
 console.log(`re-runs that turned green: ${read} read of ${runs.filter((r) => r.attempt > 1 && r.conclusion === "success").length}`);
 writeFileSync(`${dir}/failures.json`, JSON.stringify({ repo, at: new Date().toISOString(), days, since: since === "0000" ? null : since, until: until === "9999" ? null : until, from: from.slice(0, 10), branch: main, defaultBranch, rerunsRead: read, flaky: Object.values(flakyJobs).sort((a, b) => b.count - a.count), incomplete }, null, 1));

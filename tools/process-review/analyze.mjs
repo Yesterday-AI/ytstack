@@ -186,7 +186,7 @@ function summ(g) {
     merged: g.length,
     efficiency: {
       leadMedianH: r1(med(g.map((r) => r.lead))), leadP90H: r1(q(g.map((r) => r.lead), 0.9)),
-      firstReviewMedianH: r1(med(g.map((r) => r.ttfr))), sizeMedian: med(g.map((r) => r.size)), commitsMedian: med(g.map((r) => r.p.commitCount)),
+      firstReviewMedianH: r1(med(g.map((r) => r.ttfr))), firstReviewN: count(g, (r) => r.ttfr !== null), sizeMedian: med(g.map((r) => r.size)), commitsMedian: med(g.map((r) => r.p.commitCount)),
       reviewed: rv.length, roundsMean: r1(mean(rv.map((r) => r.rounds))), multiRoundShare: r3(share(count(rv, (r) => r.rounds >= 2), rv.length)),
       threePlusShare: r3(share(count(rv, (r) => r.rounds >= 3), rv.length)),
       firstRoundBlockingShare: r3(share(count(rv, (r) => r.roundList[0].blocking === true), count(rv, (r) => r.roundList[0].blocking !== null))),
@@ -482,7 +482,12 @@ if (existsSync(`${dir}/failures.json`)) {
   const inP = (iso) => Boolean(iso) && iso.slice(0, 10) >= firstDay && iso.slice(0, 10) <= lastDay;
   metrics.failures = { ...F, defaultBranch: F.defaultBranch.filter((r) => inP(r.at)).map((r) => ({ ...r, failed: r.failed.filter(keep) })), 
     // a flaky job is counted from its single sightings inside the period; a file without them (older format) only when it was mined for exactly this period
-    flaky: F.flaky.filter(keep).map((j) => (j.seen ? { ...j, count: count(j.seen, inP) } : F.since === firstDay && F.until === lastDay ? j : { ...j, count: 0 })).filter((j) => j.count > 0).sort((a, b) => b.count - a.count) };
+    // count, last sighting and example all come from the sightings inside the period
+    flaky: F.flaky.filter(keep).map((j) => {
+      if (!j.seen) return F.since === firstDay && F.until === lastDay ? j : { ...j, count: 0 };
+      const s = j.seen.map((x) => (typeof x === "string" ? { at: x, id: j.example } : x)).filter((x) => inP(x.at)).sort((a, b) => a.at.localeCompare(b.at));
+      return { ...j, seen: s, count: s.length, lastSeen: s.at(-1)?.at ?? "", example: s.at(-1)?.id ?? j.example };
+    }).filter((j) => j.count > 0).sort((a, b) => b.count - a.count) };
 }
 const headline = (m) => ({ merged: m.total.merged, leadMedianH: m.total.efficiency.leadMedianH, roundsMean: m.total.efficiency.roundsMean, firstPassShare: m.total.efficiency.firstPassShare ?? null,
   followUpExplicitShare: m.total.quality.followUpExplicitShare, mainFailureRate: m.ci?.defaultBranchPush.failureRate ?? null, notGreenShare: m.ci?.all.hours ? r3(m.ci.all.hoursNotGreen / m.ci.all.hours) : null });
