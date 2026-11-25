@@ -66,8 +66,9 @@ const riskRe = new RegExp(cfg.sensitivePattern ?? "migrat|\\.sql$|(^|/)(auth|sec
 // ---- per pull request
 const rows = prs.map((p) => {
   const evs = [...p.reviews.map((e) => ({ ...e, type: "review" })), ...p.comments.map((e) => ({ ...e, type: "comment" }))]
+    .filter((e) => e.at <= p.mergedAt) // what arrived after the merge reviewed nothing before it
     .map((e) => ({ ...e, kind: kindOf(e, p) })).filter((e) => e.kind).sort((a, b) => a.at.localeCompare(b.at));
-  const threads = p.threads.map((t) => ({ ...t, kind: kindOf(t, p)?.name ?? null }));
+  const threads = p.threads.filter((t) => !t.at || t.at <= p.mergedAt).map((t) => ({ ...t, kind: kindOf(t, p)?.name ?? null }));
   const src = p.files.filter((f) => srcRe.test(f) && !testRe.test(f));
   // risk class by the files touched: what is the most that could break
   const nonDoc = p.files.filter((f) => !docRe.test(f));
@@ -133,12 +134,16 @@ for (const f of rows.filter((r) => r.isFix)) {
 
 // ---- CI
 const defaultBranch = cfg.defaultBranch ?? Object.entries(rows.reduce((m, r) => ((m[r.p.base] = (m[r.p.base] ?? 0) + 1), m), {})).sort((a, b) => b[1] - a[1])[0][0];
-const branchOf = new Map(rows.map((r) => [r.p.branch, r]));
+// a branch name can carry several pull requests of the period: a run belongs to the one that holds its commit,
+// else to the first one not yet merged when the run started, else to the last one
+const branchOf = new Map();
+for (const r of [...rows].sort((a, b) => a.p.mergedAt.localeCompare(b.p.mergedAt))) branchOf.set(r.p.branch, [...(branchOf.get(r.p.branch) ?? []), r]);
+const prOfRun = (run) => { const l = branchOf.get(run.branch); return l && (l.find((r) => run.sha && r.p.commits.some((c) => c.oid === run.sha)) ?? l.find((r) => r.p.mergedAt >= run.createdAt) ?? l.at(-1)); };
 const ciRuns = runs.filter((r) => !cfg.ciWorkflows || cfg.ciWorkflows.includes(r.name)).map((r) => {
   const min = r.status === "completed" && r.startedAt ? (new Date(r.updatedAt) - new Date(r.startedAt)) / 6e4 : null;
   return { ...r, min: min !== null && min >= 0 && min < 360 ? min : null, week: monday(r.createdAt) };
 });
-for (const run of ciRuns) { const r = run.branch !== defaultBranch && branchOf.get(run.branch); if (r) (r.ci ??= []).push(run); }
+for (const run of ciRuns) { const r = run.branch !== defaultBranch && prOfRun(run); if (r) (r.ci ??= []).push(run); }
 for (const r of rows) {
   const first = r.ci && [...r.ci].filter((c) => c.status === "completed" && c.conclusion !== "cancelled" && c.conclusion !== "skipped").sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
   r.firstPass = first && r.rounds && r.roundList[0].blocking !== null ? first.conclusion === "success" && r.roundList[0].blocking === false : null;
@@ -419,11 +424,14 @@ metrics.changes = changeList.map((c) => judge(c, changeList));
 // coaching asks (asks.json, written by the skill coach-process): each ask is judged like a change with an expectation,
 // from the day it was delivered; the same key asked again counts how often the same thing had to be asked
 const askFile = `${dir}/asks.json`;
-const askList = (existsSync(askFile) ? JSON.parse(readFileSync(askFile, "utf8")) : []).filter((a) => a.at >= rows[0].day && a.at <= lastDay).sort((a, b) => a.at.localeCompare(b.at));
+const askAll = existsSync(askFile) ? JSON.parse(readFileSync(askFile, "utf8")) : [];
+// { key, at, dropped: true } is the user's decision to stop asking a key: it is no ask, and it marks every ask of that key up to its day
+const droppedAt = new Map(askAll.filter((a) => a.dropped).map((a) => [a.key, a.at]));
+const askList = askAll.filter((a) => !a.dropped && a.at >= rows[0].day && a.at <= lastDay).sort((a, b) => a.at.localeCompare(b.at));
 metrics.asks = askList.map((a) => {
   const j = judge({ ...a, label: a.ask, expect: a.metric ? { metric: a.metric, direction: a.direction } : a.expect }, changeList);
   const same = askList.filter((o) => o.key === a.key);
-  return { key: a.key, at: a.at, to: a.to ?? null, ask: a.ask, ref: a.ref ?? null, times: same.length, nth: same.indexOf(a) + 1, expectation: j.expectation, incomplete: j.incomplete, confounded: j.confounded };
+  return { key: a.key, at: a.at, to: a.to ?? null, ask: a.ask, ref: a.ref ?? null, times: same.length, nth: same.indexOf(a) + 1, dropped: droppedAt.has(a.key) && droppedAt.get(a.key) >= a.at, expectation: j.expectation, incomplete: j.incomplete, confounded: j.confounded };
 });
 // candidates: merged pull requests that changed the process itself, and when each reviewer was first and last seen
 const procRe = new RegExp(cfg.processPaths ?? "^\\.github/|(^|/)(AGENTS|CLAUDE|CONTRIBUTING|CODEOWNERS|REVIEW[A-Z]*)(\\.md)?$|^\\.(cursor|claude|codex|greptile)/|(^|/)(lefthook|\\.pre-commit-config|renovate|biome|eslint\\.config|vitest\\.config|playwright\\.config|turbo)\\.", "i");

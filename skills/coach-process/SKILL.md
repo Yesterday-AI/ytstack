@@ -124,7 +124,7 @@ echo "TODAY: $(date -u +%Y-%m-%d)"
 
 **Step 2 -- HARD-GATE.** `METRICS: none` or `FINDINGS: none`: stop with one sentence, "coach-process needs a process-review run of this repository with findings; run `ytstack:process-review` first." A `findings.json` older than the `metrics.json` it sits beside is from an earlier run: say so and stop. `TOOL_DIR: unavailable`: the asks can be delivered, but not judged; say so in the report.
 
-**Step 3 -- Judge the earlier asks.** `asks` in `WORKDIR/metrics.json` holds one row per recorded ask: its key, the day, the recipient, the metric with its value before and after, the verdict (`confirmed`, `refuted`, `too early`, `unknown metric`), and `times`, how often the same key was asked. Read them as:
+**Step 3 -- Judge the earlier asks.** `asks` in `WORKDIR/metrics.json` holds one row per recorded ask: its key, the day, the recipient, the metric with its value before and after, the verdict (`confirmed`, `refuted`, `too early`, `unknown metric`), `times`, how often the same key was asked, and `dropped`, true when the user dropped the key (option B below, recorded in Step 9). A dropped row is not judged, not escalated and not asked again; it only appears in the report. Read the others as:
 
 - `confirmed`: the metric moved as asked. The ask is done; Step 6 decides whether it becomes durable.
 - `too early`: leave it; do not ask again before its window closed.
@@ -147,7 +147,7 @@ echo "TODAY: $(date -u +%Y-%m-%d)"
 - **one action**, in the imperative, that an existing rule already asks for (name the file and section) or that the user stated (say so). An action the rules do not contain is not an ask; it is proposed work for Step 6 or a question for the user;
 - **the metric** it should move and the direction, one of the metric keys of `references/config.md` in the process-review skill (`rounds`, `multiRound`, `mainFailed`, `lead`, `firstPass`, ...), or none when no metric fits; an ask without a metric is delivered but never judged, so prefer one.
 
-Give each ask a stable `key` (kebab case, the thing asked, not the day: `round-rules-followed`). An ask asked again keeps its key; that is how `times` counts. Leave out an ask whose key is `too early`, and every ask the user dropped.
+Give each ask a stable `key` (kebab case, the thing asked, not the day: `round-rules-followed`). An ask asked again keeps its key; that is how `times` counts. Leave out an ask whose key is `too early`, and every key the user dropped: the ones with `dropped` true in `metrics.json` and the ones dropped in Step 3 of this run.
 
 **Step 5 -- Check what ytstack could do better.** For each finding, one question: would a ytstack skill, hook, script or instruction, as it is or with a change, have prevented it? Typical answers:
 
@@ -186,6 +186,12 @@ Send it through the channel of Step 7. On herdr: `herdr agent prompt <pane> "$(c
 
 ```json
 { "key": "round-rules-followed", "at": "2026-11-22", "to": "v2 coordinator (herdr w3:pS1)", "ask": "Hold later rounds to the round rules", "metric": "multiRound", "direction": "down", "ref": "coach-2026-11-22.txt" }
+```
+
+For every key the user dropped in Step 3 (option B), append one object that records the decision; it is no ask, and it is what keeps the key out of Step 3 and Step 4 in every later run:
+
+```json
+{ "key": "round-rules-followed", "at": "2026-11-29", "dropped": true, "by": "user" }
 ```
 
 Then `node TOOL_DIR/analyze.mjs WORKDIR` and `node TOOL_DIR/report.mjs WORKDIR/metrics.json WORKDIR/report.html --findings WORKDIR/findings.json`: the report's section "Coaching asks" lists every ask with its verdict, and the next run judges today's.

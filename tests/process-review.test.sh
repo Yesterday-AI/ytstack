@@ -18,7 +18,13 @@
 #     analyst's finding; daily.mjs prints the digest of the day asked for
 #   - api.mjs exits 2 with a clear message when no token can be resolved
 #
-# No network: mine.mjs and mine-failures.mjs are never run. Node is the
+#   - a review after the merge does not make a pull request reviewed, a reused
+#     branch name splits its CI runs by commit, a dropped ask marks its key
+#   - mine-failures.mjs leaves the default-branch section empty when no push
+#     run was mined
+#
+# No network: mine.mjs is never run, mine-failures.mjs only on a fixture that
+# needs no request. Node is the
 # plugin's one optional runtime (DECISIONS 2026-11-18); without node 18 or
 # newer the node cases are skipped and the suite stays green.
 #
@@ -176,6 +182,27 @@ has "digest: the failed push on main" "$OUT" "1 of 1 runs"
 OUT=$(node "$TOOLS/daily.mjs" "$M" --day 2026-03-03 2>&1); EC=$?
 eq "digest: fewer than three days before -> exit 1" 1 "$EC"
 has "digest: says what it needs" "$OUT" "at least three days before it"
+
+echo "# a review after the merge, a reused branch name, a dropped ask"
+# 41 gets a review two hours after its merge; 42 reuses 41's branch name. One CI run per commit on that branch.
+printf '{"number":41,"title":"fix: late","body":"","createdAt":"2026-03-11T08:00:00Z","mergedAt":"2026-03-11T10:00:00Z","additions":1,"deletions":1,"changedFiles":1,"branch":"fix-41","base":"main","author":"dev","authorBot":false,"bodyTail":"","coAuthors":[],"labels":[],"commitCount":1,"commits":[{"oid":"c41","at":"2026-03-11T08:00:00Z","msg":"late"}],"reviews":[{"by":"rita","bot":false,"state":"APPROVED","at":"2026-03-11T12:00:00Z","head":"c41","body":"fine"}],"comments":[],"threadCount":0,"threads":[],"files":["src/a41.ts"]}\n' > "$D/prs/2026-03-11.jsonl"
+printf '{"number":42,"title":"fix: again","body":"","createdAt":"2026-03-11T10:30:00Z","mergedAt":"2026-03-11T11:30:00Z","additions":1,"deletions":1,"changedFiles":1,"branch":"fix-41","base":"main","author":"dev","authorBot":false,"bodyTail":"","coAuthors":[],"labels":[],"commitCount":1,"commits":[{"oid":"c42","at":"2026-03-11T10:30:00Z","msg":"again"}],"reviews":[],"comments":[],"threadCount":0,"threads":[],"files":["src/a42.ts"]}\n' >> "$D/prs/2026-03-11.jsonl"
+for s in 41 42; do
+  printf '{"id":2%s,"name":"ci","event":"pull_request","branch":"fix-41","sha":"c%s","attempt":1,"status":"completed","conclusion":"success","createdAt":"2026-03-11T0%s:40:00Z","startedAt":"2026-03-11T0%s:40:00Z","updatedAt":"2026-03-11T0%s:50:00Z"}\n' "$s" "$s" "$((s-33))" "$((s-33))" "$((s-33))"
+done > "$D/ci/2026-03-11.jsonl"
+printf '[{"key":"review-all","at":"2026-03-07","ask":"Review every pull request","metric":"noReview","direction":"down"},{"key":"review-all","at":"2026-03-09","ask":"Review every pull request","metric":"noReview","direction":"down"},{"key":"review-all","at":"2026-03-10","dropped":true,"by":"user"}]\n' > "$D/asks.json"
+node "$TOOLS/analyze.mjs" "$D" --out "$T/third.json" >/dev/null 2>&1
+eq "review after merge: the pull request still counts as merged without review" 20 "$(j "$T/third.json" 'm.total.efficiency.reviewed')"
+eq "reused branch: the earlier pull request keeps its own run" 1 "$(j "$T/third.json" 'm.outliers.mostCiRuns.find((x) => x.pr === 41).ciRuns')"
+eq "reused branch: the later pull request gets only its own" 1 "$(j "$T/third.json" 'm.outliers.mostCiRuns.find((x) => x.pr === 42).ciRuns')"
+eq "dropped ask: the decision is no ask of its own" 2 "$(j "$T/third.json" 'm.asks.length')"
+eq "dropped ask: every ask of the key is marked" true "$(j "$T/third.json" 'm.asks.every((a) => a.dropped)')"
+
+echo "# mine-failures.mjs without a push run"
+mkdir -p "$T/pronly/ci"; cp "$D/ci/2026-03-11.jsonl" "$T/pronly/ci/"
+OUT=$(GITHUB_TOKEN=unused node "$TOOLS/mine-failures.mjs" acme/shop "$T/pronly" 2>&1); EC=$?
+eq "mine-failures: no push run and no defaultBranch -> exit 0, no request" 0 "$EC"
+eq "mine-failures: the default-branch section stays empty" 0 "$(j "$T/pronly/failures.json" 'm.defaultBranch.length')"
 
 echo "# api.mjs without a token"
 NODE_BIN=$(node -e 'console.log(process.execPath)')

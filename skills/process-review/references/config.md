@@ -107,6 +107,8 @@ Optional file in the working directory, written by `coach-process`: one object p
 [{ "key": "round-rules-followed", "at": "2026-11-22", "to": "v2 coordinator", "ask": "Hold later rounds to the round rules", "metric": "multiRound", "direction": "down", "ref": "coach-2026-11-22.txt" }]
 ```
 
+An object with `"dropped": true` (`{ "key": "...", "at": "2026-11-29", "dropped": true, "by": "user" }`) is the user's decision to stop asking that key. It is not judged and not counted; every ask of the key up to that day gets `dropped: true` in `metrics.json`.
+
 ## labels.tsv
 
 Optional file in the working directory: what a reader decided by hand. Tab-separated, one line per verdict; lines starting with `#` and a header line starting with `date` are skipped.
