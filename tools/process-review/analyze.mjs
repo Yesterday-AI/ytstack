@@ -166,7 +166,8 @@ function ciStats(list) {
     runs: list.length, completed: done.length, timed: count(done, (r) => r.min !== null), success: ok, failure: bad, cancelled, failureRate: r3(share(bad, ok + bad)), cancelledShare: r3(share(cancelled, done.length)),
     rerunShare: r3(share(count(done, (r) => r.attempt > 1), done.length)), rerunGreen: count(done, (r) => r.attempt > 1 && r.conclusion === "success"),
     medianMin: r1(med(done.filter((r) => r.conclusion === "success").map((r) => r.min))), p90Min: r1(q(done.filter((r) => r.conclusion === "success").map((r) => r.min), 0.9)),
-    hours: r1(minutes(() => true) / 60), hoursNotGreen: r1(minutes((r) => r.conclusion !== "success") / 60),
+    // no run with a measured duration: the hours are not available, never zero
+    hours: done.some((r) => r.min !== null) ? r1(minutes(() => true) / 60) : null, hoursNotGreen: done.some((r) => r.min !== null) ? r1(minutes((r) => r.conclusion !== "success") / 60) : null,
   };
 }
 const mainRuns = ciRuns.filter((r) => r.branch === defaultBranch && r.event === "push");
@@ -480,7 +481,10 @@ if (existsSync(`${dir}/failures.json`)) {
   const F = JSON.parse(readFileSync(`${dir}/failures.json`, "utf8")), ig = cfg.ignoreFailedJobs && new RegExp(cfg.ignoreFailedJobs, "i"), keep = (j) => !ig || !ig.test(`${j.job} › ${j.step ?? ""}`);
   // failures.json may be from an earlier run over other days: only what lies in this period is shown
   const inP = (iso) => Boolean(iso) && iso.slice(0, 10) >= firstDay && iso.slice(0, 10) <= lastDay;
-  metrics.failures = { ...F, defaultBranch: F.defaultBranch.filter((r) => inP(r.at)).map((r) => ({ ...r, failed: r.failed.filter(keep) })), 
+  // the file must have searched the end of this period: its window runs from `from` to `until` (older files: the day it was written)
+  const searchedTo = F.until ?? (F.at ?? "").slice(0, 10);
+  if (!(F.from <= lastDay && searchedTo >= lastDay)) metrics.failuresNotMined = { from: F.from ?? null, to: searchedTo || null };
+  else metrics.failures = { ...F, defaultBranch: F.defaultBranch.filter((r) => inP(r.at)).map((r) => ({ ...r, failed: r.failed.filter(keep) })), 
     // a flaky job is counted from its single sightings inside the period; a file without them (older format) only when it was mined for exactly this period
     // count, last sighting and example all come from the sightings inside the period
     flaky: F.flaky.filter(keep).map((j) => {
