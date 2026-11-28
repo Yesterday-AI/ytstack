@@ -352,7 +352,7 @@ eq "a short commit id: exit 0" 0 "$EC"
 host; run "$G" gates --pr 7 --reviewed-head "$SHA" --max-open 3
 eq "the cap is no gate of a merge (PR #94 review): exit 64" 64 "$EC"
 
-host; tweak view '.headRefOid = "ffffffffffffffffffffffffffffffffffffffff"'; gates
+host; tweak view '.headRefOid = "ffffffffffffffffffffffffffffffffffffffff" | .reviews[0].commit.oid = .headRefOid'; gates
 only "the head moved after the review" head
 has "both commits are named" "the host shows fffffff, the review saw ${SHA:0:7}" "$OUT"
 host; tweak view '.statusCheckRollup[0].status = "IN_PROGRESS" | .statusCheckRollup[0].conclusion = ""'; gates
@@ -371,9 +371,9 @@ eq "no checks with --allow-no-checks: exit 0" 0 "$EC"
 host; tweak view '.reviews[0].state = "CHANGES_REQUESTED"'; gates
 only "changes requested on the head" review
 has "the reviewer is named" "changes requested by rev" "$OUT"
-host; tweak view '.reviews[0].state = "CHANGES_REQUESTED" | .reviews[0].commit.oid = "0000000000000000000000000000000000000000"'; gates
+host; tweak view '.reviews[0].state = "CHANGES_REQUESTED" | .reviews[0].commit.oid = "0000000000000000000000000000000000000000"'; gates --allow-no-review
 eq "changes requested on an earlier commit do not count" 0 "$EC"
-has "the head has no review then" "ok   review: none on ${SHA:0:7}" "$OUT"
+has "the head has no review then" "ok   review: none on ${SHA:0:7} (--allow-no-review)" "$OUT"
 host; tweak view '.reviews[0].state = "CHANGES_REQUESTED" | .reviews += [.reviews[0] | .state = "APPROVED" | .submittedAt = "2026-11-13T11:00:00Z"]'; gates
 eq "a reviewer's newer review replaces the older one" 0 "$EC"
 host; tweak view '.reviews[0].state = "CHANGES_REQUESTED" | .reviews += [.reviews[0] | .state = "COMMENTED" | .submittedAt = "2026-11-13T11:00:00Z"]'; gates
@@ -399,6 +399,39 @@ host; tweak view '.reviews[0].body = "Verdict: changes requested"'; gates --verd
 only "the newest review does not match the verdict pattern" review
 host; tweak view '.reviews = []'; gates --verdict-pattern '^Verdict: approved$'
 only "no review on the head, with a verdict pattern" review
+host; tweak view '.reviews = []'; gates
+only "no review on the head: nobody reviewed this commit" review
+has "it says so" "nobody reviewed this commit" "$OUT"
+host; tweak view '.reviews[0].commit.oid = "0000000000000000000000000000000000000000"'; gates
+only "a review of an earlier commit is no review of the head" review
+host; tweak view '.reviews = []'; gates --allow-no-review
+eq "no review, --allow-no-review: exit 0" 0 "$EC"
+host; gates --reviewer 'app[bot]' --verdict-pattern '^Verdict: approved$'
+only "another account's review does not stand in for the named reviewer" review
+has "it names the reviewer" "none by app on" "$OUT"
+host; gates --reviewer app --allow-no-review
+only "--allow-no-review does not lift a named reviewer" review
+host; tweak view '.reviews += [{author: {login: "app"}, state: "COMMENTED", submittedAt: "2026-11-13T09:00:00Z", commit: {oid: .headRefOid}, body: "Verdict: blocking"}]'
+gates --reviewer 'app[bot]' --verdict-pattern '^Verdict: approved$'
+only "the named reviewer's own review decides, not a newer one of somebody else" review
+host; tweak view '.reviews += [{author: {login: "app"}, state: "COMMENTED", submittedAt: "2026-11-13T09:00:00Z", commit: {oid: .headRefOid}, body: "Verdict: approved"}]'
+gates --reviewer app --verdict-pattern '^Verdict: approved$'
+eq "the named reviewer's review matches: exit 0" 0 "$EC"
+
+# ---- 7b. wait-review ------------------------------------------------------------
+echo "# wait-review"
+wr() { OUT=$(PATH="$FAKE:$PATH" GH_FIX="$GH_FIX" YTSTACK_REVIEW_POLL=1 bash "$BIN" -C "$G" wait-review --pr 7 --head "$SHA" "$@" 2>&1); EC=$?; }
+host; wr --by rev --verdict-pattern '^Verdict: approved$'
+eq "the reviewer's review is on the head and matches: exit 0" 0 "$EC"
+host; tweak view '.reviews[0].body = "Verdict: changes requested"'; wr --by 'rev[bot]' --verdict-pattern '^Verdict: approved$'
+eq "it is there and does not match: exit 1" 1 "$EC"
+host; wr --by app --timeout 2
+eq "none by that reviewer within the timeout: exit 3" 3 "$EC"
+has "it tells the caller to commission one" "commission an independent review" "$OUT"
+host; tweak view '.headRefOid = "ffffffffffffffffffffffffffffffffffffffff"'; wr --by rev
+eq "the head moved: exit 3 at once" 3 "$EC"
+host; wr --timeout 1
+eq "wait-review without --by: usage" 64 "$EC"
 
 host; touch "$GH_FIX/view.fail"; gates
 only "the host cannot be read" host

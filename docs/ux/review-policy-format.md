@@ -91,6 +91,10 @@ It is the highest class that may merge into this area without a person. No field
 - code | marker: (`code`) | lessons: .github/reviewers/code.md | bots: cursor, greptile-apps
 - tests | marker: (`tests`) | lessons: .github/reviewers/tests.md
 
+## Reviewed by
+
+- review-app[bot] | except: src/components/**, **/*.css | pass: ^Verdict: non-blocking | wait: 60
+
 ## Checks
 
 - component-levels | file: scripts/check-levels.mjs | guards: an atom imports no molecule; the import directions of .ytstack/spec/web.md
@@ -148,6 +152,31 @@ A project that runs review agents of its own (a role per review goal, each with 
 A lesson is a change to the `lessons` file, and that is a rule change: it is proposed to a person and never written by an agent on its own.
 
 `bin/ytstack-risk reviewers` prints the section, one tab separated line per role: name, marker, lessons, bots.
+
+## Reviewed by: a reviewer outside the session
+
+A project where an account or an app reviews pull requests on its own (a review bot, a hosted review agent) names it here, so that the coordinating session waits for that review and does not commission a second one beside it. Without the section the session commissions every round review itself.
+
+```markdown
+## Reviewed by
+
+- y-pr-reviewer[bot] | except: apps/web/**, packages/ui/**, **/*.css | pass: ^Verdict: non-blocking | wait: 60
+```
+
+| Field | Required | Holds |
+|---|---|---|
+| login | yes | The account or app that submits the review, as GitHub names it; `[bot]` is optional. The section names one. |
+| `except` | no | Globs. A change that touches one of them is not this reviewer's: the session commissions its own review. |
+| `pass` | yes | An extended regular expression. The reviewer's newest review on the head passes when one of its lines matches. It cannot hold a `\|`. |
+| `wait` | yes | Minutes the session waits for the review on a head before it commissions its own. |
+
+Three rules follow from it, and `finish-lane` holds them:
+
+- **Every head is reviewed.** `bin/ytstack-finish-lane gates` and `merge` fail on a head nobody reviewed. `--allow-no-review` is a statement about a project that runs no reviews at all.
+- **One review, not two.** `bin/ytstack-risk reviewer --base <sha> --head <sha>` says who writes the round review of a change: `reviewer: <login>` with `pass:` and `wait:`, or `reviewer: own`. The policy is read at the base, like the floor's. For a named reviewer the session runs `bin/ytstack-finish-lane wait-review` and commissions nothing.
+- **Nobody answering is no pass.** When the wait ends without a review of the reviewer on the head, the session commissions the independent review itself and says so in its report. With `gates --reviewer <login> --verdict-pattern <pass>` the reviewer's own newest review on the head decides: a review of somebody else does not stand in for it.
+
+The route (below) reads round lines, which a reviewer outside the session does not write: a change it reviewed routes to a person unless the project's `merge_by` says otherwise.
 
 ## Checks: what a reviewer can rely on
 
@@ -308,7 +337,7 @@ The route reads the host only for the review records, and only with `--pr`; it s
 
 ## Checked mechanically
 
-`bin/ytstack-risk check` reads the `REVIEW.md` of the working tree. It fails on a section outside the six, a lens whose name is not a lowercase slug, a lens without `applies`, `reads` or `evidence`, a lens field outside the five, an `evidence` outside the two values, a `reads` document that does not exist, a lens name used twice, a `size` line that is not two numbers, an own reviewer whose name is not a lowercase slug or is used twice, one without `marker` or `lessons`, a marker another role has, a `lessons` file that does not exist, an own reviewer field outside the three, and a check whose name is not a lowercase slug or is used twice, one without `file` or `guards`, a `file` that does not exist and a check field outside the two. It prints one line per problem (`REVIEW.md: <what is wrong>`) and exits 1; a clean policy and a project without `REVIEW.md` exit 0.
+`bin/ytstack-risk check` reads the `REVIEW.md` of the working tree. It fails on a section outside the seven, a reviewer under "Reviewed by" that is no login, has no `pass`, a `pass` that is no extended regular expression or a `wait` that is no number of minutes, a second reviewer, a lens whose name is not a lowercase slug, a lens without `applies`, `reads` or `evidence`, a lens field outside the five, an `evidence` outside the two values, a `reads` document that does not exist, a lens name used twice, a `size` line that is not two numbers, an own reviewer whose name is not a lowercase slug or is used twice, one without `marker` or `lessons`, a marker another role has, a `lessons` file that does not exist, an own reviewer field outside the three, and a check whose name is not a lowercase slug or is used twice, one without `file` or `guards`, a `file` that does not exist and a check field outside the two. It prints one line per problem (`REVIEW.md: <what is wrong>`) and exits 1; a clean policy and a project without `REVIEW.md` exit 0.
 
 `bin/ytstack-spec lint` runs that check when `REVIEW.md` exists and counts each line as a failure. It also fails on an `auto_merge` outside the three values and on a `REVIEW.md` that `SPEC.md` does not link.
 

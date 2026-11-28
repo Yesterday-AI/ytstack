@@ -6,6 +6,7 @@
 #   ytstack-risk [-C DIR] route [--plan FILE] [--pr N [--repo OWNER/NAME]] --base SHA --head SHA [--author WORKER]
 #   ytstack-risk [-C DIR] check
 #   ytstack-risk [-C DIR] reviewers
+#   ytstack-risk [-C DIR] reviewer --base SHA --head SHA
 #   ytstack-risk manifest EVIDENCE_DIR
 #
 # DIR is a directory of the repository (default: $PWD). A relative --plan and
@@ -62,6 +63,16 @@
 # reviewers  prints the "Own reviewers" of REVIEW.md in the working tree, one
 #         tab separated line per role: role, marker, lessons, bots (comma
 #         list, empty when none). Read by bin/ytstack-review-escapes.
+# reviewer  who writes the round review of a change:
+#           reviewer: own | <login>
+#           pass: <ERE>        only with a login: a line of its review that passes
+#           wait: <minutes>    only with a login: how long to wait for it
+#           reason: <path or REVIEW.md> -- <why own>   when the section exists
+#         "## Reviewed by" of REVIEW.md, read at --base, names one account or
+#         app that reviews pull requests on its own. It reviews a change that
+#         touches none of its "except" paths; every other change, a broken
+#         section and a project without the section are the session's own
+#         review. Always exit 0 with a result: nobody reviewing is no answer.
 # manifest  writes EVIDENCE_DIR/MANIFEST: one line per image (png, jpg, jpeg,
 #         webp, gif) with its SHA-256 and its name. What a line already said
 #         about an image is kept. The reviewer fills in url, viewport, shows:
@@ -157,8 +168,8 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '5,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
-case "$CMD" in floor|route|check|reviewers|manifest) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+usage() { sed -n '5,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+case "$CMD" in floor|route|check|reviewers|reviewer|manifest) ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 # The resolver falls back to $PWD for a missing directory: refuse it here.
 [ -d "$DIR" ] || { echo "ytstack-risk: -C '$DIR' is not a directory" >&2; exit 64; }
 
@@ -218,8 +229,8 @@ review_parse() {
     fence { next }
     /^## / {
       sec = trim(substr($0, 4))
-      if (sec != "Always a person" && sec != "Never low" && sec != "Lenses" && sec != "Size" && sec != "Own reviewers" && sec != "Checks") {
-        bad("section \047## " sec "\047 is not one of Always a person, Never low, Lenses, Size, Own reviewers, Checks"); sec = ""
+      if (sec != "Always a person" && sec != "Never low" && sec != "Lenses" && sec != "Size" && sec != "Own reviewers" && sec != "Checks" && sec != "Reviewed by") {
+        bad("section \047## " sec "\047 is not one of Always a person, Never low, Lenses, Size, Own reviewers, Checks, Reviewed by"); sec = ""
       }
       next
     }
@@ -276,6 +287,25 @@ review_parse() {
       print "own|" name "|" marker "|" lessons "|" bots
       next
     }
+    # The reviewer outside the session that writes the round review:
+    # "<login> | except: <globs> | pass: <ERE> | wait: <minutes>". At most one.
+    sec == "Reviewed by" {
+      n = split(item, part, "|"); name = trim(part[1])
+      except = ""; pass = ""; wait = ""
+      for (i = 2; i <= n; i++) {
+        p = trim(part[i]); k = p; sub(/:.*/, "", k); v = trim(substr(p, length(k) + 2))
+        if (k == "except") except = list(v)
+        else if (k == "pass") pass = v
+        else if (k == "wait") wait = v
+        else bad("reviewer " name ": field \047" k "\047 is not except, pass or wait")
+      }
+      if (name !~ /^[A-Za-z0-9-]+(\[bot\])?$/) bad("reviewer \047" name "\047 is not a login")
+      if (rv++) bad("reviewer " name ": a second reviewer; the section names one")
+      if (pass == "") bad("reviewer " name " has no pass")
+      if (wait !~ /^[1-9][0-9]*$/) bad("reviewer " name ": wait \047" wait "\047 is not a number of minutes")
+      print "reviewer|" name "|" except "|" wait "|" pass
+      next
+    }
     # A machine check reviewers rely on: "<name> | file: <path> | guards: <text>".
     sec == "Checks" {
       n = split(item, part, "|"); name = trim(part[1])
@@ -317,12 +347,19 @@ EOF
 
 # ---- check ---------------------------------------------------------------------
 cmd_check() {
-  local f="${YT_DIR:+$YT_DIR/spec/REVIEW.md}" bad=0 n=0 o=0 k=0 kind a b c d e doc
+  local f="${YT_DIR:+$YT_DIR/spec/REVIEW.md}" bad=0 n=0 o=0 k=0 kind a b c d e doc by=""
   [ $# -eq 0 ] || { usage >&2; return 64; }
   if [ -z "$f" ] || [ ! -f "$f" ]; then echo "no review policy"; return 0; fi
   while IFS='|' read -r kind a b c d e; do
     case "$kind" in
       bad) bad=$((bad + 1)); echo "REVIEW.md: $a" ;;
+      reviewer)
+        # The pass pattern is everything after the wait field: d, and e when it holds a bar.
+        by="$a"; doc="$d${e:+|$e}"
+        if [ -n "$doc" ]; then
+          printf '\n' | grep -E -- "$doc" >/dev/null
+          [ $? -le 1 ] || { bad=$((bad + 1)); echo "REVIEW.md: reviewer $a: pass '$doc' is not a valid extended regular expression"; }
+        fi ;;
       own)
         o=$((o + 1))
         [ -z "$c" ] || [ -e "$TOP/$c" ] || { bad=$((bad + 1)); echo "REVIEW.md: own reviewer $a: lessons $c does not exist"; } ;;
@@ -342,7 +379,7 @@ EOD
 $(review_parse < "$f")
 EOF
   [ "$bad" -eq 0 ] || return 1
-  echo "review policy ok: $n lens(es), $o own reviewer(s), $k check(s)"
+  echo "review policy ok: $n lens(es), $o own reviewer(s), $k check(s)${by:+, reviewed by $by}"
 }
 
 # ---- reviewers -----------------------------------------------------------------
@@ -605,6 +642,34 @@ cmd_floor() {
   echo "areas: ${TOUCHED:-none}"
   echo "ceiling: $CEILING"
   echo "lenses: ${LENSES:-none}"
+}
+
+# ---- reviewer ------------------------------------------------------------------
+# Who writes the round review of BASE..HEADC: the reviewer REVIEW.md names
+# under "## Reviewed by", unless the change touches one of its "except" paths
+# or the section is broken; then, and without the section, the session's own.
+# The policy is read at the base, like the floor's.
+cmd_reviewer() {
+  local kind login except wait pass bad="" found=""
+  read_range "$@" || return $?
+  while IFS='|' read -r kind login except wait pass; do
+    case "$kind" in
+      bad) case "$login" in reviewer*) bad="$login" ;; esac ;;
+      reviewer) found="$login|$except|$wait|$pass" ;;
+    esac
+  done <<EOF
+$(g show "$BASE:.ytstack/spec/REVIEW.md" 2>/dev/null | review_parse)
+EOF
+  if [ -n "$bad" ]; then echo "reviewer: own"; echo "reason: REVIEW.md -- $bad"; return 0; fi
+  [ -n "$found" ] || { echo "reviewer: own"; return 0; }
+  IFS='|' read -r login except wait pass <<EOF
+$found
+EOF
+  kind=$(printf '%s\n' "$except" | tr ',' '\n' | match_list "$BASE" "$HEADC" | head -1)
+  if [ -n "$kind" ]; then echo "reviewer: own"; echo "reason: $kind -- an except path of $login"; return 0; fi
+  echo "reviewer: $login"
+  echo "pass: $pass"
+  echo "wait: $wait"
 }
 
 # ---- route ---------------------------------------------------------------------
@@ -970,5 +1035,6 @@ case "$CMD" in
   route)    cmd_route "$@" ;;
   check)    cmd_check "$@" ;;
   reviewers) cmd_reviewers "$@" ;;
+  reviewer) cmd_reviewer "$@" ;;
   manifest) cmd_manifest "$@" ;;
 esac
