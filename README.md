@@ -234,6 +234,7 @@ Source: [`docs/ytstack-delivery-flow.excalidraw`](docs/ytstack-delivery-flow.exc
 - Kimi Code 2.5.3 is locally verified; 2.6.2 is verified in fresh Linux/Node 24. Check [Kimi support status](docs/kimi.md#support-status) for platform limits.
 - bash, git and `gh` (for `ship`, `document-release`, and the pull request steps of `finish-lane` and `bin/ytstack-watch`; GitHub is the only pull request host they support). `jq` or Python 3 for the hooks' JSON handling; Python 3 for `bin/ytstack-check`.
 - For `visual-review`: a browser tool in the session that renders a page and returns a screenshot (a Playwright-style browser server or command line, or the host's built-in browser). Without one a visual lens records `not run`.
+- For `process-review` only: Node 18 or newer and a GitHub token with read access (`GITHUB_TOKEN`, `GH_TOKEN` or a signed-in `gh`). No other skill, hook or script uses Node.
 - Nothing else: the six skills adapted from gstack (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`) ship inside the plugin, so gstack and Bun are not needed and nothing is registered in `~/.claude/skills/`.
 
 ### Codex
@@ -261,7 +262,7 @@ Install a reviewed local checkout from Kimi's plugin manager, then reload:
 /plugins reload
 ```
 
-Use `/new` for a fresh session and `/plugins info ytstack` to check 40 skills and
+Use `/new` for a fresh session and `/plugins info ytstack` to check 41 skills and
 five lifecycle hooks. Invoke skills as `/skill:ytstack:<name>`. Kimi combines the
 static sessionStart skill with pending context consumed once through
 UserPromptSubmit; SessionStart hook stdout is not a context channel.
@@ -377,6 +378,8 @@ Milestone states are data, not prose: `planned`, `in-progress`, `done`, `dropped
 | `.ytstack/standing/`, `bin/ytstack-check --standing` | what you asked for once and for all, written down when you say it: one file per instruction, a newer one supersedes an older one by name; `.ytstack/STANDING.md` alone stays valid |
 | `bin/ytstack-watch` | polls pull requests outside the model and prints a line only when something changed; `release --commit <sha>` follows a merged commit until the target serves it and stays healthy, and prints one receipt |
 | `ytstack:lane-retro` | samples finished lanes; a mechanical mistake becomes a check that replaces an instruction line |
+| `ytstack:process-review`, `tools/process-review/` | measures a GitHub repository's pull request, review and CI process from its merged pull requests, reviews and CI runs: rules become suggestions, every dated process change is compared before and after, one HTML report and a daily digest. Read-only against GitHub; the one tool that needs Node (18 or newer) |
+| `ytstack:coach-process` | after a process review: at most five asks for the coordinator session (a fact with its denominator, one action an existing rule asks for, the metric it should move), delivered through herdr or the host's session messages; the next review judges each ask, an ask ignored twice goes to you, and every finding is checked for what ytstack itself could do better |
 | `bin/ytstack-upkeep` | one read-only run over `.ytstack/` that lists what needs a look (spec, STATE, gates, questions, lanes, runtime, review policy); `--question` leaves one question file. On a schedule: [`docs/recipes/recurring-upkeep.md`](./docs/recipes/recurring-upkeep.md) |
 
 A status never states a pull request's state from memory: host facts are read fresh and carry their read time. How to switch these tools on, step by step with a check each: [QUICKSTART, "Setting up the factory tools"](./QUICKSTART.md#setting-up-the-factory-tools).
@@ -415,7 +418,7 @@ Every hook and skill preamble resolves the checkout from where the agent actuall
 
 Ships:
 
-- 40 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), six adapted from gstack and synced with upstream (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`), review and production (`visual-review`, `review-lessons`, `signal-intake`, `incident`, `lesson`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
+- 42 skills: project-OS lifecycle (`init-project`, `adopt-brownfield`, `plan-milestone`, `slice-milestone`, `plan-task`, `summarize-task`, `reassess-roadmap`, `quick-task`, `reconcile`), continuity (`resume-session`, `handoff-session`), six adapted from gstack and synced with upstream (`office-hours`, `plan-ceo-review`, `plan-eng-review`, `retro`, `ship`, `document-release`), superpowers wrappers over the vendored subtree (`test-driven-development`, `systematic-debugging`, `verification-before-completion`, `code-review`, `finish-branch`, `grill`), orchestration (`spawn-milestone-team`, `coordinate`, `finish-lane`, `handover-step`, `lane-retro`), review and production (`visual-review`, `review-lessons`, `signal-intake`, `incident`, `lesson`), measurement (`process-review`), two directives (`using-ytstack`, `minimal-code`) and 5 engineering-OS references (`atomic-design`, `deutschland-stack-api`, `european-alternatives-api`, `oss-project`, `software-craftsmanship`).
 - 9 Claude Code hooks (SessionStart / PreCompact / SessionEnd / Stop / TeammateIdle / TaskCreated / TaskCompleted / PreToolUse-Edit / PostToolUse-Bash) on a shared resolver library (`hooks/lib/git-ctx.sh`); SessionStart injects the using-ytstack directive + project state + handoff pointers + STATE lint + lifecycle hints.
 - A status line segment (`bin/ytstack-status`): project progress from an optional `progress` block in `STATE.md`, or the active slice's task count, plus the current task. See [`docs/statusline.md`](./docs/statusline.md).
 - An optional PR watch (`bin/ytstack-pr-watch`, off until `enable`): tells the session that opened a pull request about red CI, unresolved bot review threads and merge conflicts, through hooks for Claude Code and Codex and a 60-second background worker. See [`docs/pr-watch.md`](./docs/pr-watch.md).

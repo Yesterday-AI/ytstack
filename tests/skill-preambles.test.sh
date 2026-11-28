@@ -41,7 +41,7 @@ MAIN="$TMP/main"; mkdir -p "$MAIN/.ytstack"
   echo seed > f.txt; git add -A; git commit -qm "M999-S01-T01: seed" ) >/dev/null 2>&1 || { echo FATAL fixture; exit 2; }
 WT="$TMP/wt"; git -C "$MAIN" worktree add -q -b wt-branch "$WT" >/dev/null 2>&1 || { echo FATAL worktree; exit 2; }
 
-SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill coordinate finish-lane handover-step lane-retro visual-review signal-intake incident review-lessons lesson"
+SKILLS="adopt-brownfield handoff-session init-project plan-milestone plan-task quick-task reassess-roadmap reconcile resume-session slice-milestone spawn-milestone-team summarize-task office-hours plan-ceo-review plan-eng-review retro ship document-release systematic-debugging test-driven-development verification-before-completion code-review finish-branch grill coordinate finish-lane handover-step lane-retro visual-review signal-intake incident review-lessons lesson process-review coach-process"
 
 # Brownfield fixture (M010, issue #18): existing docs, no .ytstack -> >= 2 signals
 BF="$TMP/brown"; mkdir -p "$BF/docs/adr"
@@ -516,6 +516,43 @@ REVIEWERS_END"
       rm -rf "$WT/.ytstack/signals"; own_reviewers_off ;;
     lane-retro)
       upstream_checks ;;
+    process-review)
+      # the one skill with Node scripts (DECISIONS 2026-11-18): the preamble says whether
+      # Node and a token are there and where the scripts are; it never prints the token
+      has "$s: the tool directory is found" "$OUT" "TOOL_DIR: $ROOT/skills/$s/../../tools/process-review"
+      case "$OUT" in *"HAS_NODE: yes"*|*"HAS_NODE: no"*) ok "$s: HAS_NODE is yes or no" ;; *) bad "$s: HAS_NODE is yes or no" ;; esac
+      has "$s: no origin in the fixture -> no repository guess" "$OUT" "REPO_GUESS: unknown"
+      has "$s: no earlier run" "$OUT" "PREVIOUS_RUN: none"
+      git -C "$WT" remote add origin git@github.com:acme/shop.git
+      mkdir -p "$TMP/xdg/ytstack/process-review/acme_shop"; echo '{}' > "$TMP/xdg/ytstack/process-review/acme_shop/metrics.json"
+      ( cd "$WT" || exit 2; env -i PATH="$PATH" HOME="$TMP/home" XDG_STATE_HOME="$TMP/xdg" GITHUB_TOKEN=secret-token-value bash "$P" 2>"$TMP/err" >"$TMP/out" ); OUT=$(cat "$TMP/out")
+      has "$s: the repository is read from origin" "$OUT" "REPO_GUESS: acme/shop"
+      has "$s: the earlier run of that repository is found" "$OUT" "PREVIOUS_RUN: $TMP/xdg/ytstack/process-review/acme_shop/metrics.json"
+      has "$s: GITHUB_TOKEN set -> HAS_TOKEN yes" "$OUT" "HAS_TOKEN: yes"
+      has "$s: the token's source is named" "$OUT" "TOKEN_SOURCE: GITHUB_TOKEN"
+      case "$OUT" in *secret-token-value*) bad "$s: the token is never printed" ;; *) ok "$s: the token is never printed" ;; esac
+      mkdir -p "$TMP/nogh"
+      ( cd "$WT" || exit 2; env -i PATH="$TMP/nogh:/usr/bin:/bin" HOME="$TMP/home" XDG_STATE_HOME="$TMP/xdg" bash "$P" 2>"$TMP/err" >"$TMP/out" ); OUT=$(cat "$TMP/out")
+      case "$(command -v -p gh 2>/dev/null)" in
+        /usr/bin/gh|/bin/gh) ok "$s: gh in a system directory, the no-token case is skipped" ;;
+        *) has "$s: no token variable and no gh -> HAS_TOKEN no" "$OUT" "HAS_TOKEN: no" ;;
+      esac
+      git -C "$WT" remote remove origin; rm -rf "$TMP/xdg/ytstack/process-review" ;;
+    coach-process)
+      # the coaching loop after process-review: the same working directory, the asks, the channels
+      has "$s: the tool directory is found" "$OUT" "TOOL_DIR: $ROOT/skills/$s/../../tools/process-review"
+      has "$s: no origin in the fixture -> no repository guess" "$OUT" "REPO_GUESS: unknown"
+      has "$s: no run yet" "$OUT" "METRICS: none"
+      has "$s: no asks yet" "$OUT" "ASKS: none"
+      case "$OUT" in *"HERDR: yes"*|*"HERDR: no"*) ok "$s: HERDR is yes or no" ;; *) bad "$s: HERDR is yes or no" ;; esac
+      git -C "$WT" remote add origin git@github.com:acme/shop.git
+      _CW="$TMP/xdg/ytstack/process-review/acme_shop"; mkdir -p "$_CW"; echo '{}' > "$_CW/metrics.json"; echo '[]' > "$_CW/findings.json"
+      printf '[{"key":"a","at":"2026-11-22"},{"key":"b","at":"2026-11-22"}]\n' > "$_CW/asks.json"
+      ( cd "$WT" || exit 2; env -i PATH="$PATH" HOME="$TMP/home" XDG_STATE_HOME="$TMP/xdg" bash "$P" 2>"$TMP/err" >"$TMP/out" ); OUT=$(cat "$TMP/out")
+      has "$s: the run of that repository is found" "$OUT" "METRICS: present"
+      has "$s: its findings are found" "$OUT" "FINDINGS: present"
+      has "$s: the recorded asks are counted" "$OUT" "ASKS: 2 recorded"
+      git -C "$WT" remote remove origin; rm -rf "$TMP/xdg/ytstack/process-review" ;;
     lesson)
       # the ledger and the questions (M032): every lesson in every state, the open incidents
       has "$s: the signals script is found" "$OUT" "SIGNALS_TOOL: $ROOT/bin/ytstack-signals"

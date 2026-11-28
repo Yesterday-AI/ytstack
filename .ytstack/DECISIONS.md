@@ -1635,3 +1635,25 @@ Plus: ops-layer split during the same session (yopstack created as own public re
 **How to apply:** A lane that should get the reminder holds its row in `LANES.md` (`ytstack-frontier claim --by <teammate name>`) or carries its slice in its name.
 
 **Supersedes:** None.
+
+## 2026-11-18: `process-review` is the plugin's one Node tool; every other skill and script stays bash and Python
+
+**Context:** On 18 November 2026 a consumer repository measured its own development process with a set of Node scripts (about 2,300 merged pull requests, their reviews and CI runs) and got findings it could act on. The scripts and their procedure were to become a ytstack skill. ytstack had no Node code: its scripts are bash, its checker and the PR watch engine Python 3. The same scripts also have to run unattended on the team's agent runner, whose image has Node but neither Python nor `gh`.
+
+**Options considered:**
+- A) Port the scripts to Python 3, the language of `bin/ytstack-check` and `tools/pr-watch/`.
+- B) Keep two implementations, Node for the runner and Python for the plugin.
+- C) One implementation in Node (18 or newer, no dependencies, no `gh`; the token from `GITHUB_TOKEN`, `GH_TOKEN` or `gh auth token`), shipped under `tools/process-review/`.
+
+**Chose:** C. The operator decided it on 18 November 2026: the skill's home is ytstack, and there is one implementation, in Node. The skill is `skills/process-review/`, its scripts `tools/process-review/*.mjs`, its formats `skills/process-review/references/`.
+
+**Reason:** The scripts are tested against real data as they are; a port would be a second, untested implementation of about 1,100 lines of counting rules and rendering, and two implementations of a measurement drift apart, which makes two reports of the same repository disagree. The runner that produces the recurring report has Node and no Python, so a Python port could not run there at all.
+
+**How to apply:**
+- Node is needed for this one skill only. Every other skill, hook and script stays bash and Python 3; this entry is no licence for further Node code. A second Node tool needs its own entry.
+- No package manifest, no dependency, no build step: the scripts run with `node <file>` on Node 18 or newer and use only the standard library and the built-in `fetch`.
+- The skill's preamble prints `HAS_NODE` (Node 18 or newer present), and the skill stops with one clear sentence when it is `no`. No other skill, hook or check may fail or warn because Node is missing.
+- `tests/process-review.test.sh` skips its Node cases when `node` is absent (ytstack's Linux test images have none) and never calls GitHub.
+- "A TypeScript runtime" stays out (`AGENTS.md`, "What ytstack is not"; the entry "2026-04-23: Don't rebuild GSD as TypeScript runtime"): these are plain scripts a skill runs, with no process that stays up and no state of ytstack's own.
+
+**Supersedes:** None. Narrows the statement that there is no runtime and that everything is "skill text, shell and one Python checker" (`.ytstack/spec/SPEC.md`, "What this is") by one tool directory.

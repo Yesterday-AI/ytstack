@@ -122,6 +122,34 @@ judgment can lower, the reviewer who is never the author, read-only access to
 production and every mitigation as a staged script a person runs are
 ytstack's own. No text, image or code from that account is included.
 
+## Lucide (icon outlines)
+
+tools/process-review/report.mjs inlines the SVG outlines of a few icons from
+the Lucide icon set (<https://lucide.dev>, source repository
+<https://github.com/lucide-icons/lucide>) into the HTML report it renders, so
+that the report stays one self-contained file. Nothing else of Lucide is
+shipped, installed or loaded.
+
+License: ISC. Copyright (c) 2026 Lucide Icons and Contributors. Some Lucide
+icons, the clock and the crossed circle among those inlined here, are derived
+from the Feather project and stay under the MIT License, Copyright (c)
+2013-present Cole Bemis (the MIT text is the one printed in the gstack
+section above). Checked against Lucide's LICENSE file on 2026-11-18.
+
+ISC License text (Lucide):
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 ## External AI-first methodology
 
 Conceptual influence (not vendored, not attributed by name per ytstack

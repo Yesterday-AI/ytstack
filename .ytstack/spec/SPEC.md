@@ -1,13 +1,13 @@
 ---
 project: ytstack
-updated: 2026-11-13
+updated: 2026-11-18
 ---
 
 # ytstack -- technical spec
 
 ## What this is
 
-ytstack is a plugin for Claude Code, Codex and Kimi Code. It ships one tree of skills (procedures an agent loads), three agent definitions, lifecycle hooks and a few scripts. Together they keep a project's memory in Markdown files under `.ytstack/` and lead an agent through plan, execute, verify and close. Part of the skills wrap procedures from superpowers (vendored); six are ytstack's own adaptations of gstack skills, synced with upstream. There is no runtime: everything is skill text, shell and one Python checker.
+ytstack is a plugin for Claude Code, Codex and Kimi Code. It ships one tree of skills (procedures an agent loads), three agent definitions, lifecycle hooks and a few scripts. Together they keep a project's memory in Markdown files under `.ytstack/` and lead an agent through plan, execute, verify and close. Part of the skills wrap procedures from superpowers (vendored); six are ytstack's own adaptations of gstack skills, synced with upstream. There is no runtime: everything is skill text, shell and one Python checker. One skill, `process-review`, runs Node scripts of its own (`tools/process-review/`, [process-review.md](process-review.md)); nothing else needs Node.
 
 This spec says what applies now. `STATE.md` says where the work stands, `DECISIONS.md` why, the `M###-*` files what happened.
 
@@ -21,6 +21,7 @@ This spec says what applies now. `STATE.md` says where the work stands, `DECISIO
 | host-adapters | Manifests, marketplace entries and hook registration for Claude Code, Codex and Kimi Code, the Codex and Kimi helpers | implemented | [host-adapters.md](host-adapters.md) |
 | dependencies | superpowers as a read-only subtree, six gstack skills adapted and synced with upstream, concepts-only sources | implemented | [dependencies.md](dependencies.md) |
 | checks-and-evals | The contract checker, the test suites, the spec tool, the brief tool, the coordinator scripts, the behavioural evals, the CI workflows | implemented | [checks-and-evals.md](checks-and-evals.md) |
+| process-review | The Node scripts that measure a repository's pull request, review and CI process, and their contract with the skill `process-review` | planned (the scripts exist; `verified_at` waits for the commit that adds them) | [process-review.md](process-review.md) |
 
 ## Invariants that hold everywhere
 

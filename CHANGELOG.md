@@ -59,6 +59,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`ytstack:coach-process`** 0.1.0: the loop after a process review. It turns
+  the findings into at most five asks for the session that coordinates the
+  work (a fact with its denominator, one action an existing rule or the
+  user already asks for, the metric it should move), writes the message to
+  the working directory and delivers it through herdr or the host's session
+  messages, and records each ask in `asks.json`. `analyze.mjs` judges every
+  ask like a change with an expectation and counts how often the same ask
+  was made; the report lists them under "Coaching asks". An ask that did
+  not take after being asked twice goes to the user, not a third time to
+  the coordinator. Every run checks each finding for what ytstack itself
+  could have prevented (a rule that reached no running session, a skipped
+  step, a mechanical rule followed by instruction only) and drafts it for
+  the upstream channel; what was confirmed or keeps coming back becomes
+  proposed work in the owning file, never an edit from the skill.
+- **`ytstack:process-review`** 0.1.0: measures a GitHub repository's pull
+  request, review and CI process over a period, from its merged pull
+  requests, reviews and CI runs. It mines per day into a working directory
+  outside the repository, computes throughput, efficiency (lead time, review
+  rounds and what the later rounds found, CI runs and hours per pull request)
+  and quality (follow-up fixes, merges without review, fixes without tests,
+  failed CI on the default branch, flaky re-runs), turns fixed rules with
+  thresholds and minimum samples into suggestions (a rule with too few cases
+  is "not evaluated", never passed), compares the days before and after every
+  dated entry of `changes` in `config.json` (with `expect`, the change gets
+  `confirmed`, `refuted` or `too early`), reads hand verdicts from
+  `labels.tsv` (was a reviewer's block right, what caused a red default
+  branch) and renders one self-contained HTML report plus a daily digest. The
+  measured party reads the report before a finding is final. Different from
+  `retro` (a finished milestone, from task summaries and git) and
+  `lane-retro` (a sample of finished lanes).
+- **The plugin's first Node code**, for this one skill: eight scripts under
+  `tools/process-review/` (Node 18 or newer, no dependencies, no `gh`; the
+  token from `GITHUB_TOKEN`, `GH_TOKEN` or a signed-in `gh`). Nothing else in
+  ytstack needs Node: the skill's preamble prints `HAS_NODE` and `HAS_TOKEN`,
+  and the skill stops with one sentence without Node (DECISIONS 2026-11-18).
+  `tests/process-review.test.sh` pins the scripts on a synthetic fixture
+  without network and skips its Node cases where `node` is absent; a new eval
+  case `process-review` exists and has not run yet. `NOTICE` names the Lucide
+  icon set (ISC), whose outlines the report inlines.
 - **Goal mode** (issue #99): `ytstack-goal set <M###>|"<sentence>"` makes a
   goal for the session, and the Stop hook keeps the turn going while its
   exit criteria are open, naming the open slices, the milestone's exit
