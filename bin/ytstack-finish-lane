@@ -9,10 +9,14 @@
 #   ytstack-finish-lane open-pr    --title T --body-file F [--base B] [--max-open N]
 #   ytstack-finish-lane wait-head  --pr N [--timeout SECONDS]
 #   ytstack-finish-lane body-check --pr N | --body-file F [--base B]
-#   ytstack-finish-lane gates      --pr N --reviewed-head SHA
+#   ytstack-finish-lane wait-review --pr N --head SHA --by LOGIN
+#                                  [--verdict-pattern ERE] [--timeout SECONDS]
+#   ytstack-finish-lane gates      --pr N --reviewed-head SHA [--reviewer LOGIN]
 #                                  [--verdict-pattern ERE] [--allow-no-checks]
+#                                  [--allow-no-review]
 #   ytstack-finish-lane merge      --pr N --at SHA [--method squash|merge|rebase]
-#                                  [--verdict-pattern ERE] [--allow-no-checks]
+#                                  [--reviewer LOGIN] [--verdict-pattern ERE]
+#                                  [--allow-no-checks] [--allow-no-review]
 #   ytstack-finish-lane route      --lane REF --base SHA --head SHA [--pr N] [--report F]
 #
 # All commands take -C DIR first: the lane's worktree (default: $PWD). A
@@ -56,9 +60,23 @@
 #               checks     every check on the head concluded with success,
 #                          neutral or skipped; none at all fails unless
 #                          --allow-no-checks
-#               review     no reviewer's newest review on the head requests
-#                          changes; with --verdict-pattern the newest review
-#                          on the head must also match it (grep -E, per line)
+#               review     a review was submitted on the head (none fails
+#                          unless --allow-no-review) and no reviewer's newest
+#                          review on the head requests changes; with
+#                          --verdict-pattern the newest review on the head
+#                          must also match it (grep -E, per line). With
+#                          --reviewer LOGIN "the newest review" is the newest
+#                          one LOGIN submitted on the head: a review of
+#                          somebody else does not stand in for it, and
+#                          --allow-no-review does not apply
+# wait-review polls until LOGIN (an account or an app; "[bot]" is optional)
+#             has submitted a review on SHA, the pull request's head (default
+#             3600 s, one read every 30 s). It is how a project waits for the
+#             reviewer its REVIEW.md names under "## Reviewer". Exit 0: the
+#             review is there and, with --verdict-pattern, matches it. Exit 1:
+#             it is there and requests changes or does not match. Exit 3: none
+#             within the timeout, or the head moved; the caller then
+#             commissions a review of its own.
 #               threads    no unresolved review thread
 #               mergeable  open and without a conflict
 # merge       runs gates for --at SHA, merges only when all hold, pinned to
@@ -93,7 +111,7 @@
 #             turns "unattended" into "person".
 #
 # Exit codes: 0 done; 1 refused or a gate does not hold (the reason is
-# printed); 64 usage. route: 0 "route: unattended"; 10 "route: person"; 65 git
+# printed); 3 wait-review saw no review; 64 usage. route: 0 "route: unattended"; 10 "route: person"; 65 git
 # cannot answer; a caller treats everything but 0 as "not unattended".
 
 set -uo pipefail
@@ -103,7 +121,7 @@ DIR="$PWD"
 if [ "${1:-}" = "-C" ]; then DIR="${2:-}"; shift 2 || true; fi
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 
-usage() { sed -n '6,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '6,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 bad_usage() { [ $# -eq 0 ] || echo "ytstack-finish-lane: $*" >&2; usage >&2; exit 64; }
 die() { echo "ytstack-finish-lane: $*" >&2; exit 1; }
 is_int() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; }
@@ -311,6 +329,55 @@ cmd_wait_head() {
   die "pull request $pr did not show the local head within ${timeout}s"
 }
 
+# ---- wait-review ---------------------------------------------------------------
+# The seconds between two reads; a test shortens it.
+REVIEW_POLL="${YTSTACK_REVIEW_POLL:-30}"
+
+cmd_wait_review() {
+  local pr="" timeout=3600 v host newest m left nap
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || bad_usage "$1 needs a value"
+    case "$1" in
+      --pr) pr="$2" ;;
+      --head) SHA="$2" ;;
+      --by) REVIEWER=$(reviewer_login "$2") || bad_usage "--by '$2' is not a login" ;;
+      --verdict-pattern) set_pattern "$2" ;;
+      --timeout) timeout="$2" ;;
+      *) bad_usage "wait-review: unknown argument '$1'" ;;
+    esac
+    shift 2
+  done
+  is_int "$pr" && is_int "$timeout" && is_int "$REVIEW_POLL" || bad_usage "wait-review needs --pr N; --timeout is a number of seconds"
+  is_sha "$SHA" || bad_usage "wait-review needs --head SHA, 7 to 40 hex digits"
+  [ -n "$REVIEWER" ] || bad_usage "wait-review needs --by LOGIN"
+  enter; need_gh
+  left=$timeout   # the seconds still to wait; the time a request takes is not counted
+  while :; do
+    v=$(gh pr view "$pr" --json state,headRefOid,mergeable,statusCheckRollup,reviews --jq "$(view_jq)") \
+      || die "gh pr view $pr failed; whether $REVIEWER reviewed is unknown"
+    host=$(rows "$v" head)
+    case "$host" in
+      "$SHA"*) ;;
+      *) echo "review: none -- the host shows ${host:0:7}, not ${SHA:0:7}; a review of $REVIEWER on ${SHA:0:7} can no longer come"; exit 3 ;;
+    esac
+    newest=$(rows "$v" newest)
+    if [ -n "$newest" ]; then
+      m=$(rows "$v" review | awk -F'\t' -v by="$newest" '$1 == "CHANGES_REQUESTED" && $2 == by { print "yes"; exit }')
+      if [ -n "$m" ]; then echo "review: changes requested by $newest on ${SHA:0:7}"; exit 1; fi
+      if [ -z "$PATTERN" ]; then echo "review: by $newest on ${SHA:0:7}"; return 0; fi
+      if rows "$v" body | tr -d '\r' | grep -E -- "$PATTERN" >/dev/null; then
+        echo "review: by $newest on ${SHA:0:7}, matches '$PATTERN'"; return 0
+      fi
+      echo "review: by $newest on ${SHA:0:7}, does not match '$PATTERN'"; exit 1
+    fi
+    [ "$left" -gt 0 ] || break
+    nap=$((left < REVIEW_POLL ? left : REVIEW_POLL)); [ "$nap" -gt 0 ] || nap=1
+    sleep "$nap"; left=$((left - nap))
+  done
+  echo "review: none -- $REVIEWER submitted no review on ${SHA:0:7} within ${timeout}s; commission an independent review"
+  exit 3
+}
+
 # ---- body-check ----------------------------------------------------------------
 cmd_body_check() {
   local pr="" file="" base="" head body out mb="" toks tok p n=0 stale=0
@@ -367,7 +434,22 @@ EOF
 }
 
 # ---- gates, merge --------------------------------------------------------------
-PR=""; SHA=""; PATTERN=""; ALLOW_NONE=no; METHOD=squash; HOST_HEAD=""; GATES_HOLD=yes
+PR=""; SHA=""; PATTERN=""; ALLOW_NONE=no; ALLOW_NO_REVIEW=no; REVIEWER=""; METHOD=squash; HOST_HEAD=""; GATES_HOLD=yes
+
+# reviewer_login <login>: the login as `gh pr view` reports it (an app without
+# its "[bot]"); status 1 when it is not a login.
+reviewer_login() {
+  local l="${1%\[bot\]}"
+  case "$l" in ''|*[!A-Za-z0-9-]*) return 1 ;; esac
+  printf '%s' "$l"
+}
+# set_pattern <ERE>: sets PATTERN, refusing an empty or invalid one
+set_pattern() {
+  PATTERN="$1"
+  [ -n "$PATTERN" ] || bad_usage "--verdict-pattern is empty"
+  printf '\n' | grep -E -- "$PATTERN" >/dev/null
+  [ $? -le 1 ] || bad_usage "--verdict-pattern is not a valid extended regular expression"
+}
 
 # One answer per line, "key<TAB>value": the pull request with its checks and
 # the reviews on its head, read in one request so that they describe one commit.
@@ -387,8 +469,14 @@ VIEW_JQ='
   (.headRefOid as $h | [ (.reviews // [])[] | select(.commit.oid == $h and .state != "PENDING") ] |
     # A comment does not lift a changes request of the same reviewer (PR #92 review).
     ([ .[] | select(.state != "COMMENTED") ] | group_by(.author.login)[] | max_by(.submittedAt) | "review\t\(.state)\t\(.author.login)"),
-    (max_by(.submittedAt) // empty | "newest\t\(.author.login)", ((.body // "") | split("\n")[] | "body\t" + .)))
+    ([ .[] | select(__BY__) ] | max_by(.submittedAt) // empty | "newest\t\(.author.login)", ((.body // "") | split("\n")[] | "body\t" + .)))
 '
+# view_jq: VIEW_JQ with "the newest review" narrowed to REVIEWER's, if one is set
+view_jq() {
+  local by=true
+  [ -z "$REVIEWER" ] || by="(.author.login | sub(\"\\\\[bot\\\\]\$\"; \"\")) == \"$REVIEWER\""
+  printf '%s' "${VIEW_JQ/__BY__/$by}"
+}
 # shortcut: the first 100 review threads; more than that fails the gate instead
 # of being paged through.
 # shellcheck disable=SC2016
@@ -404,15 +492,13 @@ gate_args() {
   local mode="$1"; shift
   while [ $# -gt 0 ]; do
     if [ "$1" = --allow-no-checks ]; then ALLOW_NONE=yes; shift; continue; fi
+    if [ "$1" = --allow-no-review ]; then ALLOW_NO_REVIEW=yes; shift; continue; fi
     [ $# -ge 2 ] || bad_usage "$1 needs a value"
     case "$mode:$1" in
       *:--pr) PR="$2" ;;
       gates:--reviewed-head|merge:--at) SHA="$2" ;;
-      *:--verdict-pattern)
-        PATTERN="$2"
-        [ -n "$PATTERN" ] || bad_usage "--verdict-pattern is empty"
-        printf '\n' | grep -E -- "$PATTERN" >/dev/null
-        [ $? -le 1 ] || bad_usage "--verdict-pattern is not a valid extended regular expression" ;;
+      *:--verdict-pattern) set_pattern "$2" ;;
+      *:--reviewer) REVIEWER=$(reviewer_login "$2") || bad_usage "--reviewer '$2' is not a login" ;;
       merge:--method) METHOD="$2" ;;
       *) bad_usage "$mode: unknown argument '$1'" ;;
     esac
@@ -426,8 +512,8 @@ gate_args() {
 # read_gates: one read of the host, one line per gate, the time of the read.
 # Returns 0 when every gate holds; sets HOST_HEAD.
 read_gates() {
-  local v g t short checks n open state m reviews newest unresolved total more
-  v=$(gh pr view "$PR" --json state,headRefOid,mergeable,statusCheckRollup,reviews --jq "$VIEW_JQ") \
+  local v g t short checks n open state m reviews newest unresolved total more who="${REVIEWER:+ by $REVIEWER}"
+  v=$(gh pr view "$PR" --json state,headRefOid,mergeable,statusCheckRollup,reviews --jq "$(view_jq)") \
     && g=$(gh api graphql -f query="$THREADS_QUERY" -F owner='{owner}' -F repo='{repo}' -F number="$PR" --jq "$THREADS_JQ")
   # shellcheck disable=SC2181
   if [ $? -ne 0 ]; then
@@ -455,9 +541,10 @@ read_gates() {
   reviews=$(rows "$v" review); newest=$(rows "$v" newest)
   m=$(printf '%s\n' "$reviews" | awk -F'\t' '$1 == "CHANGES_REQUESTED" { printf "%s%s", sep, $2; sep = ", " }')
   if [ -n "$m" ]; then gate FAIL review "changes requested by $m on $short"
-  elif [ -z "$PATTERN" ] && [ -z "$newest" ]; then gate ok review "none on $short"
+  elif [ -z "$newest" ] && [ -z "$PATTERN" ] && [ -z "$REVIEWER" ] && [ "$ALLOW_NO_REVIEW" = yes ]; then gate ok review "none on $short (--allow-no-review)"
+  elif [ -z "$newest" ] && [ -z "$PATTERN" ]; then gate FAIL review "none$who on $short: nobody reviewed this commit"
   elif [ -z "$PATTERN" ]; then gate ok review "no changes requested on $short (newest by $newest)"
-  elif [ -z "$newest" ]; then gate FAIL review "none on $short, nothing to match '$PATTERN'"
+  elif [ -z "$newest" ]; then gate FAIL review "none$who on $short, nothing to match '$PATTERN'"
   elif rows "$v" body | tr -d '\r' | grep -E -- "$PATTERN" >/dev/null; then gate ok review "the newest on $short (by $newest) matches '$PATTERN'"
   else gate FAIL review "the newest on $short (by $newest) does not match '$PATTERN'"
   fi
@@ -711,6 +798,7 @@ case "$CMD" in
   push)       cmd_push "$@" ;;
   open-pr)    cmd_open_pr "$@" ;;
   wait-head)  cmd_wait_head "$@" ;;
+  wait-review) cmd_wait_review "$@" ;;
   body-check) cmd_body_check "$@" ;;
   gates)      cmd_gates "$@" ;;
   merge)      cmd_merge "$@" ;;

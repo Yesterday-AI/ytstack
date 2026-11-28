@@ -289,7 +289,7 @@ check_fails() { # <label> <REVIEW.md body> <expected text>
   run "$C" check
   if [ "$EC" = 1 ]; then has "$1" "$3" "$OUT"; else bad "$1" "exit $EC, output: $OUT"; fi
 }
-check_fails "a section outside the six" '## Reviewers\n\n- somebody\n' "REVIEW.md: section '## Reviewers' is not one of Always a person, Never low, Lenses, Size, Own reviewers, Checks"
+check_fails "a section outside the six" '## Reviewers\n\n- somebody\n' "REVIEW.md: section '## Reviewers' is not one of Always a person, Never low, Lenses, Size, Own reviewers, Checks, Reviewed by"
 # The checks inventory (issue #75): the machine checks a reviewer can rely on.
 printf '# Review policy\n\n## Checks\n\n- api-docs | file: docs/api.md | guards: every endpoint is documented\n- design | file: docs/design.md | guards: the tokens are the only colours\n' > "$C/.ytstack/spec/REVIEW.md"
 run "$C" check;               eq "a checks inventory passes" 0 "$EC"
@@ -318,6 +318,29 @@ run "$C" reviewers;           eq "reviewers: a broken section exits 1" 1 "$EC"
 has "and names the problem" "lessons docs/gone.md does not exist" "$OUT"
 printf '# Review policy\n\n## Never low\n\n- **/*.sql\n' > "$C/.ytstack/spec/REVIEW.md"
 run "$C" reviewers;           eq "reviewers: no section, no line" "0:" "$EC:$OUT"
+# The reviewer outside the session ("## Reviewed by"): who writes the round review.
+check_fails "a reviewer without pass" '## Reviewed by\n\n- app[bot] | wait: 60\n' "REVIEW.md: reviewer app[bot] has no pass"
+check_fails "a reviewer whose wait is no number" '## Reviewed by\n\n- app | pass: ^Verdict: ok | wait: soon\n' "REVIEW.md: reviewer app: wait 'soon' is not a number of minutes"
+check_fails "a reviewer that is no login" '## Reviewed by\n\n- the app | pass: ^ok | wait: 5\n' "REVIEW.md: reviewer 'the app' is not a login"
+check_fails "a second reviewer" '## Reviewed by\n\n- app | pass: ^ok | wait: 5\n- other | pass: ^ok | wait: 5\n' "REVIEW.md: reviewer other: a second reviewer; the section names one"
+check_fails "a pass that is no regular expression" '## Reviewed by\n\n- app | pass: ^Verdict: (ok | wait: 5\n' "is not a valid extended regular expression"
+printf '# Review policy\n\n## Reviewed by\n\n- app[bot] | except: src/ui/**, **/*.css | pass: ^Verdict: non-blocking | wait: 60\n' > "$C/.ytstack/spec/REVIEW.md"
+run "$C" check;               eq "a reviewer line passes" 0 "$EC"
+has "and is named" "reviewed by app[bot]" "$OUT"
+( cd "$C" && git add -A && git commit -qm policy && git tag policy ) >/dev/null 2>&1
+( cd "$C" && echo x >> src/auth/login.sh && git add -A && git commit -qm code && git tag code \
+  && echo x >> src/ui/button.css && git add -A && git commit -qm ui && git tag ui ) >/dev/null 2>&1
+run "$C" reviewer --base policy --head code
+eq "a change outside the except paths is the named reviewer's" "0:reviewer: app[bot]
+pass: ^Verdict: non-blocking
+wait: 60" "$EC:$OUT"
+run "$C" reviewer --base policy --head ui
+eq "a change that touches an except path is the session's own review" "reviewer: own" "$(line reviewer)"
+has "with the path as the reason" "reason: src/ui/button.css -- an except path of app[bot]" "$OUT"
+run "$C" reviewer --base base --head code
+eq "the policy is read at the base: no section there, own" "0:reviewer: own" "$EC:$OUT"
+run "$C" reviewer --base policy
+eq "reviewer without --head: usage" 64 "$EC"
 check_fails "a lens without applies" '## Lenses\n\n- ui | reads: docs/design.md | evidence: visual\n' "REVIEW.md: lens ui has no applies"
 check_fails "a lens without reads" '## Lenses\n\n- ui | applies: src/ui/** | evidence: visual\n' "REVIEW.md: lens ui has no reads"
 check_fails "a lens without evidence" '## Lenses\n\n- ui | applies: src/ui/** | reads: docs/design.md\n' "REVIEW.md: lens ui has no evidence"

@@ -3,7 +3,7 @@ name: finish-lane
 description: "Takes a delegated lane from the worker's report to a pull request merged at the reviewed commit, with every gate read from the host. Use in the coordinating session when a lane reported and its work has to become a merged pull request, or when the user says finish the lane, land this lane, get this lane merged. Not for the session's own branch (finish-branch), not for a release (ship) and not for the worker of the lane."
 metadata:
   tier: task
-  version: 0.8.0
+  version: 0.9.0
 allowed-tools:
   - Bash
   - Read
@@ -261,6 +261,26 @@ Then read the body once against `git diff {BASE}...{SHA} --stat` and the tests i
 
 ### Step 6: Commission the review
 
+Every head gets a review before the route and the gates are read. First ask who writes it:
+
+```bash
+"${CLAUDE_SKILL_DIR}/../../bin/ytstack-risk" reviewer --base {BASE_SHA} --head {SHA}
+```
+
+`reviewer: own`: you commission it, as the rest of this step says. `reviewer: <login>` with `pass:` and `wait:`: the project's `REVIEW.md` names an account or app that reviews this kind of change on its own (`docs/ux/review-policy-format.md`, "Reviewed by"). Then you commission none and wait for that review on `{SHA}`, with the seconds of `wait:` (minutes times 60):
+
+```bash
+"${CLAUDE_SKILL_DIR}/../../bin/ytstack-finish-lane" -C {WT} wait-review --pr {N} --head {SHA} --by '{login}' --verdict-pattern '{pass}' --timeout {seconds}
+```
+
+| Exit | What it means | What you do |
+|---|---|---|
+| 0 | The reviewer's review is on `{SHA}` and passes. | Skip the rest of this step and Step 7's posting. Record the row (`ytstack-frontier set {REF} --head {SHA} --round {n} --status in-review`) and go to Step 8. In Step 10 and Step 11 the gate options are `--reviewer '{login}' --verdict-pattern '{pass}'` in place of `--verdict-pattern '^Verdict: approved'`. The route of Step 9 finds no round line of yours and says `person`: with `merge_by: risk` a person merges, and you say so in the report. |
+| 1 | It is there and does not pass. | Its findings are the round's findings: the lesson (Step 14), then they go to the worker through whoever dispatches. The fix is a new head and starts again at Step 3. |
+| 3 | No review of that reviewer on `{SHA}` within the wait, or the head moved. | A head never stays without a review: commission the independent review yourself, as below, and name in the report that the reviewer did not answer. A moved head starts again at Step 3. |
+
+Do not commission a review of your own beside a reviewer that answered, and do not wait a second time on the same head.
+
 The round is the lane's `Round` cell plus one.
 
 | Round | What is reviewed | The brief |
@@ -368,7 +388,7 @@ All hold: `ytstack-frontier set {REF} --status ready --next "merge at {SHA}"`. O
 |---|---|---|
 | `head` | commits arrived after the review | Review the new commits before anything else: Step 5 with the new head, as the fix round. |
 | `checks` | a check is pending, failed, or there is none | Pending: read again later. Failed: the lesson (Step 14), then back to the worker with the check's name. None: `--allow-no-checks` is a statement about the project, not a way through. |
-| `review` | changes are requested on this head, or the posted verdict is missing | Open findings go to the worker. A missing verdict means Step 7 did not happen on this head. |
+| `review` | changes are requested on this head, the posted verdict is missing, or nobody reviewed this head | Open findings go to the worker. A missing verdict means Step 7 did not happen on this head. "none ... nobody reviewed this commit": Step 6 on this head; `--allow-no-review` is a statement about a project without reviews, not a way through. |
 | `threads` | a review thread is unresolved | It is answered and resolved by whoever owns it: the worker for a finding in its code, the human for a question to them. You resolve no thread you did not open. |
 | `mergeable` | a conflict with the base, or the host has not decided | Conflict: the worker integrates the base; the head moves, so the fix round follows. Undecided: read again. |
 

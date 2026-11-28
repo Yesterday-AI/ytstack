@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A reviewer outside the session, and a review on every head.** A project
+  whose pull requests are reviewed by an account or app of its own names it in
+  `REVIEW.md` under `## Reviewed by` (login, `except` globs, a `pass` pattern,
+  minutes to `wait`; `docs/ux/review-policy-format.md`). `ytstack-risk
+  reviewer --base --head` says whether a change is that reviewer's or the
+  session's own; `ytstack-finish-lane wait-review` waits for its review on the
+  head and exits 3 when none came, and `finish-lane` 0.9.0 then commissions
+  the independent review itself, so a head is reviewed once and never not at
+  all. `gates` and `merge` take `--reviewer LOGIN`: that account's newest
+  review on the head decides, and a review of somebody else does not stand in
+  for it. From a field run: a coordinator kept commissioning its own reviews
+  beside a review app and merged heads the app had not read.
+
 ### Changed
+
+- **`ytstack-finish-lane gates` and `merge` fail on a head nobody reviewed.**
+  Without `--verdict-pattern` a head without any review used to pass the
+  `review` gate ("none on <sha>"). It now fails; a project that runs no
+  reviews passes `--allow-no-review`. `finish-lane` itself always passed a
+  verdict pattern and is not affected.
 
 - **The host is the ledger of a lane; the lanes file moved out of the
   repository** (issue #79). A lane's state is its pull request, read fresh.
